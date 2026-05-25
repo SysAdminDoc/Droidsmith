@@ -1,6 +1,8 @@
 # Node / Vite / React
 node_modules/
-dist/
+dist/*
+!dist/.gitkeep
+!dist/index.html
 .vite/
 *.log
 npm-debug.log*

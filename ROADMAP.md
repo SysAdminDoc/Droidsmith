@@ -14,7 +14,7 @@ bottom, but anything labelled `parallel` can be picked up out of order.
 ## Milestone 0 — Foundations
 
 - R-001 DONE Create repo, write README + ROADMAP + RESEARCH_FEATURE_PLAN + LICENSE
-- R-002 TODO Scaffold Tauri 2 + React + TS + Vite + Tailwind, builds on Win/macOS/Linux
+- R-002 DONE Scaffold Tauri 2 + React + TS + Vite + Tailwind, builds on Win/macOS/Linux (HGFS dev-mirror script lands here; full bundle pipeline deferred to R-006)
 - R-003 TODO CI: GitHub Actions matrix (Win/macOS/Linux) — `cargo check`, `tsc`, `vitest`, `cargo test`
 - R-004 TODO PSScriptAnalyzer-equivalent lint gates (clippy + eslint + prettier)
 - R-005 TODO `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, issue & PR templates

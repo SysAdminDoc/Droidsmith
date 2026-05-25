@@ -1,0 +1,36 @@
+[package]
+name = "droidsmith"
+version = "0.0.1"
+description = "Cross-platform open-source GUI for managing Android devices over ADB"
+authors = ["Droidsmith contributors"]
+license = "MIT"
+repository = "https://github.com/SysAdminDoc/Droidsmith"
+edition = "2021"
+rust-version = "1.77"
+
+[lib]
+name = "droidsmith_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-shell = "2"
+tauri-plugin-dialog = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "1"
+which = "6"
+
+[features]
+default = ["custom-protocol"]
+custom-protocol = ["tauri/custom-protocol"]
+
+[profile.release]
+panic = "abort"
+codegen-units = 1
+lto = true
+opt-level = "s"
+strip = true
