@@ -14,6 +14,111 @@ completion.
 Working batches live here. Sections collapse into a versioned release on
 each milestone tag.
 
+### 2026-05-25 — Phase 1+ end-to-end slice
+
+The thin slice from device detection through action queue + journal,
+plus the pack / quirks framework and the headless CLI. 67 Rust tests
+and 5 frontend tests, all gates green.
+
+**ADB domain layer (R-011, R-012):**
+
+- `adb/` module: `resolver`, `transport`, `device`, `packages`, `actions`.
+- `AdbTransport` trait + `ShellTransport` (real) + `MockTransport` (tests).
+- `parse_devices_long` handles daemon-startup chatter, no-permissions
+  multi-word state, wireless serial classification.
+- `list_devices` Tauri command + live Devices route in the renderer
+  with refresh button, empty/error/no-tauri states.
+
+**Package enumeration (R-020, R-021):**
+
+- Two-pass `pm list packages` union (-e/-d, both with -f/-U/-i).
+- `AppPackage{package, enabled, system, apk_path, uid, installer}`.
+- `PackageFilter::{All, User, System, Enabled, Disabled}` applied
+  after the union.
+- System detection by APK partition prefix
+  (`/system|/product|/vendor|/apex|/system_ext`).
+- `list_packages(serial, filter)` Tauri command.
+
+**Action layer + undo journal (R-022, R-026.5):**
+
+- `actions::{plan, apply}` with `ActionKind::{Disable, Enable,
+  UninstallForUser, ClearData, ForceStop}`. Two-step preview→apply.
+- In-band `pm` "Failure …" / "Error: …" markers recognised; lifted to
+  `TransportError::Exit`.
+- `journal::Journal` writes JSON-Lines per device under
+  `<app_data_dir>/journal/<serial>.jsonl` (HGFS-safe, no SQLite).
+- `record_undo` links both sides (`undone_by` / `undoes`).
+- Filename-safe serial scrubbing for wireless devices.
+- Corrupt-line tolerance: malformed JSONL rows are logged and skipped.
+- Tauri commands: `plan_action`, `apply_action`, `journal_list`,
+  `journal_undo`.
+
+**Pack framework (R-030, R-031):**
+
+- `packs::{Pack, PackTargets, PackEntry, RemovalLevel}` with UAD-NG-aligned
+  semantics so R-036 imports line up cleanly.
+- `packs::lint` validates name/description/version, package id
+  validity, duplicate detection, depends_on/needed_by id validity,
+  android_min ≤ android_max.
+- `droidsmith-pack-lint` binary — exit 0 clean, 1 issues, 2 usage.
+- `packs/_example.yaml` seeds the contributor copy.
+- New dep: `serde_yml 0.0.12`.
+
+**Vendor-quirks engine (R-034):**
+
+- `quirks::{Quirk, QuirkMatch, Mitigation, DeviceContext}` with
+  AND-across-fields / OR-within-field substring matching.
+- Case-insensitive ROM substring matching so "MIUI 14 — HyperOS Preview"
+  matches `rom: ["hyperos"]`.
+- `explain_failure` Tauri command.
+- `quirks/hyperos.yaml` seed rule: the documented Xiaomi
+  `pm disable-user` block, with the `pm uninstall --user 0` workaround
+  as a `try_alternative_action` mitigation.
+
+**Headless CLI + profiles (R-060, R-061):**
+
+- `droidsmith-cli` binary with `devices` and `run <profile.yaml> --device
+  <serial> [--dry-run|--apply]` subcommands. Hand-rolled argv parser; no
+  CLI-framework dependency. Exit codes 0/1/2/3.
+- `profile::{Profile, ProfileDeviceMatch, ProfileAction}` YAML schema,
+  serial-agnostic (serial bound at run time via `requests_for`).
+- Profile lint mirrors the pack lint shape.
+
+**Shared time module:**
+
+- `crate::time::{format_utc_rfc3339, iso_utc_now}` extracted so the
+  CLI bin, journal layer, and diagnostics module all stamp identically.
+  Hand-rolled Howard Hinnant date algorithm — no `chrono`/`time` dep.
+
+**Sidecar fetch (R-010 scaffolding):**
+
+- `scripts/fetch-platform-tools.ps1` (Windows) and `.sh` (POSIX) —
+  download, SHA-256 verify (placeholders pinned), extract, stage as
+  per-target-triple sidecars under `src-tauri/binaries/`.
+- AdbWinApi DLL handling on Windows.
+- Binaries are NOT committed; `src-tauri/binaries/` is gitignored.
+- Final `bundle.externalBin` wiring deferred to R-006.
+
+**Per-pane placeholder routes (IMP-05):**
+
+- `src/lib/tauri.ts` exposes typed wrappers around `invoke()` plus
+  `inTauri()` for graceful "running in plain Vite" fallback.
+- `src/routes/Devices.tsx` is fully live — calls `list_devices`,
+  renders empty/error/no-adb states, refresh button.
+- `src/routes/placeholders.tsx` has dedicated components for Apps,
+  Debloat, Mirror, Console, Logcat, Fastboot. Each lists planned
+  behaviour + the Rust commands already exposed (READY / TODO badges).
+- `src/routes/common.tsx` factors `PaneHeader`, `PlaceholderBody`, `Card`.
+- App.tsx is now a thin shell + router; sidebar carries a heartbeat
+  summary at the foot.
+
+**POSIX dev-mirror (IMP-07):**
+
+- `scripts/dev-mirror.sh` — rsync-based, sentinel-guarded,
+  `--watch`/`--reverse`/`--force`/`--dest` flags. Defaults to
+  `~/.droidsmith-mirror`. Watch mode polls at 1s using `find -printf`
+  for a coarse mtime fingerprint — dependency-free.
+
 ### Added
 
 - **R-003** GitHub Actions CI matrix (`.github/workflows/ci.yml`) — Rust on Ubuntu/Windows/macOS running `cargo fmt --check`, `cargo check`, `cargo clippy --all-targets -D warnings`, `cargo test --all-targets`, plus a separate frontend job (typecheck, lint, prettier, vitest).

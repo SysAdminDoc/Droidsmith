@@ -42,9 +42,26 @@ npm install        # first time only
 npm run tauri:dev
 ```
 
-The mirror script excludes `node_modules/`, `target/`, `dist/`, `.git/`. Use
+The mirror script excludes `node_modules/`, `target/`, `.git/`. Use
 `./scripts/dev-mirror.ps1 -Watch` to keep the mirror in sync as you edit on
 the HGFS side, so git stays authoritative.
+
+### WSL2 / Linux on /mnt/c / macOS on a slow share
+
+A POSIX companion to the PowerShell mirror ships in
+[`scripts/dev-mirror.sh`](../scripts/dev-mirror.sh) — same semantics
+(rsync with `--delete`, sentinel guard against accidental wipes,
+optional `--watch` mode). Default destination is
+`~/.droidsmith-mirror`:
+
+```bash
+./scripts/dev-mirror.sh            # one-shot mirror
+./scripts/dev-mirror.sh --watch    # keep in sync (1-second poll)
+./scripts/dev-mirror.sh --reverse  # copy build artefacts back to the repo
+cd ~/.droidsmith-mirror
+npm install
+npm run tauri:dev
+```
 
 ## Running tests
 
