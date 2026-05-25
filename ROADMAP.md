@@ -19,19 +19,19 @@ do not duplicate that here — link instead.
 
 - [x] **R-001** P0 — Repo, README, ROADMAP, RESEARCH_FEATURE_PLAN, LICENSE
 - [x] **R-002** P0 — Scaffold Tauri 2 + React + TS + Vite + Tailwind
-- [ ] **IMP-02** P0 — Scope `shell:default` capability to enumerated sidecar commands with arg validators
-- [ ] **R-003** P0 — GitHub Actions CI matrix (Win/macOS/Linux): `cargo check`, `cargo clippy`, `cargo test`, `npm run typecheck`, `npm run lint`, `npm run test`, pack-lint
-- [ ] **R-004** P0 — Lint gates wired locally: clippy `-D warnings`, eslint `--max-warnings 0`, prettier check
-- [ ] **R-005** P1 — `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `SECURITY.md`, `.github/ISSUE_TEMPLATE/{bug,feature}.md`, PR template
-- [ ] **IMP-01** P1 — Replace `.expect()` startup panic with native error dialog + crash log path
-- [ ] **IMP-03** P2 — Bump `thiserror 1→2`, `which 6→8`
-- [ ] **IMP-04** P2 — Heartbeat reports OS, Tauri, Rust, app_data_dir, adb_version
-- [ ] **IMP-05** P3 — Replace `<div>` nav stubs with `<button>` + placeholder routes ("Coming in R-NNN")
-- [ ] **IMP-06** P2 — `adb::locate_adb` also tries `$ANDROID_HOME`, `$ANDROID_SDK_ROOT`
+- [x] **IMP-02** P0 — Scope `shell:default` capability to enumerated sidecar commands with arg validators
+- [x] **R-003** P0 — GitHub Actions CI matrix (Win/macOS/Linux): `cargo fmt/check/clippy/test`, frontend `typecheck/lint/prettier/test`
+- [x] **R-004** P0 — Lint gates: clippy `-D warnings`, ESLint flat config, Prettier check, rustfmt.toml, `unsafe_code = deny`
+- [x] **R-005** P1 — `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `SECURITY.md`, `.github/ISSUE_TEMPLATE/{bug,feature}.md`, PR template
+- [x] **IMP-01** P1 — Replace `.expect()` startup panic with native error dialog + file-only crash log path
+- [x] **IMP-03** P2 — Bumped `thiserror 1→2`, `which 6→8`; added `os_info 3`
+- [x] **IMP-04** P2 — Heartbeat reports OS family/version/arch, Tauri, Rust MSRV, app_data_dir, adb path+source+version
+- [~] **IMP-05** P3 — Nav stubs are now `<button>`s with active state; full placeholder-route pages still pending (Wave 7)
+- [x] **IMP-06** P2 — `adb::locate_adb` honours `$ANDROID_HOME`, `$ANDROID_SDK_ROOT`; Linux paths gated to cfg(target_os = "linux")
 - [ ] **IMP-07** P3 — `scripts/dev-mirror.sh` companion to the PowerShell mirror (Linux/macOS/WSL)
 - [ ] **R-006** P1 — Release pipeline: signed Win MSI, notarized macOS dmg, Linux AppImage + deb, SBOM, signature
-- [ ] **R-007 / F-NEW-10** P1 — File-only crash log (rotating, 1MB×5) with "scrub serials" export; opt-in upload deferred to R-073
-- [ ] **LICENSE-THIRD-PARTY** P1 — Maintain `LICENSE-THIRD-PARTY.md` accumulating notices for every bundled binary or vendored data set
+- [x] **R-007 / F-NEW-10** P1 — File-only crash log floor (rotating 1MB × 5 backups) — opt-in upload still deferred to R-073
+- [x] **LICENSE-THIRD-PARTY** P1 — `LICENSE-THIRD-PARTY.md` seeded with placeholders for adb / fastboot / scrcpy / UAD-NG
 
 ## Phase 1 — Core ADB (thin end-to-end slice)
 
