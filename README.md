@@ -8,8 +8,10 @@ root, without a closed-source binary, without paywalled features.
 
 ## Status
 
-Early scaffolding. The repository currently contains the research, roadmap, and
-project ground rules. Code lands as the [ROADMAP](ROADMAP.md) items ship.
+Pre-functional but live. Tauri shell builds and runs; the in-app Heartbeat
+panel reports OS, Tauri, Rust, and ADB resolution. Feature surface lands per
+[ROADMAP.md](ROADMAP.md); shipped work is logged in [CHANGELOG.md](CHANGELOG.md);
+design rationale lives in [RESEARCH_DEEPDIVE.md](RESEARCH_DEEPDIVE.md).
 
 ## Why another ADB GUI?
 

@@ -6,7 +6,7 @@ authors = ["Droidsmith contributors"]
 license = "MIT"
 repository = "https://github.com/SysAdminDoc/Droidsmith"
 edition = "2021"
-rust-version = "1.77"
+rust-version = "1.81"
 
 [lib]
 name = "droidsmith_lib"
@@ -21,8 +21,9 @@ tauri-plugin-shell = "2"
 tauri-plugin-dialog = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-thiserror = "1"
-which = "6"
+thiserror = "2"
+which = "8"
+os_info = "3"
 
 [features]
 default = ["custom-protocol"]
@@ -34,3 +35,12 @@ codegen-units = 1
 lto = true
 opt-level = "s"
 strip = true
+
+[lints.rust]
+unsafe_code = "deny"  # `deny` (not `forbid`) so a single well-documented FFI
+                       # call in diagnostics.rs can carry an #[allow] override.
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }
+# clippy::pedantic stays off until v0.1; re-enable selectively as the
+# codebase matures.
