@@ -1,0 +1,53 @@
+version: 2
+updates:
+  - package-ecosystem: cargo
+    directory: "/src-tauri"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: "Etc/UTC"
+    open-pull-requests-limit: 5
+    labels: ["deps", "rust"]
+    groups:
+      # Tauri's ecosystem moves together; one combined PR is much easier
+      # to review than 8 individual PRs that keep re-opening when tauri-build
+      # / tauri-runtime / wry bump together.
+      tauri:
+        patterns:
+          - "tauri*"
+
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: "Etc/UTC"
+    open-pull-requests-limit: 5
+    labels: ["deps", "frontend"]
+    groups:
+      tauri-js:
+        patterns:
+          - "@tauri-apps/*"
+      typescript:
+        patterns:
+          - "typescript"
+          - "@typescript-eslint/*"
+      react:
+        patterns:
+          - "react"
+          - "react-dom"
+          - "@types/react"
+          - "@types/react-dom"
+      tailwind:
+        patterns:
+          - "tailwindcss"
+          - "postcss"
+          - "autoprefixer"
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: monthly
+    labels: ["deps", "ci"]

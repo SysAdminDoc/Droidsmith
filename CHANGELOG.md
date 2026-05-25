@@ -34,7 +34,37 @@ each milestone tag.
 
 ### Fixed
 
-- _(none yet)_
+- **A1 — race / pipe-buffer deadlock in `adb version` probe.** [`adb::probe_version`](src-tauri/src/adb.rs) previously polled `try_wait` for up to 2 s and only read stdout afterward. A verbose `adb version` could fill the OS pipe buffer (~64 KB on Windows) and block the child waiting for a reader, producing a phantom timeout. Now reads on a worker thread concurrently with the wait loop.
+- **A2 — false promise of crash log on Tauri builder error.** [`crate::run`](src-tauri/src/lib.rs) showed a dialog saying "a crash log was written" but the panic hook only fires on actual `panic!()`. Builder `Err` returns slipped past silently. Now writes through the new [`diagnostics::log_fatal`](src-tauri/src/diagnostics.rs) helper and the dialog quotes the real log path.
+- **A3 — `iso_now()` was lying.** The function name implied ISO-8601 but returned raw epoch seconds. Now emits proper `YYYY-MM-DDTHH:MM:SSZ` UTC via Howard Hinnant's date algorithm; tests cover epoch, leap-year, and post-century-leap anchors.
+- **A4 — panic hook silently disabled on minimal environments.** [`fallback_log_dir`](src-tauri/src/diagnostics.rs) previously returned `Option<PathBuf>` and skipped installing the hook on any container without `APPDATA` / `XDG_CONFIG_HOME` / `HOME`. Now always returns a path (falling back to `std::env::temp_dir().join("Droidsmith")`), guaranteeing the hook installs everywhere.
+- **A5 — silent log rotate failures.** Rotation in [`diagnostics::rotate_if_needed`](src-tauri/src/diagnostics.rs) used to swallow `rename` errors, which would lose subsequent crash records if a file lock wedged the rename. Now logs the failure to stderr while preserving the existing crash log.
+- **A8 — `adb` missed on macOS Homebrew installs.** GUI-launched apps don't inherit shell `PATH`, so `brew install android-platform-tools` was invisible. The resolver now also tries `/opt/homebrew/bin/adb` (Apple Silicon) and `/usr/local/bin/adb` (Intel) under a new `ResolveSource::Homebrew`.
+- **A8b — `adb` missed on Debian/Ubuntu `apt install adb`.** The Linux candidate list now also tries `/usr/bin/adb`.
+- **A9 — empty env vars produced bogus candidate paths.** On Windows `set ANDROID_HOME=` leaves the var defined-but-empty; the resolver was emitting `/platform-tools/adb` candidates. Now centralized in `read_env_path` which treats empty as unset.
+- **A10 — test mutated process-global env.** The previous `candidate_paths_includes_android_home_when_set` test set/cleared `ANDROID_HOME`, which is unsafe under `cargo test` parallelism. Refactored `candidate_paths` to take a `ResolverEnv` struct so tests pass synthetic env without touching process state.
+- **B1 — AppleScript escape was incomplete.** Newlines and tabs in titles/messages would produce malformed `osascript` invocations. Now escapes `\\`, `"`, `\n`, `\r`, `\t`.
+- **B6 — `dev-mirror.ps1` could wipe an unrelated folder.** `robocopy /MIR` was happy to delete arbitrary destination contents. Added a `.droidsmith-mirror` sentinel: if the destination exists, is non-empty, and lacks the sentinel, the script refuses and points to `-Force`.
+- **C1 — heartbeat error had no retry.** A failed `invoke("heartbeat")` left the user staring at a red string with no next action. Now offers a Retry button, a typed `LoadState` machine (`loading | ok | error`), `aria-live` for the panel, and `role="alert"` on the error message.
+- **C6 — invisible keyboard focus.** Tailwind strips the browser focus ring; the nav buttons had no replacement. Added `focus-visible:ring-2 focus-visible:ring-anvil-300`.
+- **C7 — Windows paths broke mid-word in the heartbeat panel.** Replaced `break-all` with `break-words` plus a `​` injector at `/` and `\` so paths wrap at segment boundaries.
+- **D1 — `os_info::get()` re-read `/etc/os-release` (or the Windows registry) on every heartbeat.** Now cached behind `OnceLock`.
+- **D2 — `adb version` probe ran on every heartbeat.** The whole `AdbResolution` is now cached behind `OnceLock` for the process lifetime.
+- **E6 — smoke test duplicated the milestone list.** Tests now `import { NAV_ITEMS } from "./App"` and assert structural invariants (count, milestone format, descriptions, label uniqueness, ascending order).
+- **TS-config — `tsc -b` was rejecting the project**. `tsconfig.json` referenced `tsconfig.node.json` but the latter wasn't composite-compliant. Consolidated into a single `tsconfig.json` covering `src` + all root configs, with `@types/node` added so `vite.config.ts` typechecks.
+- **Vitest plugin type clash** — using `@vitejs/plugin-react` in `vitest.config.ts` caused a duplicate `Plugin<any>` clash between project vite 6 and vitest's bundled vite 5. Switched to esbuild's built-in `jsx: "automatic"` (we don't render in tests, only resolve `.tsx` modules).
+- **Lint flat-config script** — `eslint src --ext .ts,.tsx` is the v8-era syntax; flat-config wants just `eslint .`. Updated, added matching `format:check` / `format:write` scripts.
+
+### Removed
+
+- `tsconfig.node.json` (consolidated into root `tsconfig.json`).
+- Dead `invalidate_cache_for_tests()` stub — tests bypass the cache via the new pure `resolve()` entry point.
+- `jsdom` devDep — test harness runs in Node now.
+
+### Tooling
+
+- `.github/dependabot.yml`: weekly cargo + npm sweeps, monthly GitHub Actions, with grouping rules so the Tauri ecosystem ships one combined PR per cycle instead of a flood.
+- CI runners switched from `ubuntu-22.04` → `ubuntu-latest`, `macos-14` → `macos-latest`. Added `--locked` to cargo invocations so dependency drift on CI is caught early. Added `permissions: contents: read` and per-job timeouts.
 
 ## [0.0.1] — 2026-05-25 — Scaffold complete
 

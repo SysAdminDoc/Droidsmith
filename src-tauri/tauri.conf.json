@@ -12,6 +12,7 @@
   "app": {
     "windows": [
       {
+        "label": "main",
         "title": "Droidsmith",
         "width": 1280,
         "height": 800,
@@ -21,19 +22,23 @@
         "fullscreen": false,
         "decorations": true,
         "transparent": false,
-        "theme": "Dark"
+        "theme": "Dark",
+        "visible": true
       }
     ],
     "security": {
-      "csp": "default-src 'self'; img-src 'self' asset: data: https://asset.localhost; style-src 'self' 'unsafe-inline'; connect-src 'self' ipc: http://ipc.localhost"
+      "csp": "default-src 'self'; img-src 'self' asset: data: https://asset.localhost; style-src 'self' 'unsafe-inline'; connect-src 'self' ipc: http://ipc.localhost; font-src 'self' data:"
     }
   },
   "bundle": {
     "active": true,
     "targets": "all",
+    "publisher": "Droidsmith contributors",
+    "copyright": "Copyright (c) Droidsmith contributors",
+    "homepage": "https://github.com/SysAdminDoc/Droidsmith",
     "category": "DeveloperTool",
     "shortDescription": "Open-source ADB GUI",
-    "longDescription": "Cross-platform open-source GUI for managing Android devices over ADB. Replacement for ADB AppControl.",
+    "longDescription": "Cross-platform open-source GUI for managing Android devices over ADB. A modern, MIT-licensed alternative to ADB AppControl with no paywalled features and no telemetry.",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

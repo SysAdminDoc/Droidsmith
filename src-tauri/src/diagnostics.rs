@@ -1,12 +1,16 @@
-//! File-only crash log + native-error reporting for cases where the GUI
+//! File-only crash log + native error reporting for cases where the GUI
 //! hasn't started yet (or has died).
 //!
 //! Two surfaces:
-//! 1. `fatal_dialog(title, message)` — synchronous OS-native message box.
-//!    Works without a Tauri runtime (used from `lib.rs::run` on startup
-//!    failure).
-//! 2. `install_panic_hook(log_dir)` — captures Rust panics into a rotating
-//!    log file at `<log_dir>/crash.log`.
+//! 1. [`fatal_dialog`] — synchronous OS-native message box. Works without
+//!    a Tauri runtime; used from [`crate::run`] on startup failure.
+//! 2. [`install_panic_hook`] — captures Rust panics into a rotating log
+//!    file at `<log_dir>/crash.log`.
+//!
+//! Plus a small public helper, [`log_fatal`], that writes a single record
+//! without needing a panic to happen — used by `lib.rs` when
+//! `tauri::Builder::run` returns `Err`, so the user-visible "a crash log
+//! was written" message is actually truthful.
 //!
 //! No network. No PII. The user can always wipe the log folder from
 //! Settings → Diagnostics (UI piece lands in Phase 7).
@@ -14,27 +18,30 @@
 use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 const CRASH_LOG: &str = "crash.log";
 const MAX_LOG_SIZE: u64 = 1_048_576; // 1 MB
 const MAX_LOG_BACKUPS: usize = 5;
 
-/// Best-effort: the OS user's config directory, with the app subfolder.
+/// Resolve a log directory we can write to.
 ///
-/// Used by the panic hook _before_ a Tauri `AppHandle` exists. Once the
-/// app is running we prefer `app.path().app_data_dir()`.
-pub fn fallback_log_dir() -> Option<PathBuf> {
-    let base = std::env::var_os("APPDATA")
-        .map(PathBuf::from)
-        .or_else(|| std::env::var_os("XDG_CONFIG_HOME").map(PathBuf::from))
-        .or_else(|| {
-            std::env::var_os("HOME").map(|h| {
-                let mut p = PathBuf::from(h);
-                p.push(".config");
-                p
-            })
-        })?;
-    Some(base.join("Droidsmith"))
+/// Tries, in order: `$APPDATA/Droidsmith`, `$XDG_CONFIG_HOME/Droidsmith`,
+/// `$HOME/.config/Droidsmith`, `<temp>/Droidsmith`. The final fallback
+/// guarantees the panic hook installs even on minimal containers without
+/// a HOME — better to write somewhere ephemeral than silently lose
+/// every crash.
+pub fn fallback_log_dir() -> PathBuf {
+    if let Some(p) = std::env::var_os("APPDATA").map(PathBuf::from) {
+        return p.join("Droidsmith");
+    }
+    if let Some(p) = std::env::var_os("XDG_CONFIG_HOME").map(PathBuf::from) {
+        return p.join("Droidsmith");
+    }
+    if let Some(home) = std::env::var_os("HOME") {
+        return PathBuf::from(home).join(".config").join("Droidsmith");
+    }
+    std::env::temp_dir().join("Droidsmith")
 }
 
 /// Show a native message box. Falls back to stderr if the OS dialog
@@ -42,6 +49,22 @@ pub fn fallback_log_dir() -> Option<PathBuf> {
 pub fn fatal_dialog(title: &str, message: &str) {
     eprintln!("FATAL: {title}\n{message}");
     show_native(title, message);
+}
+
+/// Append a structured fatal-error record to `<dir>/crash.log` and rotate
+/// if the file is past the size cap. Errors are silently swallowed because
+/// we only call this from already-failing code paths — surfacing a second
+/// failure to the user is worse than the original.
+pub fn log_fatal(dir: &Path, source: &str, message: &str) {
+    if fs::create_dir_all(dir).is_err() {
+        return;
+    }
+    let log_path = dir.join(CRASH_LOG);
+    let _ = rotate_if_needed(&log_path);
+
+    if let Ok(mut f) = OpenOptions::new().create(true).append(true).open(&log_path) {
+        let _ = writeln!(f, "[{}] fatal {source}: {message}", iso_now());
+    }
 }
 
 #[cfg(target_os = "windows")]
@@ -61,9 +84,10 @@ fn show_native(title: &str, message: &str) {
     const MB_OK_ICONERROR: u32 = 0x0000_0010;
     let title_w = to_wide(title);
     let msg_w = to_wide(message);
-    // SAFETY: pointers come from `to_wide`, both buffers contain a final
-    // NUL terminator. MessageBoxW is documented to be thread-safe and to
-    // not retain the input pointers past the call.
+    // SAFETY: both buffers were just allocated, each ends in a NUL
+    // terminator (added by `to_wide`), and MessageBoxW is documented to
+    // not retain the input pointers past the call. The null HWND is
+    // explicitly permitted by the API.
     unsafe {
         ffi_win::MessageBoxW(
             std::ptr::null_mut(),
@@ -89,26 +113,31 @@ fn show_native(title: &str, message: &str) {
 
 #[cfg(all(unix, not(target_os = "macos")))]
 fn show_native(title: &str, message: &str) {
-    // Try zenity → kdialog → notify-send.
-    if std::process::Command::new("zenity")
-        .args(["--error", "--title", title, "--text", message])
-        .status()
-        .ok()
-        .is_some_and(|s| s.success())
-    {
+    // Try zenity → kdialog → notify-send. Each is silenced into a noop
+    // if the binary doesn't exist.
+    if try_run(&["zenity", "--error", "--title", title, "--text", message]) {
         return;
     }
-    if std::process::Command::new("kdialog")
-        .args(["--error", &format!("{title}\n\n{message}")])
-        .status()
-        .ok()
-        .is_some_and(|s| s.success())
-    {
+    if try_run(&["kdialog", "--error", &format!("{title}\n\n{message}")]) {
         return;
     }
-    let _ = std::process::Command::new("notify-send")
-        .args(["-u", "critical", title, message])
-        .status();
+    let _ = try_run(&["notify-send", "-u", "critical", title, message]);
+}
+
+#[cfg(all(unix, not(target_os = "macos")))]
+fn try_run(argv: &[&str]) -> bool {
+    let (cmd, rest) = match argv.split_first() {
+        Some(x) => x,
+        None => return false,
+    };
+    std::process::Command::new(cmd)
+        .args(rest)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false)
 }
 
 #[cfg(target_os = "windows")]
@@ -128,19 +157,34 @@ mod ffi_win {
 
 #[cfg(target_os = "macos")]
 fn escape_applescript(s: &str) -> String {
-    s.replace('\\', "\\\\").replace('"', "\\\"")
+    // AppleScript string literals: backslash, double-quote, and control
+    // chars (newline, tab) need escapes. Anything else passes through.
+    let mut out = String::with_capacity(s.len());
+    for c in s.chars() {
+        match c {
+            '\\' => out.push_str("\\\\"),
+            '"' => out.push_str("\\\""),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            _ => out.push(c),
+        }
+    }
+    out
 }
 
-/// Hook Rust panics so they land in a rotating log file. Idempotent.
+/// Hook Rust panics so they land in a rotating log file. Idempotent in
+/// the sense that each call chains the prior hook, so calling multiple
+/// times records each panic once per installed hook (avoid that).
 pub fn install_panic_hook(log_dir: PathBuf) {
     let original = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
-        let _ = write_crash_line(&log_dir, info);
+        let _ = write_panic_record(&log_dir, info);
         original(info);
     }));
 }
 
-fn write_crash_line(dir: &Path, info: &std::panic::PanicHookInfo<'_>) -> std::io::Result<()> {
+fn write_panic_record(dir: &Path, info: &std::panic::PanicHookInfo<'_>) -> std::io::Result<()> {
     fs::create_dir_all(dir)?;
     let log_path = dir.join(CRASH_LOG);
 
@@ -168,7 +212,7 @@ fn write_crash_line(dir: &Path, info: &std::panic::PanicHookInfo<'_>) -> std::io
 
 fn rotate_if_needed(log_path: &Path) -> std::io::Result<()> {
     let Ok(meta) = log_path.metadata() else {
-        return Ok(());
+        return Ok(()); // doesn't exist yet — nothing to rotate
     };
     if meta.len() <= MAX_LOG_SIZE {
         return Ok(());
@@ -179,18 +223,53 @@ fn rotate_if_needed(log_path: &Path) -> std::io::Result<()> {
     for i in (1..MAX_LOG_BACKUPS).rev() {
         let from = log_path.with_extension(format!("log.{i}"));
         let to = log_path.with_extension(format!("log.{}", i + 1));
-        let _ = fs::rename(from, to);
+        if from.exists() {
+            // Surface rotation failures to stderr so a wedged file lock
+            // doesn't silently swallow every subsequent crash record.
+            if let Err(e) = fs::rename(&from, &to) {
+                eprintln!("[droidsmith] crash log rotate failed ({from:?} -> {to:?}): {e}");
+            }
+        }
     }
     fs::rename(log_path, log_path.with_extension("log.1"))?;
     Ok(())
 }
 
+/// RFC3339-ish UTC timestamp. We hand-roll instead of pulling in `chrono`
+/// or `time`; the format is `YYYY-MM-DDTHH:MM:SSZ`. Good enough for a
+/// crash log that gets grepped by humans.
 fn iso_now() -> String {
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default()
+    let secs = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or(Duration::ZERO)
         .as_secs();
-    format!("{now}") // seconds-since-epoch; full ISO formatting deferred to R-051 logcat work
+    format_utc_rfc3339(secs)
+}
+
+#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+fn format_utc_rfc3339(epoch_secs: u64) -> String {
+    // Days since 1970-01-01 + seconds within the day.
+    let secs_in_day: u64 = 86_400;
+    let total_days = (epoch_secs / secs_in_day) as i64;
+    let time_of_day = epoch_secs % secs_in_day;
+    let hour = (time_of_day / 3600) as u32;
+    let minute = ((time_of_day % 3600) / 60) as u32;
+    let second = (time_of_day % 60) as u32;
+
+    // Convert days-since-epoch to Y-M-D using Howard Hinnant's algorithm
+    // (public domain). Handles the Gregorian calendar correctly.
+    let z = total_days + 719_468;
+    let era = z.div_euclid(146_097);
+    let doe = (z - era * 146_097) as u64; // [0, 146096]
+    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
+    let y = yoe as i64 + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let day = (doy - (153 * mp + 2) / 5 + 1) as u32;
+    let month = if mp < 10 { mp + 3 } else { mp - 9 } as u32;
+    let year = if month <= 2 { y + 1 } else { y };
+
+    format!("{year:04}-{month:02}-{day:02}T{hour:02}:{minute:02}:{second:02}Z")
 }
 
 #[cfg(test)]
@@ -198,7 +277,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn rotate_when_under_threshold_is_noop() {
+    fn rotate_under_threshold_is_noop() {
         let tmp = std::env::temp_dir().join("droidsmith-rot-test-a");
         let _ = fs::remove_dir_all(&tmp);
         fs::create_dir_all(&tmp).unwrap();
@@ -220,5 +299,45 @@ mod tests {
         rotate_if_needed(&log).unwrap();
         assert!(!log.exists() || fs::read(&log).unwrap().is_empty());
         assert!(log.with_extension("log.1").exists());
+    }
+
+    #[test]
+    fn iso_format_known_anchors() {
+        assert_eq!(format_utc_rfc3339(0), "1970-01-01T00:00:00Z");
+        assert_eq!(format_utc_rfc3339(1), "1970-01-01T00:00:01Z");
+        // 2024-02-29T12:34:56Z (leap year)
+        assert_eq!(format_utc_rfc3339(1_709_210_096), "2024-02-29T12:34:56Z");
+        // 2000-03-01T00:00:00Z — the day after a century leap day
+        assert_eq!(format_utc_rfc3339(951_868_800), "2000-03-01T00:00:00Z");
+    }
+
+    #[test]
+    fn log_fatal_creates_file_and_appends() {
+        let tmp = std::env::temp_dir().join("droidsmith-fatal-test");
+        let _ = fs::remove_dir_all(&tmp);
+        log_fatal(&tmp, "init", "boom");
+        let log = tmp.join(CRASH_LOG);
+        let body = fs::read_to_string(&log).unwrap();
+        assert!(body.contains("fatal init: boom"));
+        log_fatal(&tmp, "init", "second");
+        let body = fs::read_to_string(&log).unwrap();
+        assert!(body.contains("boom"));
+        assert!(body.contains("second"));
+    }
+
+    #[test]
+    fn fallback_log_dir_returns_something() {
+        // It never returns None now — must always return a path.
+        let p = fallback_log_dir();
+        assert!(!p.as_os_str().is_empty());
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn applescript_escape_covers_special_chars() {
+        assert_eq!(escape_applescript("a\\b"), "a\\\\b");
+        assert_eq!(escape_applescript("a\"b"), "a\\\"b");
+        assert_eq!(escape_applescript("line1\nline2"), "line1\\nline2");
+        assert_eq!(escape_applescript("tab\there"), "tab\\there");
     }
 }

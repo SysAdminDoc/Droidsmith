@@ -1,8 +1,15 @@
 import { defineConfig } from "vitest/config";
 
+// No @vitejs/plugin-react here — esbuild (which Vitest runs internally)
+// has built-in JSX transformation, and we don't render components in
+// tests. Adding the plugin caused a duplicate-Plugin-type clash between
+// the project's vite 6 and vitest's bundled vite 5.
 export default defineConfig({
+  esbuild: {
+    jsx: "automatic",
+  },
   test: {
-    environment: "jsdom",
+    environment: "node",
     globals: false,
     include: ["src/**/*.test.{ts,tsx}"],
     coverage: {
