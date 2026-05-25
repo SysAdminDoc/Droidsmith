@@ -4,6 +4,7 @@
 pub mod adb;
 mod commands;
 mod diagnostics;
+mod fs_util;
 mod journal;
 /// `packs` is `pub` so the `droidsmith-pack-lint` binary (which links
 /// against this crate as `droidsmith_lib`) can reach the loader + lint
@@ -26,7 +27,6 @@ pub fn run() {
     diagnostics::install_panic_hook(log_dir.clone());
 
     let builder = tauri::Builder::default()
-        .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             heartbeat,

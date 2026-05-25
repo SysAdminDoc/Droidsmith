@@ -11,7 +11,7 @@
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
-use droidsmith_lib::packs::{lint, Pack};
+use droidsmith_lib::packs;
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -55,12 +55,7 @@ fn main() -> ExitCode {
 }
 
 fn lint_file(path: &Path) -> Result<usize, String> {
-    let text = std::fs::read_to_string(path).map_err(|e| format!("read failed: {e}"))?;
-    let pack: Pack = serde_yml::from_str(&text).map_err(|e| format!("parse failed: {e}"))?;
-    let issues = lint(&pack);
-    if issues.is_empty() {
-        Ok(pack.packages.len())
-    } else {
-        Err(issues.join("; "))
-    }
+    packs::load(path)
+        .map(|pack| pack.packages.len())
+        .map_err(|e| e.to_string())
 }

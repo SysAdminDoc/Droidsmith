@@ -30,7 +30,7 @@ pub struct AdbResolution {
 
 #[derive(Debug, Serialize, Clone, Copy, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
-#[allow(dead_code)] // `Bundled` is reserved for R-010 once the sidecar lands
+#[allow(dead_code)] // `Bundled` is reserved for R-010 once bundle wiring lands.
 pub enum ResolveSource {
     /// Found on the user's `PATH`.
     Path,
@@ -42,8 +42,8 @@ pub enum ResolveSource {
     Homebrew,
     /// Found at a common Linux distro install location.
     DistroPackage,
-    /// Bundled with Droidsmith as a sidecar (resolved at runtime by the
-    /// shell plugin, not by this fn).
+    /// Bundled with Droidsmith. Reserved for the release pipeline once
+    /// `bundle.externalBin` and resolver wiring are in place.
     Bundled,
     /// Not found anywhere we know to look.
     NotFound,
@@ -94,8 +94,8 @@ static CACHE: OnceLock<AdbResolution> = OnceLock::new();
 /// 5. Homebrew prefix on macOS
 /// 6. Common Linux distro packages
 ///
-/// The bundled sidecar is resolved separately via the Tauri shell plugin
-/// (`bundle.externalBin` in `tauri.conf.json`) — lands with R-010.
+/// Bundled platform-tools resolution is intentionally not active yet;
+/// `bundle.externalBin` and resolver wiring land together in R-010.
 ///
 /// Result is cached for the process lifetime. Call `invalidate_cache` to
 /// force a rescan (e.g. after the user installed Android Studio while the

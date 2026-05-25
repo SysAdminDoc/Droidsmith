@@ -18,6 +18,8 @@ use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
+const MAX_QUIRKS_BYTES: u64 = 512 * 1024;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Quirk {
     /// Stable id for cross-referencing in bug reports.
@@ -99,10 +101,13 @@ pub enum QuirkError {
 }
 
 pub fn load_file(path: &Path) -> Result<Vec<Quirk>, QuirkError> {
-    let text = std::fs::read_to_string(path).map_err(|source| QuirkError::Read {
-        path: path.to_path_buf(),
-        source,
-    })?;
+    let text =
+        crate::fs_util::read_to_string_limited(path, MAX_QUIRKS_BYTES).map_err(|source| {
+            QuirkError::Read {
+                path: path.to_path_buf(),
+                source,
+            }
+        })?;
     serde_yml::from_str(&text).map_err(|source| QuirkError::Parse {
         path: path.to_path_buf(),
         source,

@@ -55,6 +55,10 @@ $PinnedPreview.Sha256 = "SKIP"  # rolling channel; checksum can't be pinned
 
 $Pinned = if ($Channel -eq "preview") { $PinnedPreview } else { $PinnedStable }
 
+if ($Channel -eq "stable" -and $Pinned.Sha256 -like "PLACEHOLDER-*") {
+    throw "[fetch-platform-tools] stable checksum is not pinned yet; refusing to download. Update the SHA from Google's published .sha256, or use -Channel preview for local experiments."
+}
+
 $triples = @("x86_64-pc-windows-msvc", "aarch64-pc-windows-msvc")
 
 function Test-StagedComplete {

@@ -14,6 +14,7 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::adb::device::valid_serial;
 use crate::adb::transport::{AdbTransport, TransportError};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -146,6 +147,7 @@ pub fn apply(
     plan: PlannedAction,
     now_iso: &str,
 ) -> Result<AppliedAction, TransportError> {
+    validate_plan(&plan)?;
     let argv: Vec<&str> = plan.args.iter().map(String::as_str).collect();
     let stdout = transport.shell(&plan.request.serial, &argv)?;
     // `pm disable-user --user 0 com.foo` prints "Package com.foo new
@@ -162,6 +164,33 @@ pub fn apply(
         stdout,
         applied_at: now_iso.to_string(),
     })
+}
+
+/// Validate an IPC/CLI-supplied plan before execution. Plans cross a
+/// trust boundary: the renderer can send arbitrary JSON, so execution
+/// must prove the args match the canonical plan for the request instead
+/// of trusting `plan.args`.
+pub fn validate_plan(plan: &PlannedAction) -> Result<(), TransportError> {
+    if !valid_serial(&plan.request.serial) {
+        return Err(TransportError::Parse(format!(
+            "invalid device serial {:?}",
+            plan.request.serial
+        )));
+    }
+    if !crate::adb::packages::valid_package_name(&plan.request.package) {
+        return Err(TransportError::Parse(format!(
+            "invalid package id {:?}",
+            plan.request.package
+        )));
+    }
+
+    let expected = synth_args(&plan.request);
+    if plan.args != expected {
+        return Err(TransportError::Parse(
+            "planned adb args do not match the requested action".to_string(),
+        ));
+    }
+    Ok(())
 }
 
 /// `pm` exits 0 even when the package action fails — the failure shows
@@ -287,6 +316,43 @@ mod tests {
             }
             other => panic!("expected Exit, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn apply_refuses_tampered_plan_args() {
+        let mock = MockTransport::new();
+        let mut p = plan(ActionRequest {
+            serial: "abc".into(),
+            package: "com.x".into(),
+            kind: ActionKind::Disable,
+        });
+        p.args = vec!["pm".into(), "clear".into(), "com.x".into()];
+        let err = apply(&mock, p, "2026-05-25T12:00:00Z").unwrap_err();
+        assert!(matches!(err, TransportError::Parse(_)));
+    }
+
+    #[test]
+    fn apply_refuses_invalid_package_even_if_plan_exists() {
+        let mock = MockTransport::new();
+        let p = plan(ActionRequest {
+            serial: "abc".into(),
+            package: ".dotleading".into(),
+            kind: ActionKind::Disable,
+        });
+        let err = apply(&mock, p, "2026-05-25T12:00:00Z").unwrap_err();
+        assert!(matches!(err, TransportError::Parse(_)));
+    }
+
+    #[test]
+    fn apply_refuses_invalid_serial() {
+        let mock = MockTransport::new();
+        let p = plan(ActionRequest {
+            serial: "../journal".into(),
+            package: "com.x".into(),
+            kind: ActionKind::Disable,
+        });
+        let err = apply(&mock, p, "2026-05-25T12:00:00Z").unwrap_err();
+        assert!(matches!(err, TransportError::Parse(_)));
     }
 
     #[test]

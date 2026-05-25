@@ -27,6 +27,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::adb::actions::{ActionKind, ActionRequest};
 
+const MAX_PROFILE_BYTES: u64 = 256 * 1024;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Profile {
     pub name: String,
@@ -79,10 +81,13 @@ pub enum ProfileError {
 }
 
 pub fn load(path: &std::path::Path) -> Result<Profile, ProfileError> {
-    let text = std::fs::read_to_string(path).map_err(|source| ProfileError::Read {
-        path: path.to_path_buf(),
-        source,
-    })?;
+    let text =
+        crate::fs_util::read_to_string_limited(path, MAX_PROFILE_BYTES).map_err(|source| {
+            ProfileError::Read {
+                path: path.to_path_buf(),
+                source,
+            }
+        })?;
     let profile: Profile = serde_yml::from_str(&text).map_err(|source| ProfileError::Parse {
         path: path.to_path_buf(),
         source,
@@ -136,6 +141,39 @@ pub fn requests_for(profile: &Profile, serial: &str) -> Vec<ActionRequest> {
             kind: a.kind,
         })
         .collect()
+}
+
+pub fn serial_match_issues(profile: &Profile, serial: &str) -> Vec<String> {
+    let mut issues = Vec::new();
+    let prefix = profile.device.require_serial_prefix.trim();
+    if !prefix.is_empty() && !serial.starts_with(prefix) {
+        issues.push(format!(
+            "profile requires a device serial starting with {prefix:?}, got {serial:?}"
+        ));
+    }
+    issues
+}
+
+pub fn manufacturer_match_issues(profile: &Profile, manufacturer: Option<&str>) -> Vec<String> {
+    let mut issues = Vec::new();
+    let expected = profile.device.require_manufacturer.trim();
+    if expected.is_empty() {
+        return issues;
+    }
+
+    let Some(actual) = manufacturer.map(str::trim).filter(|s| !s.is_empty()) else {
+        issues.push(format!(
+            "profile requires manufacturer {expected:?}, but the device did not report one"
+        ));
+        return issues;
+    };
+
+    if !actual.eq_ignore_ascii_case(expected) {
+        issues.push(format!(
+            "profile requires manufacturer {expected:?}, got {actual:?}"
+        ));
+    }
+    issues
 }
 
 #[cfg(test)]
@@ -195,6 +233,29 @@ actions:
         assert_eq!(rs[0].serial, "abc-123");
         assert_eq!(rs[0].kind, ActionKind::Disable);
         assert_eq!(rs[1].kind, ActionKind::Enable);
+    }
+
+    #[test]
+    fn device_match_checks_serial_prefix_and_manufacturer() {
+        let p: Profile = serde_yml::from_str(
+            r#"
+name: "x"
+version: "1"
+device:
+  require_serial_prefix: "ABC"
+  require_manufacturer: "Google"
+actions:
+  - kind: disable
+    package: com.x
+"#,
+        )
+        .unwrap();
+
+        assert!(serial_match_issues(&p, "ABC123").is_empty());
+        assert!(!serial_match_issues(&p, "XYZ123").is_empty());
+        assert!(manufacturer_match_issues(&p, Some("google")).is_empty());
+        assert!(!manufacturer_match_issues(&p, Some("Samsung")).is_empty());
+        assert!(!manufacturer_match_issues(&p, None).is_empty());
     }
 
     #[test]

@@ -58,7 +58,8 @@ impl Journal {
     pub fn open(dir: &Path, serial: &str) -> std::io::Result<Self> {
         fs::create_dir_all(dir)?;
         let path = dir.join(format!("{}.jsonl", safe_serial(serial)));
-        let mut entries = Vec::new();
+        let mut entries: Vec<JournalEntry> = Vec::new();
+        let mut max_id = 0u64;
         if path.exists() {
             let f = File::open(&path)?;
             for line in BufReader::new(f).lines() {
@@ -67,7 +68,14 @@ impl Journal {
                     continue;
                 }
                 match serde_json::from_str::<JournalEntry>(&line) {
-                    Ok(e) => entries.push(e),
+                    Ok(e) => {
+                        max_id = max_id.max(e.id);
+                        if let Some(existing) = entries.iter_mut().find(|entry| entry.id == e.id) {
+                            *existing = e;
+                        } else {
+                            entries.push(e);
+                        }
+                    }
                     Err(err) => {
                         eprintln!(
                             "[journal] dropping corrupt line in {path:?}: {err} (line preserved at end)"
@@ -78,7 +86,7 @@ impl Journal {
                 }
             }
         }
-        let next_id = entries.last().map(|e| e.id + 1).unwrap_or(1);
+        let next_id = max_id + 1;
         Ok(Self {
             path,
             entries,
@@ -167,18 +175,24 @@ impl Journal {
 
 /// Build a filename-safe variant of a device serial. Wireless serials
 /// look like `192.168.1.42:5555` which is invalid as a Windows filename
-/// (`:` is illegal). Replace problematic chars with `_`.
+/// (`:` is illegal). Escape problematic chars instead of replacing them
+/// so `a:b` and `a_b` never collide.
 fn safe_serial(serial: &str) -> String {
-    serial
-        .chars()
-        .map(|c| {
-            if c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '.' {
-                c
-            } else {
-                '_'
-            }
-        })
-        .collect()
+    let mut out = String::with_capacity(serial.len());
+    for c in serial.chars() {
+        if c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '.' {
+            out.push(c);
+        } else {
+            out.push_str("_x");
+            out.push_str(&format!("{:X}", c as u32));
+            out.push('_');
+        }
+    }
+    if out.is_empty() {
+        "unknown".to_string()
+    } else {
+        out
+    }
 }
 
 /// Given an entry id and the journal it lives in, synthesise the
@@ -277,9 +291,32 @@ mod tests {
     }
 
     #[test]
+    fn reload_after_undo_keeps_last_state_per_id() {
+        let dir = fresh_tmp_dir("link-reload");
+        let mut j = Journal::open(&dir, "abc").unwrap();
+        j.record(fake_applied("abc", "com.foo", ActionKind::Disable))
+            .unwrap();
+        j.record_undo(1, fake_applied("abc", "com.foo", ActionKind::Enable))
+            .unwrap();
+        drop(j);
+
+        let mut reloaded = Journal::open(&dir, "abc").unwrap();
+        assert_eq!(reloaded.entries().len(), 2);
+        assert_eq!(reloaded.entries()[0].id, 1);
+        assert_eq!(reloaded.entries()[0].undone_by, Some(2));
+        assert_eq!(reloaded.entries()[1].id, 2);
+        reloaded
+            .record(fake_applied("abc", "com.bar", ActionKind::Disable))
+            .unwrap();
+        assert_eq!(reloaded.entries().last().unwrap().id, 3);
+    }
+
+    #[test]
     fn safe_serial_handles_wireless_colons() {
-        assert_eq!(safe_serial("192.168.1.42:5555"), "192.168.1.42_5555");
+        assert_eq!(safe_serial("192.168.1.42:5555"), "192.168.1.42_x3A_5555");
         assert_eq!(safe_serial("abc-123_def.0"), "abc-123_def.0");
+        assert_ne!(safe_serial("a:b"), safe_serial("a_b"));
+        assert_eq!(safe_serial(""), "unknown");
     }
 
     #[test]

@@ -6,15 +6,15 @@ export function AppsRoute() {
       <PaneHeader
         title="Apps"
         milestone="R-020"
-        description="Installed apps with real labels and icons, filters for user/system/disabled, and bulk-select actions feeding the queue."
+        description="Review installed packages with readable labels, precise filters, and a bulk action queue that makes every uninstall, disable, or extract step previewable."
       />
       <PlaceholderBody
         bullets={[
-          "Two-pass union of `pm list packages -e` and `-d` (already wired in the Rust backend).",
-          "Filters: user vs system, enabled vs disabled, has-data, recently-installed.",
-          "Multi-select drives the bulk action queue (R-022) with a preview-diff confirmation.",
-          "Drag-and-drop APK = silent install, like scrcpy 4 (R-023).",
-          "Per-app icon and label resolution via pure-Rust APK parsing (F-NEW-09).",
+          "Merge enabled and disabled package scans so the list never hides apps that matter.",
+          "Filter quickly by user, system, disabled, data-bearing, and recently installed packages.",
+          "Send multi-select choices into a preview queue before any bulk action is applied.",
+          "Install APKs from drag and drop when the silent install path is available.",
+          "Resolve package labels and icons through the Rust APK parser instead of raw package names.",
         ]}
         commands={[
           {
@@ -49,15 +49,15 @@ export function DebloatRoute() {
       <PaneHeader
         title="Debloat"
         milestone="R-033"
-        description="Pick a community pack, preview the diff, apply atomically, undo from the journal."
+        description="Choose an OEM-aware pack, understand the risk before applying it, and keep every debloat change reversible through the journal."
       />
       <PlaceholderBody
         bullets={[
-          "Pack picker filters by detected manufacturer / Android version (matches PackTargets).",
-          "Preview-diff shows synthesized adb commands AND vendor-quirk warnings (R-034 already wired on the Rust side).",
-          "Apply runs as a transaction-with-resume — a failure pauses the batch and surfaces the explanatory error.",
-          "Undo button on every row, backed by the per-device journal.",
-          "Optional UAD-NG list import (R-036) attributes upstream cleanly.",
+          "Filter packs by detected manufacturer and Android version before the user chooses one.",
+          "Show the generated ADB commands beside vendor-specific quirk warnings.",
+          "Apply changes as a resumable transaction so failures pause instead of burying context.",
+          "Attach undo controls to journal rows for device-specific recovery.",
+          "Import UAD-NG lists with clean upstream attribution.",
         ]}
         commands={[
           {
@@ -92,15 +92,15 @@ export function MirrorRoute() {
       <PaneHeader
         title="Mirror"
         milestone="R-040"
-        description="scrcpy 4.x-driven screen mirror with audio, recording, and drag-APK-installs."
+        description="Launch polished scrcpy sessions with sensible defaults for viewing, recording, file drop, and APK install workflows."
       />
       <PlaceholderBody
         bullets={[
-          "Spawns the bundled scrcpy sidecar with per-device defaults (60fps, audio on, max-size matched).",
-          "Drag an APK onto the window = silent install (scrcpy native behaviour).",
-          "Drag any other file = push to /sdcard/Download (configurable via --push-target).",
-          "Record button toggles `--record session.mp4`.",
-          "Per-device session prefs persist (bitrate, max-size, audio, codec).",
+          "Launch the bundled scrcpy sidecar with per-device defaults for frame rate, audio, and max size.",
+          "Treat dropped APK files as install intents when scrcpy supports the path.",
+          "Push non-APK files to the configured device download location.",
+          "Make recording an explicit session state with a clear output target.",
+          "Persist bitrate, max size, audio, and codec preferences per device.",
         ]}
         commands={[
           {
@@ -125,14 +125,14 @@ export function ConsoleRoute() {
       <PaneHeader
         title="Console"
         milestone="R-050"
-        description="Multi-tab adb shell with history, favourites, syntax highlighting."
+        description="Run shell commands in a focused workspace with tabs, favorites, streamed output, and copyable diagnostic snippets."
       />
       <PlaceholderBody
         bullets={[
-          "Each tab targets one (serial, command). Persists between sessions.",
-          "Favourites slot for the 8 commands you actually use (dumpsys battery, top -m 5, etc.).",
-          "Output is streamed (Tauri events), so logcat-style commands don't wedge the UI.",
-          "Copy-as-snippet button so bug reports come with reproducible commands.",
+          "Persist each tab by target device and command so sessions can resume cleanly.",
+          "Keep a compact favorite shelf for frequently repeated diagnostics.",
+          "Stream output through Tauri events so long-running commands stay responsive.",
+          "Copy commands and output as reproducible report snippets.",
         ]}
         commands={[
           {
@@ -157,14 +157,14 @@ export function LogcatRoute() {
       <PaneHeader
         title="Logcat"
         milestone="R-051"
-        description="Live tail with tag / pid / level filters and grep."
+        description="Tail device logs with fast filters, pause and save controls, and grouping that makes repeated events easier to read."
       />
       <PlaceholderBody
         bullets={[
-          "Streams `adb logcat -v threadtime` per device.",
-          "Tag/pid/level filters compile into a single grep so the stream stays cheap.",
-          "Pause / Clear / Save-to-file. The journal links to saved log slices.",
-          "Sentry-style line grouping for repeat events.",
+          "Stream `adb logcat -v threadtime` per selected device.",
+          "Compile tag, pid, level, and text filters into one cheap device-side query.",
+          "Expose pause, clear, and save-to-file controls without hiding live status.",
+          "Group repeated lines so noisy errors stay scannable.",
         ]}
         commands={[
           {
@@ -189,14 +189,14 @@ export function FastbootRoute() {
       <PaneHeader
         title="Fastboot"
         milestone="R-052"
-        description="Fastboot mode, partition inspector, slot management."
+        description="Inspect bootloader devices, partition state, and slots with clear safety copy before any destructive command is enabled."
       />
       <PlaceholderBody
         bullets={[
-          "Detects devices in fastboot/bootloader mode (separate from `adb devices`).",
-          "Reads partition table + current slot via `fastboot getvar all`.",
-          "Lock/unlock warnings spelled out before any destructive action.",
-          "Bundled fastboot sidecar landed with R-010 — same fetch script as adb.",
+          "Detect fastboot and bootloader-mode devices separately from regular ADB targets.",
+          "Read partition table and current slot data through `fastboot getvar all`.",
+          "Spell out lock and unlock risk before enabling destructive actions.",
+          "Use the bundled fastboot sidecar once the shared platform-tools fetch path is active.",
         ]}
         commands={[
           {

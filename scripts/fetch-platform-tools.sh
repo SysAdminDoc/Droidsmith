@@ -33,7 +33,15 @@ CHANNEL=stable
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --force)   FORCE=1; shift ;;
-        --channel) CHANNEL="$2"; shift 2 ;;
+        --channel)
+            if [[ $# -lt 2 ]]; then
+                echo "--channel requires stable or preview" >&2
+                usage
+                exit 2
+            fi
+            CHANNEL="$2"
+            shift 2
+            ;;
         -h|--help) usage; exit 0 ;;
         *)         echo "unknown arg: $1" >&2; usage; exit 2 ;;
     esac
@@ -88,6 +96,12 @@ if [[ "$OS" == "linux" ]]; then
 else
     URL="$URL_DARWIN"
     SHA="$SHA_DARWIN"
+fi
+
+if [[ "$CHANNEL" == "stable" && "$SHA" == PLACEHOLDER-* ]]; then
+    echo "[fetch-platform-tools] stable checksum is not pinned yet; refusing to download." >&2
+    echo "Update the SHA in this script from Google's published .sha256, or use --channel preview for local experiments." >&2
+    exit 1
 fi
 
 staged_complete=1

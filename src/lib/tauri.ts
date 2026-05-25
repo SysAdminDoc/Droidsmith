@@ -59,6 +59,7 @@ export type SerializedDeviceState =
   | "bootloader"
   | "sideload"
   | "no_permissions"
+  | { other: string }
   | { Other: string };
 
 export type ListDevicesResult = {
@@ -71,7 +72,8 @@ export function summarizeState(s: SerializedDeviceState): string {
   if (typeof s === "string") {
     return s.replace(/_/g, " ");
   }
-  return `other (${s.Other})`;
+  const raw = "other" in s ? s.other : s.Other;
+  return `other (${raw})`;
 }
 
 /** Detect whether we're running inside Tauri vs a plain Vite dev page.

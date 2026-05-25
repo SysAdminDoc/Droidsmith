@@ -46,7 +46,15 @@ while [[ $# -gt 0 ]]; do
         --watch)   WATCH=1; shift ;;
         --reverse) REVERSE=1; shift ;;
         --force)   FORCE=1; shift ;;
-        --dest)    DEST="$2"; shift 2 ;;
+        --dest)
+            if [[ $# -lt 2 ]]; then
+                echo "--dest requires a path" >&2
+                usage
+                exit 2
+            fi
+            DEST="$2"
+            shift 2
+            ;;
         -h|--help) usage; exit 0 ;;
         *)         echo "unknown arg: $1" >&2; usage; exit 2 ;;
     esac
@@ -60,6 +68,20 @@ if [[ "$REVERSE" == "1" ]]; then
     if [[ ! -d "$DST/.git" ]]; then
         echo "[dev-mirror] reverse target $DST is not a git repo; refusing" >&2
         exit 1
+    fi
+    if [[ "$FORCE" == "0" ]]; then
+        STATUS_FILE="$(mktemp -t droidsmith-dev-mirror-status.XXXXXX)"
+        if ! git -C "$DST" status --porcelain >"$STATUS_FILE"; then
+            rm -f "$STATUS_FILE"
+            echo "[dev-mirror] could not inspect git status for $DST; refusing reverse mirror" >&2
+            exit 1
+        fi
+        if [[ -s "$STATUS_FILE" ]]; then
+            rm -f "$STATUS_FILE"
+            echo "[dev-mirror] reverse target has uncommitted changes; commit/stash them or pass --force" >&2
+            exit 1
+        fi
+        rm -f "$STATUS_FILE"
     fi
 else
     SRC="$REPO_ROOT"

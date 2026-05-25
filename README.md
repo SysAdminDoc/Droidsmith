@@ -13,6 +13,20 @@ panel reports OS, Tauri, Rust, and ADB resolution. Feature surface lands per
 [ROADMAP.md](ROADMAP.md); shipped work is logged in [CHANGELOG.md](CHANGELOG.md);
 design rationale lives in [RESEARCH_DEEPDIVE.md](RESEARCH_DEEPDIVE.md).
 
+## Screenshots
+
+### Device Readiness
+
+![Droidsmith device readiness screen](docs/screenshots/droidsmith-overview.png)
+
+### Package Workflow
+
+![Droidsmith package workflow screen](docs/screenshots/droidsmith-apps.png)
+
+### Mirror Workflow
+
+![Droidsmith mirror workflow screen](docs/screenshots/droidsmith-mirror.png)
+
 ## Why another ADB GUI?
 
 ADB AppControl is the closest thing the Windows ecosystem has to a polished

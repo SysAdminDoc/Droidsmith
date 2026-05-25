@@ -1,46 +1,10 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Scoped capability set for the Droidsmith main window. The renderer cannot run arbitrary shell commands — every privileged operation flows through a Rust #[tauri::command]. The shell:allow-execute scopes below exist so the Rust side can spawn the bundled sidecar binaries (R-010 / R-040) and so the renderer can drop in renderer-driven scrcpy launches later without a capability change. The scopes are intentionally tight: any new sidecar argument family requires expanding this file in PR review.",
+  "description": "Scoped capability set for the Droidsmith main window. Privileged Android tooling flows through Rust #[tauri::command] handlers rather than renderer-launched shell commands.",
   "windows": ["main"],
   "permissions": [
     "core:default",
-    "dialog:default",
-    {
-      "identifier": "shell:allow-execute",
-      "allow": [
-        {
-          "name": "adb",
-          "sidecar": true,
-          "args": [
-            { "validator": "^(devices|version|kill-server|start-server|connect|disconnect|pair|reconnect|forward|reverse|wait-for-device|track-devices)$" },
-            { "validator": "^[A-Za-z0-9_:.\\-]{1,256}$" },
-            { "validator": "^[A-Za-z0-9_:.\\-]{1,256}$" },
-            { "validator": "^[A-Za-z0-9_:.\\-]{1,256}$" }
-          ]
-        },
-        {
-          "name": "fastboot",
-          "sidecar": true,
-          "args": [
-            { "validator": "^(devices|reboot|getvar|oem|flashing|version)$" },
-            { "validator": "^[A-Za-z0-9_:.\\-]{1,256}$" },
-            { "validator": "^[A-Za-z0-9_:.\\-]{1,256}$" }
-          ]
-        },
-        {
-          "name": "scrcpy",
-          "sidecar": true,
-          "args": [
-            { "validator": "^--[a-z0-9-]+(=.{0,512})?$" },
-            { "validator": "^--[a-z0-9-]+(=.{0,512})?$" },
-            { "validator": "^--[a-z0-9-]+(=.{0,512})?$" },
-            { "validator": "^--[a-z0-9-]+(=.{0,512})?$" },
-            { "validator": "^--[a-z0-9-]+(=.{0,512})?$" },
-            { "validator": "^--[a-z0-9-]+(=.{0,512})?$" }
-          ]
-        }
-      ]
-    }
+    "dialog:default"
   ]
 }

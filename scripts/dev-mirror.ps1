@@ -49,6 +49,15 @@ function Test-DestinationSafe {
         if (-not (Test-Path (Join-Path $Path ".git"))) {
             return @{ Safe = $false; Reason = "reverse target $Path is not a git repo" }
         }
+        if (-not $Force) {
+            $status = & git -C $Path status --porcelain
+            if ($LASTEXITCODE -ne 0) {
+                return @{ Safe = $false; Reason = "could not inspect git status for reverse target $Path" }
+            }
+            if ($status) {
+                return @{ Safe = $false; Reason = "reverse target $Path has uncommitted changes; commit/stash them or pass -Force" }
+            }
+        }
         return @{ Safe = $true }
     }
 

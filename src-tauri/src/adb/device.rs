@@ -96,6 +96,17 @@ pub fn looks_wireless(s: &str) -> bool {
     !host.is_empty() && (host.contains('.') || host.contains(':') || host == "localhost")
 }
 
+/// Conservative validator for ADB serials accepted over IPC/CLI. The
+/// serial is passed as an argv element, not through a shell, but keeping
+/// it narrow prevents path-like, whitespace, and control-character
+/// values from reaching ADB or journal filenames.
+pub fn valid_serial(s: &str) -> bool {
+    !s.is_empty()
+        && s.len() <= 256
+        && s.chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '-' | '.' | ':'))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -146,5 +157,18 @@ mod tests {
         assert!(!looks_wireless("host:notnum"));
         assert!(!looks_wireless(""));
         assert!(!looks_wireless(":5555")); // no host
+    }
+
+    #[test]
+    fn valid_serial_rejects_path_like_or_empty_values() {
+        assert!(valid_serial("R5CT60ZQR4M"));
+        assert!(valid_serial("emulator-5554"));
+        assert!(valid_serial("192.168.1.42:5555"));
+        assert!(valid_serial("device.local:5037"));
+        assert!(!valid_serial(""));
+        assert!(!valid_serial("../journal"));
+        assert!(!valid_serial("serial with spaces"));
+        assert!(!valid_serial("serial/with/slash"));
+        assert!(!valid_serial(&"a".repeat(257)));
     }
 }

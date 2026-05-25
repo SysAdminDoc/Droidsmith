@@ -6,9 +6,17 @@ import {
   inTauri,
   summarizeState,
   type ListDevicesResult,
+  type SerializedDeviceState,
 } from "../lib/tauri";
 
-import { Card, PaneHeader } from "./common";
+import {
+  Badge,
+  Button,
+  Card,
+  PaneHeader,
+  SkeletonLine,
+  StatePanel,
+} from "./common";
 
 type State =
   | { kind: "loading" }
@@ -45,83 +53,102 @@ export default function DevicesRoute() {
       <PaneHeader
         title="Devices"
         milestone="R-012"
-        description="Connected devices via USB and TCP/IP. Wireless pairing wizard ships with R-015."
+        description="Scan USB and TCP/IP targets, confirm ADB readiness, and see enough context to choose the right device before any action runs."
+        actions={
+          <Button
+            type="button"
+            onClick={() => void refresh()}
+            disabled={state.kind === "loading"}
+            variant="primary"
+          >
+            {state.kind === "loading" ? "Scanning..." : "Refresh devices"}
+          </Button>
+        }
+        meta={<DeviceHeaderMeta state={state} />}
       />
 
-      <div className="mt-4 flex items-center gap-2">
-        <button
-          type="button"
-          onClick={() => void refresh()}
-          disabled={state.kind === "loading"}
-          className="rounded border border-anvil-700 bg-anvil-800 px-3 py-1.5 text-sm text-anvil-50 hover:bg-anvil-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-anvil-300 disabled:opacity-50"
-        >
-          {state.kind === "loading" ? "Refreshing…" : "Refresh"}
-        </button>
-        {state.kind === "ok" && state.value.adb_path && (
-          <p className="text-xs text-anvil-300">
-            via <code className="font-mono">{state.value.adb_path}</code>
-          </p>
-        )}
-      </div>
-
-      <section className="mt-6 max-w-3xl" aria-live="polite">
+      <section className="mt-6 max-w-6xl" aria-live="polite">
         {state.kind === "no_tauri" && (
-          <Card>
-            <p className="text-sm text-anvil-200">
-              Tauri runtime not detected. The Devices pane needs the app's IPC
-              bridge. Run <code className="font-mono">npm run tauri:dev</code>{" "}
-              instead of plain <code className="font-mono">npm run dev</code>.
+          <StatePanel
+            title="Launch the desktop shell to scan hardware"
+            tone="info"
+            actions={
+              <Button type="button" onClick={() => void refresh()} size="sm">
+                Check again
+              </Button>
+            }
+          >
+            <p>
+              This browser preview can render the interface, but device IPC only
+              exists inside Tauri. Start the desktop shell with{" "}
+              <code>npm run tauri:dev</code> when you want Droidsmith to talk to
+              ADB.
             </p>
-          </Card>
+          </StatePanel>
         )}
 
-        {state.kind === "loading" && (
-          <Card>
-            <p role="status" className="text-sm text-anvil-200">
-              Loading device list…
-            </p>
-          </Card>
-        )}
+        {state.kind === "loading" && <DeviceTableSkeleton />}
 
         {state.kind === "error" && (
-          <Card>
-            <p role="alert" className="text-sm text-red-300">
-              Failed to list devices: {state.message}
-            </p>
-            <button
-              type="button"
-              onClick={() => void refresh()}
-              className="mt-3 rounded border border-anvil-700 bg-anvil-800 px-2 py-1 text-xs text-anvil-50 hover:bg-anvil-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-anvil-300"
-            >
-              Retry
-            </button>
-          </Card>
+          <StatePanel
+            title="Device scan did not complete"
+            tone="danger"
+            actions={
+              <Button
+                type="button"
+                onClick={() => void refresh()}
+                variant="danger"
+                size="sm"
+              >
+                Retry scan
+              </Button>
+            }
+          >
+            <p>{state.message}</p>
+          </StatePanel>
         )}
 
         {state.kind === "ok" && !state.value.adb_resolved && (
-          <Card>
-            <p className="text-sm text-anvil-200">
-              <strong>adb binary not found.</strong> Droidsmith looks on{" "}
-              <code className="font-mono">$PATH</code>, then{" "}
-              <code className="font-mono">$ANDROID_HOME</code>, then the Android
-              Studio default install path, then Homebrew (macOS) / the distro
-              package manager (Linux). The bundled sidecar fallback lands in
-              R-010 — see{" "}
-              <code className="font-mono">scripts/fetch-platform-tools.*</code>.
+          <StatePanel title="ADB is not available yet" tone="warning">
+            <p>
+              Droidsmith checked <code>$PATH</code>, <code>$ANDROID_HOME</code>,
+              Android Studio defaults, Homebrew, and common Linux
+              package-manager locations. Install Android platform tools or run{" "}
+              <code>scripts/fetch-platform-tools.*</code> when the bundled
+              sidecar lands.
             </p>
-          </Card>
+          </StatePanel>
         )}
 
         {state.kind === "ok" &&
           state.value.adb_resolved &&
           state.value.devices.length === 0 && (
-            <Card>
-              <p className="text-sm text-anvil-200">
-                No devices connected. Plug in a USB cable and tap{" "}
-                <em>Allow USB debugging</em> on the device, or pair over Wi-Fi
-                (R-015 ships the pairing wizard).
-              </p>
-            </Card>
+            <StatePanel
+              title="No Android devices found"
+              tone="info"
+              actions={
+                <Button
+                  type="button"
+                  onClick={() => void refresh()}
+                  variant="secondary"
+                  size="sm"
+                >
+                  Scan again
+                </Button>
+              }
+            >
+              <ol className="grid gap-2 text-sm sm:grid-cols-3">
+                <li className="rounded-md border border-white/10 bg-white/[0.04] p-3">
+                  Connect USB and enable developer options.
+                </li>
+                <li className="rounded-md border border-white/10 bg-white/[0.04] p-3">
+                  Accept the <em>Allow USB debugging</em> prompt on-device.
+                </li>
+                <li className="rounded-md border border-white/10 bg-white/[0.04] p-3">
+                  Use Wi-Fi pairing once the R-015 wizard lands.
+                </li>
+              </ol>
+            </StatePanel>
           )}
 
         {state.kind === "ok" && state.value.devices.length > 0 && (
@@ -132,50 +159,187 @@ export default function DevicesRoute() {
   );
 }
 
+function DeviceHeaderMeta({ state }: { state: State }) {
+  if (state.kind === "loading") {
+    return (
+      <div className="flex flex-wrap gap-2">
+        <Badge tone="info">Scanning bridge</Badge>
+        <Badge tone="neutral">Waiting for ADB</Badge>
+      </div>
+    );
+  }
+
+  if (state.kind === "no_tauri") {
+    return (
+      <div className="flex flex-wrap gap-2">
+        <Badge tone="neutral">Browser preview</Badge>
+        <Badge tone="info">Tauri IPC required</Badge>
+      </div>
+    );
+  }
+
+  if (state.kind === "error") {
+    return <Badge tone="danger">Scan failed</Badge>;
+  }
+
+  if (!state.value.adb_resolved) {
+    return <Badge tone="warning">ADB missing</Badge>;
+  }
+
+  return (
+    <div className="flex min-w-0 flex-wrap items-center gap-2">
+      <Badge tone="success">ADB resolved</Badge>
+      {state.value.adb_path && (
+        <code className="max-w-full truncate font-mono text-xs">
+          {state.value.adb_path}
+        </code>
+      )}
+    </div>
+  );
+}
+
 function DeviceTable({ devices }: { devices: ListDevicesResult["devices"] }) {
   return (
-    <div className="overflow-x-auto rounded-lg border border-anvil-800">
-      <table className="min-w-full divide-y divide-anvil-800 text-sm">
-        <thead className="bg-anvil-900">
-          <tr>
-            <Th>Serial</Th>
-            <Th>State</Th>
-            <Th>Model</Th>
-            <Th>Transport</Th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-anvil-800">
-          {devices.map((d) => (
-            <tr key={d.serial} className="bg-anvil-950/50">
-              <Td>
-                <code className="font-mono text-xs text-anvil-50">
-                  {d.serial}
-                </code>
-                {d.wireless && (
-                  <span className="ml-2 rounded bg-blue-900/40 px-1.5 py-0.5 text-[10px] uppercase text-blue-200">
-                    wireless
-                  </span>
-                )}
-              </Td>
-              <Td>{summarizeState(d.state)}</Td>
-              <Td>{d.model ?? "—"}</Td>
-              <Td>{d.transport_id != null ? `id ${d.transport_id}` : "—"}</Td>
+    <Card className="overflow-hidden p-0">
+      <div className="flex flex-col gap-3 border-b border-white/10 p-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h3 className="text-sm font-semibold text-anvil-50">
+            Connected devices
+          </h3>
+          <p className="mt-1 text-xs text-anvil-400">
+            Review state and transport before launching package, shell, or
+            fastboot actions.
+          </p>
+        </div>
+        <Badge tone="success">
+          {devices.length} {devices.length === 1 ? "device" : "devices"}
+        </Badge>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="min-w-full text-sm">
+          <thead className="bg-white/[0.04]">
+            <tr>
+              <Th>Serial</Th>
+              <Th>State</Th>
+              <Th>Identity</Th>
+              <Th>Transport</Th>
             </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+          </thead>
+          <tbody className="divide-y divide-white/10">
+            {devices.map((device) => (
+              <tr
+                key={device.serial}
+                className="bg-anvil-950/20 transition hover:bg-white/[0.035]"
+              >
+                <Td>
+                  <div className="flex min-w-[13rem] items-center gap-2">
+                    <code className="font-mono text-xs text-anvil-50">
+                      {device.serial}
+                    </code>
+                    {device.wireless && <Badge tone="info">Wi-Fi</Badge>}
+                  </div>
+                </Td>
+                <Td>
+                  <Badge tone={deviceStateTone(device.state)}>
+                    {formatStateLabel(device.state)}
+                  </Badge>
+                </Td>
+                <Td>
+                  <div className="min-w-[13rem]">
+                    <p className="font-medium text-anvil-100">
+                      {device.model ?? "Unknown model"}
+                    </p>
+                    <p className="mt-1 text-xs text-anvil-400">
+                      {[device.product, device.device]
+                        .filter(Boolean)
+                        .join(" / ") || "No product metadata"}
+                    </p>
+                  </div>
+                </Td>
+                <Td>
+                  {device.transport_id != null ? (
+                    <code className="font-mono text-xs">
+                      transport {device.transport_id}
+                    </code>
+                  ) : (
+                    <span className="text-anvil-500">Not reported</span>
+                  )}
+                </Td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </Card>
+  );
+}
+
+function DeviceTableSkeleton() {
+  return (
+    <Card className="overflow-hidden p-0" aria-label="Loading devices">
+      <div className="border-b border-white/10 p-4">
+        <SkeletonLine className="w-40" />
+        <SkeletonLine className="mt-3 w-80 max-w-full" />
+      </div>
+      <div className="divide-y divide-white/10">
+        {Array.from({ length: 4 }).map((_, index) => (
+          <div
+            key={index}
+            className="grid gap-4 p-4 sm:grid-cols-[1.2fr_0.7fr_1.2fr_0.8fr]"
+          >
+            <SkeletonLine className="w-44" />
+            <SkeletonLine className="w-24" />
+            <div>
+              <SkeletonLine className="w-36" />
+              <SkeletonLine className="mt-2 w-48" />
+            </div>
+            <SkeletonLine className="w-28" />
+          </div>
+        ))}
+      </div>
+    </Card>
   );
 }
 
 function Th({ children }: { children: ReactNode }) {
   return (
-    <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-anvil-300">
+    <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-anvil-400">
       {children}
     </th>
   );
 }
 
 function Td({ children }: { children: ReactNode }) {
-  return <td className="px-3 py-2 text-anvil-100">{children}</td>;
+  return <td className="px-4 py-4 align-middle text-anvil-200">{children}</td>;
+}
+
+function formatStateLabel(state: SerializedDeviceState): string {
+  const label = summarizeState(state);
+  return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
+function deviceStateTone(
+  state: SerializedDeviceState,
+): "neutral" | "info" | "success" | "warning" | "danger" {
+  if (typeof state !== "string") {
+    return "neutral";
+  }
+
+  if (state === "device") {
+    return "success";
+  }
+
+  if (state === "bootloader" || state === "recovery" || state === "sideload") {
+    return "info";
+  }
+
+  if (state === "unauthorized" || state === "offline") {
+    return "warning";
+  }
+
+  if (state === "no_permissions") {
+    return "danger";
+  }
+
+  return "neutral";
 }

@@ -80,9 +80,13 @@ cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings
 
 ## Production build
 
-The production bundle ships `adb` and `fastboot` as Tauri sidecars so end
-users don't need a separate Android SDK install. Binaries are NOT
-committed — fetch them per host before running `tauri:build`:
+The current production build uses the same resolver as development: it
+looks for `adb` on `PATH`, under `ANDROID_HOME` / `ANDROID_SDK_ROOT`, and
+in common platform locations. Bundled platform-tools are planned for
+R-010, but `bundle.externalBin` is not wired yet.
+
+When R-010 enables bundled platform-tools, binaries must still be fetched
+per host because they are not committed:
 
 ```powershell
 # Windows
@@ -102,13 +106,12 @@ npm run tauri:build
 
 Output lands in `src-tauri/target/release/bundle/` per OS.
 
-### Skipping the sidecar fetch in dev
+### Sidecars in dev
 
-The dev loop (`npm run tauri:dev`) does NOT require the sidecars — the
-ADB resolver finds the user's system `adb` first and only falls back to
-the bundled one when nothing else is present. Wiring sidecars into
-`tauri.conf.json` `bundle.externalBin` happens as part of R-010 (release
-pipeline).
+The dev loop (`npm run tauri:dev`) does not require sidecars. Until
+R-010 lands, the resolver never falls back to bundled binaries; install
+Android Studio Platform Tools locally or set `ANDROID_HOME` /
+`ANDROID_SDK_ROOT`.
 
 ## What's not done yet
 

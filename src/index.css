@@ -14,6 +14,41 @@
   }
 
   body {
-    @apply font-sans;
+    @apply bg-[#08090d] font-sans text-anvil-100 antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  ::selection {
+    background-color: rgb(103 232 249 / 0.25);
+    color: #ecfeff;
+  }
+
+  code {
+    @apply rounded bg-black/20 px-1 py-0.5 text-[0.92em] text-anvil-100;
+  }
+
+  .nav-strip {
+    scrollbar-width: none;
+  }
+
+  .nav-strip::-webkit-scrollbar {
+    display: none;
+  }
+
+  @media (min-width: 1024px) and (max-height: 760px) {
+    .runtime-panel {
+      display: none !important;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      scroll-behavior: auto !important;
+      transition-duration: 0.01ms !important;
+    }
   }
 }

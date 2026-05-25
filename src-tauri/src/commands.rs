@@ -14,6 +14,7 @@ use std::sync::OnceLock;
 use serde::Serialize;
 use tauri::Manager;
 
+use crate::adb::device::valid_serial;
 use crate::adb::{self, actions};
 use crate::journal::{self, Journal, JournalEntry};
 use crate::quirks::{self, DeviceContext, Quirk};
@@ -111,6 +112,11 @@ pub fn list_packages(
     serial: String,
     filter: adb::PackageFilter,
 ) -> Result<Vec<adb::AppPackage>, adb::TransportError> {
+    if !valid_serial(&serial) {
+        return Err(adb::TransportError::Parse(format!(
+            "invalid device serial {serial:?}"
+        )));
+    }
     let resolution = adb::locate_adb();
     let path = resolution
         .path
@@ -173,6 +179,17 @@ fn journal_dir(app: &tauri::AppHandle) -> Result<PathBuf, CommandError> {
     Ok(base.join("journal"))
 }
 
+fn validate_serial_arg(serial: &str) -> Result<(), CommandError> {
+    if valid_serial(serial) {
+        Ok(())
+    } else {
+        Err(CommandError {
+            code: "invalid_serial",
+            message: format!("invalid device serial {serial:?}"),
+        })
+    }
+}
+
 /// Apply a previously-planned action and record it in the per-device
 /// journal. Returns the freshly-written journal entry.
 #[tauri::command]
@@ -200,6 +217,7 @@ pub fn journal_list(
     app: tauri::AppHandle,
     serial: String,
 ) -> Result<Vec<JournalEntry>, CommandError> {
+    validate_serial_arg(&serial)?;
     let journal = Journal::open(&journal_dir(&app)?, &serial)?;
     Ok(journal.entries().to_vec())
 }
@@ -213,6 +231,7 @@ pub fn journal_undo(
     serial: String,
     entry_id: u64,
 ) -> Result<JournalEntry, CommandError> {
+    validate_serial_arg(&serial)?;
     let resolution = adb::locate_adb();
     let path = resolution
         .path

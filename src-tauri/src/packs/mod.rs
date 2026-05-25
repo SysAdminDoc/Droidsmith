@@ -43,6 +43,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::adb::packages::valid_package_name;
 
+const MAX_PACK_BYTES: u64 = 512 * 1024;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Pack {
     /// Human-friendly title shown in the pack picker.
@@ -133,9 +135,11 @@ pub enum PackError {
 }
 
 pub fn load(path: &Path) -> Result<Pack, PackError> {
-    let text = std::fs::read_to_string(path).map_err(|source| PackError::Read {
-        path: path.to_path_buf(),
-        source,
+    let text = crate::fs_util::read_to_string_limited(path, MAX_PACK_BYTES).map_err(|source| {
+        PackError::Read {
+            path: path.to_path_buf(),
+            source,
+        }
     })?;
     let pack: Pack = serde_yml::from_str(&text).map_err(|source| PackError::Parse {
         path: path.to_path_buf(),

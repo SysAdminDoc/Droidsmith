@@ -19,7 +19,7 @@
 use std::path::PathBuf;
 use std::process::ExitCode;
 
-use droidsmith_lib::adb::{self, actions, AdbTransport, ShellTransport};
+use droidsmith_lib::adb::{self, actions, device::valid_serial, AdbTransport, ShellTransport};
 use droidsmith_lib::profile;
 
 fn main() -> ExitCode {
@@ -126,6 +126,9 @@ fn parse_run_args(argv: &[String]) -> Result<RunArgs, String> {
         i += 1;
     }
     let serial = serial.ok_or("--device <serial> is required")?;
+    if !valid_serial(&serial) {
+        return Err(format!("invalid --device serial: {serial:?}"));
+    }
     let apply = apply.ok_or("pass exactly one of --dry-run or --apply")?;
     Ok(RunArgs {
         profile_path,
@@ -152,6 +155,14 @@ fn cmd_run(argv: &[String]) -> ExitCode {
         }
     };
 
+    let serial_issues = profile::serial_match_issues(&profile, &args.serial);
+    if !serial_issues.is_empty() {
+        for issue in serial_issues {
+            eprintln!("[droidsmith-cli] {issue}");
+        }
+        return ExitCode::from(2);
+    }
+
     println!("Profile: {} (version {})", profile.name, profile.version);
     if !profile.description.is_empty() {
         println!("  {}", profile.description);
@@ -174,6 +185,12 @@ fn cmd_run(argv: &[String]) -> ExitCode {
     }
 
     if !args.apply {
+        if !profile.device.require_manufacturer.trim().is_empty() {
+            println!(
+                "\n(dry-run; manufacturer constraint {:?} will be verified during --apply)",
+                profile.device.require_manufacturer
+            );
+        }
         println!("\n(dry-run; nothing was changed)");
         return ExitCode::SUCCESS;
     }
@@ -181,6 +198,25 @@ fn cmd_run(argv: &[String]) -> ExitCode {
     let Some(transport) = resolve_or_fail() else {
         return ExitCode::from(3);
     };
+    let manufacturer = match transport.shell(&args.serial, &["getprop", "ro.product.manufacturer"])
+    {
+        Ok(value) => Some(value.trim().to_string()),
+        Err(e) if profile.device.require_manufacturer.trim().is_empty() => {
+            eprintln!("[droidsmith-cli] warning: could not read device manufacturer: {e}");
+            None
+        }
+        Err(e) => {
+            eprintln!("[droidsmith-cli] could not verify required device manufacturer: {e}");
+            return ExitCode::from(1);
+        }
+    };
+    let manufacturer_issues = profile::manufacturer_match_issues(&profile, manufacturer.as_deref());
+    if !manufacturer_issues.is_empty() {
+        for issue in manufacturer_issues {
+            eprintln!("[droidsmith-cli] {issue}");
+        }
+        return ExitCode::from(1);
+    }
 
     let mut failures = 0;
     for (i, plan) in plans.into_iter().enumerate() {
