@@ -1,0 +1,297 @@
+//! Destructive ADB actions: disable, uninstall, enable, clear data.
+//!
+//! Two-step API by design:
+//!
+//! - [`plan`] synthesises a [`PlannedAction`] from a high-level
+//!   [`ActionRequest`]. No I/O. The plan can be shown to the user as a
+//!   preview ("we will run `adb -s X shell pm disable-user --user 0 Y`").
+//! - [`apply`] takes the plan and runs it via the supplied transport.
+//!   On success it returns an [`AppliedAction`] suitable for journalling.
+//!
+//! This split lets the GUI do "Preview → Confirm → Apply" cleanly and
+//! lets the CLI (`droidsmith-cli`) do `--dry-run` by stopping after
+//! [`plan`].
+
+use serde::{Deserialize, Serialize};
+
+use crate::adb::transport::{AdbTransport, TransportError};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ActionKind {
+    /// `pm disable-user --user 0 <pkg>` — reversible with `pm enable`.
+    Disable,
+    /// `pm enable <pkg>` — reverses Disable.
+    Enable,
+    /// `pm uninstall --user 0 <pkg>` — effectively permanent for the
+    /// current user; the APK remains in `/system/` (system apps) but
+    /// is removed from `/data/app/` (user apps).
+    UninstallForUser,
+    /// `pm clear <pkg>` — wipes the package's data and cache.
+    ClearData,
+    /// `am force-stop <pkg>` — non-destructive; included for symmetry.
+    ForceStop,
+}
+
+impl ActionKind {
+    /// True for actions that the journal can losslessly undo by issuing
+    /// the inverse `ActionKind` on the same package. `UninstallForUser`
+    /// and `ClearData` cannot be losslessly undone — undo from the
+    /// journal will surface that explicitly.
+    ///
+    /// Kept alongside `inverse` for symmetry; the renderer will use
+    /// this to disable the "Undo" button on irreversible rows.
+    #[allow(dead_code)]
+    pub fn is_reversible(self) -> bool {
+        matches!(self, Self::Disable | Self::Enable)
+    }
+
+    pub fn inverse(self) -> Option<ActionKind> {
+        match self {
+            Self::Disable => Some(Self::Enable),
+            Self::Enable => Some(Self::Disable),
+            Self::UninstallForUser | Self::ClearData | Self::ForceStop => None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ActionRequest {
+    pub serial: String,
+    pub package: String,
+    pub kind: ActionKind,
+}
+
+/// Synthesised plan. The `args` field is exactly what the action will
+/// pass to `adb shell` — no further interpolation happens at apply
+/// time. `description` is human-readable for the confirmation dialog.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PlannedAction {
+    pub request: ActionRequest,
+    pub args: Vec<String>,
+    pub description: String,
+}
+
+/// Applied action — the journal record. `stdout`/`stderr` are kept so
+/// support tickets can include the raw response.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AppliedAction {
+    pub plan: PlannedAction,
+    pub stdout: String,
+    /// ISO-8601 UTC timestamp.
+    pub applied_at: String,
+}
+
+pub fn plan(request: ActionRequest) -> PlannedAction {
+    if !crate::adb::packages::valid_package_name(&request.package) {
+        // We still return a plan but with a "looks suspicious"
+        // description so the confirmation UI can flag it.
+        let args = synth_args(&request);
+        return PlannedAction {
+            description: format!(
+                "[suspicious package id: {:?}] {}",
+                request.package,
+                describe(&request)
+            ),
+            args,
+            request,
+        };
+    }
+    let args = synth_args(&request);
+    let description = describe(&request);
+    PlannedAction {
+        request,
+        args,
+        description,
+    }
+}
+
+fn synth_args(r: &ActionRequest) -> Vec<String> {
+    match r.kind {
+        ActionKind::Disable => vec![
+            "pm".into(),
+            "disable-user".into(),
+            "--user".into(),
+            "0".into(),
+            r.package.clone(),
+        ],
+        ActionKind::Enable => vec!["pm".into(), "enable".into(), r.package.clone()],
+        ActionKind::UninstallForUser => vec![
+            "pm".into(),
+            "uninstall".into(),
+            "--user".into(),
+            "0".into(),
+            r.package.clone(),
+        ],
+        ActionKind::ClearData => vec!["pm".into(), "clear".into(), r.package.clone()],
+        ActionKind::ForceStop => vec!["am".into(), "force-stop".into(), r.package.clone()],
+    }
+}
+
+fn describe(r: &ActionRequest) -> String {
+    match r.kind {
+        ActionKind::Disable => format!("Disable {} for the current user", r.package),
+        ActionKind::Enable => format!("Re-enable {}", r.package),
+        ActionKind::UninstallForUser => format!(
+            "Uninstall {} for the current user (system APK preserved on /system)",
+            r.package
+        ),
+        ActionKind::ClearData => format!("Clear data and cache for {}", r.package),
+        ActionKind::ForceStop => format!("Force-stop {}", r.package),
+    }
+}
+
+pub fn apply(
+    transport: &dyn AdbTransport,
+    plan: PlannedAction,
+    now_iso: &str,
+) -> Result<AppliedAction, TransportError> {
+    let argv: Vec<&str> = plan.args.iter().map(String::as_str).collect();
+    let stdout = transport.shell(&plan.request.serial, &argv)?;
+    // `pm disable-user --user 0 com.foo` prints "Package com.foo new
+    // state: disabled" on success and "Failure [...]" on failure. We
+    // surface the raw text and let UI / journal layers decide.
+    if let Some(err) = pm_failure_marker(&stdout) {
+        return Err(TransportError::Exit {
+            code: 1,
+            stderr: err.to_string(),
+        });
+    }
+    Ok(AppliedAction {
+        plan,
+        stdout,
+        applied_at: now_iso.to_string(),
+    })
+}
+
+/// `pm` exits 0 even when the package action fails — the failure shows
+/// up in stdout. This recognises the common shapes:
+///
+///   `Failure [DELETE_FAILED_INTERNAL_ERROR]`
+///   `Error: ...`
+fn pm_failure_marker(stdout: &str) -> Option<&str> {
+    for line in stdout.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with("Failure") || trimmed.starts_with("Error:") {
+            return Some(trimmed);
+        }
+    }
+    None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::adb::transport::MockTransport;
+
+    #[test]
+    fn plan_disable_emits_pm_disable_user() {
+        let r = ActionRequest {
+            serial: "abc".into(),
+            package: "com.facebook.appmanager".into(),
+            kind: ActionKind::Disable,
+        };
+        let p = plan(r);
+        assert_eq!(
+            p.args,
+            vec![
+                "pm",
+                "disable-user",
+                "--user",
+                "0",
+                "com.facebook.appmanager"
+            ]
+        );
+        assert!(p.description.contains("Disable"));
+    }
+
+    #[test]
+    fn plan_enable_emits_pm_enable() {
+        let p = plan(ActionRequest {
+            serial: "abc".into(),
+            package: "com.x".into(),
+            kind: ActionKind::Enable,
+        });
+        assert_eq!(p.args, vec!["pm", "enable", "com.x"]);
+    }
+
+    #[test]
+    fn plan_uninstall_user_emits_pm_uninstall() {
+        let p = plan(ActionRequest {
+            serial: "abc".into(),
+            package: "com.x".into(),
+            kind: ActionKind::UninstallForUser,
+        });
+        assert_eq!(p.args, vec!["pm", "uninstall", "--user", "0", "com.x"]);
+    }
+
+    #[test]
+    fn plan_flags_suspicious_package_id_but_still_emits_args() {
+        let p = plan(ActionRequest {
+            serial: "abc".into(),
+            package: ".dotleading".into(),
+            kind: ActionKind::Disable,
+        });
+        assert!(p.description.starts_with("[suspicious package id"));
+        // Args still synthesised — the caller decides whether to
+        // refuse.
+        assert!(!p.args.is_empty());
+    }
+
+    #[test]
+    fn inverse_and_reversibility() {
+        assert_eq!(ActionKind::Disable.inverse(), Some(ActionKind::Enable));
+        assert_eq!(ActionKind::Enable.inverse(), Some(ActionKind::Disable));
+        assert!(ActionKind::Disable.is_reversible());
+        assert!(ActionKind::Enable.is_reversible());
+        assert!(!ActionKind::UninstallForUser.is_reversible());
+        assert!(ActionKind::UninstallForUser.inverse().is_none());
+    }
+
+    #[test]
+    fn apply_records_stdout_and_timestamp() {
+        let mock = MockTransport::new();
+        mock.expect_shell(
+            "abc",
+            &["pm", "disable-user", "--user", "0", "com.x"],
+            Ok("Package com.x new state: disabled\n".into()),
+        );
+        let p = plan(ActionRequest {
+            serial: "abc".into(),
+            package: "com.x".into(),
+            kind: ActionKind::Disable,
+        });
+        let applied = apply(&mock, p, "2026-05-25T12:00:00Z").unwrap();
+        assert_eq!(applied.applied_at, "2026-05-25T12:00:00Z");
+        assert!(applied.stdout.contains("new state: disabled"));
+    }
+
+    #[test]
+    fn apply_surfaces_pm_failure_marker() {
+        let mock = MockTransport::new();
+        mock.expect_shell(
+            "abc",
+            &["pm", "uninstall", "--user", "0", "com.x"],
+            Ok("Failure [DELETE_FAILED_INTERNAL_ERROR]\n".into()),
+        );
+        let p = plan(ActionRequest {
+            serial: "abc".into(),
+            package: "com.x".into(),
+            kind: ActionKind::UninstallForUser,
+        });
+        let err = apply(&mock, p, "2026-05-25T12:00:00Z").unwrap_err();
+        match err {
+            TransportError::Exit { code, stderr } => {
+                assert_eq!(code, 1);
+                assert!(stderr.contains("DELETE_FAILED_INTERNAL_ERROR"));
+            }
+            other => panic!("expected Exit, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn pm_failure_marker_recognises_error_prefix() {
+        assert!(pm_failure_marker("Error: package not found").is_some());
+        assert!(pm_failure_marker("nothing wrong here").is_none());
+    }
+}

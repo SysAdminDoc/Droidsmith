@@ -1,8 +1,11 @@
 mod adb;
 mod commands;
 mod diagnostics;
+mod journal;
 
-use commands::heartbeat;
+use commands::{
+    apply_action, heartbeat, journal_list, journal_undo, list_devices, list_packages, plan_action,
+};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -14,7 +17,15 @@ pub fn run() {
     let builder = tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
-        .invoke_handler(tauri::generate_handler![heartbeat]);
+        .invoke_handler(tauri::generate_handler![
+            heartbeat,
+            list_devices,
+            list_packages,
+            plan_action,
+            apply_action,
+            journal_list,
+            journal_undo,
+        ]);
 
     let context = tauri::generate_context!();
     if let Err(e) = builder.run(context) {

@@ -246,6 +246,13 @@ fn iso_now() -> String {
     format_utc_rfc3339(secs)
 }
 
+/// Re-export under a slightly-longer name for cross-module use. Kept
+/// in this module because the panic-log writer is the original (and
+/// most strictly-defended) caller.
+pub(crate) fn format_utc_rfc3339_for_journal(epoch_secs: u64) -> String {
+    format_utc_rfc3339(epoch_secs)
+}
+
 #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
 fn format_utc_rfc3339(epoch_secs: u64) -> String {
     // Days since 1970-01-01 + seconds within the day.
