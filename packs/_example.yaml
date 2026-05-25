@@ -1,0 +1,36 @@
+# Example debloat pack. This file is intentionally small so contributors
+# can copy it as a starting point. Drop new packs alongside this one;
+# `droidsmith-pack-lint packs/*.yaml` is the CI gate.
+#
+# Schema is documented in src-tauri/src/packs/mod.rs.
+
+name: "Example — Pixel sampler"
+version: "1"
+description: >
+  A two-package sampler that demonstrates the pack schema without
+  recommending anything serious. Real Pixel pack lands with R-032.
+attribution: |
+  Original Droidsmith authoring. MIT.
+
+targets:
+  manufacturer: ["Google"]
+  rom: ["aosp", "stock"]
+  android_min: 12
+
+packages:
+  - id: com.android.bookmarkprovider
+    removal: recommended
+    description: >
+      Legacy bookmark provider. Modern Chrome stores bookmarks server-side
+      under the user's Google account; this leftover system app is rarely
+      used and safe to disable.
+    labels: ["legacy"]
+
+  - id: com.google.android.apps.docs
+    removal: advanced
+    description: >
+      Google Drive integration. Removing this disables "Save to Drive"
+      from Chrome and Gmail, and breaks document attachments in some
+      third-party apps. Re-enable if you rely on cross-app file pickers.
+    needed_by: ["com.android.chrome", "com.google.android.gm"]
+    labels: ["productivity", "google"]

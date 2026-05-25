@@ -2,9 +2,15 @@ mod adb;
 mod commands;
 mod diagnostics;
 mod journal;
+/// `packs` is `pub` so the `droidsmith-pack-lint` binary (which links
+/// against this crate as `droidsmith_lib`) can reach the loader + lint
+/// types. Tauri-internal callers go through `crate::packs` as usual.
+pub mod packs;
+mod quirks;
 
 use commands::{
-    apply_action, heartbeat, journal_list, journal_undo, list_devices, list_packages, plan_action,
+    apply_action, explain_failure, heartbeat, journal_list, journal_undo, list_devices,
+    list_packages, plan_action,
 };
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -25,6 +31,7 @@ pub fn run() {
             apply_action,
             journal_list,
             journal_undo,
+            explain_failure,
         ]);
 
     let context = tauri::generate_context!();

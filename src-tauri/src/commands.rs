@@ -16,6 +16,7 @@ use tauri::Manager;
 
 use crate::adb::{self, actions};
 use crate::journal::{self, Journal, JournalEntry};
+use crate::quirks::{self, DeviceContext, Quirk};
 
 #[derive(Serialize)]
 pub struct Heartbeat {
@@ -242,4 +243,46 @@ fn iso_now() -> String {
         .unwrap_or_default()
         .as_secs();
     crate::diagnostics::format_utc_rfc3339_for_journal(secs)
+}
+
+/// Request shape for [`explain_failure`].
+#[derive(Debug, serde::Deserialize)]
+pub struct ExplainFailureRequest {
+    pub manufacturer: Option<String>,
+    pub rom: Option<String>,
+    pub package_id: Option<String>,
+    pub raw_error: Option<String>,
+    /// Optional path to a `quirks/*.yaml` file. If `None`, we look in
+    /// the app-resource folder for the bundled quirks.
+    pub quirks_path: Option<String>,
+}
+
+/// Load quirks from the given YAML file (or the bundled default once
+/// resource shipping lands) and match against the failure context.
+/// Returns `Some(quirk)` if a rule applies, `None` if the raw error
+/// should be shown as-is.
+#[tauri::command]
+pub fn explain_failure(req: ExplainFailureRequest) -> Result<Option<Quirk>, CommandError> {
+    // Until R-006 ships bundled resources, the caller passes an
+    // explicit path. We refuse to silently load nothing — that would
+    // make false-negatives look like "no quirk applies".
+    let path = req.quirks_path.ok_or(CommandError {
+        code: "quirks_path_required",
+        message: "explain_failure currently requires an explicit quirks_path; bundled \
+                  resources land with R-006."
+            .to_string(),
+    })?;
+
+    let quirks_list = quirks::load_file(std::path::Path::new(&path)).map_err(|e| CommandError {
+        code: "quirks_load_failed",
+        message: e.to_string(),
+    })?;
+
+    let ctx = DeviceContext {
+        manufacturer: req.manufacturer.as_deref(),
+        rom: req.rom.as_deref(),
+        package_id: req.package_id.as_deref(),
+        raw_error: req.raw_error.as_deref(),
+    };
+    Ok(quirks::explain(&quirks_list, &ctx).cloned())
 }
