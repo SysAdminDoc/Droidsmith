@@ -1,4 +1,7 @@
-mod adb;
+/// `adb` is `pub` so the `droidsmith-cli` binary (which links against
+/// this crate as `droidsmith_lib`) can reach the transport and action
+/// types. The Tauri runtime still goes through `crate::adb`.
+pub mod adb;
 mod commands;
 mod diagnostics;
 mod journal;
@@ -6,7 +9,9 @@ mod journal;
 /// against this crate as `droidsmith_lib`) can reach the loader + lint
 /// types. Tauri-internal callers go through `crate::packs` as usual.
 pub mod packs;
+pub mod profile;
 mod quirks;
+pub mod time;
 
 use commands::{
     apply_action, explain_failure, heartbeat, journal_list, journal_undo, list_devices,

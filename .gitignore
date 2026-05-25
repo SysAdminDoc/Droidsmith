@@ -44,6 +44,7 @@ desktop.ini
 # Bundled platform-tools cache (downloaded on first run, do not commit)
 src-tauri/resources/platform-tools/
 src-tauri/resources/scrcpy/
+src-tauri/binaries/
 
 # Test artefacts
 coverage/

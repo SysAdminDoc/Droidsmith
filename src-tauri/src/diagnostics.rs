@@ -18,7 +18,6 @@
 use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 const CRASH_LOG: &str = "crash.log";
 const MAX_LOG_SIZE: u64 = 1_048_576; // 1 MB
@@ -235,48 +234,10 @@ fn rotate_if_needed(log_path: &Path) -> std::io::Result<()> {
     Ok(())
 }
 
-/// RFC3339-ish UTC timestamp. We hand-roll instead of pulling in `chrono`
-/// or `time`; the format is `YYYY-MM-DDTHH:MM:SSZ`. Good enough for a
-/// crash log that gets grepped by humans.
+/// Wall-clock UTC stamp for a crash-log line. Delegates to the shared
+/// `crate::time` formatter so journals and crash logs match exactly.
 fn iso_now() -> String {
-    let secs = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or(Duration::ZERO)
-        .as_secs();
-    format_utc_rfc3339(secs)
-}
-
-/// Re-export under a slightly-longer name for cross-module use. Kept
-/// in this module because the panic-log writer is the original (and
-/// most strictly-defended) caller.
-pub(crate) fn format_utc_rfc3339_for_journal(epoch_secs: u64) -> String {
-    format_utc_rfc3339(epoch_secs)
-}
-
-#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-fn format_utc_rfc3339(epoch_secs: u64) -> String {
-    // Days since 1970-01-01 + seconds within the day.
-    let secs_in_day: u64 = 86_400;
-    let total_days = (epoch_secs / secs_in_day) as i64;
-    let time_of_day = epoch_secs % secs_in_day;
-    let hour = (time_of_day / 3600) as u32;
-    let minute = ((time_of_day % 3600) / 60) as u32;
-    let second = (time_of_day % 60) as u32;
-
-    // Convert days-since-epoch to Y-M-D using Howard Hinnant's algorithm
-    // (public domain). Handles the Gregorian calendar correctly.
-    let z = total_days + 719_468;
-    let era = z.div_euclid(146_097);
-    let doe = (z - era * 146_097) as u64; // [0, 146096]
-    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
-    let y = yoe as i64 + era * 400;
-    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
-    let mp = (5 * doy + 2) / 153;
-    let day = (doy - (153 * mp + 2) / 5 + 1) as u32;
-    let month = if mp < 10 { mp + 3 } else { mp - 9 } as u32;
-    let year = if month <= 2 { y + 1 } else { y };
-
-    format!("{year:04}-{month:02}-{day:02}T{hour:02}:{minute:02}:{second:02}Z")
+    crate::time::iso_utc_now()
 }
 
 #[cfg(test)]
@@ -306,16 +267,6 @@ mod tests {
         rotate_if_needed(&log).unwrap();
         assert!(!log.exists() || fs::read(&log).unwrap().is_empty());
         assert!(log.with_extension("log.1").exists());
-    }
-
-    #[test]
-    fn iso_format_known_anchors() {
-        assert_eq!(format_utc_rfc3339(0), "1970-01-01T00:00:00Z");
-        assert_eq!(format_utc_rfc3339(1), "1970-01-01T00:00:01Z");
-        // 2024-02-29T12:34:56Z (leap year)
-        assert_eq!(format_utc_rfc3339(1_709_210_096), "2024-02-29T12:34:56Z");
-        // 2000-03-01T00:00:00Z — the day after a century leap day
-        assert_eq!(format_utc_rfc3339(951_868_800), "2000-03-01T00:00:00Z");
     }
 
     #[test]

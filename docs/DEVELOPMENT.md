@@ -63,11 +63,35 @@ cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings
 
 ## Production build
 
+The production bundle ships `adb` and `fastboot` as Tauri sidecars so end
+users don't need a separate Android SDK install. Binaries are NOT
+committed — fetch them per host before running `tauri:build`:
+
+```powershell
+# Windows
+.\scripts\fetch-platform-tools.ps1
+```
+
+```bash
+# macOS / Linux
+./scripts/fetch-platform-tools.sh
+```
+
+Then:
+
 ```bash
 npm run tauri:build
 ```
 
 Output lands in `src-tauri/target/release/bundle/` per OS.
+
+### Skipping the sidecar fetch in dev
+
+The dev loop (`npm run tauri:dev`) does NOT require the sidecars — the
+ADB resolver finds the user's system `adb` first and only falls back to
+the bundled one when nothing else is present. Wiring sidecars into
+`tauri.conf.json` `bundle.externalBin` happens as part of R-010 (release
+pipeline).
 
 ## What's not done yet
 

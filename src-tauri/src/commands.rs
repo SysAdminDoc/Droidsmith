@@ -234,15 +234,8 @@ pub fn journal_undo(
     Ok(entry)
 }
 
-/// Hand-rolled RFC3339 UTC stamp matching the one in `diagnostics`.
-/// Centralised here for the journal; the diagnostics module's copy is
-/// independent so the two layers don't reach into each other.
 fn iso_now() -> String {
-    let secs = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs();
-    crate::diagnostics::format_utc_rfc3339_for_journal(secs)
+    crate::time::iso_utc_now()
 }
 
 /// Request shape for [`explain_failure`].
