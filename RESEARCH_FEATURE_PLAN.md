@@ -1,5 +1,11 @@
 # Droidsmith — Research & Feature Plan
 
+> **For the full evidence-grounded deep dive — feature inventory, competitive
+> research with verified primary sources, security audit, prioritized
+> checkbox roadmap with acceptance criteria — see
+> [RESEARCH_DEEPDIVE.md](RESEARCH_DEEPDIVE.md).** This file is the elevator
+> pitch.
+
 This document captures (a) what we learned about ADB AppControl and the
 broader ADB-GUI landscape, (b) what Droidsmith should look like to be a
 strictly better open-source replacement, and (c) the technical choices we are
