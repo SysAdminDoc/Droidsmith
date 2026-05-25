@@ -1,0 +1,50 @@
+# Node / Vite / React
+node_modules/
+dist/
+.vite/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Rust / Tauri
+target/
+src-tauri/target/
+src-tauri/gen/
+src-tauri/WixTools/
+**/*.rs.bk
+Cargo.lock.bak
+
+# Tauri build output
+src-tauri/release/
+src-tauri/debug/
+
+# Editor / OS
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json.sample
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# HGFS dev-mirror staging
+.dev-mirror/
+
+# Secrets / env
+.env
+.env.local
+.env.*.local
+
+# Bundled platform-tools cache (downloaded on first run, do not commit)
+src-tauri/resources/platform-tools/
+src-tauri/resources/scrcpy/
+
+# Test artefacts
+coverage/
+playwright-report/
+playwright/.cache/
+test-results/
