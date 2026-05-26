@@ -14,6 +14,12 @@ completion.
 Working batches live here. Sections collapse into a versioned release on
 each milestone tag.
 
+## [0.1.0] — 2026-05-25
+
+First tagged release. Pre-built Windows installer + portable `.exe`
+attached to the GitHub release. Includes everything in the Phase 1+
+end-to-end slice below plus the Phase 0 scaffold (R-001..R-002, IMP-01..IMP-07).
+
 ### 2026-05-25 — Phase 1+ end-to-end slice
 
 The thin slice from device detection through action queue + journal,
