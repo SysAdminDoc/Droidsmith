@@ -14,6 +14,13 @@ completion.
 Working batches live here. Sections collapse into a versioned release on
 each milestone tag.
 
+### Docs
+
+- Consolidated planning docs: active items remain in `ROADMAP.md`, shipped
+  roadmap history is summarized in `COMPLETED.md`, and research context is
+  summarized in `RESEARCH_REPORT.md` with the previous research files archived
+  under `docs/archive/research/`.
+
 ## [0.1.0] — 2026-05-25
 
 First tagged release. Pre-built Windows installer + portable `.exe`
@@ -185,7 +192,7 @@ line for feature work.
 
 ### Added
 
-- **R-001** Repository scaffolding: [README.md](README.md), [ROADMAP.md](ROADMAP.md), [RESEARCH_FEATURE_PLAN.md](RESEARCH_FEATURE_PLAN.md), [LICENSE](LICENSE), [.gitignore](.gitignore) — commit `0a82c63`.
+- **R-001** Repository scaffolding: [README.md](README.md), [ROADMAP.md](ROADMAP.md), planning research, [LICENSE](LICENSE), [.gitignore](.gitignore) — commit `0a82c63`.
 - **R-002** Tauri 2 + React + TS + Vite + Tailwind scaffold — commit `4f7b584`.
   - Rust backend with `shell` + `dialog` plugins, `heartbeat` IPC, `adb::locate_adb` helper across Win/macOS/Linux paths.
   - React 18 + TypeScript frontend with sidebar shell and live heartbeat panel.
@@ -194,7 +201,7 @@ line for feature work.
   - HGFS dev-mirror script ([`scripts/dev-mirror.ps1`](scripts/dev-mirror.ps1)) with `-Watch` / `-Reverse` modes for VMware Shared Folders development.
   - `dist/index.html` placeholder so `tauri::generate_context!` validates before the first `npm run build`.
   - [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) covering native and HGFS dev loops.
-- **Research deep-dive** — commit `dd59888` — evidence-grounded feature & improvement plan ([RESEARCH_DEEPDIVE.md](RESEARCH_DEEPDIVE.md)) with prioritized roadmap, IMP-01..IMP-07, F-NEW-01..F-NEW-10. Drives this Changelog and the integrated ROADMAP.
+- **Research deep-dive** — commit `dd59888` — evidence-grounded feature and improvement plan, now summarized in [RESEARCH_REPORT.md](RESEARCH_REPORT.md) and archived under `docs/archive/research/`, with prioritized roadmap, IMP-01..IMP-07, F-NEW-01..F-NEW-10. Drives this Changelog and the integrated ROADMAP.
 
 ### Verified
 

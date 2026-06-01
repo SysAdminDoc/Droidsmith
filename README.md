@@ -11,7 +11,7 @@ root, without a closed-source binary, without paywalled features.
 Pre-functional but live. Tauri shell builds and runs; the in-app Heartbeat
 panel reports OS, Tauri, Rust, and ADB resolution. Feature surface lands per
 [ROADMAP.md](ROADMAP.md); shipped work is logged in [CHANGELOG.md](CHANGELOG.md);
-design rationale lives in [RESEARCH_DEEPDIVE.md](RESEARCH_DEEPDIVE.md).
+design rationale is summarized in [RESEARCH_REPORT.md](RESEARCH_REPORT.md).
 
 ## Screenshots
 
@@ -57,8 +57,8 @@ ADB front end, but it has hard limits that an open project can fix:
 - **i18next** — translations
 
 The stack is locked in once R-002 (scaffold) lands. See
-[RESEARCH_FEATURE_PLAN.md](RESEARCH_FEATURE_PLAN.md) for the rationale and
-the alternatives considered.
+[RESEARCH_REPORT.md](RESEARCH_REPORT.md) for the rationale and the alternatives
+considered.
 
 ## Repository layout (planned)
 
@@ -70,8 +70,16 @@ Droidsmith/
   cli/              Headless CLI (`droidsmith run profile.yaml`)
   docs/             User & contributor docs
   ROADMAP.md
-  RESEARCH_FEATURE_PLAN.md
+  COMPLETED.md
+  RESEARCH_REPORT.md
 ```
+
+## Project planning
+
+- [ROADMAP.md](ROADMAP.md) - active and planned roadmap items.
+- [COMPLETED.md](COMPLETED.md) - shipped roadmap history.
+- [RESEARCH_REPORT.md](RESEARCH_REPORT.md) - research summary and archive index.
+- [CHANGELOG.md](CHANGELOG.md) - release-level details.
 
 ## Getting involved
 

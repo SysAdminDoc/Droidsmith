@@ -1,9 +1,10 @@
 # Droidsmith Roadmap
 
 Single source of truth for what's planned, what's in flight, and what's
-shipped. Completed items move to [CHANGELOG.md](CHANGELOG.md). Deep
-evidence and design notes live in [RESEARCH_DEEPDIVE.md](RESEARCH_DEEPDIVE.md);
-do not duplicate that here — link instead.
+shipped. Completed items are summarized in [COMPLETED.md](COMPLETED.md) and
+release details live in [CHANGELOG.md](CHANGELOG.md). Research context lives in
+[RESEARCH_REPORT.md](RESEARCH_REPORT.md); do not duplicate that here — link
+instead.
 
 ## Conventions
 
@@ -17,7 +18,7 @@ do not duplicate that here — link instead.
 
 ## Phase 0 — Foundations (harden the scaffold before features)
 
-- [x] **R-001** P0 — Repo, README, ROADMAP, RESEARCH_FEATURE_PLAN, LICENSE
+- [x] **R-001** P0 — Repo, README, ROADMAP, research plan, LICENSE
 - [x] **R-002** P0 — Scaffold Tauri 2 + React + TS + Vite + Tailwind
 - [x] **IMP-02** P0 — Scope `shell:default` capability to enumerated sidecar commands with arg validators
 - [x] **R-003** P0 — GitHub Actions CI matrix (Win/macOS/Linux): `cargo fmt/check/clippy/test`, frontend `typecheck/lint/prettier/test`
@@ -102,7 +103,8 @@ it — all in one session, with no Android SDK install required.
 
 ## Open questions (block correct prioritization)
 
-See [RESEARCH_DEEPDIVE.md §Open Questions](RESEARCH_DEEPDIVE.md#open-questions) for the full list. Summary:
+See [RESEARCH_REPORT.md](RESEARCH_REPORT.md) and the archived deep-dive report
+for the full evidence trail. Summary:
 
 1. GitHub org for the remote (Cargo.toml declares `SysAdminDoc/Droidsmith`)
 2. Code-signing certificates funding for R-006
