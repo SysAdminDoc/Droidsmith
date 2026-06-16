@@ -5,13 +5,16 @@ import {
   callApplyAction,
   callListDevices,
   callListPackages,
+  callListPermissions,
   callPlanAction,
+  callSetPermission,
   inTauri,
   type ActionKind,
   type AppPackage,
   type Device,
   type ListDevicesResult,
   type PackageFilter,
+  type PermissionInfo,
   type PlannedAction,
 } from "../lib/tauri";
 
@@ -60,6 +63,7 @@ export default function AppsRoute() {
   const [pkgState, setPkgState] = useState<PackagesState>({ kind: "idle" });
   const [actionState, setActionState] = useState<ActionState>({ kind: "idle" });
   const [search, setSearch] = useState("");
+  const [inspectedPkg, setInspectedPkg] = useState<string | null>(null);
 
   const loadDevices = useCallback(async () => {
     if (!inTauri()) {
@@ -259,9 +263,18 @@ export default function AppsRoute() {
                 packages={filteredPackages}
                 totalCount={pkgState.packages.length}
                 onAction={startAction}
+                onInspect={setInspectedPkg}
               />
             )}
           </>
+        )}
+
+        {inspectedPkg && selectedSerial && (
+          <PermissionsPanel
+            serial={selectedSerial}
+            pkg={inspectedPkg}
+            onClose={() => setInspectedPkg(null)}
+          />
         )}
 
         <ActionOverlay
@@ -339,10 +352,12 @@ function PackageTable({
   packages,
   totalCount,
   onAction,
+  onInspect,
 }: {
   packages: AppPackage[];
   totalCount: number;
   onAction: (pkg: string, kind: ActionKind) => void;
+  onInspect: (pkg: string) => void;
 }) {
   return (
     <Card className="overflow-hidden p-0">
@@ -448,6 +463,14 @@ function PackageTable({
                       >
                         Stop
                       </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => onInspect(pkg.package)}
+                      >
+                        Perms
+                      </Button>
                     </div>
                   </Td>
                 </tr>
@@ -552,6 +575,112 @@ function ActionOverlay({
     >
       <p>{state.message}</p>
     </StatePanel>
+  );
+}
+
+function PermissionsPanel({
+  serial,
+  pkg,
+  onClose,
+}: {
+  serial: string;
+  pkg: string;
+  onClose: () => void;
+}) {
+  const [perms, setPerms] = useState<PermissionInfo[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [toggling, setToggling] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const result = await callListPermissions(serial, pkg);
+      setPerms(result);
+    } catch {
+      setPerms([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [serial, pkg]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const togglePerm = useCallback(
+    async (permission: string, grant: boolean) => {
+      setToggling(permission);
+      try {
+        await callSetPermission(serial, pkg, permission, grant);
+        setPerms((prev) =>
+          prev.map((p) =>
+            p.permission === permission ? { ...p, granted: grant } : p,
+          ),
+        );
+      } catch {
+        // Reload on failure to get accurate state
+        void load();
+      } finally {
+        setToggling(null);
+      }
+    },
+    [serial, pkg, load],
+  );
+
+  return (
+    <Card className="overflow-hidden p-0">
+      <div className="flex items-center justify-between border-b border-white/10 p-4">
+        <div>
+          <h3 className="text-sm font-semibold text-anvil-50">
+            Permissions
+          </h3>
+          <code className="mt-1 block font-mono text-xs text-anvil-400">
+            {pkg}
+          </code>
+        </div>
+        <Button type="button" size="sm" variant="ghost" onClick={onClose}>
+          Close
+        </Button>
+      </div>
+      {loading ? (
+        <div className="p-4">
+          <SkeletonLine className="w-48" />
+          <SkeletonLine className="mt-3 w-64" />
+          <SkeletonLine className="mt-3 w-56" />
+        </div>
+      ) : perms.length === 0 ? (
+        <div className="p-4 text-sm text-anvil-400">
+          No runtime or install permissions found for this package.
+        </div>
+      ) : (
+        <div className="divide-y divide-white/10" style={{ maxHeight: "20rem", overflowY: "auto" }}>
+          {perms.map((p) => (
+            <div
+              key={p.permission}
+              className="flex items-center justify-between gap-3 px-4 py-2.5"
+            >
+              <code className="min-w-0 truncate font-mono text-xs text-anvil-200">
+                {p.permission}
+              </code>
+              <button
+                type="button"
+                onClick={() => void togglePerm(p.permission, !p.granted)}
+                disabled={toggling === p.permission}
+                className={[
+                  "shrink-0 rounded-full px-3 py-1 text-xs font-medium transition",
+                  p.granted
+                    ? "bg-emerald-300/10 text-emerald-100 hover:bg-emerald-300/20"
+                    : "bg-red-300/10 text-red-100 hover:bg-red-300/20",
+                  toggling === p.permission ? "opacity-50" : "",
+                ].join(" ")}
+              >
+                {p.granted ? "Granted" : "Denied"}
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </Card>
   );
 }
 

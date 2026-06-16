@@ -272,6 +272,27 @@ export async function callJournalUndo(
   return invoke<JournalEntry>("journal_undo", { serial, entry_id: entryId });
 }
 
+export type PermissionInfo = {
+  permission: string;
+  granted: boolean;
+};
+
+export async function callListPermissions(
+  serial: string,
+  pkg: string,
+): Promise<PermissionInfo[]> {
+  return invoke<PermissionInfo[]>("list_permissions", { serial, package: pkg });
+}
+
+export async function callSetPermission(
+  serial: string,
+  pkg: string,
+  permission: string,
+  grant: boolean,
+): Promise<string> {
+  return invoke<string>("set_permission", { serial, package: pkg, permission, grant });
+}
+
 export type ProcessInfo = {
   pid: number;
   user: string;

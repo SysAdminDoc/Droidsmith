@@ -333,6 +333,82 @@ pub fn shell_run(serial: String, argv: Vec<String>) -> Result<String, CommandErr
     Ok(stdout)
 }
 
+/// List runtime permissions for a package.
+#[tauri::command]
+pub fn list_permissions(
+    serial: String,
+    package: String,
+) -> Result<Vec<PermissionInfo>, CommandError> {
+    validate_serial_arg(&serial)?;
+    let resolution = adb::locate_adb();
+    let path = resolution
+        .path
+        .as_ref()
+        .ok_or(adb::TransportError::AdbNotFound)?;
+    let transport = adb::ShellTransport::new(path);
+    let stdout = transport.shell(&serial, &["dumpsys", "package", &package])?;
+    Ok(parse_permissions(&stdout))
+}
+
+/// Grant or revoke a runtime permission.
+#[tauri::command]
+pub fn set_permission(
+    serial: String,
+    package: String,
+    permission: String,
+    grant: bool,
+) -> Result<String, CommandError> {
+    validate_serial_arg(&serial)?;
+    let resolution = adb::locate_adb();
+    let path = resolution
+        .path
+        .as_ref()
+        .ok_or(adb::TransportError::AdbNotFound)?;
+    let transport = adb::ShellTransport::new(path);
+    let action = if grant { "grant" } else { "revoke" };
+    let stdout = transport.shell(&serial, &["pm", action, &package, &permission])?;
+    Ok(stdout)
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct PermissionInfo {
+    pub permission: String,
+    pub granted: bool,
+}
+
+fn parse_permissions(stdout: &str) -> Vec<PermissionInfo> {
+    let mut out = Vec::new();
+    let mut in_perms = false;
+    for line in stdout.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with("runtime permissions:") || trimmed.starts_with("install permissions:")
+        {
+            in_perms = true;
+            continue;
+        }
+        if in_perms {
+            if trimmed.is_empty() || (!trimmed.contains("android.permission") && !trimmed.contains(':')) {
+                if !trimmed.starts_with("android.permission") {
+                    in_perms = false;
+                    continue;
+                }
+            }
+            // Format: android.permission.CAMERA: granted=true
+            if let Some((perm, rest)) = trimmed.split_once(':') {
+                let perm = perm.trim();
+                if perm.contains("android.permission") || perm.contains("android.") {
+                    let granted = rest.contains("granted=true");
+                    out.push(PermissionInfo {
+                        permission: perm.to_string(),
+                        granted,
+                    });
+                }
+            }
+        }
+    }
+    out
+}
+
 /// Get process list from a device. Uses `ps -A -o PID,USER,VSZ,RSS,%CPU,NAME`
 /// for a structured snapshot.
 #[tauri::command]
