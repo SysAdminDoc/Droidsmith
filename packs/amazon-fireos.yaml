@@ -1,0 +1,102 @@
+name: "Amazon — Fire OS"
+version: "1"
+description: >
+  Debloat pack for Amazon Fire tablets running Fire OS 8+. Targets Amazon
+  advertising services, pre-installed Amazon apps, and lock screen ads.
+  Note: Fire OS restricts ADB more than stock Android; some packages may
+  require uninstall-for-user rather than disable.
+attribution: |
+  Original Droidsmith authoring based on public Fire OS package lists and
+  community debloat guides. MIT licensed.
+
+targets:
+  manufacturer: ["Amazon"]
+  rom: ["fire", "Fire OS"]
+  android_min: 30
+
+packages:
+  - id: com.amazon.kindle.otter.oobe.forced.ota
+    removal: recommended
+    description: >
+      Forced OTA update service. Disabling stops automatic system updates
+      that can re-enable removed bloatware.
+    labels: ["amazon", "system"]
+
+  - id: com.amazon.ags.app
+    removal: recommended
+    description: >
+      Amazon Appstore Games. Game store and launcher. Play Store (if
+      sideloaded) or APK installs work as alternatives.
+    labels: ["amazon", "gaming"]
+
+  - id: com.amazon.venezia
+    removal: recommended
+    description: >
+      Amazon Appstore. Amazon's app marketplace. Can be removed if you
+      use Play Store (sideloaded) instead.
+    labels: ["amazon", "store"]
+
+  - id: com.amazon.kindle
+    removal: advanced
+    description: >
+      Kindle reader. The core reading app on Fire tablets. Remove only
+      if you use an alternative reader.
+    labels: ["amazon", "reading"]
+
+  - id: com.amazon.avod
+    removal: recommended
+    description: >
+      Amazon Prime Video. Streaming video app. Can be re-installed from
+      Amazon Appstore if needed.
+    labels: ["amazon", "media"]
+
+  - id: com.amazon.mp3
+    removal: recommended
+    description: >
+      Amazon Music. Music streaming app. Third-party music players work
+      as alternatives.
+    labels: ["amazon", "media"]
+
+  - id: com.amazon.photos
+    removal: recommended
+    description: >
+      Amazon Photos. Cloud photo storage. Google Photos or other apps
+      work as alternatives.
+    labels: ["amazon", "photos"]
+
+  - id: com.amazon.advertisingservice
+    removal: recommended
+    description: >
+      Amazon Advertising Service. The ads framework that powers lock screen
+      ads and in-app promotions. Disabling reduces ad frequency but may not
+      fully eliminate lock screen offers.
+    labels: ["amazon", "ads"]
+
+  - id: com.amazon.kindle.kso
+    removal: recommended
+    description: >
+      Kindle Special Offers. Lock screen ads / special offers. Disabling
+      helps reduce lock screen advertising.
+    labels: ["amazon", "ads"]
+
+  - id: com.goodreads.android
+    removal: recommended
+    description: >
+      Goodreads. Book social network app. Safe to remove; available from
+      Play Store if needed.
+    labels: ["amazon", "social"]
+
+  - id: com.amazon.dee.app
+    removal: advanced
+    description: >
+      Alexa app. Voice assistant integration. Removing disables hands-free
+      Alexa on the device.
+    labels: ["amazon", "assistant"]
+
+  - id: com.amazon.parentalcontrols
+    removal: advanced
+    description: >
+      Amazon Kids / Parental Controls. Disabling removes child profiles
+      and content restrictions. Only remove if the device is not shared
+      with children.
+    labels: ["amazon", "parental"]

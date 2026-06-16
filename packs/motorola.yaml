@@ -1,0 +1,85 @@
+name: "Motorola — near-stock Android"
+version: "1"
+description: >
+  Debloat pack for Motorola devices (Moto G, Edge, Razr) running near-stock
+  Android 13–15. Motorola adds relatively little bloat compared to Samsung or
+  Xiaomi, but bundles some Moto-specific apps and carrier preloads.
+attribution: |
+  Original Droidsmith authoring based on public Motorola package lists and
+  community debloat experience. MIT licensed.
+
+targets:
+  manufacturer: ["motorola", "Motorola"]
+  rom: ["stock", "moto"]
+  android_min: 33
+
+packages:
+  - id: com.motorola.moto
+    removal: recommended
+    description: >
+      Moto app (Hello Moto). Gesture tutorials and feature demos. Safe
+      to remove after initial setup.
+    labels: ["motorola", "bloat"]
+
+  - id: com.motorola.help
+    removal: recommended
+    description: >
+      Moto Help. Device support and FAQ app. Safe to remove; support is
+      available via web.
+    labels: ["motorola", "support"]
+
+  - id: com.motorola.gamemode
+    removal: recommended
+    description: >
+      Moto Gametime. Gaming performance overlay. Safe to remove if you
+      don't use the gaming HUD.
+    labels: ["motorola", "gaming"]
+
+  - id: com.motorola.demo
+    removal: recommended
+    description: >
+      Retail demo mode. Only present on retail units. Safe to remove
+      on consumer devices.
+    labels: ["motorola", "demo"]
+
+  - id: com.motorola.ccc.devicemanagement
+    removal: advanced
+    description: >
+      Device Management / Device Policy. Carrier device management
+      framework. Disabling may affect carrier OTA updates on some models.
+    labels: ["motorola", "carrier"]
+
+  - id: com.motorola.brapps
+    removal: recommended
+    description: >
+      Moto Suggestions / App recommendations. Promotional app suggestions
+      during setup and in the launcher. Purely marketing.
+    labels: ["motorola", "bloat", "ads"]
+
+  - id: com.motorola.timeweatherwidget
+    removal: recommended
+    description: >
+      Moto Widget. Time and weather home screen widget. Google's
+      At a Glance widget or third-party alternatives work as replacements.
+    labels: ["motorola", "utility"]
+
+  - id: com.amazon.mShop.android.shopping
+    removal: recommended
+    description: >
+      Amazon Shopping. Carrier-preloaded Amazon app. Can be re-installed
+      from the Play Store if needed.
+    labels: ["carrier", "preload"]
+
+  - id: com.facebook.appmanager
+    removal: recommended
+    description: >
+      Facebook App Manager. Background service that auto-installs or
+      updates Facebook. Removing prevents silent Facebook installation.
+    labels: ["carrier", "preload", "facebook"]
+
+  - id: com.facebook.system
+    removal: recommended
+    description: >
+      Facebook System. Carrier-embedded Facebook framework. Safe to
+      remove; Facebook from the Play Store works independently.
+    labels: ["carrier", "preload", "facebook"]
