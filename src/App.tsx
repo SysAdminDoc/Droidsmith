@@ -5,6 +5,7 @@ import { callHeartbeat, inTauri, type Heartbeat } from "./lib/tauri";
 import { cn } from "./lib/cn";
 
 import DevicesRoute from "./routes/Devices";
+import WirelessRoute from "./routes/Wireless";
 import { Badge, Button, SkeletonLine } from "./routes/common";
 import {
   AppsRoute,
@@ -30,6 +31,13 @@ export const NAV_ITEMS: ReadonlyArray<NavItem> = [
     milestone: "R-012",
     description: "USB + wireless discovery for every connected Android target.",
     render: () => <DevicesRoute />,
+  },
+  {
+    label: "Wireless",
+    milestone: "R-015",
+    description:
+      "QR, pairing-code, and mDNS flows for Android wireless debugging.",
+    render: () => <WirelessRoute />,
   },
   {
     label: "Apps",
@@ -380,6 +388,12 @@ function NavIcon({ label, active }: { label: string; active: boolean }) {
         <>
           <path d="M8 4.5h8a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2v-11a2 2 0 0 1 2-2Z" />
           <path d="M10 7.5h4M10 16.5h4" />
+        </>
+      )}
+      {label === "Wireless" && (
+        <>
+          <path d="M7.25 14.25a6.75 6.75 0 0 1 9.5 0M4.5 11.25a10.6 10.6 0 0 1 15 0M10 17.25a2.85 2.85 0 0 1 4 0" />
+          <path d="M12 20h.01" />
         </>
       )}
       {label === "Apps" && (

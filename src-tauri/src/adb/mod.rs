@@ -11,6 +11,8 @@
 //!   transport.
 //! - [`packages`] — `pm list packages` parsing and the typed
 //!   [`AppPackage`] / [`PackageFilter`] surfaces.
+//! - [`wireless`] — Android 11+ pairing/connect helpers around
+//!   `adb pair`, `adb connect`, and mDNS service discovery.
 //!
 //! All Tauri `#[command]` glue lives in `crate::commands`, not here.
 //! The domain layer is `cargo test`-able without a Tauri runtime.
@@ -26,6 +28,7 @@ pub mod device;
 pub mod packages;
 pub mod resolver;
 pub mod transport;
+pub mod wireless;
 
 // Public re-exports for cross-module consumers (`commands`, tests).
 // Items in `actions` are reached via `crate::adb::actions::*` so no
@@ -34,3 +37,7 @@ pub use device::Device;
 pub use packages::{list_packages, AppPackage, PackageFilter};
 pub use resolver::{locate_adb, AdbResolution};
 pub use transport::{AdbTransport, ShellTransport, TransportError};
+pub use wireless::{
+    connect as connect_wireless, list_mdns_services, pair as pair_wireless, WirelessAdbService,
+    WirelessCommandResult, WirelessConnectRequest, WirelessPairRequest,
+};

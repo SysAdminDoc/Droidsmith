@@ -107,6 +107,59 @@ pub fn list_devices() -> Result<ListDevicesResult, adb::TransportError> {
     })
 }
 
+#[derive(Serialize)]
+pub struct ListWirelessServicesResult {
+    pub adb_resolved: bool,
+    pub adb_path: Option<String>,
+    pub services: Vec<adb::WirelessAdbService>,
+}
+
+#[tauri::command]
+pub fn list_wireless_services() -> Result<ListWirelessServicesResult, adb::TransportError> {
+    let resolution = adb::locate_adb();
+    let Some(path) = resolution.path.as_ref() else {
+        return Ok(ListWirelessServicesResult {
+            adb_resolved: false,
+            adb_path: None,
+            services: Vec::new(),
+        });
+    };
+
+    let transport = adb::ShellTransport::new(path);
+    let services = adb::list_mdns_services(&transport)?;
+    Ok(ListWirelessServicesResult {
+        adb_resolved: true,
+        adb_path: Some(path.clone()),
+        services,
+    })
+}
+
+#[tauri::command]
+pub fn pair_wireless(
+    request: adb::WirelessPairRequest,
+) -> Result<adb::WirelessCommandResult, CommandError> {
+    let resolution = adb::locate_adb();
+    let path = resolution
+        .path
+        .as_ref()
+        .ok_or(adb::TransportError::AdbNotFound)?;
+    let transport = adb::ShellTransport::new(path);
+    Ok(adb::pair_wireless(&transport, &request)?)
+}
+
+#[tauri::command]
+pub fn connect_wireless(
+    request: adb::WirelessConnectRequest,
+) -> Result<adb::WirelessCommandResult, CommandError> {
+    let resolution = adb::locate_adb();
+    let path = resolution
+        .path
+        .as_ref()
+        .ok_or(adb::TransportError::AdbNotFound)?;
+    let transport = adb::ShellTransport::new(path);
+    Ok(adb::connect_wireless(&transport, &request)?)
+}
+
 #[tauri::command]
 pub fn list_packages(
     serial: String,

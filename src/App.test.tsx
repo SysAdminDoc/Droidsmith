@@ -3,8 +3,8 @@ import { describe, expect, it } from "vitest";
 import { NAV_ITEMS } from "./App";
 
 describe("NAV_ITEMS", () => {
-  it("has the seven planned panes", () => {
-    expect(NAV_ITEMS).toHaveLength(7);
+  it("has the eight planned panes", () => {
+    expect(NAV_ITEMS).toHaveLength(8);
   });
 
   it("every item references a valid R-NNN milestone", () => {
