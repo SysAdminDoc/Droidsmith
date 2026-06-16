@@ -33,38 +33,6 @@ export function MirrorRoute() {
   );
 }
 
-export function LogcatRoute() {
-  return (
-    <>
-      <PaneHeader
-        title="Logcat"
-        milestone="R-051"
-        description="Tail device logs with fast filters, pause and save controls, and grouping that makes repeated events easier to read."
-      />
-      <PlaceholderBody
-        bullets={[
-          "Stream `adb logcat -v threadtime` per selected device.",
-          "Compile tag, pid, level, and text filters into one cheap device-side query.",
-          "Expose pause, clear, and save-to-file controls without hiding live status.",
-          "Group repeated lines so noisy errors stay scannable.",
-        ]}
-        commands={[
-          {
-            name: "logcat_start",
-            sig: "(serial, filters) -> stream_id",
-            ready: false,
-          },
-          {
-            name: "logcat_stop",
-            sig: "(stream_id) -> ()",
-            ready: false,
-          },
-        ]}
-      />
-    </>
-  );
-}
-
 export function FastbootRoute() {
   return (
     <>

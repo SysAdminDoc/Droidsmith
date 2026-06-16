@@ -9,12 +9,9 @@ import WirelessRoute from "./routes/Wireless";
 import AppsRoute from "./routes/Apps";
 import DebloatRoute from "./routes/Debloat";
 import ConsoleRoute from "./routes/Console";
+import LogcatRoute from "./routes/Logcat";
 import { Badge, Button, SkeletonLine } from "./routes/common";
-import {
-  FastbootRoute,
-  LogcatRoute,
-  MirrorRoute,
-} from "./routes/placeholders";
+import { FastbootRoute, MirrorRoute } from "./routes/placeholders";
 
 export type NavItem = {
   label: string;
