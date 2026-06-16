@@ -272,6 +272,20 @@ export async function callJournalUndo(
   return invoke<JournalEntry>("journal_undo", { serial, entry_id: entryId });
 }
 
+export type ProcessInfo = {
+  pid: number;
+  user: string;
+  vsz_kb: number;
+  rss_kb: number;
+  name: string;
+};
+
+export async function callListProcesses(
+  serial: string,
+): Promise<ProcessInfo[]> {
+  return invoke<ProcessInfo[]>("list_processes", { serial });
+}
+
 export async function callTakeScreenshot(
   serial: string,
   localPath: string,

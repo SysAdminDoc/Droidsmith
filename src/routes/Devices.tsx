@@ -4,12 +4,14 @@ import type { ReactNode } from "react";
 import {
   callGetDeviceInfo,
   callListDevices,
+  callListProcesses,
   callShellRun,
   callTakeScreenshot,
   inTauri,
   summarizeState,
   type DeviceInfo,
   type ListDevicesResult,
+  type ProcessInfo,
   type SerializedDeviceState,
 } from "../lib/tauri";
 
@@ -666,6 +668,7 @@ function DeviceControls({ serial }: { serial: string }) {
   );
 
   return (
+    <div className="space-y-4">
     <div className="grid gap-4 lg:grid-cols-[1fr_1fr]">
       <Card className="p-5">
         <div className="flex items-center justify-between">
@@ -763,7 +766,121 @@ function DeviceControls({ serial }: { serial: string }) {
         </Card>
       </div>
     </div>
+      <ProcessManager serial={serial} />
+    </div>
   );
+}
+
+function ProcessManager({ serial }: { serial: string }) {
+  const [processes, setProcesses] = useState<ProcessInfo[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [search, setSearch] = useState("");
+  const [sortBy, setSortBy] = useState<"rss" | "name">("rss");
+
+  const refresh = useCallback(async () => {
+    setLoading(true);
+    try {
+      const procs = await callListProcesses(serial);
+      setProcesses(procs);
+    } catch {
+      setProcesses([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [serial]);
+
+  const filtered = processes
+    .filter((p) =>
+      search ? p.name.toLowerCase().includes(search.toLowerCase()) : true,
+    )
+    .sort((a, b) =>
+      sortBy === "rss" ? b.rss_kb - a.rss_kb : a.name.localeCompare(b.name),
+    );
+
+  return (
+    <Card className="overflow-hidden p-0">
+      <div className="flex flex-col gap-3 border-b border-white/10 p-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h3 className="text-sm font-semibold text-anvil-50">
+            Process manager
+          </h3>
+          <p className="mt-1 text-xs text-anvil-400">
+            Snapshot of running processes sorted by memory usage.
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Filter..."
+            aria-label="Filter processes"
+            className="h-8 w-40 rounded-md border border-white/10 bg-white/[0.06] px-2 font-mono text-xs text-anvil-50 outline-none placeholder:text-anvil-600 focus:border-circuit-300/50"
+          />
+          <Button
+            type="button"
+            size="sm"
+            variant="primary"
+            onClick={() => void refresh()}
+            disabled={loading}
+          >
+            {loading ? "Loading..." : processes.length > 0 ? "Refresh" : "Load"}
+          </Button>
+        </div>
+      </div>
+      {processes.length > 0 && (
+        <div className="overflow-x-auto" style={{ maxHeight: "24rem" }}>
+          <table className="min-w-full text-xs">
+            <thead className="sticky top-0 bg-anvil-900">
+              <tr>
+                <th className="px-3 py-2 text-left font-semibold text-anvil-400">PID</th>
+                <th className="px-3 py-2 text-left font-semibold text-anvil-400">User</th>
+                <th
+                  className="cursor-pointer px-3 py-2 text-right font-semibold text-anvil-400"
+                  onClick={() => setSortBy("rss")}
+                >
+                  RSS {sortBy === "rss" ? "▼" : ""}
+                </th>
+                <th
+                  className="cursor-pointer px-3 py-2 text-left font-semibold text-anvil-400"
+                  onClick={() => setSortBy("name")}
+                >
+                  Name {sortBy === "name" ? "▼" : ""}
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-white/5">
+              {filtered.slice(0, 100).map((p) => (
+                <tr key={p.pid} className="hover:bg-white/[0.03]">
+                  <td className="px-3 py-1.5 font-mono text-anvil-300">
+                    {p.pid}
+                  </td>
+                  <td className="px-3 py-1.5 text-anvil-400">{p.user}</td>
+                  <td className="px-3 py-1.5 text-right font-mono text-anvil-200">
+                    {formatKb(p.rss_kb)}
+                  </td>
+                  <td className="px-3 py-1.5 font-mono text-anvil-100">
+                    {p.name}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {filtered.length > 100 && (
+            <p className="px-3 py-2 text-xs text-anvil-500">
+              Showing 100 of {filtered.length} processes
+            </p>
+          )}
+        </div>
+      )}
+    </Card>
+  );
+}
+
+function formatKb(kb: number): string {
+  if (kb >= 1048576) return `${(kb / 1048576).toFixed(1)} GB`;
+  if (kb >= 1024) return `${(kb / 1024).toFixed(1)} MB`;
+  return `${kb} KB`;
 }
 
 function AuthorizePrompt({

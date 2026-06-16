@@ -333,6 +333,55 @@ pub fn shell_run(serial: String, argv: Vec<String>) -> Result<String, CommandErr
     Ok(stdout)
 }
 
+/// Get process list from a device. Uses `ps -A -o PID,USER,VSZ,RSS,%CPU,NAME`
+/// for a structured snapshot.
+#[tauri::command]
+pub fn list_processes(serial: String) -> Result<Vec<ProcessInfo>, CommandError> {
+    validate_serial_arg(&serial)?;
+    let resolution = adb::locate_adb();
+    let path = resolution
+        .path
+        .as_ref()
+        .ok_or(adb::TransportError::AdbNotFound)?;
+    let transport = adb::ShellTransport::new(path);
+    let stdout = transport.shell(&serial, &["ps", "-A", "-o", "PID,USER,VSZ,RSS,NAME"])?;
+    Ok(parse_ps_output(&stdout))
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ProcessInfo {
+    pub pid: u32,
+    pub user: String,
+    pub vsz_kb: u64,
+    pub rss_kb: u64,
+    pub name: String,
+}
+
+fn parse_ps_output(stdout: &str) -> Vec<ProcessInfo> {
+    let mut out = Vec::new();
+    for line in stdout.lines().skip(1) {
+        let tokens: Vec<&str> = line.split_whitespace().collect();
+        if tokens.len() < 5 {
+            continue;
+        }
+        let Some(pid) = tokens[0].parse::<u32>().ok() else {
+            continue;
+        };
+        let user = tokens[1].to_string();
+        let vsz_kb = tokens[2].parse::<u64>().unwrap_or(0);
+        let rss_kb = tokens[3].parse::<u64>().unwrap_or(0);
+        let name = tokens[4..].join(" ");
+        out.push(ProcessInfo {
+            pid,
+            user,
+            vsz_kb,
+            rss_kb,
+            name,
+        });
+    }
+    out
+}
+
 /// Take a screenshot on the device and pull it to a local path.
 #[tauri::command]
 pub fn take_screenshot(
