@@ -113,12 +113,18 @@ export default function App() {
 
   return (
     <div className="min-h-full overflow-hidden bg-[#08090d] text-anvil-100">
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-md focus:bg-circuit-300 focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:text-anvil-950"
+      >
+        Skip to content
+      </a>
       <div
         className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,0.12),transparent_34rem),linear-gradient(135deg,rgba(255,255,255,0.04),transparent_34%)]"
         aria-hidden="true"
       />
       <div className="relative flex min-h-full flex-col lg:flex-row">
-        <aside className="border-b border-white/10 bg-anvil-950/90 p-4 backdrop-blur-xl lg:sticky lg:top-0 lg:flex lg:h-screen lg:w-80 lg:shrink-0 lg:flex-col lg:overflow-y-auto lg:border-b-0 lg:border-r lg:p-5">
+        <aside className="border-b border-white/10 bg-anvil-950/90 p-4 backdrop-blur-xl lg:sticky lg:top-0 lg:flex lg:h-screen lg:w-80 lg:shrink-0 lg:flex-col lg:overflow-y-auto lg:border-b-0 lg:border-r lg:p-5" aria-label="Application sidebar">
           <div className="flex items-start justify-between gap-4 lg:block">
             <Brand state={hb} />
             <div className="lg:mt-6">
@@ -148,7 +154,7 @@ export default function App() {
           </div>
         </aside>
 
-        <main className="min-w-0 flex-1 overflow-auto px-4 py-5 sm:px-6 lg:px-8 lg:py-8">
+        <main id="main-content" className="min-w-0 flex-1 overflow-auto px-4 py-5 sm:px-6 lg:px-8 lg:py-8">
           <div className="mx-auto max-w-7xl">{activeItem.render()}</div>
         </main>
       </div>
