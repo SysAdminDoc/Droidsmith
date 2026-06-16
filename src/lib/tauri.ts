@@ -431,6 +431,27 @@ export async function callExtractApk(
   });
 }
 
+export type FastbootDevice = {
+  serial: string;
+  mode: string;
+  product: string | null;
+};
+
+export async function callLocateFastboot(): Promise<string | null> {
+  return invoke<string | null>("locate_fastboot");
+}
+
+export async function callListFastbootDevices(): Promise<FastbootDevice[]> {
+  return invoke<FastbootDevice[]>("list_fastboot_devices");
+}
+
+export async function callFastbootGetvar(
+  serial: string,
+  key: string,
+): Promise<string> {
+  return invoke<string>("fastboot_getvar", { serial, key });
+}
+
 export async function callListPacks(): Promise<Pack[]> {
   return invoke<Pack[]>("list_packs");
 }

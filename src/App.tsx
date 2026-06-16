@@ -17,8 +17,8 @@ import DebloatRoute from "./routes/Debloat";
 import ConsoleRoute from "./routes/Console";
 import LogcatRoute from "./routes/Logcat";
 import MirrorRoute from "./routes/Mirror";
+import FastbootRoute from "./routes/Fastboot";
 import { Badge, Button, SkeletonLine } from "./routes/common";
-import { FastbootRoute } from "./routes/placeholders";
 
 export type NavItem = {
   label: string;

@@ -535,6 +535,86 @@ fn run_adb_simple(
     }
 }
 
+/// Locate the fastboot binary on the system.
+#[tauri::command]
+pub fn locate_fastboot() -> Option<String> {
+    which::which("fastboot")
+        .ok()
+        .map(|p| p.display().to_string())
+}
+
+/// List devices visible to fastboot.
+#[tauri::command]
+pub fn list_fastboot_devices() -> Result<Vec<FastbootDevice>, CommandError> {
+    let fastboot_path = which::which("fastboot").map_err(|_| CommandError {
+        code: "fastboot_not_found",
+        message: "fastboot binary not found on PATH".to_string(),
+    })?;
+
+    let timeout = std::time::Duration::from_secs(10);
+    let stdout = run_adb_simple(&fastboot_path, &["devices", "-l"], timeout)?;
+    Ok(parse_fastboot_devices(&stdout))
+}
+
+/// Query a fastboot variable.
+#[tauri::command]
+pub fn fastboot_getvar(serial: String, key: String) -> Result<String, CommandError> {
+    validate_serial_arg(&serial)?;
+    let fastboot_path = which::which("fastboot").map_err(|_| CommandError {
+        code: "fastboot_not_found",
+        message: "fastboot binary not found on PATH".to_string(),
+    })?;
+
+    let timeout = std::time::Duration::from_secs(10);
+    let stdout = run_adb_simple(&fastboot_path, &["-s", &serial, "getvar", &key], timeout)
+        .or_else(|_| {
+            // fastboot getvar outputs to stderr, retry capturing stderr
+            let output = std::process::Command::new(&fastboot_path)
+                .args(["-s", &serial, "getvar", &key])
+                .output()
+                .map_err(|e| CommandError {
+                    code: "spawn_failed",
+                    message: e.to_string(),
+                })?;
+            Ok(String::from_utf8_lossy(&output.stderr).into_owned())
+        })?;
+    Ok(stdout)
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct FastbootDevice {
+    pub serial: String,
+    pub mode: String,
+    pub product: Option<String>,
+}
+
+fn parse_fastboot_devices(stdout: &str) -> Vec<FastbootDevice> {
+    let mut out = Vec::new();
+    for line in stdout.lines() {
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+        let mut tokens = line.split_whitespace();
+        let Some(serial) = tokens.next() else {
+            continue;
+        };
+        let mode = tokens.next().unwrap_or("fastboot").to_string();
+        let mut product = None;
+        for tok in tokens {
+            if let Some(val) = tok.strip_prefix("product:") {
+                product = Some(val.to_string());
+            }
+        }
+        out.push(FastbootDevice {
+            serial: serial.to_string(),
+            mode,
+            product,
+        });
+    }
+    out
+}
+
 /// Get network connections from the device using `ss -tunp`.
 #[tauri::command]
 pub fn list_network_connections(
