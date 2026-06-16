@@ -535,6 +535,74 @@ fn run_adb_simple(
     }
 }
 
+/// Get network connections from the device using `ss -tunp`.
+#[tauri::command]
+pub fn list_network_connections(
+    serial: String,
+) -> Result<Vec<NetworkConnection>, CommandError> {
+    validate_serial_arg(&serial)?;
+    let resolution = adb::locate_adb();
+    let path = resolution
+        .path
+        .as_ref()
+        .ok_or(adb::TransportError::AdbNotFound)?;
+    let transport = adb::ShellTransport::new(path);
+    let stdout = transport
+        .shell(&serial, &["ss", "-tunp"])
+        .or_else(|_| transport.shell(&serial, &["netstat", "-tunp"]))?;
+    Ok(parse_ss_output(&stdout))
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct NetworkConnection {
+    pub state: String,
+    pub protocol: String,
+    pub local_addr: String,
+    pub remote_addr: String,
+    pub process: Option<String>,
+}
+
+fn parse_ss_output(stdout: &str) -> Vec<NetworkConnection> {
+    let mut out = Vec::new();
+    for line in stdout.lines().skip(1) {
+        let tokens: Vec<&str> = line.split_whitespace().collect();
+        if tokens.len() < 5 {
+            continue;
+        }
+        let state = tokens[0].to_string();
+        let protocol = if line.contains("tcp") {
+            "tcp".to_string()
+        } else if line.contains("udp") {
+            "udp".to_string()
+        } else {
+            "?".to_string()
+        };
+
+        let (local_addr, remote_addr, process) = if tokens.len() >= 6 {
+            (
+                tokens[4].to_string(),
+                tokens[5].to_string(),
+                tokens.get(6).map(|s| s.to_string()),
+            )
+        } else {
+            (
+                tokens[3].to_string(),
+                tokens[4].to_string(),
+                tokens.get(5).map(|s| s.to_string()),
+            )
+        };
+
+        out.push(NetworkConnection {
+            state,
+            protocol,
+            local_addr,
+            remote_addr,
+            process,
+        });
+    }
+    out
+}
+
 /// Backup a package's data using `adb backup`. The user must confirm
 /// on the device screen. Returns the adb output.
 #[tauri::command]

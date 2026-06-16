@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import {
   callGetDeviceInfo,
   callListDevices,
+  callListNetworkConnections,
   callListProcesses,
   callListRemoteFiles,
   callPullFile,
@@ -13,6 +14,7 @@ import {
   summarizeState,
   type DeviceInfo,
   type ListDevicesResult,
+  type NetworkConnection,
   type ProcessInfo,
   type RemoteFileEntry,
   type RemoteListing,
@@ -772,6 +774,7 @@ function DeviceControls({ serial }: { serial: string }) {
     </div>
       <ProcessManager serial={serial} />
       <FileManager serial={serial} />
+      <NetworkInspector serial={serial} />
     </div>
   );
 }
@@ -1047,6 +1050,120 @@ function FileManager({ serial }: { serial: string }) {
             </div>
           )}
         </>
+      )}
+    </Card>
+  );
+}
+
+function NetworkInspector({ serial }: { serial: string }) {
+  const [connections, setConnections] = useState<NetworkConnection[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [search, setSearch] = useState("");
+
+  const refresh = useCallback(async () => {
+    setLoading(true);
+    try {
+      const conns = await callListNetworkConnections(serial);
+      setConnections(conns);
+    } catch {
+      setConnections([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [serial]);
+
+  const filtered = connections.filter((c) =>
+    search
+      ? c.local_addr.includes(search) ||
+        c.remote_addr.includes(search) ||
+        (c.process?.includes(search) ?? false) ||
+        c.state.toLowerCase().includes(search.toLowerCase())
+      : true,
+  );
+
+  return (
+    <Card className="overflow-hidden p-0">
+      <div className="flex flex-col gap-3 border-b border-white/10 p-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h3 className="text-sm font-semibold text-anvil-50">
+            Network connections
+          </h3>
+          <p className="mt-1 text-xs text-anvil-400">
+            Active TCP/UDP connections via <code>ss -tunp</code>.
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Filter..."
+            aria-label="Filter network connections"
+            className="h-8 w-40 rounded-md border border-white/10 bg-white/[0.06] px-2 font-mono text-xs text-anvil-50 outline-none placeholder:text-anvil-600 focus:border-circuit-300/50"
+          />
+          <Button
+            type="button"
+            size="sm"
+            variant="primary"
+            onClick={() => void refresh()}
+            disabled={loading}
+          >
+            {loading
+              ? "Loading..."
+              : connections.length > 0
+                ? "Refresh"
+                : "Load"}
+          </Button>
+        </div>
+      </div>
+      {connections.length > 0 && (
+        <div className="overflow-x-auto" style={{ maxHeight: "20rem" }}>
+          <table className="min-w-full text-xs">
+            <thead className="sticky top-0 bg-anvil-900">
+              <tr>
+                <th className="px-3 py-2 text-left font-semibold text-anvil-400">
+                  Proto
+                </th>
+                <th className="px-3 py-2 text-left font-semibold text-anvil-400">
+                  State
+                </th>
+                <th className="px-3 py-2 text-left font-semibold text-anvil-400">
+                  Local
+                </th>
+                <th className="px-3 py-2 text-left font-semibold text-anvil-400">
+                  Remote
+                </th>
+                <th className="px-3 py-2 text-left font-semibold text-anvil-400">
+                  Process
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-white/5">
+              {filtered.slice(0, 100).map((c, i) => (
+                <tr key={i} className="hover:bg-white/[0.03]">
+                  <td className="px-3 py-1.5 font-mono text-anvil-300">
+                    {c.protocol}
+                  </td>
+                  <td className="px-3 py-1.5 text-anvil-200">{c.state}</td>
+                  <td className="px-3 py-1.5 font-mono text-anvil-100">
+                    {c.local_addr}
+                  </td>
+                  <td className="px-3 py-1.5 font-mono text-anvil-100">
+                    {c.remote_addr}
+                  </td>
+                  <td className="px-3 py-1.5 font-mono text-anvil-400">
+                    {c.process ?? "—"}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {filtered.length > 100 && (
+            <p className="px-3 py-2 text-xs text-anvil-500">
+              Showing 100 of {filtered.length} connections
+            </p>
+          )}
+        </div>
       )}
     </Card>
   );

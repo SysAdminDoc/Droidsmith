@@ -285,6 +285,20 @@ export type RemoteListing = {
   free_space_kb: number | null;
 };
 
+export type NetworkConnection = {
+  state: string;
+  protocol: string;
+  local_addr: string;
+  remote_addr: string;
+  process: string | null;
+};
+
+export async function callListNetworkConnections(
+  serial: string,
+): Promise<NetworkConnection[]> {
+  return invoke<NetworkConnection[]>("list_network_connections", { serial });
+}
+
 export async function callBackupPackage(
   serial: string,
   pkg: string,
