@@ -241,6 +241,7 @@ export default function AppsRoute() {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search packages..."
+                aria-label="Filter packages by name"
                 className="h-9 w-64 max-w-full rounded-md border border-white/10 bg-white/[0.06] px-3 font-mono text-sm text-anvil-50 outline-none transition placeholder:text-anvil-600 focus:border-circuit-300/50 focus:ring-2 focus:ring-circuit-300/20"
               />
             </div>
@@ -474,9 +475,15 @@ function ActionOverlay({
 
   if (state.kind === "confirming") {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="confirm-dialog-title"
+        onKeyDown={(e) => { if (e.key === "Escape") onCancel(); }}
+      >
         <Card className="mx-4 max-w-lg p-6">
-          <h3 className="text-lg font-semibold text-anvil-50">
+          <h3 id="confirm-dialog-title" className="text-lg font-semibold text-anvil-50">
             Confirm action
           </h3>
           <p className="mt-3 text-sm leading-6 text-anvil-200">

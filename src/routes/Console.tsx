@@ -240,6 +240,7 @@ export default function ConsoleRoute() {
                 placeholder="getprop ro.product.model"
                 disabled={running}
                 autoFocus
+                aria-label="ADB shell command"
                 className="h-8 flex-1 bg-transparent font-mono text-sm text-anvil-50 outline-none placeholder:text-anvil-600"
               />
               <Button
