@@ -15,8 +15,8 @@ mod quirks;
 pub mod time;
 
 use commands::{
-    apply_action, connect_wireless, explain_failure, heartbeat, journal_list, journal_undo,
-    list_devices, list_packages, list_wireless_services, pair_wireless, plan_action,
+    apply_action, connect_wireless, explain_failure, get_device_info, heartbeat, journal_list,
+    journal_undo, list_devices, list_packages, list_wireless_services, pair_wireless, plan_action,
 };
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -31,6 +31,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             heartbeat,
             list_devices,
+            get_device_info,
             list_wireless_services,
             pair_wireless,
             connect_wireless,
