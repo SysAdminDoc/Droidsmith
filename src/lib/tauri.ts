@@ -68,6 +68,39 @@ export type ListDevicesResult = {
   devices: Device[];
 };
 
+export type WirelessServiceKind = "pairing" | "connect" | "other";
+
+export type WirelessAdbService = {
+  name: string;
+  service_type: string;
+  kind: WirelessServiceKind;
+  host: string;
+  port: number;
+  endpoint: string;
+};
+
+export type ListWirelessServicesResult = {
+  adb_resolved: boolean;
+  adb_path: string | null;
+  services: WirelessAdbService[];
+};
+
+export type WirelessPairRequest = {
+  host: string;
+  port: number;
+  pairing_code: string;
+};
+
+export type WirelessConnectRequest = {
+  host: string;
+  port: number;
+};
+
+export type WirelessCommandResult = {
+  endpoint: string;
+  stdout: string;
+};
+
 export function summarizeState(s: SerializedDeviceState): string {
   if (typeof s === "string") {
     return s.replace(/_/g, " ");
@@ -89,4 +122,20 @@ export async function callHeartbeat(): Promise<Heartbeat> {
 
 export async function callListDevices(): Promise<ListDevicesResult> {
   return invoke<ListDevicesResult>("list_devices");
+}
+
+export async function callListWirelessServices(): Promise<ListWirelessServicesResult> {
+  return invoke<ListWirelessServicesResult>("list_wireless_services");
+}
+
+export async function callPairWireless(
+  request: WirelessPairRequest,
+): Promise<WirelessCommandResult> {
+  return invoke<WirelessCommandResult>("pair_wireless", { request });
+}
+
+export async function callConnectWireless(
+  request: WirelessConnectRequest,
+): Promise<WirelessCommandResult> {
+  return invoke<WirelessCommandResult>("connect_wireless", { request });
 }

@@ -83,6 +83,13 @@ impl ShellTransport {
     fn run(&self, args: &[&str]) -> Result<String, TransportError> {
         run_capture(&self.adb_path, args, self.timeout)
     }
+
+    /// Run a raw `adb` command that is not device-shell scoped. Kept on
+    /// the concrete shell transport so the trait only exposes
+    /// device-level operations.
+    pub fn adb(&self, args: &[&str]) -> Result<String, TransportError> {
+        self.run(args)
+    }
 }
 
 impl AdbTransport for ShellTransport {
