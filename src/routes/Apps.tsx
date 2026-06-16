@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 
 import {
   callApplyAction,
+  callBackupPackage,
   callListDevices,
   callListPackages,
   callListPermissions,
@@ -64,6 +65,7 @@ export default function AppsRoute() {
   const [actionState, setActionState] = useState<ActionState>({ kind: "idle" });
   const [search, setSearch] = useState("");
   const [inspectedPkg, setInspectedPkg] = useState<string | null>(null);
+  const [backupMsg, setBackupMsg] = useState<string | null>(null);
 
   const loadDevices = useCallback(async () => {
     if (!inTauri()) {
@@ -127,6 +129,22 @@ export default function AppsRoute() {
           kind: "error",
           message: e instanceof Error ? e.message : String(e),
         });
+      }
+    },
+    [selectedSerial],
+  );
+
+  const startBackup = useCallback(
+    async (pkg: string) => {
+      if (!selectedSerial) return;
+      setBackupMsg(`Backing up ${pkg}... Confirm on device.`);
+      try {
+        await callBackupPackage(selectedSerial, pkg, `${pkg}.ab`);
+        setBackupMsg(`Backup saved to ${pkg}.ab`);
+      } catch (e) {
+        setBackupMsg(
+          `Backup failed: ${e instanceof Error ? e.message : String(e)}`,
+        );
       }
     },
     [selectedSerial],
@@ -264,6 +282,7 @@ export default function AppsRoute() {
                 totalCount={pkgState.packages.length}
                 onAction={startAction}
                 onInspect={setInspectedPkg}
+                onBackup={(pkg) => void startBackup(pkg)}
               />
             )}
           </>
@@ -275,6 +294,25 @@ export default function AppsRoute() {
             pkg={inspectedPkg}
             onClose={() => setInspectedPkg(null)}
           />
+        )}
+
+        {backupMsg && (
+          <StatePanel
+            title="Backup"
+            tone="info"
+            actions={
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={() => setBackupMsg(null)}
+              >
+                Dismiss
+              </Button>
+            }
+          >
+            <p>{backupMsg}</p>
+          </StatePanel>
         )}
 
         <ActionOverlay
@@ -353,11 +391,13 @@ function PackageTable({
   totalCount,
   onAction,
   onInspect,
+  onBackup,
 }: {
   packages: AppPackage[];
   totalCount: number;
   onAction: (pkg: string, kind: ActionKind) => void;
   onInspect: (pkg: string) => void;
+  onBackup: (pkg: string) => void;
 }) {
   return (
     <Card className="overflow-hidden p-0">
@@ -470,6 +510,14 @@ function PackageTable({
                         onClick={() => onInspect(pkg.package)}
                       >
                         Perms
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => onBackup(pkg.package)}
+                      >
+                        Backup
                       </Button>
                     </div>
                   </Td>

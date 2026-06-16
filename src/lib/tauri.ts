@@ -285,6 +285,18 @@ export type RemoteListing = {
   free_space_kb: number | null;
 };
 
+export async function callBackupPackage(
+  serial: string,
+  pkg: string,
+  localPath: string,
+): Promise<string> {
+  return invoke<string>("backup_package", {
+    serial,
+    package: pkg,
+    local_path: localPath,
+  });
+}
+
 export async function callListRemoteFiles(
   serial: string,
   remotePath: string,
