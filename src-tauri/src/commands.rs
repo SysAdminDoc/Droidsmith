@@ -535,6 +535,28 @@ fn run_adb_simple(
     }
 }
 
+/// Backup a package's data using `adb backup`. The user must confirm
+/// on the device screen. Returns the adb output.
+#[tauri::command]
+pub fn backup_package(
+    serial: String,
+    package: String,
+    local_path: String,
+) -> Result<String, CommandError> {
+    validate_serial_arg(&serial)?;
+    let resolution = adb::locate_adb();
+    let adb_path = resolution
+        .path
+        .as_ref()
+        .ok_or(adb::TransportError::AdbNotFound)?;
+
+    let timeout = std::time::Duration::from_secs(300);
+    let output = run_adb_simple(std::path::Path::new(adb_path), &[
+        "-s", &serial, "backup", "-f", &local_path, "-apk", &package,
+    ], timeout)?;
+    Ok(output)
+}
+
 /// List runtime permissions for a package.
 #[tauri::command]
 pub fn list_permissions(
