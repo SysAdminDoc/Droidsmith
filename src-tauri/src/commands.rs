@@ -306,6 +306,18 @@ pub fn journal_undo(
     Ok(entry)
 }
 
+#[tauri::command]
+pub fn get_device_info(serial: String) -> Result<adb::DeviceInfo, CommandError> {
+    validate_serial_arg(&serial)?;
+    let resolution = adb::locate_adb();
+    let path = resolution
+        .path
+        .as_ref()
+        .ok_or(adb::TransportError::AdbNotFound)?;
+    let transport = adb::ShellTransport::new(path);
+    Ok(adb::get_device_info(&transport, &serial)?)
+}
+
 fn iso_now() -> String {
     crate::time::iso_utc_now()
 }

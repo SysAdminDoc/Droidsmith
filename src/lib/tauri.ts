@@ -101,6 +101,73 @@ export type WirelessCommandResult = {
   stdout: string;
 };
 
+export type BatteryInfo = {
+  level: number | null;
+  status: string | null;
+  temperature: number | null;
+};
+
+export type StorageInfo = {
+  total_kb: number | null;
+  used_kb: number | null;
+  available_kb: number | null;
+};
+
+export type DeviceInfo = {
+  serial: string;
+  model: string | null;
+  manufacturer: string | null;
+  android_version: string | null;
+  sdk_level: string | null;
+  build_fingerprint: string | null;
+  security_patch: string | null;
+  hardware_serial: string | null;
+  battery: BatteryInfo | null;
+  storage: StorageInfo | null;
+  wifi_ip: string | null;
+};
+
+export type PackageFilter = "all" | "user" | "system" | "enabled" | "disabled";
+
+export type AppPackage = {
+  package: string;
+  enabled: boolean;
+  system: boolean;
+  apk_path: string | null;
+  uid: number | null;
+  installer: string | null;
+};
+
+export type ActionKind =
+  | "disable"
+  | "enable"
+  | "uninstall_for_user"
+  | "clear_data"
+  | "force_stop";
+
+export type ActionRequest = {
+  serial: string;
+  package: string;
+  kind: ActionKind;
+};
+
+export type PlannedAction = {
+  request: ActionRequest;
+  args: string[];
+  description: string;
+};
+
+export type JournalEntry = {
+  id: number;
+  action: string;
+  package: string;
+  kind: ActionKind;
+  applied_at: string;
+  stdout: string;
+  undone_by: number | null;
+  undoes: number | null;
+};
+
 export function summarizeState(s: SerializedDeviceState): string {
   if (typeof s === "string") {
     return s.replace(/_/g, " ");
@@ -138,4 +205,42 @@ export async function callConnectWireless(
   request: WirelessConnectRequest,
 ): Promise<WirelessCommandResult> {
   return invoke<WirelessCommandResult>("connect_wireless", { request });
+}
+
+export async function callGetDeviceInfo(
+  serial: string,
+): Promise<DeviceInfo> {
+  return invoke<DeviceInfo>("get_device_info", { serial });
+}
+
+export async function callListPackages(
+  serial: string,
+  filter: PackageFilter,
+): Promise<AppPackage[]> {
+  return invoke<AppPackage[]>("list_packages", { serial, filter });
+}
+
+export async function callPlanAction(
+  request: ActionRequest,
+): Promise<PlannedAction> {
+  return invoke<PlannedAction>("plan_action", { request });
+}
+
+export async function callApplyAction(
+  plan: PlannedAction,
+): Promise<JournalEntry> {
+  return invoke<JournalEntry>("apply_action", { plan });
+}
+
+export async function callJournalList(
+  serial: string,
+): Promise<JournalEntry[]> {
+  return invoke<JournalEntry[]>("journal_list", { serial });
+}
+
+export async function callJournalUndo(
+  serial: string,
+  entryId: number,
+): Promise<JournalEntry> {
+  return invoke<JournalEntry>("journal_undo", { serial, entry_id: entryId });
 }

@@ -25,6 +25,7 @@
 
 pub mod actions;
 pub mod device;
+pub mod device_info;
 pub mod packages;
 pub mod resolver;
 pub mod transport;
@@ -37,6 +38,7 @@ pub use device::Device;
 pub use packages::{list_packages, AppPackage, PackageFilter};
 pub use resolver::{locate_adb, AdbResolution};
 pub use transport::{AdbTransport, ShellTransport, TransportError};
+pub use device_info::{get_device_info, DeviceInfo};
 pub use wireless::{
     connect as connect_wireless, list_mdns_services, pair as pair_wireless, WirelessAdbService,
     WirelessCommandResult, WirelessConnectRequest, WirelessPairRequest,
