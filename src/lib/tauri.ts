@@ -272,6 +272,53 @@ export async function callJournalUndo(
   return invoke<JournalEntry>("journal_undo", { serial, entry_id: entryId });
 }
 
+export type RemoteFileEntry = {
+  name: string;
+  is_dir: boolean;
+  size: number | null;
+  permissions: string;
+};
+
+export type RemoteListing = {
+  path: string;
+  entries: RemoteFileEntry[];
+  free_space_kb: number | null;
+};
+
+export async function callListRemoteFiles(
+  serial: string,
+  remotePath: string,
+): Promise<RemoteListing> {
+  return invoke<RemoteListing>("list_remote_files", {
+    serial,
+    remote_path: remotePath,
+  });
+}
+
+export async function callPushFile(
+  serial: string,
+  localPath: string,
+  remotePath: string,
+): Promise<string> {
+  return invoke<string>("push_file", {
+    serial,
+    local_path: localPath,
+    remote_path: remotePath,
+  });
+}
+
+export async function callPullFile(
+  serial: string,
+  remotePath: string,
+  localPath: string,
+): Promise<string> {
+  return invoke<string>("pull_file", {
+    serial,
+    remote_path: remotePath,
+    local_path: localPath,
+  });
+}
+
 export type PermissionInfo = {
   permission: string;
   granted: boolean;

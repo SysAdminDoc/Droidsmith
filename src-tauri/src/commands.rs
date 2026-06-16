@@ -333,6 +333,208 @@ pub fn shell_run(serial: String, argv: Vec<String>) -> Result<String, CommandErr
     Ok(stdout)
 }
 
+/// List files in a remote directory on the device.
+#[tauri::command]
+pub fn list_remote_files(
+    serial: String,
+    remote_path: String,
+) -> Result<RemoteListing, CommandError> {
+    validate_serial_arg(&serial)?;
+    let resolution = adb::locate_adb();
+    let path = resolution
+        .path
+        .as_ref()
+        .ok_or(adb::TransportError::AdbNotFound)?;
+    let transport = adb::ShellTransport::new(path);
+    let stdout = transport.shell(&serial, &["ls", "-la", &remote_path])?;
+    let entries = parse_ls_output(&stdout, &remote_path);
+    let free_space = transport
+        .shell(&serial, &["df", &remote_path])
+        .ok()
+        .and_then(|s| parse_df_free(&s));
+    Ok(RemoteListing {
+        path: remote_path,
+        entries,
+        free_space_kb: free_space,
+    })
+}
+
+/// Push a local file to the device.
+#[tauri::command]
+pub fn push_file(
+    serial: String,
+    local_path: String,
+    remote_path: String,
+) -> Result<String, CommandError> {
+    validate_serial_arg(&serial)?;
+    let resolution = adb::locate_adb();
+    let adb_path = resolution
+        .path
+        .as_ref()
+        .ok_or(adb::TransportError::AdbNotFound)?;
+
+    let timeout = std::time::Duration::from_secs(120);
+    let output = run_adb_simple(std::path::Path::new(adb_path), &[
+        "-s", &serial, "push", &local_path, &remote_path,
+    ], timeout)?;
+    Ok(output)
+}
+
+/// Pull a remote file from the device.
+#[tauri::command]
+pub fn pull_file(
+    serial: String,
+    remote_path: String,
+    local_path: String,
+) -> Result<String, CommandError> {
+    validate_serial_arg(&serial)?;
+    let resolution = adb::locate_adb();
+    let adb_path = resolution
+        .path
+        .as_ref()
+        .ok_or(adb::TransportError::AdbNotFound)?;
+
+    let timeout = std::time::Duration::from_secs(120);
+    let output = run_adb_simple(std::path::Path::new(adb_path), &[
+        "-s", &serial, "pull", &remote_path, &local_path,
+    ], timeout)?;
+    Ok(output)
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct RemoteListing {
+    pub path: String,
+    pub entries: Vec<RemoteFileEntry>,
+    pub free_space_kb: Option<u64>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct RemoteFileEntry {
+    pub name: String,
+    pub is_dir: bool,
+    pub size: Option<u64>,
+    pub permissions: String,
+}
+
+fn parse_ls_output(stdout: &str, parent: &str) -> Vec<RemoteFileEntry> {
+    let mut out = Vec::new();
+    for line in stdout.lines() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with("total") {
+            continue;
+        }
+        let tokens: Vec<&str> = line.splitn(8, char::is_whitespace).collect();
+        if tokens.len() < 7 {
+            continue;
+        }
+        let perms = tokens[0];
+        let name_part = if tokens.len() >= 8 {
+            tokens[7].trim()
+        } else {
+            tokens[tokens.len() - 1].trim()
+        };
+        if name_part == "." || name_part == ".." {
+            continue;
+        }
+        let is_dir = perms.starts_with('d');
+        let size = if is_dir {
+            None
+        } else {
+            tokens[4].parse::<u64>().ok()
+        };
+        out.push(RemoteFileEntry {
+            name: name_part.to_string(),
+            is_dir,
+            size,
+            permissions: perms.to_string(),
+        });
+    }
+    out.sort_by(|a, b| b.is_dir.cmp(&a.is_dir).then(a.name.cmp(&b.name)));
+    out
+}
+
+fn parse_df_free(stdout: &str) -> Option<u64> {
+    for line in stdout.lines().skip(1) {
+        let tokens: Vec<&str> = line.split_whitespace().collect();
+        if tokens.len() >= 4 {
+            return tokens[3].parse().ok();
+        }
+    }
+    None
+}
+
+fn run_adb_simple(
+    adb_path: &std::path::Path,
+    args: &[&str],
+    timeout: std::time::Duration,
+) -> Result<String, CommandError> {
+    use std::io::Read as IoRead;
+    use std::process::{Command, Stdio};
+    use std::time::Instant;
+
+    let mut child = Command::new(adb_path)
+        .args(args)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|e| CommandError {
+            code: "spawn_failed",
+            message: format!("failed to run adb: {e}"),
+        })?;
+
+    let mut stdout_pipe = child.stdout.take().unwrap();
+    let mut stderr_pipe = child.stderr.take().unwrap();
+
+    let stdout_reader = std::thread::spawn(move || {
+        let mut buf = Vec::with_capacity(4096);
+        let _ = stdout_pipe.read_to_end(&mut buf);
+        buf
+    });
+    let stderr_reader = std::thread::spawn(move || {
+        let mut buf = Vec::with_capacity(1024);
+        let _ = stderr_pipe.read_to_end(&mut buf);
+        buf
+    });
+
+    let start = Instant::now();
+    let exit_status = loop {
+        match child.try_wait() {
+            Ok(Some(status)) => break Some(status),
+            Ok(None) => {
+                if start.elapsed() > timeout {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    break None;
+                }
+                std::thread::sleep(std::time::Duration::from_millis(50));
+            }
+            Err(_) => break None,
+        }
+    };
+
+    let stdout_bytes = stdout_reader.join().unwrap_or_default();
+    let stderr_bytes = stderr_reader.join().unwrap_or_default();
+    let stdout = String::from_utf8_lossy(&stdout_bytes).into_owned();
+    let stderr = String::from_utf8_lossy(&stderr_bytes).into_owned();
+
+    match exit_status {
+        None => Err(CommandError {
+            code: "adb_timeout",
+            message: format!("adb timed out after {timeout:?}"),
+        }),
+        Some(status) if status.success() => Ok(stdout),
+        Some(status) => Err(CommandError {
+            code: "adb_exit",
+            message: format!(
+                "adb exited with code {}: {}",
+                status.code().unwrap_or(-1),
+                stderr
+            ),
+        }),
+    }
+}
+
 /// List runtime permissions for a package.
 #[tauri::command]
 pub fn list_permissions(
