@@ -8,6 +8,7 @@ import {
   useCommandPalette,
   type PaletteItem,
 } from "./routes/CommandPalette";
+import OnboardingTour from "./routes/Onboarding";
 
 import DevicesRoute from "./routes/Devices";
 import WirelessRoute from "./routes/Wireless";
@@ -89,6 +90,7 @@ type LoadState =
 export default function App() {
   const [hb, setHb] = useState<LoadState>({ status: "loading" });
   const [active, setActive] = useState<string>(NAV_ITEMS[0].label);
+  const [showOnboarding, setShowOnboarding] = useState(false);
   const palette = useCommandPalette();
 
   const paletteItems: PaletteItem[] = useMemo(
@@ -162,6 +164,15 @@ export default function App() {
           </nav>
 
           <div className="runtime-panel mt-5 hidden lg:block lg:mt-auto lg:pt-8">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="mb-3 w-full"
+              onClick={() => setShowOnboarding(true)}
+            >
+              Getting started guide
+            </Button>
             <HeartbeatSidebarSummary
               state={hb}
               onRetry={() => void loadHeartbeat()}
@@ -173,6 +184,11 @@ export default function App() {
           <div className="mx-auto max-w-7xl">{activeItem.render()}</div>
         </main>
       </div>
+      {showOnboarding && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <OnboardingTour onDismiss={() => setShowOnboarding(false)} />
+        </div>
+      )}
       <CommandPalette
         open={palette.open}
         onClose={() => palette.setOpen(false)}
