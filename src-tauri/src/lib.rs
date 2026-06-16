@@ -16,8 +16,8 @@ pub mod time;
 
 use commands::{
     apply_action, connect_wireless, explain_failure, extract_apk, get_device_info, heartbeat,
-    install_apk, journal_list, journal_undo, list_devices, list_packages, list_packs,
-    list_wireless_services, pair_wireless, plan_action, shell_run,
+    install_apk, journal_list, journal_undo, launch_scrcpy, list_devices, list_packages,
+    list_packs, list_wireless_services, locate_scrcpy, pair_wireless, plan_action, shell_run,
 };
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -41,6 +41,8 @@ pub fn run() {
             plan_action,
             apply_action,
             shell_run,
+            locate_scrcpy,
+            launch_scrcpy,
             install_apk,
             extract_apk,
             journal_list,
