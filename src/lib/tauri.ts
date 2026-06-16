@@ -272,6 +272,24 @@ export async function callJournalUndo(
   return invoke<JournalEntry>("journal_undo", { serial, entry_id: entryId });
 }
 
+export async function callLocateScrcpy(): Promise<string | null> {
+  return invoke<string | null>("locate_scrcpy");
+}
+
+export type LaunchScrcpyOptions = {
+  serial: string;
+  max_size?: number | null;
+  bit_rate?: string | null;
+  no_audio: boolean;
+  record_path?: string | null;
+};
+
+export async function callLaunchScrcpy(
+  opts: LaunchScrcpyOptions,
+): Promise<number> {
+  return invoke<number>("launch_scrcpy", opts);
+}
+
 export async function callShellRun(
   serial: string,
   argv: string[],

@@ -333,6 +333,58 @@ pub fn shell_run(serial: String, argv: Vec<String>) -> Result<String, CommandErr
     Ok(stdout)
 }
 
+/// Locate the scrcpy binary on the system. Returns the path if found.
+#[tauri::command]
+pub fn locate_scrcpy() -> Option<String> {
+    which::which("scrcpy")
+        .ok()
+        .map(|p| p.display().to_string())
+}
+
+/// Launch scrcpy for a device. Fire-and-forget: we spawn the process
+/// detached so it outlives the IPC call. Returns the PID.
+#[tauri::command]
+pub fn launch_scrcpy(
+    serial: String,
+    max_size: Option<u32>,
+    bit_rate: Option<String>,
+    no_audio: bool,
+    record_path: Option<String>,
+) -> Result<u32, CommandError> {
+    validate_serial_arg(&serial)?;
+    let scrcpy_path = which::which("scrcpy").map_err(|_| CommandError {
+        code: "scrcpy_not_found",
+        message: "scrcpy binary not found on PATH".to_string(),
+    })?;
+
+    let mut cmd = std::process::Command::new(scrcpy_path);
+    cmd.arg("-s").arg(&serial);
+    if let Some(ms) = max_size {
+        cmd.arg("--max-size").arg(ms.to_string());
+    }
+    if let Some(br) = &bit_rate {
+        cmd.arg("--video-bit-rate").arg(br);
+    }
+    if no_audio {
+        cmd.arg("--no-audio");
+    }
+    if let Some(rp) = &record_path {
+        cmd.arg("--record").arg(rp);
+    }
+
+    let child = cmd
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .map_err(|e| CommandError {
+            code: "scrcpy_spawn_failed",
+            message: format!("failed to launch scrcpy: {e}"),
+        })?;
+
+    Ok(child.id())
+}
+
 /// Install an APK file on a device. The `apk_path` is a local filesystem
 /// path to the `.apk` file. Uses `adb install -r` for replace-on-conflict.
 #[tauri::command]
