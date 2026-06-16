@@ -1,8 +1,13 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 
 import { callHeartbeat, inTauri, type Heartbeat } from "./lib/tauri";
 import { cn } from "./lib/cn";
+import {
+  CommandPalette,
+  useCommandPalette,
+  type PaletteItem,
+} from "./routes/CommandPalette";
 
 import DevicesRoute from "./routes/Devices";
 import WirelessRoute from "./routes/Wireless";
@@ -84,6 +89,18 @@ type LoadState =
 export default function App() {
   const [hb, setHb] = useState<LoadState>({ status: "loading" });
   const [active, setActive] = useState<string>(NAV_ITEMS[0].label);
+  const palette = useCommandPalette();
+
+  const paletteItems: PaletteItem[] = useMemo(
+    () =>
+      NAV_ITEMS.map((item) => ({
+        id: `nav:${item.label}`,
+        label: item.label,
+        description: item.description,
+        category: "Navigation",
+      })),
+    [],
+  );
 
   const loadHeartbeat = useCallback(async () => {
     if (!inTauri()) {
@@ -156,6 +173,16 @@ export default function App() {
           <div className="mx-auto max-w-7xl">{activeItem.render()}</div>
         </main>
       </div>
+      <CommandPalette
+        open={palette.open}
+        onClose={() => palette.setOpen(false)}
+        items={paletteItems}
+        onSelect={(item) => {
+          if (item.id.startsWith("nav:")) {
+            setActive(item.label);
+          }
+        }}
+      />
     </div>
   );
 }
