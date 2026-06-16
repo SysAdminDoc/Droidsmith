@@ -1,0 +1,246 @@
+name: "Pixel — stock Android"
+version: "1"
+description: >
+  Debloat pack for Google Pixel devices running stock Android (AOSP).
+  Tested against Pixel 6/7/8/9 with Android 13–15. Targets pre-installed
+  Google apps and services that most users never open or can replace with
+  lighter alternatives. Does not touch core telephony, camera, or system
+  stability packages.
+attribution: |
+  Original Droidsmith authoring based on public AOSP package lists and
+  community debloat guides. MIT licensed.
+
+targets:
+  manufacturer: ["Google"]
+  rom: ["aosp", "stock"]
+  android_min: 33
+
+packages:
+  # ── Google apps: safe to remove ────────────────────────────────────
+
+  - id: com.google.android.apps.docs
+    removal: recommended
+    description: >
+      Google Drive. Disabling removes the "Save to Drive" share target.
+      Files stay accessible via the web.
+    needed_by: ["com.google.android.apps.docs.editors.docs", "com.google.android.apps.docs.editors.sheets"]
+    labels: ["google", "productivity"]
+
+  - id: com.google.android.apps.docs.editors.docs
+    removal: recommended
+    description: >
+      Google Docs editor. Web version is fully functional as a replacement.
+    depends_on: ["com.google.android.apps.docs"]
+    labels: ["google", "productivity"]
+
+  - id: com.google.android.apps.docs.editors.sheets
+    removal: recommended
+    description: >
+      Google Sheets editor. Web version is fully functional as a replacement.
+    depends_on: ["com.google.android.apps.docs"]
+    labels: ["google", "productivity"]
+
+  - id: com.google.android.apps.docs.editors.slides
+    removal: recommended
+    description: >
+      Google Slides editor. Web version is fully functional as a replacement.
+    labels: ["google", "productivity"]
+
+  - id: com.google.android.apps.tachyon
+    removal: recommended
+    description: >
+      Google Meet (formerly Duo). Video calling app. Can be re-installed
+      from the Play Store if needed.
+    labels: ["google", "communication"]
+
+  - id: com.google.android.apps.youtube.music
+    removal: recommended
+    description: >
+      YouTube Music. Streaming music app bundled on Pixels. Disable to
+      reclaim background battery and data. Spotify or other players work
+      as replacements.
+    labels: ["google", "media"]
+
+  - id: com.google.android.videos
+    removal: recommended
+    description: >
+      Google TV (formerly Play Movies). Media player and store. Local
+      video playback works through Files or VLC.
+    labels: ["google", "media"]
+
+  - id: com.google.android.apps.magazines
+    removal: recommended
+    description: >
+      Google News. News aggregation app. Disable to remove the feed and
+      reclaim notification noise.
+    labels: ["google", "news"]
+
+  - id: com.google.android.apps.maps
+    removal: advanced
+    description: >
+      Google Maps. Some apps depend on Maps for location display and
+      navigation intents. Disabling may break ride-sharing apps and
+      location-based features in third-party apps.
+    needed_by: ["com.google.android.apps.maps.go"]
+    labels: ["google", "navigation"]
+
+  - id: com.google.android.apps.podcasts
+    removal: recommended
+    description: >
+      Google Podcasts. Podcast player. Alternative podcast apps are
+      widely available.
+    labels: ["google", "media"]
+
+  - id: com.google.android.apps.wellbeing
+    removal: advanced
+    description: >
+      Digital Wellbeing. Tracks screen time, app timers, focus mode, and
+      bedtime mode. Disabling removes the "Digital Wellbeing" entry in
+      Settings but has no stability impact.
+    labels: ["google", "wellness"]
+
+  - id: com.google.android.apps.subscriptions.red
+    removal: recommended
+    description: >
+      Google One. Cloud storage subscription manager. Disabling has no
+      effect on existing storage or backups accessed via web.
+    labels: ["google", "subscription"]
+
+  - id: com.google.android.keep
+    removal: recommended
+    description: >
+      Google Keep. Note-taking app. Notes remain accessible via the web
+      after disabling.
+    labels: ["google", "productivity"]
+
+  - id: com.google.android.apps.books
+    removal: recommended
+    description: >
+      Google Play Books. E-book reader and store. Purchased books
+      remain available through the web reader.
+    labels: ["google", "media"]
+
+  - id: com.google.android.apps.fitness
+    removal: recommended
+    description: >
+      Google Fit. Fitness tracking app. Disabling does not affect
+      Fitbit or other fitness apps.
+    labels: ["google", "fitness"]
+
+  # ── Google services: advanced ──────────────────────────────────────
+
+  - id: com.google.android.feedback
+    removal: advanced
+    description: >
+      Google feedback reporter. Used when you tap "Send feedback" in
+      Google apps. Disabling prevents submitting feedback but has no
+      stability impact.
+    labels: ["google", "telemetry"]
+
+  - id: com.google.android.printservice.recommendation
+    removal: recommended
+    description: >
+      Print service recommendation. Suggests print plugins when you try
+      to print. Safe to remove if you don't use Android printing.
+    labels: ["google", "printing"]
+
+  - id: com.google.android.googlequicksearchbox
+    removal: expert
+    description: >
+      Google Search / Google app / Assistant. Removing breaks the search
+      bar widget, Google Assistant voice commands, and the "Hey Google"
+      hotword. Only disable if you use an alternative launcher without
+      the Google search bar.
+    labels: ["google", "search", "assistant"]
+
+  - id: com.google.android.apps.walletnfcrel
+    removal: advanced
+    description: >
+      Google Wallet (formerly Google Pay). NFC tap-to-pay. Disabling
+      breaks contactless payments. Safe if you don't use tap-to-pay.
+    labels: ["google", "payments"]
+
+  - id: com.google.android.apps.recorder
+    removal: recommended
+    description: >
+      Pixel Recorder. Voice recording app with on-device transcription.
+      Can be re-installed from the Play Store.
+    labels: ["google", "utility"]
+
+  - id: com.google.android.markup
+    removal: advanced
+    description: >
+      Pixel screenshot markup editor. Disabling removes the built-in
+      screenshot annotation tool. Third-party screenshot editors work
+      as alternatives.
+    labels: ["google", "utility"]
+
+  # ── Carrier / OEM bloat ────────────────────────────────────────────
+
+  - id: com.android.bookmarkprovider
+    removal: recommended
+    description: >
+      Legacy bookmark provider. Modern Chrome stores bookmarks
+      server-side under the user's Google account.
+    labels: ["legacy", "aosp"]
+
+  - id: com.android.hotspot2.osulogin
+    removal: advanced
+    description: >
+      Passpoint / Hotspot 2.0 Wi-Fi auto-login. Only needed for
+      carrier Wi-Fi offloading at airports and hotels.
+    labels: ["carrier", "wifi"]
+
+  - id: com.android.bips
+    removal: recommended
+    description: >
+      Default print service. Safe to remove if you don't print from
+      your phone.
+    labels: ["utility", "printing"]
+
+  - id: com.android.dreams.basic
+    removal: recommended
+    description: >
+      Basic screen saver (daydream). Shows colored shapes when docked.
+      Most users never enable it.
+    labels: ["aosp", "cosmetic"]
+
+  - id: com.android.dreams.phototable
+    removal: recommended
+    description: >
+      Photo table screen saver. Displays photos when docked. Rarely
+      used; the ambient display has replaced this.
+    labels: ["aosp", "cosmetic"]
+
+  - id: com.android.egg
+    removal: recommended
+    description: >
+      Android Easter egg. Hidden mini-game in Settings. Purely cosmetic;
+      zero impact on functionality.
+    labels: ["aosp", "cosmetic"]
+
+  - id: com.google.android.projection.gearhead
+    removal: advanced
+    description: >
+      Android Auto. Disabling breaks in-car display mirroring. Safe if
+      you don't use Android Auto.
+    labels: ["google", "automotive"]
+
+  # ── Expert-only: functional but rarely needed ──────────────────────
+
+  - id: com.google.android.tts
+    removal: expert
+    description: >
+      Google Text-to-Speech engine. Removing breaks spoken navigation
+      directions in Maps, TalkBack screen reader, and any app using the
+      TTS API. Only disable if you never use spoken output.
+    needed_by: ["com.google.android.apps.maps", "com.google.android.marvin.talkback"]
+    labels: ["google", "accessibility"]
+
+  - id: com.google.android.apps.nbu.files
+    removal: expert
+    description: >
+      Files by Google. The default file manager and storage cleaner.
+      Removing this means you'll need a third-party file manager for
+      downloads, transfers, and storage cleanup.
+    labels: ["google", "utility"]
