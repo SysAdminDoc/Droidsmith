@@ -1,0 +1,161 @@
+name: "Samsung — One UI"
+version: "1"
+description: >
+  Debloat pack for Samsung Galaxy devices running One UI 5–7. Targets
+  Samsung-specific bloatware, duplicate Google/Samsung apps, and carrier
+  services. Tested against Galaxy S23/S24/A54 on One UI 6.x.
+attribution: |
+  Original Droidsmith authoring based on public Samsung package lists and
+  community debloat experience. MIT licensed.
+
+targets:
+  manufacturer: ["samsung", "Samsung"]
+  rom: ["oneui", "One UI"]
+  android_min: 33
+
+packages:
+  # ── Samsung apps: safe to remove ──────────────────────────────────
+
+  - id: com.samsung.android.app.tips
+    removal: recommended
+    description: >
+      Samsung Tips. Promotional tips and suggestions. Purely marketing;
+      no impact on device functionality.
+    labels: ["samsung", "bloat"]
+
+  - id: com.samsung.android.game.gamehome
+    removal: recommended
+    description: >
+      Game Launcher. Game organization hub. Safe to remove if you don't
+      use Samsung's game performance features.
+    labels: ["samsung", "gaming"]
+
+  - id: com.samsung.android.game.gametools
+    removal: recommended
+    description: >
+      Game Booster tools overlay. Performance mode and screenshot tools
+      for gaming. Only useful if you use Game Launcher.
+    depends_on: ["com.samsung.android.game.gamehome"]
+    labels: ["samsung", "gaming"]
+
+  - id: com.samsung.android.voc
+    removal: recommended
+    description: >
+      Samsung Members. Community app and device diagnostics. Can be
+      re-installed from Galaxy Store.
+    labels: ["samsung", "support"]
+
+  - id: com.samsung.android.app.spage
+    removal: recommended
+    description: >
+      Samsung Free (Bixby Home replacement). News, games, and TV content
+      feed accessible from the leftmost home screen panel.
+    labels: ["samsung", "bloat", "ads"]
+
+  - id: com.samsung.android.bixby.agent
+    removal: advanced
+    description: >
+      Bixby Voice. Samsung's voice assistant. Disabling frees the side
+      key from Bixby but may affect Bixby Routines if you use them.
+    labels: ["samsung", "bixby"]
+
+  - id: com.samsung.android.bixby.service
+    removal: advanced
+    description: >
+      Bixby service framework. Backend for Bixby features. Removing may
+      show transient errors if other Bixby components are still present.
+    labels: ["samsung", "bixby"]
+
+  - id: com.samsung.android.visionintelligence
+    removal: advanced
+    description: >
+      Bixby Vision. Visual search and AR features. Disabling removes the
+      camera Bixby Vision integration.
+    labels: ["samsung", "bixby"]
+
+  - id: com.samsung.android.app.dressroom
+    removal: recommended
+    description: >
+      Samsung Customization Service / AR Emoji. Animated avatar feature.
+      No impact on camera or messaging when removed.
+    labels: ["samsung", "cosmetic"]
+
+  - id: com.samsung.android.aremoji
+    removal: recommended
+    description: >
+      AR Emoji core. Animated emoji creation. Safe to remove; standard
+      emoji remain available.
+    labels: ["samsung", "cosmetic"]
+
+  - id: com.samsung.android.ardrawing
+    removal: recommended
+    description: >
+      AR Doodle. Augmented reality drawing overlay for camera. Purely
+      cosmetic feature.
+    labels: ["samsung", "cosmetic"]
+
+  - id: com.samsung.android.app.watchmanagerstub
+    removal: recommended
+    description: >
+      Galaxy Wearable stub. Placeholder for Galaxy Watch pairing. Safe to
+      remove if you don't own a Galaxy Watch.
+    labels: ["samsung", "wearable"]
+
+  - id: com.samsung.android.da.daagent
+    removal: recommended
+    description: >
+      Samsung Daily / Dual Messenger agent. Background service for
+      Samsung's content feeds.
+    labels: ["samsung", "bloat"]
+
+  - id: com.samsung.android.mobileservice
+    removal: advanced
+    description: >
+      Samsung Experience Service. Samsung account sync and cloud features.
+      Disabling may break Samsung Cloud backup and Find My Mobile.
+    labels: ["samsung", "account"]
+
+  - id: com.samsung.android.themestore
+    removal: recommended
+    description: >
+      Galaxy Themes store. Wallpaper and theme marketplace. System themes
+      continue to work without it.
+    labels: ["samsung", "cosmetic"]
+
+  - id: com.samsung.android.app.routines
+    removal: advanced
+    description: >
+      Bixby Routines. Automation engine for if-this-then-that rules.
+      Disabling removes the Settings → Modes and Routines section.
+    labels: ["samsung", "bixby", "automation"]
+
+  - id: com.samsung.android.smartsuggestions
+    removal: recommended
+    description: >
+      Smart suggestions. Contextual action suggestions in the edge panel
+      and notifications. Removing reduces notification noise.
+    labels: ["samsung", "telemetry"]
+
+  - id: com.samsung.android.app.sharelive
+    removal: recommended
+    description: >
+      Samsung Quick Share / Nearby Share integration. Samsung's file
+      sharing feature. Android's built-in Nearby Share works independently.
+    labels: ["samsung", "sharing"]
+
+  # ── Samsung services: expert ───────────────────────────────────────
+
+  - id: com.samsung.android.knox.containercore
+    removal: expert
+    description: >
+      Samsung Knox container core. Enterprise security framework. Removing
+      breaks Knox-based work profiles and Secure Folder. Only disable if
+      you never use enterprise features.
+    labels: ["samsung", "knox", "enterprise"]
+
+  - id: com.samsung.android.smartcallprovider
+    removal: expert
+    description: >
+      Samsung Smart Call. Caller ID and spam detection. Disabling removes
+      built-in call screening. Third-party alternatives work.
+    labels: ["samsung", "telephony"]
