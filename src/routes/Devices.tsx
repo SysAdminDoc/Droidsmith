@@ -187,6 +187,41 @@ export default function DevicesRoute() {
             onSelect={(serial) => void selectDevice(serial)}
           />
         )}
+
+        {state.kind === "ok" &&
+          state.value.devices.some(
+            (d) =>
+              typeof d.state === "string" && d.state === "unauthorized",
+          ) && (
+            <AuthorizePrompt
+              devices={state.value.devices.filter(
+                (d) =>
+                  typeof d.state === "string" && d.state === "unauthorized",
+              )}
+              onRefresh={() => void refresh()}
+            />
+          )}
+
+        {state.kind === "ok" &&
+          state.value.devices.some(
+            (d) =>
+              typeof d.state === "string" && d.state === "no_permissions",
+          ) && (
+            <StatePanel title="Linux permissions issue" tone="danger">
+              <p>
+                One or more devices report "no permissions". On Linux, add a udev
+                rule for your device's USB vendor ID:
+              </p>
+              <pre className="mt-2 rounded-md border border-white/10 bg-white/[0.04] p-3 font-mono text-xs text-anvil-200">
+                {`echo 'SUBSYSTEM=="usb", ATTR{idVendor}=="XXXX", MODE="0666"' | sudo tee /etc/udev/rules.d/51-android.rules\nsudo udevadm control --reload-rules && sudo udevadm trigger`}
+              </pre>
+              <p className="mt-2">
+                Replace <code>XXXX</code> with your device's vendor ID (e.g.{" "}
+                <code>18d1</code> for Google,{" "}
+                <code>04e8</code> for Samsung). Then unplug and reconnect.
+              </p>
+            </StatePanel>
+          )}
       </section>
 
       {detail.kind !== "idle" && (
@@ -529,6 +564,102 @@ function Td({ children }: { children: ReactNode }) {
 function formatStateLabel(state: SerializedDeviceState): string {
   const label = summarizeState(state);
   return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
+function AuthorizePrompt({
+  devices,
+  onRefresh,
+}: {
+  devices: ListDevicesResult["devices"];
+  onRefresh: () => void;
+}) {
+  return (
+    <Card className="mt-4 border-amber-300/20 bg-amber-950/20 p-5">
+      <div className="flex gap-4">
+        <span
+          className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full bg-amber-300 ring-4 ring-amber-300/10"
+          aria-hidden="true"
+        />
+        <div className="min-w-0 flex-1">
+          <h3 className="text-sm font-semibold text-anvil-50">
+            {devices.length === 1
+              ? "Device waiting for authorization"
+              : `${devices.length} devices waiting for authorization`}
+          </h3>
+          <div className="mt-3 text-sm leading-6 text-anvil-300">
+            <p>
+              {devices.length === 1
+                ? `Device ${devices[0]!.serial} is connected but hasn't been authorized yet.`
+                : "The following devices are connected but haven't been authorized yet:"}
+            </p>
+            {devices.length > 1 && (
+              <ul className="mt-2 space-y-1">
+                {devices.map((d) => (
+                  <li key={d.serial}>
+                    <code className="font-mono text-xs text-anvil-100">
+                      {d.serial}
+                    </code>
+                    {d.model && (
+                      <span className="ml-2 text-xs text-anvil-400">
+                        ({d.model})
+                      </span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+            <div className="mt-4">
+              <p className="text-xs font-semibold text-anvil-200">
+                To authorize:
+              </p>
+              <ol className="mt-2 grid gap-2 text-sm sm:grid-cols-3">
+                <li className="rounded-md border border-white/10 bg-white/[0.04] p-3">
+                  <span className="font-semibold text-anvil-100">1.</span> Look
+                  at the device screen for the{" "}
+                  <em>Allow USB debugging?</em> dialog.
+                </li>
+                <li className="rounded-md border border-white/10 bg-white/[0.04] p-3">
+                  <span className="font-semibold text-anvil-100">2.</span>{" "}
+                  Optionally check{" "}
+                  <em>Always allow from this computer</em> to skip this next
+                  time.
+                </li>
+                <li className="rounded-md border border-white/10 bg-white/[0.04] p-3">
+                  <span className="font-semibold text-anvil-100">3.</span> Tap{" "}
+                  <em>Allow</em>, then click Refresh below.
+                </li>
+              </ol>
+            </div>
+            <div className="mt-4 rounded-md border border-white/10 bg-white/[0.04] p-3">
+              <p className="text-xs font-medium text-anvil-400">
+                No dialog on-device?
+              </p>
+              <ul className="mt-2 space-y-1 text-xs text-anvil-400">
+                <li>
+                  Revoke existing authorizations:{" "}
+                  <code className="text-anvil-200">
+                    Settings → Developer options → Revoke USB debugging
+                    authorizations
+                  </code>
+                </li>
+                <li>Reconnect the USB cable and wait a few seconds.</li>
+                <li>
+                  Ensure USB mode is set to{" "}
+                  <em>File Transfer / MTP</em> (some devices block debugging in
+                  charge-only mode).
+                </li>
+              </ul>
+            </div>
+          </div>
+          <div className="mt-4">
+            <Button type="button" size="sm" variant="primary" onClick={onRefresh}>
+              Refresh devices
+            </Button>
+          </div>
+        </div>
+      </div>
+    </Card>
+  );
 }
 
 function deviceStateTone(
