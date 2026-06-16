@@ -168,6 +168,33 @@ export type JournalEntry = {
   undoes: number | null;
 };
 
+export type RemovalLevel = "recommended" | "advanced" | "expert" | "unsafe";
+
+export type PackEntry = {
+  id: string;
+  removal: RemovalLevel;
+  description: string;
+  depends_on: string[];
+  needed_by: string[];
+  labels: string[];
+};
+
+export type PackTargets = {
+  manufacturer: string[];
+  rom: string[];
+  android_min: number | null;
+  android_max: number | null;
+};
+
+export type Pack = {
+  name: string;
+  version: string;
+  description: string;
+  targets: PackTargets;
+  packages: PackEntry[];
+  attribution: string | null;
+};
+
 export function summarizeState(s: SerializedDeviceState): string {
   if (typeof s === "string") {
     return s.replace(/_/g, " ");
@@ -243,4 +270,8 @@ export async function callJournalUndo(
   entryId: number,
 ): Promise<JournalEntry> {
   return invoke<JournalEntry>("journal_undo", { serial, entry_id: entryId });
+}
+
+export async function callListPacks(): Promise<Pack[]> {
+  return invoke<Pack[]>("list_packs");
 }

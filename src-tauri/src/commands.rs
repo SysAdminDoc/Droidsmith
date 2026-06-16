@@ -318,6 +318,40 @@ pub fn get_device_info(serial: String) -> Result<adb::DeviceInfo, CommandError> 
     Ok(adb::get_device_info(&transport, &serial)?)
 }
 
+/// List all debloat packs from the app's `packs/` resource directory.
+/// Returns packs that parse and lint cleanly; silently skips broken files.
+#[tauri::command]
+pub fn list_packs(app: tauri::AppHandle) -> Result<Vec<crate::packs::Pack>, CommandError> {
+    let resource_dir = app.path().resource_dir().map_err(|e| CommandError {
+        code: "no_resource_dir",
+        message: e.to_string(),
+    })?;
+    let packs_dir = resource_dir.join("packs");
+
+    if !packs_dir.is_dir() {
+        return Ok(Vec::new());
+    }
+
+    let mut packs = Vec::new();
+    let entries = std::fs::read_dir(&packs_dir).map_err(|e| CommandError {
+        code: "io_error",
+        message: format!("could not read packs directory: {e}"),
+    })?;
+
+    for entry in entries {
+        let Ok(entry) = entry else { continue };
+        let path = entry.path();
+        if path.extension().is_some_and(|ext| ext == "yaml" || ext == "yml") {
+            if let Ok(pack) = crate::packs::load(&path) {
+                packs.push(pack);
+            }
+        }
+    }
+
+    packs.sort_by(|a, b| a.name.cmp(&b.name));
+    Ok(packs)
+}
+
 fn iso_now() -> String {
     crate::time::iso_utc_now()
 }
