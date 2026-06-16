@@ -15,9 +15,9 @@ mod quirks;
 pub mod time;
 
 use commands::{
-    apply_action, connect_wireless, explain_failure, get_device_info, heartbeat, journal_list,
-    journal_undo, list_devices, list_packages, list_packs, list_wireless_services, pair_wireless,
-    plan_action,
+    apply_action, connect_wireless, explain_failure, extract_apk, get_device_info, heartbeat,
+    install_apk, journal_list, journal_undo, list_devices, list_packages, list_packs,
+    list_wireless_services, pair_wireless, plan_action,
 };
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -40,6 +40,8 @@ pub fn run() {
             list_packs,
             plan_action,
             apply_action,
+            install_apk,
+            extract_apk,
             journal_list,
             journal_undo,
             explain_failure,

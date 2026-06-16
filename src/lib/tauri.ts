@@ -272,6 +272,25 @@ export async function callJournalUndo(
   return invoke<JournalEntry>("journal_undo", { serial, entry_id: entryId });
 }
 
+export async function callInstallApk(
+  serial: string,
+  apkPath: string,
+): Promise<string> {
+  return invoke<string>("install_apk", { serial, apk_path: apkPath });
+}
+
+export async function callExtractApk(
+  serial: string,
+  remotePath: string,
+  localPath: string,
+): Promise<string> {
+  return invoke<string>("extract_apk", {
+    serial,
+    remote_path: remotePath,
+    local_path: localPath,
+  });
+}
+
 export async function callListPacks(): Promise<Pack[]> {
   return invoke<Pack[]>("list_packs");
 }

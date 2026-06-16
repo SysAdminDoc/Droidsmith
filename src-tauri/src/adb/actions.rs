@@ -34,6 +34,176 @@ pub enum ActionKind {
     ForceStop,
 }
 
+/// Install an APK on a device using `adb install`. The APK path is a
+/// local filesystem path that gets pushed to the device via adb's
+/// built-in staging.
+pub fn install_apk(
+    adb_path: &std::path::Path,
+    serial: &str,
+    apk_path: &str,
+) -> Result<String, TransportError> {
+    use crate::adb::transport::DEFAULT_TIMEOUT;
+    use std::io::Read as IoRead;
+    use std::process::{Command, Stdio};
+    use std::time::Instant;
+
+    if !crate::adb::device::valid_serial(serial) {
+        return Err(TransportError::Parse(format!(
+            "invalid device serial {serial:?}"
+        )));
+    }
+
+    let timeout = std::time::Duration::from_secs(300);
+    let mut child = Command::new(adb_path)
+        .args(["-s", serial, "install", "-r", apk_path])
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(TransportError::Spawn)?;
+
+    let mut stdout_pipe = child
+        .stdout
+        .take()
+        .ok_or_else(|| TransportError::Parse("no stdout pipe".to_string()))?;
+    let mut stderr_pipe = child
+        .stderr
+        .take()
+        .ok_or_else(|| TransportError::Parse("no stderr pipe".to_string()))?;
+
+    let stdout_reader = std::thread::spawn(move || -> Vec<u8> {
+        let mut buf = Vec::with_capacity(4096);
+        let _ = stdout_pipe.read_to_end(&mut buf);
+        buf
+    });
+    let stderr_reader = std::thread::spawn(move || -> Vec<u8> {
+        let mut buf = Vec::with_capacity(1024);
+        let _ = stderr_pipe.read_to_end(&mut buf);
+        buf
+    });
+
+    let start = Instant::now();
+    let exit_status = loop {
+        match child.try_wait() {
+            Ok(Some(status)) => break Some(status),
+            Ok(None) => {
+                if start.elapsed() > timeout {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    break None;
+                }
+                std::thread::sleep(std::time::Duration::from_millis(100));
+            }
+            Err(_) => break None,
+        }
+    };
+
+    let stdout_bytes = stdout_reader.join().unwrap_or_default();
+    let stderr_bytes = stderr_reader.join().unwrap_or_default();
+    let stderr = String::from_utf8_lossy(&stderr_bytes).into_owned();
+    let stdout = String::from_utf8_lossy(&stdout_bytes).into_owned();
+
+    match exit_status {
+        None => Err(TransportError::Timeout(timeout)),
+        Some(status) => {
+            if status.success() {
+                if let Some(err) = pm_failure_marker(&stdout) {
+                    return Err(TransportError::Exit {
+                        code: 1,
+                        stderr: err.to_string(),
+                    });
+                }
+                Ok(stdout)
+            } else if let Some(code) = status.code() {
+                Err(TransportError::Exit { code, stderr })
+            } else {
+                Err(TransportError::Signaled { stderr })
+            }
+        }
+    }
+}
+
+/// Pull an APK from a device using `adb pull`.
+pub fn extract_apk(
+    adb_path: &std::path::Path,
+    serial: &str,
+    remote_path: &str,
+    local_path: &str,
+) -> Result<String, TransportError> {
+    use std::io::Read as IoRead;
+    use std::process::{Command, Stdio};
+    use std::time::Instant;
+
+    if !crate::adb::device::valid_serial(serial) {
+        return Err(TransportError::Parse(format!(
+            "invalid device serial {serial:?}"
+        )));
+    }
+
+    let timeout = std::time::Duration::from_secs(120);
+    let mut child = Command::new(adb_path)
+        .args(["-s", serial, "pull", remote_path, local_path])
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(TransportError::Spawn)?;
+
+    let mut stdout_pipe = child
+        .stdout
+        .take()
+        .ok_or_else(|| TransportError::Parse("no stdout pipe".to_string()))?;
+    let mut stderr_pipe = child
+        .stderr
+        .take()
+        .ok_or_else(|| TransportError::Parse("no stderr pipe".to_string()))?;
+
+    let stdout_reader = std::thread::spawn(move || -> Vec<u8> {
+        let mut buf = Vec::with_capacity(4096);
+        let _ = stdout_pipe.read_to_end(&mut buf);
+        buf
+    });
+    let stderr_reader = std::thread::spawn(move || -> Vec<u8> {
+        let mut buf = Vec::with_capacity(1024);
+        let _ = stderr_pipe.read_to_end(&mut buf);
+        buf
+    });
+
+    let start = Instant::now();
+    let exit_status = loop {
+        match child.try_wait() {
+            Ok(Some(status)) => break Some(status),
+            Ok(None) => {
+                if start.elapsed() > timeout {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    break None;
+                }
+                std::thread::sleep(std::time::Duration::from_millis(100));
+            }
+            Err(_) => break None,
+        }
+    };
+
+    let stdout_bytes = stdout_reader.join().unwrap_or_default();
+    let stderr_bytes = stderr_reader.join().unwrap_or_default();
+    let stderr = String::from_utf8_lossy(&stderr_bytes).into_owned();
+    let stdout = String::from_utf8_lossy(&stdout_bytes).into_owned();
+
+    match exit_status {
+        None => Err(TransportError::Timeout(timeout)),
+        Some(status) => {
+            if status.success() {
+                Ok(stdout)
+            } else if let Some(code) = status.code() {
+                Err(TransportError::Exit { code, stderr })
+            } else {
+                Err(TransportError::Signaled { stderr })
+            }
+        }
+    }
+}
+
 impl ActionKind {
     /// True for actions that the journal can losslessly undo by issuing
     /// the inverse `ActionKind` on the same package. `UninstallForUser`
