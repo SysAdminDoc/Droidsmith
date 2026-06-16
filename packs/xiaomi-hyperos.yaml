@@ -1,0 +1,158 @@
+name: "Xiaomi — HyperOS / MIUI"
+version: "1"
+description: >
+  Debloat pack for Xiaomi, Redmi, and POCO devices running HyperOS or
+  MIUI 14+. Targets pre-installed Xiaomi apps, advertising services, and
+  system analytics. Note: Xiaomi blocks pm disable-user on some packages;
+  the quirks engine will suggest pm uninstall --user 0 as an alternative.
+attribution: |
+  Original Droidsmith authoring based on public MIUI/HyperOS package lists
+  and community debloat guides. MIT licensed.
+
+targets:
+  manufacturer: ["Xiaomi", "xiaomi", "Redmi", "POCO"]
+  rom: ["hyperos", "HyperOS", "miui", "MIUI"]
+  android_min: 33
+
+packages:
+  # ── Xiaomi bloatware: safe to remove ──────────────────────────────
+
+  - id: com.miui.analytics
+    removal: recommended
+    description: >
+      MIUI Analytics. Telemetry data collection service. Disabling reduces
+      background data usage and privacy exposure.
+    labels: ["xiaomi", "telemetry", "ads"]
+
+  - id: com.miui.msa
+    removal: recommended
+    description: >
+      MIUI System Ads (MSA). The advertising framework embedded in system
+      apps. Disabling removes most in-system ads. May require uninstall
+      for user 0 on HyperOS.
+    labels: ["xiaomi", "ads"]
+
+  - id: com.xiaomi.glgm
+    removal: recommended
+    description: >
+      Xiaomi Games. Game center with promotions. Safe to remove; games
+      work independently.
+    labels: ["xiaomi", "gaming", "bloat"]
+
+  - id: com.miui.player
+    removal: recommended
+    description: >
+      MIUI Music player. Built-in music app. Third-party players work
+      as replacements.
+    labels: ["xiaomi", "media"]
+
+  - id: com.miui.videoplayer
+    removal: recommended
+    description: >
+      MIUI Video player. Built-in video app with online content. Third-party
+      players like VLC work as replacements.
+    labels: ["xiaomi", "media"]
+
+  - id: com.miui.compass
+    removal: recommended
+    description: >
+      MIUI Compass. Compass app rarely used; GPS apps provide this
+      functionality.
+    labels: ["xiaomi", "utility"]
+
+  - id: com.miui.yellowpage
+    removal: recommended
+    description: >
+      MIUI Yellow Pages. Caller ID directory with Chinese business
+      listings. Not useful outside China.
+    labels: ["xiaomi", "telephony", "regional"]
+
+  - id: com.miui.weather2
+    removal: recommended
+    description: >
+      MIUI Weather. Built-in weather widget and app. Third-party weather
+      apps provide better accuracy.
+    labels: ["xiaomi", "utility"]
+
+  - id: com.miui.bugreport
+    removal: recommended
+    description: >
+      MIUI Bug Report. Feedback and bug reporting tool. Safe to remove
+      for normal usage.
+    labels: ["xiaomi", "telemetry"]
+
+  - id: com.xiaomi.midrop
+    removal: recommended
+    description: >
+      Xiaomi ShareMe / Mi Drop. File sharing between Xiaomi devices.
+      Android's Nearby Share works as a replacement.
+    labels: ["xiaomi", "sharing"]
+
+  - id: com.miui.cleanmaster
+    removal: recommended
+    description: >
+      MIUI Cleaner (powered by Clean Master). Storage cleaner with ads.
+      Android's built-in storage manager is sufficient.
+    labels: ["xiaomi", "utility", "ads"]
+
+  - id: com.xiaomi.payment
+    removal: recommended
+    description: >
+      Mi Pay. Xiaomi's payment service. Not available in most regions
+      outside Asia.
+    labels: ["xiaomi", "payments", "regional"]
+
+  - id: com.miui.personalassistant
+    removal: recommended
+    description: >
+      MIUI App Vault / Personal Assistant. Left home screen panel with
+      widgets and content. Removing frees the swipe-left gesture.
+    labels: ["xiaomi", "bloat"]
+
+  - id: com.miui.hybrid
+    removal: recommended
+    description: >
+      MIUI Quick Apps. Instant app platform. Rarely used; removing has
+      no impact on installed apps.
+    labels: ["xiaomi", "bloat"]
+
+  # ── Xiaomi services: advanced ─────────────────────────────────────
+
+  - id: com.xiaomi.xmsf
+    removal: advanced
+    description: >
+      Xiaomi Service Framework. Push notification service for Xiaomi apps.
+      Disabling may break notifications in Mi Home and other Xiaomi apps.
+    needed_by: ["com.xiaomi.smarthome"]
+    labels: ["xiaomi", "framework"]
+
+  - id: com.miui.securitycenter
+    removal: expert
+    description: >
+      MIUI Security Center / Phone Manager. Permissions manager, cleaner,
+      battery saver, and app lock. Removing this eliminates MIUI's
+      aggressive background task killing but also loses the built-in
+      antivirus and permission controls.
+    labels: ["xiaomi", "security"]
+
+  - id: com.miui.cloudservice
+    removal: advanced
+    description: >
+      Xiaomi Cloud. Cloud backup and sync service. Disabling stops Mi
+      Cloud backups. Google backup continues independently.
+    labels: ["xiaomi", "cloud"]
+
+  - id: com.xiaomi.discover
+    removal: recommended
+    description: >
+      Mi Browser promoted content. Content discovery feed. Pure bloatware
+      with ads.
+    labels: ["xiaomi", "ads", "bloat"]
+
+  - id: com.miui.cloudbackup
+    removal: advanced
+    description: >
+      MIUI Cloud Backup. System backup to Mi Cloud. Disabling only
+      affects Mi Cloud; Google backup is independent.
+    depends_on: ["com.miui.cloudservice"]
+    labels: ["xiaomi", "cloud"]
