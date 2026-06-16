@@ -8,9 +8,9 @@ import DevicesRoute from "./routes/Devices";
 import WirelessRoute from "./routes/Wireless";
 import AppsRoute from "./routes/Apps";
 import DebloatRoute from "./routes/Debloat";
+import ConsoleRoute from "./routes/Console";
 import { Badge, Button, SkeletonLine } from "./routes/common";
 import {
-  ConsoleRoute,
   FastbootRoute,
   LogcatRoute,
   MirrorRoute,

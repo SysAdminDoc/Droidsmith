@@ -272,6 +272,13 @@ export async function callJournalUndo(
   return invoke<JournalEntry>("journal_undo", { serial, entry_id: entryId });
 }
 
+export async function callShellRun(
+  serial: string,
+  argv: string[],
+): Promise<string> {
+  return invoke<string>("shell_run", { serial, argv });
+}
+
 export async function callInstallApk(
   serial: string,
   apkPath: string,
