@@ -5,6 +5,8 @@ import {
   callGetDeviceInfo,
   callListDevices,
   callListProcesses,
+  callListRemoteFiles,
+  callPullFile,
   callShellRun,
   callTakeScreenshot,
   inTauri,
@@ -12,6 +14,8 @@ import {
   type DeviceInfo,
   type ListDevicesResult,
   type ProcessInfo,
+  type RemoteFileEntry,
+  type RemoteListing,
   type SerializedDeviceState,
 } from "../lib/tauri";
 
@@ -767,6 +771,7 @@ function DeviceControls({ serial }: { serial: string }) {
       </div>
     </div>
       <ProcessManager serial={serial} />
+      <FileManager serial={serial} />
     </div>
   );
 }
@@ -881,6 +886,170 @@ function formatKb(kb: number): string {
   if (kb >= 1048576) return `${(kb / 1048576).toFixed(1)} GB`;
   if (kb >= 1024) return `${(kb / 1024).toFixed(1)} MB`;
   return `${kb} KB`;
+}
+
+function formatBytes(bytes: number | null): string {
+  if (bytes == null) return "—";
+  if (bytes >= 1073741824) return `${(bytes / 1073741824).toFixed(1)} GB`;
+  if (bytes >= 1048576) return `${(bytes / 1048576).toFixed(1)} MB`;
+  if (bytes >= 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${bytes} B`;
+}
+
+function FileManager({ serial }: { serial: string }) {
+  const [listing, setListing] = useState<RemoteListing | null>(null);
+  const [currentPath, setCurrentPath] = useState("/sdcard");
+  const [loading, setLoading] = useState(false);
+  const [pullMsg, setPullMsg] = useState<string | null>(null);
+
+  const browse = useCallback(
+    async (path: string) => {
+      setLoading(true);
+      setPullMsg(null);
+      try {
+        const result = await callListRemoteFiles(serial, path);
+        setListing(result);
+        setCurrentPath(path);
+      } catch {
+        setListing(null);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [serial],
+  );
+
+  const navigateUp = useCallback(() => {
+    const parent = currentPath.replace(/\/[^/]+\/?$/, "") || "/";
+    void browse(parent);
+  }, [currentPath, browse]);
+
+  const pullRemote = useCallback(
+    async (entry: RemoteFileEntry) => {
+      setPullMsg(`Pulling ${entry.name}...`);
+      try {
+        const remoteFull =
+          currentPath === "/"
+            ? `/${entry.name}`
+            : `${currentPath}/${entry.name}`;
+        await callPullFile(serial, remoteFull, entry.name);
+        setPullMsg(`Saved ${entry.name} to working directory`);
+      } catch (e) {
+        setPullMsg(
+          `Failed: ${e instanceof Error ? e.message : String(e)}`,
+        );
+      }
+    },
+    [serial, currentPath],
+  );
+
+  return (
+    <Card className="overflow-hidden p-0">
+      <div className="flex flex-col gap-3 border-b border-white/10 p-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h3 className="text-sm font-semibold text-anvil-50">File manager</h3>
+          <p className="mt-1 text-xs text-anvil-400">
+            Browse, pull, and inspect files on the device.
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          {listing?.free_space_kb != null && (
+            <Badge tone="neutral">
+              {formatKb(listing.free_space_kb)} free
+            </Badge>
+          )}
+          <Button
+            type="button"
+            size="sm"
+            variant="primary"
+            onClick={() => void browse(currentPath)}
+            disabled={loading}
+          >
+            {loading ? "Loading..." : listing ? "Refresh" : "Browse"}
+          </Button>
+        </div>
+      </div>
+
+      {listing && (
+        <>
+          <div className="flex items-center gap-2 border-b border-white/10 bg-white/[0.02] px-4 py-2">
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              onClick={navigateUp}
+              disabled={currentPath === "/"}
+            >
+              ..
+            </Button>
+            <code className="flex-1 truncate font-mono text-xs text-anvil-200">
+              {currentPath}
+            </code>
+          </div>
+          <div
+            className="divide-y divide-white/5 overflow-y-auto"
+            style={{ maxHeight: "20rem" }}
+          >
+            {listing.entries.length === 0 && (
+              <div className="px-4 py-6 text-center text-xs text-anvil-500">
+                Empty directory
+              </div>
+            )}
+            {listing.entries.map((entry) => (
+              <div
+                key={entry.name}
+                className="flex items-center gap-3 px-4 py-2 text-xs hover:bg-white/[0.03]"
+              >
+                <span className="w-4 text-center text-anvil-400">
+                  {entry.is_dir ? "📁" : "📄"}
+                </span>
+                {entry.is_dir ? (
+                  <button
+                    type="button"
+                    className="min-w-0 flex-1 truncate text-left font-mono text-circuit-200 hover:underline"
+                    onClick={() =>
+                      void browse(
+                        currentPath === "/"
+                          ? `/${entry.name}`
+                          : `${currentPath}/${entry.name}`,
+                      )
+                    }
+                  >
+                    {entry.name}/
+                  </button>
+                ) : (
+                  <span className="min-w-0 flex-1 truncate font-mono text-anvil-100">
+                    {entry.name}
+                  </span>
+                )}
+                <span className="shrink-0 font-mono text-anvil-500">
+                  {entry.is_dir ? "" : formatBytes(entry.size)}
+                </span>
+                <span className="hidden shrink-0 font-mono text-anvil-600 sm:inline">
+                  {entry.permissions}
+                </span>
+                {!entry.is_dir && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => void pullRemote(entry)}
+                  >
+                    Pull
+                  </Button>
+                )}
+              </div>
+            ))}
+          </div>
+          {pullMsg && (
+            <div className="border-t border-white/10 px-4 py-2">
+              <p className="text-xs text-anvil-300">{pullMsg}</p>
+            </div>
+          )}
+        </>
+      )}
+    </Card>
+  );
 }
 
 function AuthorizePrompt({
