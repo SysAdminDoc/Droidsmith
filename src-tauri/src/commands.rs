@@ -333,6 +333,27 @@ pub fn shell_run(serial: String, argv: Vec<String>) -> Result<String, CommandErr
     Ok(stdout)
 }
 
+/// Take a screenshot on the device and pull it to a local path.
+#[tauri::command]
+pub fn take_screenshot(
+    serial: String,
+    local_path: String,
+) -> Result<String, CommandError> {
+    validate_serial_arg(&serial)?;
+    let resolution = adb::locate_adb();
+    let path = resolution
+        .path
+        .as_ref()
+        .ok_or(adb::TransportError::AdbNotFound)?;
+    let transport = adb::ShellTransport::new(path);
+
+    let remote = "/sdcard/droidsmith-screenshot.png";
+    transport.shell(&serial, &["screencap", "-p", remote])?;
+    actions::extract_apk(std::path::Path::new(path), &serial, remote, &local_path)?;
+    let _ = transport.shell(&serial, &["rm", remote]);
+    Ok(local_path)
+}
+
 /// Locate the scrcpy binary on the system. Returns the path if found.
 #[tauri::command]
 pub fn locate_scrcpy() -> Option<String> {

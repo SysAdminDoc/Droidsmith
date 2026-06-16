@@ -4,6 +4,8 @@ import type { ReactNode } from "react";
 import {
   callGetDeviceInfo,
   callListDevices,
+  callShellRun,
+  callTakeScreenshot,
   inTauri,
   summarizeState,
   type DeviceInfo,
@@ -225,11 +227,14 @@ export default function DevicesRoute() {
       </section>
 
       {detail.kind !== "idle" && (
-        <section className="mt-4 max-w-6xl" aria-live="polite">
+        <section className="mt-4 max-w-6xl space-y-4" aria-live="polite">
           <DeviceDetail
             state={detail}
             onRetry={(serial) => void selectDevice(serial)}
           />
+          {detail.kind === "ok" && (
+            <DeviceControls serial={detail.info.serial} />
+          )}
         </section>
       )}
     </>
@@ -564,6 +569,201 @@ function Td({ children }: { children: ReactNode }) {
 function formatStateLabel(state: SerializedDeviceState): string {
   const label = summarizeState(state);
   return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
+const REMOTE_BUTTONS: { label: string; keycode: number; icon: string }[] = [
+  { label: "Home", keycode: 3, icon: "⌂" },
+  { label: "Back", keycode: 4, icon: "←" },
+  { label: "Recents", keycode: 187, icon: "⊞" },
+  { label: "Up", keycode: 19, icon: "▲" },
+  { label: "Down", keycode: 20, icon: "▼" },
+  { label: "Left", keycode: 21, icon: "◀" },
+  { label: "Right", keycode: 22, icon: "▶" },
+  { label: "OK", keycode: 23, icon: "●" },
+  { label: "Vol +", keycode: 24, icon: "🔊" },
+  { label: "Vol -", keycode: 25, icon: "🔉" },
+  { label: "Power", keycode: 26, icon: "⏻" },
+  { label: "Menu", keycode: 82, icon: "☰" },
+];
+
+function DeviceControls({ serial }: { serial: string }) {
+  const [lastKey, setLastKey] = useState<string | null>(null);
+  const [screenshotMsg, setScreenshotMsg] = useState<string | null>(null);
+  const [density, setDensity] = useState("");
+  const [displayMsg, setDisplayMsg] = useState<string | null>(null);
+
+  const sendKey = useCallback(
+    async (keycode: number, label: string) => {
+      try {
+        await callShellRun(serial, [
+          "input",
+          "keyevent",
+          String(keycode),
+        ]);
+        setLastKey(label);
+      } catch {
+        setLastKey(`${label} failed`);
+      }
+    },
+    [serial],
+  );
+
+  const takeScreenshot = useCallback(async () => {
+    setScreenshotMsg("Capturing...");
+    try {
+      const ts = Date.now();
+      const localPath = `screenshot-${serial}-${ts}.png`;
+      await callTakeScreenshot(serial, localPath);
+      setScreenshotMsg(`Saved to ${localPath}`);
+    } catch (e) {
+      setScreenshotMsg(
+        `Failed: ${e instanceof Error ? e.message : String(e)}`,
+      );
+    }
+  }, [serial]);
+
+  const applyDensity = useCallback(async () => {
+    if (!density.trim()) return;
+    try {
+      await callShellRun(serial, ["wm", "density", density.trim()]);
+      setDisplayMsg(`Density set to ${density.trim()}`);
+    } catch (e) {
+      setDisplayMsg(
+        `Failed: ${e instanceof Error ? e.message : String(e)}`,
+      );
+    }
+  }, [serial, density]);
+
+  const resetDensity = useCallback(async () => {
+    try {
+      await callShellRun(serial, ["wm", "density", "reset"]);
+      setDisplayMsg("Density reset to default");
+    } catch (e) {
+      setDisplayMsg(
+        `Failed: ${e instanceof Error ? e.message : String(e)}`,
+      );
+    }
+  }, [serial]);
+
+  const toggleForceDark = useCallback(
+    async (enable: boolean) => {
+      try {
+        await callShellRun(serial, [
+          "settings",
+          "put",
+          "secure",
+          "ui_night_mode",
+          enable ? "2" : "1",
+        ]);
+        setDisplayMsg(enable ? "Force dark enabled" : "Force dark disabled");
+      } catch (e) {
+        setDisplayMsg(
+          `Failed: ${e instanceof Error ? e.message : String(e)}`,
+        );
+      }
+    },
+    [serial],
+  );
+
+  return (
+    <div className="grid gap-4 lg:grid-cols-[1fr_1fr]">
+      <Card className="p-5">
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-semibold text-anvil-50">Virtual remote</h3>
+          {lastKey && (
+            <span className="text-xs text-anvil-400">Last: {lastKey}</span>
+          )}
+        </div>
+        <div className="mt-4 grid grid-cols-4 gap-2">
+          {REMOTE_BUTTONS.map((btn) => (
+            <Button
+              key={btn.label}
+              type="button"
+              size="sm"
+              onClick={() => void sendKey(btn.keycode, btn.label)}
+              title={`keyevent ${btn.keycode}`}
+            >
+              <span className="mr-1">{btn.icon}</span> {btn.label}
+            </Button>
+          ))}
+        </div>
+      </Card>
+
+      <div className="space-y-4">
+        <Card className="p-5">
+          <h3 className="text-sm font-semibold text-anvil-50">Screenshot</h3>
+          <p className="mt-1 text-xs text-anvil-400">
+            Capture the current screen to a local PNG file.
+          </p>
+          <div className="mt-3 flex items-center gap-3">
+            <Button
+              type="button"
+              size="sm"
+              variant="primary"
+              onClick={() => void takeScreenshot()}
+            >
+              Capture
+            </Button>
+            {screenshotMsg && (
+              <span className="text-xs text-anvil-300">{screenshotMsg}</span>
+            )}
+          </div>
+        </Card>
+
+        <Card className="p-5">
+          <h3 className="text-sm font-semibold text-anvil-50">Display tuning</h3>
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            <div className="flex items-end gap-2">
+              <label className="grid flex-1 gap-1.5">
+                <span className="text-xs font-medium text-anvil-400">
+                  Density (DPI)
+                </span>
+                <input
+                  type="text"
+                  value={density}
+                  onChange={(e) => setDensity(e.target.value)}
+                  placeholder="420"
+                  inputMode="numeric"
+                  className="h-9 rounded-md border border-white/10 bg-white/[0.06] px-3 font-mono text-sm text-anvil-50 outline-none transition placeholder:text-anvil-600 focus:border-circuit-300/50 focus:ring-2 focus:ring-circuit-300/20"
+                />
+              </label>
+              <Button type="button" size="sm" onClick={() => void applyDensity()}>
+                Set
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={() => void resetDensity()}
+              >
+                Reset
+              </Button>
+            </div>
+            <div className="flex items-end gap-2">
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => void toggleForceDark(true)}
+              >
+                Force dark on
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={() => void toggleForceDark(false)}
+              >
+                Force dark off
+              </Button>
+            </div>
+          </div>
+          {displayMsg && (
+            <p className="mt-3 text-xs text-anvil-300">{displayMsg}</p>
+          )}
+        </Card>
+      </div>
+    </div>
+  );
 }
 
 function AuthorizePrompt({

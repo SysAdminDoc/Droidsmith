@@ -272,6 +272,13 @@ export async function callJournalUndo(
   return invoke<JournalEntry>("journal_undo", { serial, entry_id: entryId });
 }
 
+export async function callTakeScreenshot(
+  serial: string,
+  localPath: string,
+): Promise<string> {
+  return invoke<string>("take_screenshot", { serial, local_path: localPath });
+}
+
 export async function callLocateScrcpy(): Promise<string | null> {
   return invoke<string | null>("locate_scrcpy");
 }
