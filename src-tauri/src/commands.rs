@@ -318,6 +318,38 @@ pub fn get_device_info(serial: String) -> Result<adb::DeviceInfo, CommandError> 
     Ok(adb::get_device_info(&transport, &serial)?)
 }
 
+/// Install an APK file on a device. The `apk_path` is a local filesystem
+/// path to the `.apk` file. Uses `adb install -r` for replace-on-conflict.
+#[tauri::command]
+pub fn install_apk(serial: String, apk_path: String) -> Result<String, CommandError> {
+    validate_serial_arg(&serial)?;
+    let resolution = adb::locate_adb();
+    let path = resolution
+        .path
+        .as_ref()
+        .ok_or(adb::TransportError::AdbNotFound)?;
+    let stdout = actions::install_apk(std::path::Path::new(path), &serial, &apk_path)?;
+    Ok(stdout)
+}
+
+/// Pull an APK from the device to a local path.
+#[tauri::command]
+pub fn extract_apk(
+    serial: String,
+    remote_path: String,
+    local_path: String,
+) -> Result<String, CommandError> {
+    validate_serial_arg(&serial)?;
+    let resolution = adb::locate_adb();
+    let path = resolution
+        .path
+        .as_ref()
+        .ok_or(adb::TransportError::AdbNotFound)?;
+    let stdout =
+        actions::extract_apk(std::path::Path::new(path), &serial, &remote_path, &local_path)?;
+    Ok(stdout)
+}
+
 /// List all debloat packs from the app's `packs/` resource directory.
 /// Returns packs that parse and lint cleanly; silently skips broken files.
 #[tauri::command]
