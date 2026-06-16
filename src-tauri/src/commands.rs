@@ -318,6 +318,21 @@ pub fn get_device_info(serial: String) -> Result<adb::DeviceInfo, CommandError> 
     Ok(adb::get_device_info(&transport, &serial)?)
 }
 
+/// Run a one-shot shell command on a device and return its output.
+#[tauri::command]
+pub fn shell_run(serial: String, argv: Vec<String>) -> Result<String, CommandError> {
+    validate_serial_arg(&serial)?;
+    let resolution = adb::locate_adb();
+    let path = resolution
+        .path
+        .as_ref()
+        .ok_or(adb::TransportError::AdbNotFound)?;
+    let transport = adb::ShellTransport::new(path);
+    let refs: Vec<&str> = argv.iter().map(String::as_str).collect();
+    let stdout = transport.shell(&serial, &refs)?;
+    Ok(stdout)
+}
+
 /// Install an APK file on a device. The `apk_path` is a local filesystem
 /// path to the `.apk` file. Uses `adb install -r` for replace-on-conflict.
 #[tauri::command]

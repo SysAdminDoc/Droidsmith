@@ -33,38 +33,6 @@ export function MirrorRoute() {
   );
 }
 
-export function ConsoleRoute() {
-  return (
-    <>
-      <PaneHeader
-        title="Console"
-        milestone="R-050"
-        description="Run shell commands in a focused workspace with tabs, favorites, streamed output, and copyable diagnostic snippets."
-      />
-      <PlaceholderBody
-        bullets={[
-          "Persist each tab by target device and command so sessions can resume cleanly.",
-          "Keep a compact favorite shelf for frequently repeated diagnostics.",
-          "Stream output through Tauri events so long-running commands stay responsive.",
-          "Copy commands and output as reproducible report snippets.",
-        ]}
-        commands={[
-          {
-            name: "shell_run_oneshot",
-            sig: "(serial, argv) -> String",
-            ready: true,
-          },
-          {
-            name: "shell_stream_start",
-            sig: "(serial, argv) -> stream_id",
-            ready: false,
-          },
-        ]}
-      />
-    </>
-  );
-}
-
 export function LogcatRoute() {
   return (
     <>
