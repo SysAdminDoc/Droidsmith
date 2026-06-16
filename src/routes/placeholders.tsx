@@ -1,48 +1,5 @@
 import { PaneHeader, PlaceholderBody } from "./common";
 
-export function AppsRoute() {
-  return (
-    <>
-      <PaneHeader
-        title="Apps"
-        milestone="R-020"
-        description="Review installed packages with readable labels, precise filters, and a bulk action queue that makes every uninstall, disable, or extract step previewable."
-      />
-      <PlaceholderBody
-        bullets={[
-          "Merge enabled and disabled package scans so the list never hides apps that matter.",
-          "Filter quickly by user, system, disabled, data-bearing, and recently installed packages.",
-          "Send multi-select choices into a preview queue before any bulk action is applied.",
-          "Install APKs from drag and drop when the silent install path is available.",
-          "Resolve package labels and icons through the Rust APK parser instead of raw package names.",
-        ]}
-        commands={[
-          {
-            name: "list_packages",
-            sig: "(serial, filter) -> AppPackage[]",
-            ready: true,
-          },
-          {
-            name: "plan_action",
-            sig: "(request) -> PlannedAction",
-            ready: true,
-          },
-          {
-            name: "apply_action",
-            sig: "(plan) -> JournalEntry",
-            ready: true,
-          },
-          {
-            name: "extract_apk",
-            sig: "(serial, package, dest) -> path",
-            ready: false,
-          },
-        ]}
-      />
-    </>
-  );
-}
-
 export function DebloatRoute() {
   return (
     <>

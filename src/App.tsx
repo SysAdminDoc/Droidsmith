@@ -6,9 +6,9 @@ import { cn } from "./lib/cn";
 
 import DevicesRoute from "./routes/Devices";
 import WirelessRoute from "./routes/Wireless";
+import AppsRoute from "./routes/Apps";
 import { Badge, Button, SkeletonLine } from "./routes/common";
 import {
-  AppsRoute,
   ConsoleRoute,
   DebloatRoute,
   FastbootRoute,
