@@ -1,48 +1,5 @@
 import { PaneHeader, PlaceholderBody } from "./common";
 
-export function DebloatRoute() {
-  return (
-    <>
-      <PaneHeader
-        title="Debloat"
-        milestone="R-033"
-        description="Choose an OEM-aware pack, understand the risk before applying it, and keep every debloat change reversible through the journal."
-      />
-      <PlaceholderBody
-        bullets={[
-          "Filter packs by detected manufacturer and Android version before the user chooses one.",
-          "Show the generated ADB commands beside vendor-specific quirk warnings.",
-          "Apply changes as a resumable transaction so failures pause instead of burying context.",
-          "Attach undo controls to journal rows for device-specific recovery.",
-          "Import UAD-NG lists with clean upstream attribution.",
-        ]}
-        commands={[
-          {
-            name: "packs::load",
-            sig: "(path) -> Pack",
-            ready: true,
-          },
-          {
-            name: "packs::lint",
-            sig: "(pack) -> Vec<reason>",
-            ready: true,
-          },
-          {
-            name: "explain_failure",
-            sig: "(req) -> Option<Quirk>",
-            ready: true,
-          },
-          {
-            name: "list_packs",
-            sig: "() -> Vec<Pack>",
-            ready: false,
-          },
-        ]}
-      />
-    </>
-  );
-}
-
 export function MirrorRoute() {
   return (
     <>
