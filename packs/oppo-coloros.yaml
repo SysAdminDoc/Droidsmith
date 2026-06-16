@@ -1,0 +1,100 @@
+name: "OPPO / Realme — ColorOS"
+version: "1"
+description: >
+  Debloat pack for OPPO and Realme devices running ColorOS 13–14. Targets
+  OPPO-specific bloatware, advertising services, and duplicate utility apps.
+  Realme UI is a ColorOS fork and shares most system packages.
+attribution: |
+  Original Droidsmith authoring based on public ColorOS package lists and
+  community debloat experience. MIT licensed.
+
+targets:
+  manufacturer: ["OPPO", "oppo", "Realme", "realme", "OnePlus"]
+  rom: ["coloros", "ColorOS", "realmeui", "Realme UI"]
+  android_min: 33
+
+packages:
+  - id: com.coloros.gamespace
+    removal: recommended
+    description: >
+      Game Space. Game organization and performance mode. Safe to remove
+      if you don't use OPPO's gaming features.
+    labels: ["oppo", "gaming"]
+
+  - id: com.heytap.browser
+    removal: recommended
+    description: >
+      HeyTap Browser. OPPO's built-in browser with content feeds. Chrome
+      or any third-party browser works as a replacement.
+    labels: ["oppo", "browser", "ads"]
+
+  - id: com.heytap.music
+    removal: recommended
+    description: >
+      HeyTap Music. OPPO's music player. Third-party players work as
+      replacements.
+    labels: ["oppo", "media"]
+
+  - id: com.nearme.gamecenter
+    removal: recommended
+    description: >
+      OPPO Game Center. App store for games with promotions. Safe to
+      remove; Play Store handles game installs.
+    labels: ["oppo", "gaming", "bloat"]
+
+  - id: com.heytap.cloud
+    removal: advanced
+    description: >
+      HeyTap Cloud. OPPO's cloud storage and backup. Disabling stops
+      OPPO Cloud backups. Google backup continues independently.
+    labels: ["oppo", "cloud"]
+
+  - id: com.coloros.assistantscreen
+    removal: recommended
+    description: >
+      Smart Sidebar / Assistant Screen. Quick-access panel. Removing
+      has no impact on core functionality.
+    labels: ["oppo", "utility"]
+
+  - id: com.heytap.themestore
+    removal: recommended
+    description: >
+      OPPO Theme Store. Theme marketplace. System themes continue to
+      work without it.
+    labels: ["oppo", "cosmetic"]
+
+  - id: com.coloros.weather2
+    removal: recommended
+    description: >
+      ColorOS Weather. Built-in weather app. Third-party weather apps
+      provide better accuracy.
+    labels: ["oppo", "utility"]
+
+  - id: com.oplus.kids
+    removal: recommended
+    description: >
+      Kids Space. Parental control app. Safe to remove if you don't use
+      OPPO's kids mode.
+    labels: ["oppo", "parental"]
+
+  - id: com.heytap.market
+    removal: recommended
+    description: >
+      OPPO App Market. Alternative app store. Play Store handles app
+      distribution; this is redundant.
+    labels: ["oppo", "bloat"]
+
+  - id: com.coloros.compass2
+    removal: recommended
+    description: >
+      ColorOS Compass. Compass utility. GPS/maps apps provide this
+      functionality.
+    labels: ["oppo", "utility"]
+
+  - id: com.oplus.phonemanager
+    removal: expert
+    description: >
+      Phone Manager. Security scanner, cleaner, and permission manager.
+      Removing eliminates OPPO's aggressive background task killing but
+      also loses the built-in security scanner.
+    labels: ["oppo", "security"]
