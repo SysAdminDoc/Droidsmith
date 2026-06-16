@@ -39,6 +39,8 @@ export default function MirrorRoute() {
   const [maxSize, setMaxSize] = useState("1024");
   const [bitRate, setBitRate] = useState("8M");
   const [noAudio, setNoAudio] = useState(false);
+  const [recording, setRecording] = useState(false);
+  const [recordPath, setRecordPath] = useState("");
 
   const loadDevices = useCallback(async () => {
     if (!inTauri()) {
@@ -92,7 +94,7 @@ export default function MirrorRoute() {
         max_size: maxSize ? Number(maxSize) : null,
         bit_rate: bitRate || null,
         no_audio: noAudio,
-        record_path: null,
+        record_path: recording && recordPath.trim() ? recordPath.trim() : null,
       });
       setSession({ kind: "active", pid });
     } catch (e) {
@@ -239,6 +241,31 @@ export default function MirrorRoute() {
                     />
                     <span className="text-sm text-anvil-200">Disable audio</span>
                   </label>
+                </div>
+                <div className="mt-4 flex flex-wrap items-end gap-3">
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={recording}
+                      onChange={(e) => setRecording(e.target.checked)}
+                      className="h-4 w-4 rounded border-white/20 bg-white/[0.06] text-circuit-300 focus:ring-2 focus:ring-circuit-300/30"
+                    />
+                    <span className="text-sm text-anvil-200">Record session</span>
+                  </label>
+                  {recording && (
+                    <label className="grid flex-1 gap-1.5">
+                      <span className="text-xs font-medium text-anvil-400">
+                        Output file
+                      </span>
+                      <input
+                        type="text"
+                        value={recordPath}
+                        onChange={(e) => setRecordPath(e.target.value)}
+                        placeholder="recording.mp4"
+                        className="h-9 rounded-md border border-white/10 bg-white/[0.06] px-3 font-mono text-sm text-anvil-50 outline-none transition placeholder:text-anvil-600 focus:border-circuit-300/50 focus:ring-2 focus:ring-circuit-300/20"
+                      />
+                    </label>
+                  )}
                 </div>
                 <div className="mt-5 flex items-center gap-3">
                   <Button
