@@ -234,9 +234,7 @@ export async function callConnectWireless(
   return invoke<WirelessCommandResult>("connect_wireless", { request });
 }
 
-export async function callGetDeviceInfo(
-  serial: string,
-): Promise<DeviceInfo> {
+export async function callGetDeviceInfo(serial: string): Promise<DeviceInfo> {
   return invoke<DeviceInfo>("get_device_info", { serial });
 }
 
@@ -259,9 +257,7 @@ export async function callApplyAction(
   return invoke<JournalEntry>("apply_action", { plan });
 }
 
-export async function callJournalList(
-  serial: string,
-): Promise<JournalEntry[]> {
+export async function callJournalList(serial: string): Promise<JournalEntry[]> {
   return invoke<JournalEntry[]>("journal_list", { serial });
 }
 
@@ -363,7 +359,12 @@ export async function callSetPermission(
   permission: string,
   grant: boolean,
 ): Promise<string> {
-  return invoke<string>("set_permission", { serial, package: pkg, permission, grant });
+  return invoke<string>("set_permission", {
+    serial,
+    package: pkg,
+    permission,
+    grant,
+  });
 }
 
 export type ProcessInfo = {

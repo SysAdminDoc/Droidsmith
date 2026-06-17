@@ -25,6 +25,8 @@ import {
   Badge,
   Button,
   Card,
+  EmptyState,
+  FieldInput,
   PaneHeader,
   SkeletonLine,
   StatePanel,
@@ -200,8 +202,7 @@ export default function DevicesRoute() {
 
         {state.kind === "ok" &&
           state.value.devices.some(
-            (d) =>
-              typeof d.state === "string" && d.state === "unauthorized",
+            (d) => typeof d.state === "string" && d.state === "unauthorized",
           ) && (
             <AuthorizePrompt
               devices={state.value.devices.filter(
@@ -214,21 +215,20 @@ export default function DevicesRoute() {
 
         {state.kind === "ok" &&
           state.value.devices.some(
-            (d) =>
-              typeof d.state === "string" && d.state === "no_permissions",
+            (d) => typeof d.state === "string" && d.state === "no_permissions",
           ) && (
             <StatePanel title="Linux permissions issue" tone="danger">
               <p>
-                One or more devices report "no permissions". On Linux, add a udev
-                rule for your device's USB vendor ID:
+                One or more devices report "no permissions". On Linux, add a
+                udev rule for your device's USB vendor ID:
               </p>
               <pre className="mt-2 rounded-md border border-white/10 bg-white/[0.04] p-3 font-mono text-xs text-anvil-200">
                 {`echo 'SUBSYSTEM=="usb", ATTR{idVendor}=="XXXX", MODE="0666"' | sudo tee /etc/udev/rules.d/51-android.rules\nsudo udevadm control --reload-rules && sudo udevadm trigger`}
               </pre>
               <p className="mt-2">
                 Replace <code>XXXX</code> with your device's vendor ID (e.g.{" "}
-                <code>18d1</code> for Google,{" "}
-                <code>04e8</code> for Samsung). Then unplug and reconnect.
+                <code>18d1</code> for Google, <code>04e8</code> for Samsung).
+                Then unplug and reconnect.
               </p>
             </StatePanel>
           )}
@@ -451,9 +451,7 @@ function DeviceDetail({
           {info.android_version && (
             <Badge tone="info">Android {info.android_version}</Badge>
           )}
-          {info.sdk_level && (
-            <Badge tone="neutral">API {info.sdk_level}</Badge>
-          )}
+          {info.sdk_level && <Badge tone="neutral">API {info.sdk_level}</Badge>}
         </div>
       </div>
 
@@ -477,10 +475,7 @@ function DeviceDetail({
           <InfoField label="Wi-Fi IP" value={info.wifi_ip} mono />
         )}
         {info.battery && (
-          <InfoField
-            label="Battery"
-            value={formatBattery(info.battery)}
-          />
+          <InfoField label="Battery" value={formatBattery(info.battery)} />
         )}
         {info.storage && (
           <InfoField
@@ -579,19 +574,19 @@ function formatStateLabel(state: SerializedDeviceState): string {
   return label.charAt(0).toUpperCase() + label.slice(1);
 }
 
-const REMOTE_BUTTONS: { label: string; keycode: number; icon: string }[] = [
-  { label: "Home", keycode: 3, icon: "⌂" },
-  { label: "Back", keycode: 4, icon: "←" },
-  { label: "Recents", keycode: 187, icon: "⊞" },
-  { label: "Up", keycode: 19, icon: "▲" },
-  { label: "Down", keycode: 20, icon: "▼" },
-  { label: "Left", keycode: 21, icon: "◀" },
-  { label: "Right", keycode: 22, icon: "▶" },
-  { label: "OK", keycode: 23, icon: "●" },
-  { label: "Vol +", keycode: 24, icon: "🔊" },
-  { label: "Vol -", keycode: 25, icon: "🔉" },
-  { label: "Power", keycode: 26, icon: "⏻" },
-  { label: "Menu", keycode: 82, icon: "☰" },
+const REMOTE_BUTTONS: { label: string; keycode: number }[] = [
+  { label: "Home", keycode: 3 },
+  { label: "Back", keycode: 4 },
+  { label: "Recents", keycode: 187 },
+  { label: "Up", keycode: 19 },
+  { label: "Down", keycode: 20 },
+  { label: "Left", keycode: 21 },
+  { label: "Right", keycode: 22 },
+  { label: "OK", keycode: 23 },
+  { label: "Vol +", keycode: 24 },
+  { label: "Vol -", keycode: 25 },
+  { label: "Power", keycode: 26 },
+  { label: "Menu", keycode: 82 },
 ];
 
 function DeviceControls({ serial }: { serial: string }) {
@@ -603,11 +598,7 @@ function DeviceControls({ serial }: { serial: string }) {
   const sendKey = useCallback(
     async (keycode: number, label: string) => {
       try {
-        await callShellRun(serial, [
-          "input",
-          "keyevent",
-          String(keycode),
-        ]);
+        await callShellRun(serial, ["input", "keyevent", String(keycode)]);
         setLastKey(label);
       } catch {
         setLastKey(`${label} failed`);
@@ -624,9 +615,7 @@ function DeviceControls({ serial }: { serial: string }) {
       await callTakeScreenshot(serial, localPath);
       setScreenshotMsg(`Saved to ${localPath}`);
     } catch (e) {
-      setScreenshotMsg(
-        `Failed: ${e instanceof Error ? e.message : String(e)}`,
-      );
+      setScreenshotMsg(`Failed: ${e instanceof Error ? e.message : String(e)}`);
     }
   }, [serial]);
 
@@ -636,9 +625,7 @@ function DeviceControls({ serial }: { serial: string }) {
       await callShellRun(serial, ["wm", "density", density.trim()]);
       setDisplayMsg(`Density set to ${density.trim()}`);
     } catch (e) {
-      setDisplayMsg(
-        `Failed: ${e instanceof Error ? e.message : String(e)}`,
-      );
+      setDisplayMsg(`Failed: ${e instanceof Error ? e.message : String(e)}`);
     }
   }, [serial, density]);
 
@@ -647,9 +634,7 @@ function DeviceControls({ serial }: { serial: string }) {
       await callShellRun(serial, ["wm", "density", "reset"]);
       setDisplayMsg("Density reset to default");
     } catch (e) {
-      setDisplayMsg(
-        `Failed: ${e instanceof Error ? e.message : String(e)}`,
-      );
+      setDisplayMsg(`Failed: ${e instanceof Error ? e.message : String(e)}`);
     }
   }, [serial]);
 
@@ -665,9 +650,7 @@ function DeviceControls({ serial }: { serial: string }) {
         ]);
         setDisplayMsg(enable ? "Force dark enabled" : "Force dark disabled");
       } catch (e) {
-        setDisplayMsg(
-          `Failed: ${e instanceof Error ? e.message : String(e)}`,
-        );
+        setDisplayMsg(`Failed: ${e instanceof Error ? e.message : String(e)}`);
       }
     },
     [serial],
@@ -675,107 +658,173 @@ function DeviceControls({ serial }: { serial: string }) {
 
   return (
     <div className="space-y-4">
-    <div className="grid gap-4 lg:grid-cols-[1fr_1fr]">
-      <Card className="p-5">
-        <div className="flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-anvil-50">Virtual remote</h3>
-          {lastKey && (
-            <span className="text-xs text-anvil-400">Last: {lastKey}</span>
-          )}
-        </div>
-        <div className="mt-4 grid grid-cols-4 gap-2">
-          {REMOTE_BUTTONS.map((btn) => (
-            <Button
-              key={btn.label}
-              type="button"
-              size="sm"
-              onClick={() => void sendKey(btn.keycode, btn.label)}
-              title={`keyevent ${btn.keycode}`}
-            >
-              <span className="mr-1">{btn.icon}</span> {btn.label}
-            </Button>
-          ))}
-        </div>
-      </Card>
-
-      <div className="space-y-4">
+      <div className="grid gap-4 lg:grid-cols-[1fr_1fr]">
         <Card className="p-5">
-          <h3 className="text-sm font-semibold text-anvil-50">Screenshot</h3>
-          <p className="mt-1 text-xs text-anvil-400">
-            Capture the current screen to a local PNG file.
-          </p>
-          <div className="mt-3 flex items-center gap-3">
-            <Button
-              type="button"
-              size="sm"
-              variant="primary"
-              onClick={() => void takeScreenshot()}
-            >
-              Capture
-            </Button>
-            {screenshotMsg && (
-              <span className="text-xs text-anvil-300">{screenshotMsg}</span>
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-anvil-50">
+              Virtual remote
+            </h3>
+            {lastKey && (
+              <span className="text-xs text-anvil-400">Last: {lastKey}</span>
             )}
           </div>
+          <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {REMOTE_BUTTONS.map((btn) => (
+              <Button
+                key={btn.label}
+                type="button"
+                size="sm"
+                onClick={() => void sendKey(btn.keycode, btn.label)}
+                title={`keyevent ${btn.keycode}`}
+                className="justify-start"
+              >
+                <RemoteGlyph label={btn.label} />
+                <span>{btn.label}</span>
+              </Button>
+            ))}
+          </div>
         </Card>
 
-        <Card className="p-5">
-          <h3 className="text-sm font-semibold text-anvil-50">Display tuning</h3>
-          <div className="mt-3 grid gap-3 sm:grid-cols-2">
-            <div className="flex items-end gap-2">
-              <label className="grid flex-1 gap-1.5">
-                <span className="text-xs font-medium text-anvil-400">
-                  Density (DPI)
-                </span>
-                <input
-                  type="text"
-                  value={density}
-                  onChange={(e) => setDensity(e.target.value)}
-                  placeholder="420"
-                  inputMode="numeric"
-                  className="h-9 rounded-md border border-white/10 bg-white/[0.06] px-3 font-mono text-sm text-anvil-50 outline-none transition placeholder:text-anvil-600 focus:border-circuit-300/50 focus:ring-2 focus:ring-circuit-300/20"
-                />
-              </label>
-              <Button type="button" size="sm" onClick={() => void applyDensity()}>
-                Set
-              </Button>
+        <div className="space-y-4">
+          <Card className="p-5">
+            <h3 className="text-sm font-semibold text-anvil-50">Screenshot</h3>
+            <p className="mt-1 text-xs text-anvil-400">
+              Capture the current screen to a local PNG file.
+            </p>
+            <div className="mt-3 flex items-center gap-3">
               <Button
                 type="button"
                 size="sm"
-                variant="ghost"
-                onClick={() => void resetDensity()}
+                variant="primary"
+                onClick={() => void takeScreenshot()}
               >
-                Reset
+                Capture
               </Button>
+              {screenshotMsg && (
+                <span className="text-xs text-anvil-300">{screenshotMsg}</span>
+              )}
             </div>
-            <div className="flex items-end gap-2">
-              <Button
-                type="button"
-                size="sm"
-                onClick={() => void toggleForceDark(true)}
-              >
-                Force dark on
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant="ghost"
-                onClick={() => void toggleForceDark(false)}
-              >
-                Force dark off
-              </Button>
+          </Card>
+
+          <Card className="p-5">
+            <h3 className="text-sm font-semibold text-anvil-50">
+              Display tuning
+            </h3>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              <div className="flex items-end gap-2">
+                <label className="grid flex-1 gap-1.5">
+                  <span className="text-xs font-medium text-anvil-400">
+                    Density (DPI)
+                  </span>
+                  <FieldInput
+                    type="text"
+                    value={density}
+                    onChange={(e) => setDensity(e.target.value)}
+                    placeholder="420"
+                    inputMode="numeric"
+                    className="font-mono"
+                  />
+                </label>
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => void applyDensity()}
+                >
+                  Set
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => void resetDensity()}
+                >
+                  Reset
+                </Button>
+              </div>
+              <div className="flex items-end gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => void toggleForceDark(true)}
+                >
+                  Force dark on
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => void toggleForceDark(false)}
+                >
+                  Force dark off
+                </Button>
+              </div>
             </div>
-          </div>
-          {displayMsg && (
-            <p className="mt-3 text-xs text-anvil-300">{displayMsg}</p>
-          )}
-        </Card>
+            {displayMsg && (
+              <p className="mt-3 text-xs text-anvil-300">{displayMsg}</p>
+            )}
+          </Card>
+        </div>
       </div>
-    </div>
       <ProcessManager serial={serial} />
       <FileManager serial={serial} />
       <NetworkInspector serial={serial} />
     </div>
+  );
+}
+
+function RemoteGlyph({ label }: { label: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className="h-4 w-4 shrink-0"
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="1.8"
+      aria-hidden="true"
+    >
+      {label === "Home" && (
+        <path d="m4 11 8-7 8 7v8a1 1 0 0 1-1 1h-5v-6h-4v6H5a1 1 0 0 1-1-1v-8Z" />
+      )}
+      {label === "Back" && <path d="M15 6 9 12l6 6" />}
+      {label === "Recents" && (
+        <>
+          <path d="M8 7h9v9" />
+          <path d="M5 10h9v9H5z" />
+        </>
+      )}
+      {label === "Up" && <path d="m7 14 5-5 5 5" />}
+      {label === "Down" && <path d="m7 10 5 5 5-5" />}
+      {label === "Left" && <path d="m14 7-5 5 5 5" />}
+      {label === "Right" && <path d="m10 7 5 5-5 5" />}
+      {label === "OK" && <circle cx="12" cy="12" r="4" />}
+      {label === "Vol +" && (
+        <>
+          <path d="M5 10v4h3l4 3V7l-4 3H5Z" />
+          <path d="M17 9v6M14 12h6" />
+        </>
+      )}
+      {label === "Vol -" && (
+        <>
+          <path d="M5 10v4h3l4 3V7l-4 3H5Z" />
+          <path d="M15 12h5" />
+        </>
+      )}
+      {label === "Power" && (
+        <>
+          <path d="M12 4v8" />
+          <path d="M7.5 7.5a7 7 0 1 0 9 0" />
+        </>
+      )}
+      {label === "Menu" && (
+        <>
+          <path d="M6 8h12" />
+          <path d="M6 12h12" />
+          <path d="M6 16h12" />
+        </>
+      )}
+    </svg>
   );
 }
 
@@ -817,13 +866,13 @@ function ProcessManager({ serial }: { serial: string }) {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <input
+          <FieldInput
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Filter..."
+            placeholder="Filter"
             aria-label="Filter processes"
-            className="h-8 w-40 rounded-md border border-white/10 bg-white/[0.06] px-2 font-mono text-xs text-anvil-50 outline-none placeholder:text-anvil-600 focus:border-circuit-300/50"
+            className="h-8 w-40 px-2 font-mono text-xs"
           />
           <Button
             type="button"
@@ -836,24 +885,38 @@ function ProcessManager({ serial }: { serial: string }) {
           </Button>
         </div>
       </div>
-      {processes.length > 0 && (
+      {processes.length === 0 && !loading && (
+        <EmptyState title="No process snapshot loaded">
+          <p>Load a process snapshot to inspect memory-heavy apps.</p>
+        </EmptyState>
+      )}
+      {processes.length > 0 && filtered.length === 0 && (
+        <EmptyState title="No matching processes">
+          <p>Clear the filter or search for another process name.</p>
+        </EmptyState>
+      )}
+      {processes.length > 0 && filtered.length > 0 && (
         <div className="overflow-x-auto" style={{ maxHeight: "24rem" }}>
           <table className="min-w-full text-xs">
             <thead className="sticky top-0 bg-anvil-900">
               <tr>
-                <th className="px-3 py-2 text-left font-semibold text-anvil-400">PID</th>
-                <th className="px-3 py-2 text-left font-semibold text-anvil-400">User</th>
+                <th className="px-3 py-2 text-left font-semibold text-anvil-400">
+                  PID
+                </th>
+                <th className="px-3 py-2 text-left font-semibold text-anvil-400">
+                  User
+                </th>
                 <th
                   className="cursor-pointer px-3 py-2 text-right font-semibold text-anvil-400"
                   onClick={() => setSortBy("rss")}
                 >
-                  RSS {sortBy === "rss" ? "▼" : ""}
+                  RSS {sortBy === "rss" ? "(sorted)" : ""}
                 </th>
                 <th
                   className="cursor-pointer px-3 py-2 text-left font-semibold text-anvil-400"
                   onClick={() => setSortBy("name")}
                 >
-                  Name {sortBy === "name" ? "▼" : ""}
+                  Name {sortBy === "name" ? "(sorted)" : ""}
                 </th>
               </tr>
             </thead>
@@ -892,7 +955,7 @@ function formatKb(kb: number): string {
 }
 
 function formatBytes(bytes: number | null): string {
-  if (bytes == null) return "—";
+  if (bytes == null) return "Unknown";
   if (bytes >= 1073741824) return `${(bytes / 1073741824).toFixed(1)} GB`;
   if (bytes >= 1048576) return `${(bytes / 1048576).toFixed(1)} MB`;
   if (bytes >= 1024) return `${(bytes / 1024).toFixed(1)} KB`;
@@ -938,9 +1001,7 @@ function FileManager({ serial }: { serial: string }) {
         await callPullFile(serial, remoteFull, entry.name);
         setPullMsg(`Saved ${entry.name} to working directory`);
       } catch (e) {
-        setPullMsg(
-          `Failed: ${e instanceof Error ? e.message : String(e)}`,
-        );
+        setPullMsg(`Failed: ${e instanceof Error ? e.message : String(e)}`);
       }
     },
     [serial, currentPath],
@@ -957,9 +1018,7 @@ function FileManager({ serial }: { serial: string }) {
         </div>
         <div className="flex items-center gap-2">
           {listing?.free_space_kb != null && (
-            <Badge tone="neutral">
-              {formatKb(listing.free_space_kb)} free
-            </Badge>
+            <Badge tone="neutral">{formatKb(listing.free_space_kb)} free</Badge>
           )}
           <Button
             type="button"
@@ -972,6 +1031,15 @@ function FileManager({ serial }: { serial: string }) {
           </Button>
         </div>
       </div>
+
+      {!listing && !loading && (
+        <EmptyState title="No directory loaded">
+          <p>
+            Browse <code>/sdcard</code> to inspect device files and pull local
+            copies.
+          </p>
+        </EmptyState>
+      )}
 
       {listing && (
         <>
@@ -994,18 +1062,16 @@ function FileManager({ serial }: { serial: string }) {
             style={{ maxHeight: "20rem" }}
           >
             {listing.entries.length === 0 && (
-              <div className="px-4 py-6 text-center text-xs text-anvil-500">
-                Empty directory
-              </div>
+              <EmptyState title="Empty directory" className="border-t-0">
+                <p>This path has no visible entries.</p>
+              </EmptyState>
             )}
             {listing.entries.map((entry) => (
               <div
                 key={entry.name}
                 className="flex items-center gap-3 px-4 py-2 text-xs hover:bg-white/[0.03]"
               >
-                <span className="w-4 text-center text-anvil-400">
-                  {entry.is_dir ? "📁" : "📄"}
-                </span>
+                <FileGlyph directory={entry.is_dir} />
                 {entry.is_dir ? (
                   <button
                     type="button"
@@ -1055,6 +1121,34 @@ function FileManager({ serial }: { serial: string }) {
   );
 }
 
+function FileGlyph({ directory }: { directory: boolean }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className="h-4 w-4 shrink-0 text-anvil-400"
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="1.8"
+      aria-hidden="true"
+    >
+      {directory ? (
+        <>
+          <path d="M3.5 6.5h6l2 2H20a1.5 1.5 0 0 1 1.5 1.5v7.5A1.5 1.5 0 0 1 20 19H4a1.5 1.5 0 0 1-1.5-1.5V8A1.5 1.5 0 0 1 4 6.5Z" />
+          <path d="M3.5 10h18" />
+        </>
+      ) : (
+        <>
+          <path d="M7 3.5h7l3 3V20a.5.5 0 0 1-.5.5h-9A.5.5 0 0 1 7 20V3.5Z" />
+          <path d="M14 3.5v3h3" />
+          <path d="M9.5 11h5M9.5 14h5" />
+        </>
+      )}
+    </svg>
+  );
+}
+
 function NetworkInspector({ serial }: { serial: string }) {
   const [connections, setConnections] = useState<NetworkConnection[]>([]);
   const [loading, setLoading] = useState(false);
@@ -1093,13 +1187,13 @@ function NetworkInspector({ serial }: { serial: string }) {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <input
+          <FieldInput
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Filter..."
+            placeholder="Filter"
             aria-label="Filter network connections"
-            className="h-8 w-40 rounded-md border border-white/10 bg-white/[0.06] px-2 font-mono text-xs text-anvil-50 outline-none placeholder:text-anvil-600 focus:border-circuit-300/50"
+            className="h-8 w-40 px-2 font-mono text-xs"
           />
           <Button
             type="button"
@@ -1116,7 +1210,19 @@ function NetworkInspector({ serial }: { serial: string }) {
           </Button>
         </div>
       </div>
-      {connections.length > 0 && (
+      {connections.length === 0 && !loading && (
+        <EmptyState title="No network snapshot loaded">
+          <p>Load active sockets to review endpoints and owning processes.</p>
+        </EmptyState>
+      )}
+      {connections.length > 0 && filtered.length === 0 && (
+        <EmptyState title="No matching connections">
+          <p>
+            Clear the filter or search for another address, process, or state.
+          </p>
+        </EmptyState>
+      )}
+      {connections.length > 0 && filtered.length > 0 && (
         <div className="overflow-x-auto" style={{ maxHeight: "20rem" }}>
           <table className="min-w-full text-xs">
             <thead className="sticky top-0 bg-anvil-900">
@@ -1152,7 +1258,7 @@ function NetworkInspector({ serial }: { serial: string }) {
                     {c.remote_addr}
                   </td>
                   <td className="px-3 py-1.5 font-mono text-anvil-400">
-                    {c.process ?? "—"}
+                    {c.process ?? "Not reported"}
                   </td>
                 </tr>
               ))}
@@ -1180,7 +1286,7 @@ function AuthorizePrompt({
     <Card className="mt-4 border-amber-300/20 bg-amber-950/20 p-5">
       <div className="flex gap-4">
         <span
-          className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full bg-amber-300 ring-4 ring-amber-300/10"
+          className="mt-1 h-2.5 w-2.5 shrink-0 rounded-sm bg-amber-300 ring-4 ring-amber-300/10"
           aria-hidden="true"
         />
         <div className="min-w-0 flex-1">
@@ -1218,14 +1324,13 @@ function AuthorizePrompt({
               <ol className="mt-2 grid gap-2 text-sm sm:grid-cols-3">
                 <li className="rounded-md border border-white/10 bg-white/[0.04] p-3">
                   <span className="font-semibold text-anvil-100">1.</span> Look
-                  at the device screen for the{" "}
-                  <em>Allow USB debugging?</em> dialog.
+                  at the device screen for the <em>Allow USB debugging?</em>{" "}
+                  dialog.
                 </li>
                 <li className="rounded-md border border-white/10 bg-white/[0.04] p-3">
                   <span className="font-semibold text-anvil-100">2.</span>{" "}
-                  Optionally check{" "}
-                  <em>Always allow from this computer</em> to skip this next
-                  time.
+                  Optionally check <em>Always allow from this computer</em> to
+                  skip this next time.
                 </li>
                 <li className="rounded-md border border-white/10 bg-white/[0.04] p-3">
                   <span className="font-semibold text-anvil-100">3.</span> Tap{" "}
@@ -1247,15 +1352,19 @@ function AuthorizePrompt({
                 </li>
                 <li>Reconnect the USB cable and wait a few seconds.</li>
                 <li>
-                  Ensure USB mode is set to{" "}
-                  <em>File Transfer / MTP</em> (some devices block debugging in
-                  charge-only mode).
+                  Ensure USB mode is set to <em>File Transfer / MTP</em> (some
+                  devices block debugging in charge-only mode).
                 </li>
               </ul>
             </div>
           </div>
           <div className="mt-4">
-            <Button type="button" size="sm" variant="primary" onClick={onRefresh}>
+            <Button
+              type="button"
+              size="sm"
+              variant="primary"
+              onClick={onRefresh}
+            >
               Refresh devices
             </Button>
           </div>

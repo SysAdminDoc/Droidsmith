@@ -11,7 +11,6 @@ import {
   type ListDevicesResult,
   type Pack,
   type PackEntry,
-  type PlannedAction,
   type RemovalLevel,
 } from "../lib/tauri";
 
@@ -38,7 +37,13 @@ type PacksState =
 type WizardStep =
   | { step: "pick_pack" }
   | { step: "preview"; pack: Pack; selected: Set<string> }
-  | { step: "applying"; pack: Pack; queue: PackEntry[]; applied: number; errors: string[] }
+  | {
+      step: "applying";
+      pack: Pack;
+      queue: PackEntry[];
+      applied: number;
+      errors: string[];
+    }
   | { step: "done"; pack: Pack; applied: number; errors: string[] };
 
 export default function DebloatRoute() {
@@ -93,9 +98,7 @@ export default function DebloatRoute() {
 
   const selectPack = useCallback((pack: Pack) => {
     const recommended = new Set(
-      pack.packages
-        .filter((p) => p.removal === "recommended")
-        .map((p) => p.id),
+      pack.packages.filter((p) => p.removal === "recommended").map((p) => p.id),
     );
     setWizard({ step: "preview", pack, selected: recommended });
   }, []);
@@ -115,10 +118,14 @@ export default function DebloatRoute() {
 
   const applyPack = useCallback(async () => {
     if (wizard.step !== "preview" || !selectedSerial) return;
-    const queue = wizard.pack.packages.filter((p) =>
-      wizard.selected.has(p.id),
-    );
-    setWizard({ step: "applying", pack: wizard.pack, queue, applied: 0, errors: [] });
+    const queue = wizard.pack.packages.filter((p) => wizard.selected.has(p.id));
+    setWizard({
+      step: "applying",
+      pack: wizard.pack,
+      queue,
+      applied: 0,
+      errors: [],
+    });
 
     let applied = 0;
     const errors: string[] = [];
@@ -439,7 +446,7 @@ function PackPreview({
                           {entry.labels.map((l) => (
                             <span
                               key={l}
-                              className="rounded-full border border-white/10 px-1.5 py-0.5 text-[10px] text-anvil-500"
+                              className="rounded-md border border-white/10 px-1.5 py-0.5 text-[10px] text-anvil-500"
                             >
                               {l}
                             </span>
@@ -496,9 +503,9 @@ function ApplyProgress({
           </span>
           <span>{pct}%</span>
         </div>
-        <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/[0.08]">
+        <div className="mt-2 h-2 overflow-hidden rounded-sm bg-white/[0.08]">
           <div
-            className="h-full rounded-full bg-circuit-300 transition-all duration-300"
+            className="h-full rounded-sm bg-circuit-300 transition-all duration-300"
             style={{ width: `${pct}%` }}
           />
         </div>
@@ -597,4 +604,3 @@ function tierTone(
       return "danger";
   }
 }
-

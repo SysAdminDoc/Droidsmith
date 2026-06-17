@@ -33,6 +33,7 @@ export default [
         "warn",
         { allowConstantExport: true },
       ],
+      "no-undef": "off",
       "@typescript-eslint/no-unused-vars": [
         "error",
         { argsIgnorePattern: "^_" },

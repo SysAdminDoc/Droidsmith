@@ -8,7 +8,14 @@ import {
   type ListDevicesResult,
 } from "../lib/tauri";
 
-import { Badge, Button, Card, PaneHeader, StatePanel } from "./common";
+import {
+  Badge,
+  Button,
+  Card,
+  FieldInput,
+  PaneHeader,
+  StatePanel,
+} from "./common";
 
 type DevicesState =
   | { kind: "loading" }
@@ -103,7 +110,15 @@ export default function MirrorRoute() {
         message: e instanceof Error ? e.message : String(e),
       });
     }
-  }, [selectedSerial, scrcpyState, maxSize, bitRate, noAudio]);
+  }, [
+    selectedSerial,
+    scrcpyState,
+    maxSize,
+    bitRate,
+    noAudio,
+    recording,
+    recordPath,
+  ]);
 
   const authorizedDevices =
     devicesState.kind === "ok"
@@ -211,25 +226,25 @@ export default function MirrorRoute() {
                     <span className="text-xs font-medium text-anvil-400">
                       Max size (px)
                     </span>
-                    <input
+                    <FieldInput
                       type="text"
                       value={maxSize}
                       onChange={(e) => setMaxSize(e.target.value)}
                       placeholder="1024"
                       inputMode="numeric"
-                      className="h-9 rounded-md border border-white/10 bg-white/[0.06] px-3 font-mono text-sm text-anvil-50 outline-none transition placeholder:text-anvil-600 focus:border-circuit-300/50 focus:ring-2 focus:ring-circuit-300/20"
+                      className="font-mono"
                     />
                   </label>
                   <label className="grid gap-1.5">
                     <span className="text-xs font-medium text-anvil-400">
                       Video bit rate
                     </span>
-                    <input
+                    <FieldInput
                       type="text"
                       value={bitRate}
                       onChange={(e) => setBitRate(e.target.value)}
                       placeholder="8M"
-                      className="h-9 rounded-md border border-white/10 bg-white/[0.06] px-3 font-mono text-sm text-anvil-50 outline-none transition placeholder:text-anvil-600 focus:border-circuit-300/50 focus:ring-2 focus:ring-circuit-300/20"
+                      className="font-mono"
                     />
                   </label>
                   <label className="flex items-center gap-2 self-end">
@@ -239,7 +254,9 @@ export default function MirrorRoute() {
                       onChange={(e) => setNoAudio(e.target.checked)}
                       className="h-4 w-4 rounded border-white/20 bg-white/[0.06] text-circuit-300 focus:ring-2 focus:ring-circuit-300/30"
                     />
-                    <span className="text-sm text-anvil-200">Disable audio</span>
+                    <span className="text-sm text-anvil-200">
+                      Disable audio
+                    </span>
                   </label>
                 </div>
                 <div className="mt-4 flex flex-wrap items-end gap-3">
@@ -250,19 +267,21 @@ export default function MirrorRoute() {
                       onChange={(e) => setRecording(e.target.checked)}
                       className="h-4 w-4 rounded border-white/20 bg-white/[0.06] text-circuit-300 focus:ring-2 focus:ring-circuit-300/30"
                     />
-                    <span className="text-sm text-anvil-200">Record session</span>
+                    <span className="text-sm text-anvil-200">
+                      Record session
+                    </span>
                   </label>
                   {recording && (
                     <label className="grid flex-1 gap-1.5">
                       <span className="text-xs font-medium text-anvil-400">
                         Output file
                       </span>
-                      <input
+                      <FieldInput
                         type="text"
                         value={recordPath}
                         onChange={(e) => setRecordPath(e.target.value)}
                         placeholder="recording.mp4"
-                        className="h-9 rounded-md border border-white/10 bg-white/[0.06] px-3 font-mono text-sm text-anvil-50 outline-none transition placeholder:text-anvil-600 focus:border-circuit-300/50 focus:ring-2 focus:ring-circuit-300/20"
+                        className="font-mono"
                       />
                     </label>
                   )}

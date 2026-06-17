@@ -16,6 +16,7 @@ import {
   Badge,
   Button,
   Card,
+  FieldInput,
   PaneHeader,
   SkeletonLine,
   StatePanel,
@@ -180,7 +181,7 @@ export default function WirelessRoute() {
         <Card className="p-5">
           <div className="flex flex-col gap-5 lg:flex-row xl:flex-col 2xl:flex-row">
             <div className="shrink-0">
-              <div className="grid h-60 w-60 place-items-center rounded-lg bg-slate-50 p-4">
+              <div className="grid aspect-square w-full max-w-52 place-items-center rounded-lg bg-slate-50 p-3 shadow-[0_20px_55px_rgba(0,0,0,0.28)]">
                 {qrDataUrl ? (
                   <img
                     src={qrDataUrl}
@@ -612,13 +613,13 @@ function TextField({
   return (
     <label className="grid gap-1.5">
       <span className="text-xs font-medium text-anvil-400">{label}</span>
-      <input
+      <FieldInput
         value={value}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
         inputMode={inputMode}
         maxLength={maxLength}
-        className="h-9 rounded-md border border-white/10 bg-white/[0.06] px-3 font-mono text-sm text-anvil-50 outline-none transition placeholder:text-anvil-600 focus:border-circuit-300/50 focus:ring-2 focus:ring-circuit-300/20"
+        className="font-mono"
       />
     </label>
   );

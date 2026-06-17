@@ -9,14 +9,7 @@ import {
   type FastbootDevice,
 } from "../lib/tauri";
 
-import {
-  Badge,
-  Button,
-  Card,
-  PaneHeader,
-  SkeletonLine,
-  StatePanel,
-} from "./common";
+import { Badge, Button, Card, PaneHeader, StatePanel } from "./common";
 
 type FastbootState =
   | { kind: "checking" }
@@ -210,7 +203,7 @@ export default function FastbootRoute() {
                             <Td>
                               <Badge tone="info">{d.mode}</Badge>
                             </Td>
-                            <Td>{d.product ?? "—"}</Td>
+                            <Td>{d.product ?? "Not reported"}</Td>
                             <Td>
                               <Button
                                 type="button"
@@ -284,9 +277,9 @@ export default function FastbootRoute() {
                 <div className="mt-5 rounded-md border border-amber-300/20 bg-amber-950/20 p-3">
                   <p className="text-xs leading-5 text-amber-200">
                     Fastboot operations can be destructive. Droidsmith
-                    intentionally does not expose flash, erase, or
-                    lock/unlock commands through the GUI. Use the Console tab
-                    with <code>fastboot</code> directly for those operations.
+                    intentionally does not expose flash, erase, or lock/unlock
+                    commands through the GUI. Use the Console tab with{" "}
+                    <code>fastboot</code> directly for those operations.
                   </p>
                 </div>
               </Card>

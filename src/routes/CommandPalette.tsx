@@ -69,17 +69,49 @@ export function CommandPalette({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center pt-[15vh] bg-black/60 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-start justify-center bg-black/65 px-4 pt-[12vh] backdrop-blur-sm"
       onClick={onClose}
       role="dialog"
       aria-modal="true"
-      aria-label="Command palette"
+      aria-labelledby="command-palette-title"
     >
       <div
-        className="mx-4 w-full max-w-lg overflow-hidden rounded-xl border border-white/10 bg-anvil-900 shadow-2xl"
+        className="w-full max-w-xl overflow-hidden rounded-lg border border-white/10 bg-anvil-900 shadow-2xl"
         onClick={(e) => e.stopPropagation()}
         onKeyDown={handleKeyDown}
       >
+        <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
+          <div>
+            <h2
+              id="command-palette-title"
+              className="text-sm font-semibold text-anvil-50"
+            >
+              Command palette
+            </h2>
+            <p className="mt-0.5 text-xs text-anvil-500">
+              Jump to a Droidsmith workspace.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close command palette"
+            className="grid h-8 w-8 place-items-center rounded-md text-anvil-400 transition hover:bg-white/[0.06] hover:text-anvil-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-circuit-300"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              className="h-4 w-4"
+              fill="none"
+              stroke="currentColor"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth="2"
+              aria-hidden="true"
+            >
+              <path d="m6 6 12 12M18 6 6 18" />
+            </svg>
+          </button>
+        </div>
         <div className="flex items-center gap-3 border-b border-white/10 px-4 py-3">
           <svg
             viewBox="0 0 24 24"
@@ -102,15 +134,15 @@ export function CommandPalette({
             aria-label="Command palette search"
             className="h-8 flex-1 bg-transparent text-sm text-anvil-50 outline-none placeholder:text-anvil-500"
           />
-          <kbd className="hidden rounded border border-white/10 px-1.5 py-0.5 font-mono text-[10px] text-anvil-500 sm:inline-block">
-            ESC
-          </kbd>
         </div>
 
         <div className="max-h-80 overflow-y-auto py-2" role="listbox">
           {filtered.length === 0 && (
-            <div className="px-4 py-6 text-center text-sm text-anvil-500">
-              No results for "{query}"
+            <div className="px-4 py-7 text-center">
+              <p className="text-sm font-medium text-anvil-200">
+                No matching workspace
+              </p>
+              <p className="mt-1 text-xs text-anvil-500">Try a route name.</p>
             </div>
           )}
           {filtered.map((item, index) => (
@@ -139,7 +171,7 @@ export function CommandPalette({
                   </span>
                 )}
               </span>
-              <span className="shrink-0 rounded-full border border-white/10 px-2 py-0.5 text-[10px] text-anvil-500">
+              <span className="shrink-0 rounded-md border border-white/10 px-2 py-0.5 text-[10px] text-anvil-500">
                 {item.category}
               </span>
             </button>
@@ -148,21 +180,4 @@ export function CommandPalette({
       </div>
     </div>
   );
-}
-
-export function useCommandPalette() {
-  const [open, setOpen] = useState(false);
-
-  useEffect(() => {
-    function handleKeyDown(e: KeyboardEvent) {
-      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
-        e.preventDefault();
-        setOpen((prev) => !prev);
-      }
-    }
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, []);
-
-  return { open, setOpen };
 }

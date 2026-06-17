@@ -16,7 +16,7 @@ export function PaneHeader({
   meta?: ReactNode;
 }) {
   return (
-    <header className="border-b border-white/10 pb-6">
+    <header className="border-b border-white/10 pb-6 sm:pb-7">
       <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-3">
@@ -31,7 +31,7 @@ export function PaneHeader({
           {meta && <div className="mt-4">{meta}</div>}
         </div>
         {actions && (
-          <div className="flex shrink-0 flex-wrap items-center gap-2">
+          <div className="flex shrink-0 flex-wrap items-center gap-2 sm:justify-end">
             {actions}
           </div>
         )}
@@ -67,7 +67,7 @@ export function PlaceholderBody({
         <ol className="mt-5 space-y-3">
           {bullets.map((bullet, index) => (
             <li key={bullet} className="flex gap-3 text-sm leading-6">
-              <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] font-mono text-[11px] text-anvil-300">
+              <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-white/10 bg-white/[0.04] font-mono text-[11px] text-anvil-300">
                 {index + 1}
               </span>
               <span className="text-anvil-200">{bullet}</span>
@@ -115,16 +115,15 @@ export function PlaceholderBody({
 export function Card({
   children,
   className = "",
-}: {
-  children: ReactNode;
-  className?: string;
-}) {
+  ...props
+}: ComponentPropsWithoutRef<"div">) {
   return (
     <div
       className={cn(
         "rounded-lg border border-white/10 bg-anvil-900/70 shadow-glow backdrop-blur",
         className || "p-4",
       )}
+      {...props}
     >
       {children}
     </div>
@@ -147,8 +146,8 @@ export function Button({
       className={cn(
         "inline-flex items-center justify-center gap-2 rounded-md font-medium transition duration-150",
         "focus:outline-none focus-visible:ring-2 focus-visible:ring-circuit-300 focus-visible:ring-offset-2 focus-visible:ring-offset-anvil-950",
-        "disabled:cursor-not-allowed disabled:opacity-45",
-        size === "sm" ? "h-8 px-2.5 text-xs" : "h-9 px-3.5 text-sm",
+        "disabled:cursor-not-allowed disabled:opacity-50",
+        size === "sm" ? "min-h-8 px-2.5 text-xs" : "min-h-9 px-3.5 text-sm",
         variant === "primary" &&
           "bg-circuit-300 text-anvil-950 shadow-[0_0_22px_rgba(34,211,238,0.22)] hover:bg-circuit-200 active:bg-circuit-400",
         variant === "secondary" &&
@@ -178,7 +177,7 @@ export function Badge({
   return (
     <span
       className={cn(
-        "inline-flex min-h-6 items-center rounded-full border px-2 py-0.5 text-xs font-medium",
+        "inline-flex min-h-6 items-center rounded-md border px-2 py-0.5 text-xs font-medium",
         tone === "neutral" && "border-white/10 bg-white/[0.05] text-anvil-300",
         tone === "info" &&
           "border-circuit-300/25 bg-circuit-300/10 text-circuit-100",
@@ -216,6 +215,7 @@ export function StatePanel({
 }) {
   return (
     <Card
+      role={tone === "danger" ? "alert" : "status"}
       className={cn(
         "p-5",
         tone === "info" && "border-circuit-300/20 bg-circuit-950/35",
@@ -225,17 +225,7 @@ export function StatePanel({
       )}
     >
       <div className="flex gap-4">
-        <span
-          className={cn(
-            "mt-1 h-2.5 w-2.5 shrink-0 rounded-full ring-4",
-            tone === "neutral" && "bg-anvil-300 ring-anvil-300/10",
-            tone === "info" && "bg-circuit-300 ring-circuit-300/10",
-            tone === "success" && "bg-emerald-300 ring-emerald-300/10",
-            tone === "warning" && "bg-amber-300 ring-amber-300/10",
-            tone === "danger" && "bg-red-300 ring-red-300/10",
-          )}
-          aria-hidden="true"
-        />
+        <StatusGlyph tone={tone} />
         <div className="min-w-0 flex-1">
           <h3 className="text-sm font-semibold text-anvil-50">{title}</h3>
           <div className="mt-2 text-sm leading-6 text-anvil-300">
@@ -254,9 +244,156 @@ export function SkeletonLine({ className }: { className?: string }) {
   return (
     <span
       className={cn(
-        "block h-3 animate-pulse rounded-full bg-white/[0.08]",
+        "block h-3 animate-pulse rounded-sm bg-white/[0.08]",
         className,
       )}
     />
+  );
+}
+
+export function FieldInput({
+  className,
+  ...props
+}: ComponentPropsWithoutRef<"input">) {
+  return (
+    <input
+      className={cn(
+        "h-9 rounded-md border border-white/10 bg-white/[0.06] px-3 text-sm text-anvil-50 outline-none transition",
+        "placeholder:text-anvil-600 hover:border-white/20 focus:border-circuit-300/60 focus:ring-2 focus:ring-circuit-300/20",
+        "disabled:cursor-not-allowed disabled:opacity-50",
+        className,
+      )}
+      {...props}
+    />
+  );
+}
+
+export function EmptyState({
+  title,
+  children,
+  actions,
+  className,
+}: {
+  title: string;
+  children: ReactNode;
+  actions?: ReactNode;
+  className?: string;
+}) {
+  return (
+    <div
+      className={cn(
+        "border-t border-white/10 bg-white/[0.018] px-5 py-7",
+        className,
+      )}
+    >
+      <div className="mx-auto max-w-xl text-center">
+        <p className="text-sm font-semibold text-anvil-100">{title}</p>
+        <div className="mt-2 text-sm leading-6 text-anvil-400">{children}</div>
+        {actions && (
+          <div className="mt-4 flex flex-wrap justify-center gap-2">
+            {actions}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export function TableHeaderCell({
+  children,
+  align = "left",
+  className,
+}: {
+  children: ReactNode;
+  align?: "left" | "right";
+  className?: string;
+}) {
+  return (
+    <th
+      className={cn(
+        "px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.08em] text-anvil-400",
+        align === "right" ? "text-right" : "text-left",
+        className,
+      )}
+    >
+      {children}
+    </th>
+  );
+}
+
+export function TableCell({
+  children,
+  align = "left",
+  className,
+}: {
+  children: ReactNode;
+  align?: "left" | "right";
+  className?: string;
+}) {
+  return (
+    <td
+      className={cn(
+        "px-4 py-4 align-middle text-anvil-200",
+        align === "right" && "text-right",
+        className,
+      )}
+    >
+      {children}
+    </td>
+  );
+}
+
+function StatusGlyph({
+  tone,
+}: {
+  tone: "neutral" | "info" | "success" | "warning" | "danger";
+}) {
+  return (
+    <span
+      className={cn(
+        "mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-md border",
+        tone === "neutral" && "border-white/10 bg-white/[0.05] text-anvil-300",
+        tone === "info" &&
+          "border-circuit-300/25 bg-circuit-300/10 text-circuit-100",
+        tone === "success" &&
+          "border-emerald-300/25 bg-emerald-300/10 text-emerald-100",
+        tone === "warning" &&
+          "border-amber-300/25 bg-amber-300/10 text-amber-100",
+        tone === "danger" && "border-red-300/25 bg-red-300/10 text-red-100",
+      )}
+      aria-hidden="true"
+    >
+      <svg
+        viewBox="0 0 24 24"
+        className="h-4 w-4"
+        fill="none"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="2"
+      >
+        {tone === "success" ? (
+          <path d="m6 12 4 4 8-8" />
+        ) : tone === "warning" ? (
+          <>
+            <path d="M12 8v5" />
+            <path d="M12 17h.01" />
+            <path d="M10.3 4.6 2.9 17.5A2 2 0 0 0 4.6 20h14.8a2 2 0 0 0 1.7-2.5L13.7 4.6a2 2 0 0 0-3.4 0Z" />
+          </>
+        ) : tone === "danger" ? (
+          <>
+            <path d="M12 8v5" />
+            <path d="M12 17h.01" />
+            <path d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18Z" />
+          </>
+        ) : (
+          <>
+            <path d="M12 16v-4" />
+            <path d="M12 8h.01" />
+            <path d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18Z" />
+          </>
+        )}
+      </svg>
+    </span>
   );
 }

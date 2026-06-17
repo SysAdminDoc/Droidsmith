@@ -23,6 +23,8 @@ import {
   Badge,
   Button,
   Card,
+  EmptyState,
+  FieldInput,
   PaneHeader,
   SkeletonLine,
   StatePanel,
@@ -179,7 +181,9 @@ export default function AppsRoute() {
   const filteredPackages =
     pkgState.kind === "ok"
       ? pkgState.packages.filter((p) =>
-          search ? p.package.toLowerCase().includes(search.toLowerCase()) : true,
+          search
+            ? p.package.toLowerCase().includes(search.toLowerCase())
+            : true,
         )
       : [];
 
@@ -234,7 +238,8 @@ export default function AppsRoute() {
         {devicesState.kind === "ok" && authorizedDevices.length === 0 && (
           <StatePanel title="No authorized devices" tone="warning">
             <p>
-              Connect a device and accept the USB debugging prompt, then refresh.
+              Connect a device and accept the USB debugging prompt, then
+              refresh.
             </p>
           </StatePanel>
         )}
@@ -258,13 +263,13 @@ export default function AppsRoute() {
                 }}
               />
               <div className="flex-1" />
-              <input
+              <FieldInput
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search packages..."
                 aria-label="Filter packages by name"
-                className="h-9 w-64 max-w-full rounded-md border border-white/10 bg-white/[0.06] px-3 font-mono text-sm text-anvil-50 outline-none transition placeholder:text-anvil-600 focus:border-circuit-300/50 focus:ring-2 focus:ring-circuit-300/20"
+                className="w-64 max-w-full font-mono"
               />
             </div>
 
@@ -363,7 +368,11 @@ function FilterChips({
   onChange: (f: PackageFilter) => void;
 }) {
   return (
-    <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label="Package filter">
+    <div
+      className="flex flex-wrap gap-1.5 rounded-lg border border-white/10 bg-white/[0.025] p-1"
+      role="radiogroup"
+      aria-label="Package filter"
+    >
       {FILTERS.map((f) => (
         <button
           key={f.value}
@@ -372,11 +381,11 @@ function FilterChips({
           aria-checked={active === f.value}
           onClick={() => onChange(f.value)}
           className={[
-            "rounded-full border px-3 py-1 text-xs font-medium transition",
+            "rounded-md border px-3 py-1.5 text-xs font-medium transition",
             "focus:outline-none focus-visible:ring-2 focus-visible:ring-circuit-300",
             active === f.value
-              ? "border-circuit-300/30 bg-circuit-300/10 text-circuit-100"
-              : "border-white/10 bg-white/[0.04] text-anvil-300 hover:border-white/20 hover:text-anvil-100",
+              ? "border-circuit-300/30 bg-circuit-300/12 text-circuit-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]"
+              : "border-transparent text-anvil-300 hover:bg-white/[0.05] hover:text-anvil-100",
           ].join(" ")}
         >
           {f.label}
@@ -421,9 +430,12 @@ function PackageTable({
         </div>
       </div>
       {packages.length === 0 ? (
-        <div className="p-6 text-center text-sm text-anvil-400">
-          No packages match the current filter and search.
-        </div>
+        <EmptyState title="No matching packages">
+          <p>
+            Adjust the search text or switch package filters to bring the list
+            back.
+          </p>
+        </EmptyState>
       ) : (
         <div className="overflow-x-auto">
           <table className="min-w-full text-sm">
@@ -547,17 +559,24 @@ function ActionOverlay({
   if (state.kind === "confirming") {
     return (
       <div
-        className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
-        role="dialog"
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 px-4 backdrop-blur-sm"
+        role="alertdialog"
         aria-modal="true"
         aria-labelledby="confirm-dialog-title"
-        onKeyDown={(e) => { if (e.key === "Escape") onCancel(); }}
+        aria-describedby="confirm-dialog-description"
       >
-        <Card className="mx-4 max-w-lg p-6">
-          <h3 id="confirm-dialog-title" className="text-lg font-semibold text-anvil-50">
-            Confirm action
+        <Card className="w-full max-w-lg p-6">
+          <Badge tone="warning">Review before applying</Badge>
+          <h3
+            id="confirm-dialog-title"
+            className="mt-4 text-lg font-semibold text-anvil-50"
+          >
+            Apply package action
           </h3>
-          <p className="mt-3 text-sm leading-6 text-anvil-200">
+          <p
+            id="confirm-dialog-description"
+            className="mt-3 text-sm leading-6 text-anvil-200"
+          >
             {state.plan.description}
           </p>
           <div className="mt-3 rounded-md border border-white/10 bg-white/[0.04] p-3">
@@ -574,7 +593,7 @@ function ActionOverlay({
               Cancel
             </Button>
             <Button type="button" variant="primary" onClick={onConfirm}>
-              Apply
+              Apply change
             </Button>
           </div>
         </Card>
@@ -584,12 +603,17 @@ function ActionOverlay({
 
   if (state.kind === "applying") {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-        <Card className="mx-4 max-w-lg p-6">
-          <h3 className="text-sm font-semibold text-anvil-50">Applying...</h3>
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 px-4 backdrop-blur-sm">
+        <Card className="w-full max-w-lg p-6" role="status">
+          <h3 className="text-sm font-semibold text-anvil-50">
+            Applying change
+          </h3>
           <p className="mt-2 text-xs text-anvil-400">
             {state.plan.description}
           </p>
+          <div className="mt-4 h-2 overflow-hidden rounded-sm bg-white/[0.08]">
+            <div className="h-full w-2/3 animate-pulse rounded-sm bg-circuit-300" />
+          </div>
         </Card>
       </div>
     );
@@ -679,9 +703,7 @@ function PermissionsPanel({
     <Card className="overflow-hidden p-0">
       <div className="flex items-center justify-between border-b border-white/10 p-4">
         <div>
-          <h3 className="text-sm font-semibold text-anvil-50">
-            Permissions
-          </h3>
+          <h3 className="text-sm font-semibold text-anvil-50">Permissions</h3>
           <code className="mt-1 block font-mono text-xs text-anvil-400">
             {pkg}
           </code>
@@ -697,11 +719,14 @@ function PermissionsPanel({
           <SkeletonLine className="mt-3 w-56" />
         </div>
       ) : perms.length === 0 ? (
-        <div className="p-4 text-sm text-anvil-400">
-          No runtime or install permissions found for this package.
-        </div>
+        <EmptyState title="No permissions found">
+          <p>This package did not report runtime or install permissions.</p>
+        </EmptyState>
       ) : (
-        <div className="divide-y divide-white/10" style={{ maxHeight: "20rem", overflowY: "auto" }}>
+        <div
+          className="divide-y divide-white/10"
+          style={{ maxHeight: "20rem", overflowY: "auto" }}
+        >
           {perms.map((p) => (
             <div
               key={p.permission}
@@ -715,10 +740,10 @@ function PermissionsPanel({
                 onClick={() => void togglePerm(p.permission, !p.granted)}
                 disabled={toggling === p.permission}
                 className={[
-                  "shrink-0 rounded-full px-3 py-1 text-xs font-medium transition",
+                  "shrink-0 rounded-md border px-3 py-1 text-xs font-medium transition",
                   p.granted
-                    ? "bg-emerald-300/10 text-emerald-100 hover:bg-emerald-300/20"
-                    : "bg-red-300/10 text-red-100 hover:bg-red-300/20",
+                    ? "border-emerald-300/20 bg-emerald-300/10 text-emerald-100 hover:bg-emerald-300/20"
+                    : "border-red-300/20 bg-red-300/10 text-red-100 hover:bg-red-300/20",
                   toggling === p.permission ? "opacity-50" : "",
                 ].join(" ")}
               >

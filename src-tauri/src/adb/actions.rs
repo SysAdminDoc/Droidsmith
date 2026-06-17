@@ -42,7 +42,6 @@ pub fn install_apk(
     serial: &str,
     apk_path: &str,
 ) -> Result<String, TransportError> {
-    use crate::adb::transport::DEFAULT_TIMEOUT;
     use std::io::Read as IoRead;
     use std::process::{Command, Stdio};
     use std::time::Instant;
