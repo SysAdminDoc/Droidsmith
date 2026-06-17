@@ -4,7 +4,6 @@ import {
   callListDevices,
   callShellRun,
   inTauri,
-  type Device,
   type ListDevicesResult,
 } from "../lib/tauri";
 
@@ -108,7 +107,8 @@ export default function ConsoleRoute() {
         e.preventDefault();
         const cmds = history.filter((h) => !h.error);
         if (cmds.length === 0) return;
-        const next = historyIndex < cmds.length - 1 ? historyIndex + 1 : historyIndex;
+        const next =
+          historyIndex < cmds.length - 1 ? historyIndex + 1 : historyIndex;
         setHistoryIndex(next);
         setCommand(cmds[cmds.length - 1 - next]?.command ?? "");
       } else if (e.key === "ArrowDown") {
@@ -179,13 +179,17 @@ export default function ConsoleRoute() {
 
         {authorizedDevices.length > 1 && (
           <Card className="p-4">
-            <h3 className="text-sm font-semibold text-anvil-50">Target device</h3>
+            <h3 className="text-sm font-semibold text-anvil-50">
+              Target device
+            </h3>
             <div className="mt-3 flex flex-wrap gap-2">
               {authorizedDevices.map((d) => (
                 <Button
                   key={d.serial}
                   type="button"
-                  variant={d.serial === selectedSerial ? "primary" : "secondary"}
+                  variant={
+                    d.serial === selectedSerial ? "primary" : "secondary"
+                  }
                   size="sm"
                   onClick={() => setSelectedSerial(d.serial)}
                 >

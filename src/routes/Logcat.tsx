@@ -7,7 +7,14 @@ import {
   type ListDevicesResult,
 } from "../lib/tauri";
 
-import { Badge, Button, Card, PaneHeader, StatePanel } from "./common";
+import {
+  Badge,
+  Button,
+  Card,
+  FieldInput,
+  PaneHeader,
+  StatePanel,
+} from "./common";
 
 type DevicesState =
   | { kind: "loading" }
@@ -163,13 +170,17 @@ export default function LogcatRoute() {
 
         {authorizedDevices.length > 1 && (
           <Card className="p-4">
-            <h3 className="text-sm font-semibold text-anvil-50">Target device</h3>
+            <h3 className="text-sm font-semibold text-anvil-50">
+              Target device
+            </h3>
             <div className="mt-3 flex flex-wrap gap-2">
               {authorizedDevices.map((d) => (
                 <Button
                   key={d.serial}
                   type="button"
-                  variant={d.serial === selectedSerial ? "primary" : "secondary"}
+                  variant={
+                    d.serial === selectedSerial ? "primary" : "secondary"
+                  }
                   size="sm"
                   onClick={() => {
                     setSelectedSerial(d.serial);
@@ -188,21 +199,25 @@ export default function LogcatRoute() {
           <>
             <div className="flex flex-wrap items-end gap-3">
               <label className="grid gap-1.5">
-                <span className="text-xs font-medium text-anvil-400">Tag filter</span>
-                <input
+                <span className="text-xs font-medium text-anvil-400">
+                  Tag filter
+                </span>
+                <FieldInput
                   type="text"
                   value={tagFilter}
                   onChange={(e) => setTagFilter(e.target.value)}
                   placeholder="ActivityManager"
-                  className="h-9 w-44 rounded-md border border-white/10 bg-white/[0.06] px-3 font-mono text-sm text-anvil-50 outline-none transition placeholder:text-anvil-600 focus:border-circuit-300/50 focus:ring-2 focus:ring-circuit-300/20"
+                  className="w-44 font-mono"
                 />
               </label>
               <label className="grid gap-1.5">
-                <span className="text-xs font-medium text-anvil-400">Min level</span>
+                <span className="text-xs font-medium text-anvil-400">
+                  Min level
+                </span>
                 <select
                   value={levelFilter}
                   onChange={(e) => setLevelFilter(e.target.value)}
-                  className="h-9 rounded-md border border-white/10 bg-white/[0.06] px-3 text-sm text-anvil-50 outline-none focus:border-circuit-300/50 focus:ring-2 focus:ring-circuit-300/20"
+                  className="h-9 rounded-md border border-white/10 bg-white/[0.06] px-3 text-sm text-anvil-50 outline-none transition hover:border-white/20 focus:border-circuit-300/60 focus:ring-2 focus:ring-circuit-300/20"
                 >
                   {LEVELS.map((l) => (
                     <option key={l} value={l}>
@@ -212,14 +227,16 @@ export default function LogcatRoute() {
                 </select>
               </label>
               <label className="grid gap-1.5">
-                <span className="text-xs font-medium text-anvil-400">Text search</span>
-                <input
+                <span className="text-xs font-medium text-anvil-400">
+                  Text search
+                </span>
+                <FieldInput
                   type="text"
                   value={textFilter}
                   onChange={(e) => setTextFilter(e.target.value)}
-                  placeholder="grep..."
+                  placeholder="grep"
                   aria-label="Filter log lines by text"
-                  className="h-9 w-44 rounded-md border border-white/10 bg-white/[0.06] px-3 font-mono text-sm text-anvil-50 outline-none transition placeholder:text-anvil-600 focus:border-circuit-300/50 focus:ring-2 focus:ring-circuit-300/20"
+                  className="w-44 font-mono"
                 />
               </label>
               <div className="flex gap-2">

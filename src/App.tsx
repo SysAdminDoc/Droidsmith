@@ -3,11 +3,8 @@ import type { ReactNode } from "react";
 
 import { callHeartbeat, inTauri, type Heartbeat } from "./lib/tauri";
 import { cn } from "./lib/cn";
-import {
-  CommandPalette,
-  useCommandPalette,
-  type PaletteItem,
-} from "./routes/CommandPalette";
+import { CommandPalette, type PaletteItem } from "./routes/CommandPalette";
+import { useCommandPalette } from "./routes/useCommandPalette";
 import OnboardingTour from "./routes/Onboarding";
 
 import DevicesRoute from "./routes/Devices";
@@ -137,11 +134,14 @@ export default function App() {
         Skip to content
       </a>
       <div
-        className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,0.12),transparent_34rem),linear-gradient(135deg,rgba(255,255,255,0.04),transparent_34%)]"
+        className="pointer-events-none fixed inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.035),transparent_28rem),linear-gradient(90deg,rgba(34,211,238,0.055),transparent_36rem)]"
         aria-hidden="true"
       />
       <div className="relative flex min-h-full flex-col lg:flex-row">
-        <aside className="border-b border-white/10 bg-anvil-950/90 p-4 backdrop-blur-xl lg:sticky lg:top-0 lg:flex lg:h-screen lg:w-80 lg:shrink-0 lg:flex-col lg:overflow-y-auto lg:border-b-0 lg:border-r lg:p-5" aria-label="Application sidebar">
+        <aside
+          className="border-b border-white/10 bg-anvil-950/90 p-4 backdrop-blur-xl lg:sticky lg:top-0 lg:flex lg:h-screen lg:w-80 lg:shrink-0 lg:flex-col lg:overflow-y-auto lg:border-b-0 lg:border-r lg:p-5"
+          aria-label="Application sidebar"
+        >
           <div className="flex items-start justify-between gap-4 lg:block">
             <Brand state={hb} />
             <div className="lg:mt-6">
@@ -150,7 +150,7 @@ export default function App() {
           </div>
 
           <nav
-            className="nav-strip mt-5 flex snap-x gap-2 overflow-x-auto pb-1 text-sm lg:block lg:space-y-1.5 lg:overflow-visible lg:pb-0"
+            className="nav-strip mt-5 flex snap-x gap-2 overflow-x-auto pb-2 text-sm lg:block lg:space-y-1.5 lg:overflow-visible lg:pb-0"
             aria-label="Primary"
           >
             {NAV_ITEMS.map((item) => (
@@ -163,16 +163,18 @@ export default function App() {
             ))}
           </nav>
 
+          <ShellActions
+            className="mt-3 lg:hidden"
+            onOpenPalette={() => palette.setOpen(true)}
+            onOpenGuide={() => setShowOnboarding(true)}
+          />
+          <ShellActions
+            className="mt-4 hidden lg:grid"
+            onOpenPalette={() => palette.setOpen(true)}
+            onOpenGuide={() => setShowOnboarding(true)}
+          />
+
           <div className="runtime-panel mt-5 hidden lg:block lg:mt-auto lg:pt-8">
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="mb-3 w-full"
-              onClick={() => setShowOnboarding(true)}
-            >
-              Getting started guide
-            </Button>
             <HeartbeatSidebarSummary
               state={hb}
               onRetry={() => void loadHeartbeat()}
@@ -180,7 +182,10 @@ export default function App() {
           </div>
         </aside>
 
-        <main id="main-content" className="min-w-0 flex-1 overflow-auto px-4 py-5 sm:px-6 lg:px-8 lg:py-8">
+        <main
+          id="main-content"
+          className="min-w-0 flex-1 overflow-auto px-4 py-5 sm:px-6 lg:px-8 lg:py-8"
+        >
           <div className="mx-auto max-w-7xl">{activeItem.render()}</div>
         </main>
       </div>
@@ -199,6 +204,49 @@ export default function App() {
           }
         }}
       />
+    </div>
+  );
+}
+
+function ShellActions({
+  className,
+  onOpenPalette,
+  onOpenGuide,
+  stacked = false,
+}: {
+  className?: string;
+  onOpenPalette: () => void;
+  onOpenGuide: () => void;
+  stacked?: boolean;
+}) {
+  return (
+    <div
+      className={cn(
+        "grid gap-2",
+        stacked ? "grid-cols-1" : "grid-cols-2",
+        className,
+      )}
+    >
+      <Button
+        type="button"
+        variant="secondary"
+        size="sm"
+        className="w-full"
+        onClick={onOpenPalette}
+      >
+        <SearchIcon />
+        Commands
+      </Button>
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        className="w-full"
+        onClick={onOpenGuide}
+      >
+        <GuideIcon />
+        Guide
+      </Button>
     </div>
   );
 }
@@ -385,7 +433,7 @@ function StatusDot({ tone }: { tone: "neutral" | "success" | "danger" }) {
   return (
     <span
       className={cn(
-        "h-2 w-2 rounded-full",
+        "h-2 w-2 rounded-sm",
         tone === "neutral" && "bg-anvil-400",
         tone === "success" && "bg-emerald-300",
         tone === "danger" && "bg-red-300",
@@ -411,6 +459,42 @@ function LogoMark() {
         />
       </svg>
     </span>
+  );
+}
+
+function SearchIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className="h-4 w-4"
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="1.8"
+      aria-hidden="true"
+    >
+      <circle cx="11" cy="11" r="7" />
+      <path d="m16.2 16.2 3.3 3.3" />
+    </svg>
+  );
+}
+
+function GuideIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className="h-4 w-4"
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="1.8"
+      aria-hidden="true"
+    >
+      <path d="M5 5.5A2.5 2.5 0 0 1 7.5 3H19v16H7.5A2.5 2.5 0 0 0 5 21.5v-16Z" />
+      <path d="M9 7h6M9 10h5" />
+    </svg>
   );
 }
 

@@ -15,6 +15,7 @@ use serde::Serialize;
 use tauri::Manager;
 
 use crate::adb::device::valid_serial;
+use crate::adb::transport::AdbTransport;
 use crate::adb::{self, actions};
 use crate::journal::{self, Journal, JournalEntry};
 use crate::quirks::{self, DeviceContext, Quirk};
@@ -374,9 +375,11 @@ pub fn push_file(
         .ok_or(adb::TransportError::AdbNotFound)?;
 
     let timeout = std::time::Duration::from_secs(120);
-    let output = run_adb_simple(std::path::Path::new(adb_path), &[
-        "-s", &serial, "push", &local_path, &remote_path,
-    ], timeout)?;
+    let output = run_adb_simple(
+        std::path::Path::new(adb_path),
+        &["-s", &serial, "push", &local_path, &remote_path],
+        timeout,
+    )?;
     Ok(output)
 }
 
@@ -395,9 +398,11 @@ pub fn pull_file(
         .ok_or(adb::TransportError::AdbNotFound)?;
 
     let timeout = std::time::Duration::from_secs(120);
-    let output = run_adb_simple(std::path::Path::new(adb_path), &[
-        "-s", &serial, "pull", &remote_path, &local_path,
-    ], timeout)?;
+    let output = run_adb_simple(
+        std::path::Path::new(adb_path),
+        &["-s", &serial, "pull", &remote_path, &local_path],
+        timeout,
+    )?;
     Ok(output)
 }
 
@@ -416,7 +421,7 @@ pub struct RemoteFileEntry {
     pub permissions: String,
 }
 
-fn parse_ls_output(stdout: &str, parent: &str) -> Vec<RemoteFileEntry> {
+fn parse_ls_output(stdout: &str, _parent: &str) -> Vec<RemoteFileEntry> {
     let mut out = Vec::new();
     for line in stdout.lines() {
         let line = line.trim();
@@ -576,7 +581,7 @@ pub fn fastboot_getvar(serial: String, key: String) -> Result<String, CommandErr
                     code: "spawn_failed",
                     message: e.to_string(),
                 })?;
-            Ok(String::from_utf8_lossy(&output.stderr).into_owned())
+            Ok::<String, CommandError>(String::from_utf8_lossy(&output.stderr).into_owned())
         })?;
     Ok(stdout)
 }
@@ -617,9 +622,7 @@ fn parse_fastboot_devices(stdout: &str) -> Vec<FastbootDevice> {
 
 /// Get network connections from the device using `ss -tunp`.
 #[tauri::command]
-pub fn list_network_connections(
-    serial: String,
-) -> Result<Vec<NetworkConnection>, CommandError> {
+pub fn list_network_connections(serial: String) -> Result<Vec<NetworkConnection>, CommandError> {
     validate_serial_arg(&serial)?;
     let resolution = adb::locate_adb();
     let path = resolution
@@ -699,9 +702,11 @@ pub fn backup_package(
         .ok_or(adb::TransportError::AdbNotFound)?;
 
     let timeout = std::time::Duration::from_secs(300);
-    let output = run_adb_simple(std::path::Path::new(adb_path), &[
-        "-s", &serial, "backup", "-f", &local_path, "-apk", &package,
-    ], timeout)?;
+    let output = run_adb_simple(
+        std::path::Path::new(adb_path),
+        &["-s", &serial, "backup", "-f", &local_path, "-apk", &package],
+        timeout,
+    )?;
     Ok(output)
 }
 
@@ -753,13 +758,16 @@ fn parse_permissions(stdout: &str) -> Vec<PermissionInfo> {
     let mut in_perms = false;
     for line in stdout.lines() {
         let trimmed = line.trim();
-        if trimmed.starts_with("runtime permissions:") || trimmed.starts_with("install permissions:")
+        if trimmed.starts_with("runtime permissions:")
+            || trimmed.starts_with("install permissions:")
         {
             in_perms = true;
             continue;
         }
         if in_perms {
-            if trimmed.is_empty() || (!trimmed.contains("android.permission") && !trimmed.contains(':')) {
+            if trimmed.is_empty()
+                || (!trimmed.contains("android.permission") && !trimmed.contains(':'))
+            {
                 if !trimmed.starts_with("android.permission") {
                     in_perms = false;
                     continue;
@@ -832,10 +840,7 @@ fn parse_ps_output(stdout: &str) -> Vec<ProcessInfo> {
 
 /// Take a screenshot on the device and pull it to a local path.
 #[tauri::command]
-pub fn take_screenshot(
-    serial: String,
-    local_path: String,
-) -> Result<String, CommandError> {
+pub fn take_screenshot(serial: String, local_path: String) -> Result<String, CommandError> {
     validate_serial_arg(&serial)?;
     let resolution = adb::locate_adb();
     let path = resolution
@@ -854,9 +859,7 @@ pub fn take_screenshot(
 /// Locate the scrcpy binary on the system. Returns the path if found.
 #[tauri::command]
 pub fn locate_scrcpy() -> Option<String> {
-    which::which("scrcpy")
-        .ok()
-        .map(|p| p.display().to_string())
+    which::which("scrcpy").ok().map(|p| p.display().to_string())
 }
 
 /// Launch scrcpy for a device. Fire-and-forget: we spawn the process
@@ -930,8 +933,12 @@ pub fn extract_apk(
         .path
         .as_ref()
         .ok_or(adb::TransportError::AdbNotFound)?;
-    let stdout =
-        actions::extract_apk(std::path::Path::new(path), &serial, &remote_path, &local_path)?;
+    let stdout = actions::extract_apk(
+        std::path::Path::new(path),
+        &serial,
+        &remote_path,
+        &local_path,
+    )?;
     Ok(stdout)
 }
 
@@ -958,7 +965,10 @@ pub fn list_packs(app: tauri::AppHandle) -> Result<Vec<crate::packs::Pack>, Comm
     for entry in entries {
         let Ok(entry) = entry else { continue };
         let path = entry.path();
-        if path.extension().is_some_and(|ext| ext == "yaml" || ext == "yml") {
+        if path
+            .extension()
+            .is_some_and(|ext| ext == "yaml" || ext == "yml")
+        {
             if let Ok(pack) = crate::packs::load(&path) {
                 packs.push(pack);
             }

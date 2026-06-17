@@ -13,7 +13,7 @@ const STEPS: Step[] = [
     content: [
       "Open Settings on your Android device.",
       "Scroll to About phone (or About tablet).",
-      "Tap Build number 7 times. You'll see a toast saying \"You are now a developer!\"",
+      'Tap Build number 7 times. You\'ll see a toast saying "You are now a developer!"',
       "Go back to Settings — Developer options is now visible.",
     ],
     tip: "On Samsung: Settings → About phone → Software information → Build number.",
@@ -25,7 +25,7 @@ const STEPS: Step[] = [
       "Scroll down to USB debugging and toggle it on.",
       "Confirm the warning dialog.",
     ],
-    tip: "On Xiaomi/MIUI: also enable \"USB debugging (Security settings)\" to allow app installs.",
+    tip: 'On Xiaomi/MIUI: also enable "USB debugging (Security settings)" to allow app installs.',
   },
   {
     title: "Install USB Drivers (Windows)",
@@ -41,8 +41,8 @@ const STEPS: Step[] = [
     title: "Connect and Authorize",
     content: [
       "Connect your device via USB cable.",
-      "Your device will show an \"Allow USB debugging?\" dialog.",
-      "Check \"Always allow from this computer\" if this is your personal machine.",
+      'Your device will show an "Allow USB debugging?" dialog.',
+      'Check "Always allow from this computer" if this is your personal machine.',
       "Tap Allow. The device should appear in Droidsmith's Devices tab.",
     ],
     tip: "If the dialog doesn't appear, try a different USB cable — charge-only cables don't support data.",
@@ -73,7 +73,9 @@ export default function OnboardingTour({
     <Card className="mx-auto max-w-2xl p-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <h2 className="text-lg font-semibold text-anvil-50">Getting started</h2>
+          <h2 className="text-lg font-semibold text-anvil-50">
+            Getting started
+          </h2>
           <Badge tone="info">
             {step + 1} / {STEPS.length}
           </Badge>
@@ -88,7 +90,7 @@ export default function OnboardingTour({
           <div
             key={i}
             className={[
-              "h-1 flex-1 rounded-full transition-colors",
+              "h-1 flex-1 rounded-sm transition-colors",
               i <= step ? "bg-circuit-300" : "bg-white/10",
             ].join(" ")}
           />
@@ -102,7 +104,7 @@ export default function OnboardingTour({
         <ol className="mt-4 space-y-3">
           {current.content.map((line, i) => (
             <li key={i} className="flex gap-3 text-sm leading-6 text-anvil-200">
-              <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] font-mono text-[11px] text-anvil-300">
+              <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-white/10 bg-white/[0.04] font-mono text-[11px] text-anvil-300">
                 {i + 1}
               </span>
               <span>{line}</span>

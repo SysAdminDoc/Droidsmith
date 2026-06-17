@@ -41,8 +41,16 @@ pub fn get_device_info(
     serial: &str,
 ) -> Result<DeviceInfo, TransportError> {
     let props = fetch_properties(transport, serial)?;
-    let battery = parse_battery(&transport.shell(serial, &["dumpsys", "battery"]).unwrap_or_default());
-    let storage = parse_df(&transport.shell(serial, &["df", "/data"]).unwrap_or_default());
+    let battery = parse_battery(
+        &transport
+            .shell(serial, &["dumpsys", "battery"])
+            .unwrap_or_default(),
+    );
+    let storage = parse_df(
+        &transport
+            .shell(serial, &["df", "/data"])
+            .unwrap_or_default(),
+    );
     let wifi_ip = get_prop(&props, "dhcp.wlan0.ipaddress")
         .or_else(|| get_prop(&props, "wifi.interface.ip"))
         .filter(|ip| !ip.is_empty());
@@ -176,8 +184,14 @@ garbage line
 ";
         let props = parse_getprop(stdout);
         assert_eq!(props.len(), 4);
-        assert_eq!(get_prop(&props, "ro.product.model").as_deref(), Some("Pixel 8"));
-        assert_eq!(get_prop(&props, "ro.build.version.sdk").as_deref(), Some("34"));
+        assert_eq!(
+            get_prop(&props, "ro.product.model").as_deref(),
+            Some("Pixel 8")
+        );
+        assert_eq!(
+            get_prop(&props, "ro.build.version.sdk").as_deref(),
+            Some("34")
+        );
         assert_eq!(get_prop(&props, "missing"), None);
     }
 
