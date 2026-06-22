@@ -20,7 +20,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@tauri-apps/api": "^2.1.1",
+    "@tauri-apps/api": "^2.11.1",
     "@tauri-apps/plugin-dialog": "^2.0.1",
     "qrcode-generator": "^2.0.4",
     "i18next": "^24.2.2",
@@ -30,7 +30,7 @@
     "zustand": "^5.0.2"
   },
   "devDependencies": {
-    "@tauri-apps/cli": "^2.1.0",
+    "@tauri-apps/cli": "^2.11.3",
     "@types/node": "^20.17.10",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
