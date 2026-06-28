@@ -17,13 +17,6 @@ instead.
 
 ## Research-Driven Additions
 
-- [ ] P0 - Bundle pack and quirk resources into production builds
-  Why: Debloat currently depends on `list_packs`, but production bundles do not ship `packs/` or `quirks/`, so the flagship debloat workflow can load empty data.
-  Evidence: `src-tauri/src/commands.rs:list_packs`, `src-tauri/src/commands.rs:explain_failure`, `src-tauri/tauri.conf.json`, UAD-NG/Canta package-list workflows.
-  Touches: `src-tauri/tauri.conf.json`, `src-tauri/src/commands.rs`, `packs/`, `quirks/`, `src/routes/Debloat.tsx`, bundle smoke tests.
-  Acceptance: Installed app lists bundled packs, loads bundled quirks without a manual path, and a build test fails if either resource directory is missing.
-  Complexity: M
-
 - [ ] P0 - Patch the Vite audit advisory and add local dependency-audit gates
   Why: Local `npm audit --json` reports a high-severity Vite advisory and a moderate transitive `js-yaml` advisory.
   Evidence: `npm audit --json`, `GHSA-fx2h-pf6j-xcff`, `GHSA-h67p-54hq-rp68`, open Dependabot PR #22 could not be closed because `gh` mutation auth returned 401.

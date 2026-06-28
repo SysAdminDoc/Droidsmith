@@ -14,7 +14,7 @@
 //! When an OEM blocks a `pm disable`, we surface the exact reason
 //! instead of "Operation failed".
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
@@ -88,13 +88,19 @@ pub struct DeviceContext<'a> {
 pub enum QuirkError {
     #[error("could not read {path:?}: {source}")]
     Read {
-        path: std::path::PathBuf,
+        path: PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
+    #[error("could not read quirks directory {path:?}: {source}")]
+    ReadDir {
+        path: PathBuf,
         #[source]
         source: std::io::Error,
     },
     #[error("could not parse {path:?}: {source}")]
     Parse {
-        path: std::path::PathBuf,
+        path: PathBuf,
         #[source]
         source: serde_yml::Error,
     },
@@ -112,6 +118,34 @@ pub fn load_file(path: &Path) -> Result<Vec<Quirk>, QuirkError> {
         path: path.to_path_buf(),
         source,
     })
+}
+
+pub fn load_dir(path: &Path) -> Result<Vec<Quirk>, QuirkError> {
+    let entries = std::fs::read_dir(path).map_err(|source| QuirkError::ReadDir {
+        path: path.to_path_buf(),
+        source,
+    })?;
+    let mut files = Vec::new();
+    for entry in entries {
+        let entry = entry.map_err(|source| QuirkError::ReadDir {
+            path: path.to_path_buf(),
+            source,
+        })?;
+        let file_path = entry.path();
+        if file_path
+            .extension()
+            .is_some_and(|ext| ext == "yaml" || ext == "yml")
+        {
+            files.push(file_path);
+        }
+    }
+    files.sort();
+
+    let mut out = Vec::new();
+    for file in files {
+        out.extend(load_file(&file)?);
+    }
+    Ok(out)
 }
 
 /// Search loaded quirks for the best match. Returns the first quirk
@@ -303,5 +337,37 @@ mod tests {
             }
             other => panic!("unexpected mitigation: {other:?}"),
         }
+    }
+
+    #[test]
+    fn load_dir_reads_yaml_files_in_stable_order() {
+        let dir = std::env::temp_dir().join("droidsmith-quirks-dir-test");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("readme.txt"), "ignored").unwrap();
+        std::fs::write(
+            dir.join("b.yaml"),
+            r#"
+- id: second
+  title: "Second"
+  explanation: "Second quirk"
+"#,
+        )
+        .unwrap();
+        std::fs::write(
+            dir.join("a.yaml"),
+            r#"
+- id: first
+  title: "First"
+  explanation: "First quirk"
+"#,
+        )
+        .unwrap();
+
+        let loaded = load_dir(&dir).unwrap();
+        assert_eq!(loaded.len(), 2);
+        assert_eq!(loaded[0].id, "first");
+        assert_eq!(loaded[1].id, "second");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

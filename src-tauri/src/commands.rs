@@ -993,23 +993,25 @@ pub struct ExplainFailureRequest {
     pub quirks_path: Option<String>,
 }
 
-/// Load quirks from the given YAML file (or the bundled default once
-/// resource shipping lands) and match against the failure context.
+/// Load quirks from the given YAML file or bundled resource directory and
+/// match against the failure context.
 /// Returns `Some(quirk)` if a rule applies, `None` if the raw error
 /// should be shown as-is.
 #[tauri::command]
-pub fn explain_failure(req: ExplainFailureRequest) -> Result<Option<Quirk>, CommandError> {
-    // Until R-006 ships bundled resources, the caller passes an
-    // explicit path. We refuse to silently load nothing — that would
-    // make false-negatives look like "no quirk applies".
-    let path = req.quirks_path.ok_or(CommandError {
-        code: "quirks_path_required",
-        message: "explain_failure currently requires an explicit quirks_path; bundled \
-                  resources land with R-006."
-            .to_string(),
-    })?;
-
-    let quirks_list = quirks::load_file(std::path::Path::new(&path)).map_err(|e| CommandError {
+pub fn explain_failure(
+    app: tauri::AppHandle,
+    req: ExplainFailureRequest,
+) -> Result<Option<Quirk>, CommandError> {
+    let quirks_list = if let Some(path) = req.quirks_path.as_deref() {
+        quirks::load_file(std::path::Path::new(path))
+    } else {
+        let resource_dir = app.path().resource_dir().map_err(|e| CommandError {
+            code: "no_resource_dir",
+            message: e.to_string(),
+        })?;
+        quirks::load_dir(&resource_dir.join("quirks"))
+    }
+    .map_err(|e| CommandError {
         code: "quirks_load_failed",
         message: e.to_string(),
     })?;
