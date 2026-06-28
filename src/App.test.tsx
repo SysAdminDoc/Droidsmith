@@ -13,15 +13,16 @@ describe("NAV_ITEMS", () => {
     }
   });
 
-  it("every item has a description so the placeholder pane is never bare", () => {
+  it("every item has translation keys for the label and description", () => {
     for (const item of NAV_ITEMS) {
-      expect(item.description.length).toBeGreaterThan(20);
+      expect(item.labelKey).toMatch(/^nav\./);
+      expect(item.descriptionKey).toMatch(/^[a-z]+\./);
     }
   });
 
-  it("labels are unique (active-pane lookup depends on it)", () => {
-    const labels = new Set(NAV_ITEMS.map((i) => i.label));
-    expect(labels.size).toBe(NAV_ITEMS.length);
+  it("ids are unique (active-pane lookup depends on them)", () => {
+    const ids = new Set(NAV_ITEMS.map((i) => i.id));
+    expect(ids.size).toBe(NAV_ITEMS.length);
   });
 
   it("milestones are sorted ascending — keeps the sidebar in roadmap order", () => {

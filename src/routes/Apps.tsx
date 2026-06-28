@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import type { ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 
 import {
   callApplyAction,
@@ -49,15 +50,16 @@ type ActionState =
   | { kind: "success"; message: string }
   | { kind: "error"; message: string };
 
-const FILTERS: { value: PackageFilter; label: string }[] = [
-  { value: "all", label: "All" },
-  { value: "user", label: "User" },
-  { value: "system", label: "System" },
-  { value: "enabled", label: "Enabled" },
-  { value: "disabled", label: "Disabled" },
+const FILTERS: { value: PackageFilter; labelKey: string }[] = [
+  { value: "all", labelKey: "apps.filterAll" },
+  { value: "user", labelKey: "apps.filterUser" },
+  { value: "system", labelKey: "apps.filterSystem" },
+  { value: "enabled", labelKey: "apps.filterEnabled" },
+  { value: "disabled", labelKey: "apps.filterDisabled" },
 ];
 
 export default function AppsRoute() {
+  const { t } = useTranslation();
   const [devicesState, setDevicesState] = useState<DevicesState>({
     kind: "loading",
   });
@@ -139,17 +141,19 @@ export default function AppsRoute() {
   const startBackup = useCallback(
     async (pkg: string) => {
       if (!selectedSerial) return;
-      setBackupMsg(`Backing up ${pkg}... Confirm on device.`);
+      setBackupMsg(t("apps.backingUp", { package: pkg }));
       try {
         await callBackupPackage(selectedSerial, pkg, `${pkg}.ab`);
-        setBackupMsg(`Backup saved to ${pkg}.ab`);
+        setBackupMsg(t("apps.backupSaved", { file: `${pkg}.ab` }));
       } catch (e) {
         setBackupMsg(
-          `Backup failed: ${e instanceof Error ? e.message : String(e)}`,
+          t("apps.backupFailed", {
+            message: e instanceof Error ? e.message : String(e),
+          }),
         );
       }
     },
-    [selectedSerial],
+    [selectedSerial, t],
   );
 
   const confirmAction = useCallback(async () => {
@@ -160,7 +164,7 @@ export default function AppsRoute() {
       await callApplyAction(plan);
       setActionState({
         kind: "success",
-        message: `${plan.description} — completed.`,
+        message: t("apps.planCompleted", { description: plan.description }),
       });
       void loadPackages();
     } catch (e) {
@@ -169,7 +173,7 @@ export default function AppsRoute() {
         message: e instanceof Error ? e.message : String(e),
       });
     }
-  }, [actionState, loadPackages]);
+  }, [actionState, loadPackages, t]);
 
   const authorizedDevices =
     devicesState.kind === "ok"
@@ -190,9 +194,9 @@ export default function AppsRoute() {
   return (
     <>
       <PaneHeader
-        title="Apps"
+        title={t("apps.title")}
         milestone="R-020"
-        description="Review installed packages with precise filters, and a preview-before-apply workflow for disable, enable, uninstall, and data-clear actions."
+        description={t("apps.description")}
         actions={
           selectedSerial ? (
             <Button
@@ -201,7 +205,9 @@ export default function AppsRoute() {
               disabled={pkgState.kind === "loading"}
               variant="primary"
             >
-              {pkgState.kind === "loading" ? "Loading..." : "Refresh packages"}
+              {pkgState.kind === "loading"
+                ? t("apps.loading")
+                : t("apps.refreshPackages")}
             </Button>
           ) : undefined
         }
@@ -209,8 +215,9 @@ export default function AppsRoute() {
           <div className="flex flex-wrap items-center gap-2">
             {devicesState.kind === "ok" && (
               <Badge tone="success">
-                {authorizedDevices.length} authorized{" "}
-                {authorizedDevices.length === 1 ? "device" : "devices"}
+                {t("apps.authorizedDeviceCount", {
+                  count: authorizedDevices.length,
+                })}
               </Badge>
             )}
             {selectedSerial && (
@@ -224,23 +231,20 @@ export default function AppsRoute() {
 
       <section className="mt-6 max-w-7xl space-y-4">
         {devicesState.kind === "no_tauri" && (
-          <StatePanel title="Desktop shell required" tone="info">
-            <p>Package management runs inside the Tauri runtime.</p>
+          <StatePanel title={t("common.desktopRequired")} tone="info">
+            <p>{t("apps.desktopRequiredBody")}</p>
           </StatePanel>
         )}
 
         {devicesState.kind === "error" && (
-          <StatePanel title="Device scan failed" tone="danger">
+          <StatePanel title={t("devices.scanFailed")} tone="danger">
             <p>{devicesState.message}</p>
           </StatePanel>
         )}
 
         {devicesState.kind === "ok" && authorizedDevices.length === 0 && (
-          <StatePanel title="No authorized devices" tone="warning">
-            <p>
-              Connect a device and accept the USB debugging prompt, then
-              refresh.
-            </p>
+          <StatePanel title={t("common.noAuthorized")} tone="warning">
+            <p>{t("apps.noAuthorizedBody")}</p>
           </StatePanel>
         )}
 
@@ -267,8 +271,8 @@ export default function AppsRoute() {
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search packages..."
-                aria-label="Filter packages by name"
+                placeholder={t("apps.searchPlaceholder")}
+                aria-label={t("apps.searchLabel")}
                 className="w-64 max-w-full font-mono"
               />
             </div>
@@ -276,7 +280,10 @@ export default function AppsRoute() {
             {pkgState.kind === "loading" && <PackagesSkeleton />}
 
             {pkgState.kind === "error" && (
-              <StatePanel title="Package enumeration failed" tone="danger">
+              <StatePanel
+                title={t("apps.packageEnumerationFailed")}
+                tone="danger"
+              >
                 <p>{pkgState.message}</p>
               </StatePanel>
             )}
@@ -303,7 +310,7 @@ export default function AppsRoute() {
 
         {backupMsg && (
           <StatePanel
-            title="Backup"
+            title={t("apps.backup")}
             tone="info"
             actions={
               <Button
@@ -312,7 +319,7 @@ export default function AppsRoute() {
                 variant="ghost"
                 onClick={() => setBackupMsg(null)}
               >
-                Dismiss
+                {t("common.dismiss")}
               </Button>
             }
           >
@@ -340,9 +347,13 @@ function DevicePicker({
   selected: string | null;
   onSelect: (serial: string) => void;
 }) {
+  const { t } = useTranslation();
+
   return (
     <Card className="p-4">
-      <h3 className="text-sm font-semibold text-anvil-50">Select device</h3>
+      <h3 className="text-sm font-semibold text-anvil-50">
+        {t("common.selectDevice")}
+      </h3>
       <div className="mt-3 flex flex-wrap gap-2">
         {devices.map((d) => (
           <Button
@@ -367,11 +378,13 @@ function FilterChips({
   active: PackageFilter;
   onChange: (f: PackageFilter) => void;
 }) {
+  const { t } = useTranslation();
+
   return (
     <div
       className="flex flex-wrap gap-1.5 rounded-lg border border-white/10 bg-white/[0.025] p-1"
       role="radiogroup"
-      aria-label="Package filter"
+      aria-label={t("apps.packageFilterLabel")}
     >
       {FILTERS.map((f) => (
         <button
@@ -388,7 +401,7 @@ function FilterChips({
               : "border-transparent text-anvil-300 hover:bg-white/[0.05] hover:text-anvil-100",
           ].join(" ")}
         >
-          {f.label}
+          {t(f.labelKey)}
         </button>
       ))}
     </div>
@@ -408,43 +421,46 @@ function PackageTable({
   onInspect: (pkg: string) => void;
   onBackup: (pkg: string) => void;
 }) {
+  const { t } = useTranslation();
+
   return (
     <Card className="overflow-hidden p-0">
       <div className="flex flex-col gap-3 border-b border-white/10 p-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h3 className="text-sm font-semibold text-anvil-50">
-            Installed packages
+            {t("apps.installedPackages")}
           </h3>
           <p className="mt-1 text-xs text-anvil-400">
-            Actions preview before applying. Disable and enable are reversible
-            via the journal.
+            {t("apps.installedPackagesBody")}
           </p>
         </div>
         <div className="flex gap-2">
           {packages.length !== totalCount && (
             <Badge tone="info">
-              {packages.length} / {totalCount} shown
+              {t("apps.shownCount", {
+                shown: packages.length,
+                total: totalCount,
+              })}
             </Badge>
           )}
-          <Badge tone="neutral">{totalCount} total</Badge>
+          <Badge tone="neutral">
+            {t("common.totalCount", { count: totalCount })}
+          </Badge>
         </div>
       </div>
       {packages.length === 0 ? (
-        <EmptyState title="No matching packages">
-          <p>
-            Adjust the search text or switch package filters to bring the list
-            back.
-          </p>
+        <EmptyState title={t("apps.noMatchingPackages")}>
+          <p>{t("apps.noMatchingPackagesBody")}</p>
         </EmptyState>
       ) : (
         <div className="overflow-x-auto">
           <table className="min-w-full text-sm">
             <thead className="bg-white/[0.04]">
               <tr>
-                <Th>Package</Th>
-                <Th>Type</Th>
-                <Th>State</Th>
-                <Th>Actions</Th>
+                <Th>{t("apps.package")}</Th>
+                <Th>{t("apps.type")}</Th>
+                <Th>{t("devices.state")}</Th>
+                <Th>{t("apps.actions")}</Th>
               </tr>
             </thead>
             <tbody className="divide-y divide-white/10">
@@ -460,19 +476,25 @@ function PackageTable({
                       </code>
                       {pkg.installer && (
                         <p className="mt-1 text-[11px] text-anvil-500">
-                          via {pkg.installer}
+                          {t("apps.viaInstaller", {
+                            installer: pkg.installer,
+                          })}
                         </p>
                       )}
                     </div>
                   </Td>
                   <Td>
                     <Badge tone={pkg.system ? "warning" : "neutral"}>
-                      {pkg.system ? "System" : "User"}
+                      {pkg.system
+                        ? t("apps.filterSystem")
+                        : t("apps.filterUser")}
                     </Badge>
                   </Td>
                   <Td>
                     <Badge tone={pkg.enabled ? "success" : "danger"}>
-                      {pkg.enabled ? "Enabled" : "Disabled"}
+                      {pkg.enabled
+                        ? t("apps.filterEnabled")
+                        : t("apps.filterDisabled")}
                     </Badge>
                   </Td>
                   <Td>
@@ -484,7 +506,7 @@ function PackageTable({
                             size="sm"
                             onClick={() => onAction(pkg.package, "disable")}
                           >
-                            Disable
+                            {t("apps.disable")}
                           </Button>
                           <Button
                             type="button"
@@ -494,7 +516,7 @@ function PackageTable({
                             }
                             variant="danger"
                           >
-                            Uninstall
+                            {t("apps.uninstall")}
                           </Button>
                         </>
                       ) : (
@@ -504,7 +526,7 @@ function PackageTable({
                           variant="primary"
                           onClick={() => onAction(pkg.package, "enable")}
                         >
-                          Enable
+                          {t("apps.enable")}
                         </Button>
                       )}
                       <Button
@@ -513,7 +535,7 @@ function PackageTable({
                         variant="ghost"
                         onClick={() => onAction(pkg.package, "force_stop")}
                       >
-                        Stop
+                        {t("apps.stop")}
                       </Button>
                       <Button
                         type="button"
@@ -521,7 +543,7 @@ function PackageTable({
                         variant="ghost"
                         onClick={() => onInspect(pkg.package)}
                       >
-                        Perms
+                        {t("apps.perms")}
                       </Button>
                       <Button
                         type="button"
@@ -529,7 +551,7 @@ function PackageTable({
                         variant="ghost"
                         onClick={() => onBackup(pkg.package)}
                       >
-                        Backup
+                        {t("apps.backup")}
                       </Button>
                     </div>
                   </Td>
@@ -554,6 +576,8 @@ function ActionOverlay({
   onCancel: () => void;
   onDismiss: () => void;
 }) {
+  const { t } = useTranslation();
+
   if (state.kind === "idle") return null;
 
   if (state.kind === "confirming") {
@@ -566,12 +590,12 @@ function ActionOverlay({
         aria-describedby="confirm-dialog-description"
       >
         <Card className="w-full max-w-lg p-6">
-          <Badge tone="warning">Review before applying</Badge>
+          <Badge tone="warning">{t("apps.reviewBeforeApplying")}</Badge>
           <h3
             id="confirm-dialog-title"
             className="mt-4 text-lg font-semibold text-anvil-50"
           >
-            Apply package action
+            {t("apps.applyPackageAction")}
           </h3>
           <p
             id="confirm-dialog-description"
@@ -581,7 +605,7 @@ function ActionOverlay({
           </p>
           <div className="mt-3 rounded-md border border-white/10 bg-white/[0.04] p-3">
             <p className="text-xs font-medium text-anvil-400">
-              ADB command preview
+              {t("apps.commandPreview")}
             </p>
             <code className="mt-1 block font-mono text-xs text-anvil-100">
               adb -s {state.plan.request.serial} shell{" "}
@@ -590,10 +614,10 @@ function ActionOverlay({
           </div>
           <div className="mt-5 flex justify-end gap-3">
             <Button type="button" onClick={onCancel}>
-              Cancel
+              {t("apps.cancel")}
             </Button>
             <Button type="button" variant="primary" onClick={onConfirm}>
-              Apply change
+              {t("apps.applyChange")}
             </Button>
           </div>
         </Card>
@@ -606,7 +630,7 @@ function ActionOverlay({
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 px-4 backdrop-blur-sm">
         <Card className="w-full max-w-lg p-6" role="status">
           <h3 className="text-sm font-semibold text-anvil-50">
-            Applying change
+            {t("apps.applyingChange")}
           </h3>
           <p className="mt-2 text-xs text-anvil-400">
             {state.plan.description}
@@ -622,11 +646,11 @@ function ActionOverlay({
   if (state.kind === "success") {
     return (
       <StatePanel
-        title="Action completed"
+        title={t("apps.actionCompleted")}
         tone="success"
         actions={
           <Button type="button" size="sm" onClick={onDismiss}>
-            Dismiss
+            {t("common.dismiss")}
           </Button>
         }
       >
@@ -637,11 +661,11 @@ function ActionOverlay({
 
   return (
     <StatePanel
-      title="Action failed"
+      title={t("apps.actionFailed")}
       tone="danger"
       actions={
         <Button type="button" size="sm" variant="danger" onClick={onDismiss}>
-          Dismiss
+          {t("common.dismiss")}
         </Button>
       }
     >
@@ -659,6 +683,7 @@ function PermissionsPanel({
   pkg: string;
   onClose: () => void;
 }) {
+  const { t } = useTranslation();
   const [perms, setPerms] = useState<PermissionInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [toggling, setToggling] = useState<string | null>(null);
@@ -703,13 +728,15 @@ function PermissionsPanel({
     <Card className="overflow-hidden p-0">
       <div className="flex items-center justify-between border-b border-white/10 p-4">
         <div>
-          <h3 className="text-sm font-semibold text-anvil-50">Permissions</h3>
+          <h3 className="text-sm font-semibold text-anvil-50">
+            {t("apps.permissions")}
+          </h3>
           <code className="mt-1 block font-mono text-xs text-anvil-400">
             {pkg}
           </code>
         </div>
         <Button type="button" size="sm" variant="ghost" onClick={onClose}>
-          Close
+          {t("common.close")}
         </Button>
       </div>
       {loading ? (
@@ -719,8 +746,8 @@ function PermissionsPanel({
           <SkeletonLine className="mt-3 w-56" />
         </div>
       ) : perms.length === 0 ? (
-        <EmptyState title="No permissions found">
-          <p>This package did not report runtime or install permissions.</p>
+        <EmptyState title={t("apps.noPermissionsFound")}>
+          <p>{t("apps.noPermissionsFoundBody")}</p>
         </EmptyState>
       ) : (
         <div
@@ -747,7 +774,7 @@ function PermissionsPanel({
                   toggling === p.permission ? "opacity-50" : "",
                 ].join(" ")}
               >
-                {p.granted ? "Granted" : "Denied"}
+                {p.granted ? t("apps.granted") : t("apps.denied")}
               </button>
             </div>
           ))}
@@ -758,8 +785,13 @@ function PermissionsPanel({
 }
 
 function PackagesSkeleton() {
+  const { t } = useTranslation();
+
   return (
-    <Card className="overflow-hidden p-0" aria-label="Loading packages">
+    <Card
+      className="overflow-hidden p-0"
+      aria-label={t("apps.loadingPackages")}
+    >
       <div className="border-b border-white/10 p-4">
         <SkeletonLine className="w-40" />
         <SkeletonLine className="mt-3 w-64 max-w-full" />

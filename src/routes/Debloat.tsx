@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 import {
   callApplyAction,
@@ -47,6 +48,7 @@ type WizardStep =
   | { step: "done"; pack: Pack; applied: number; errors: string[] };
 
 export default function DebloatRoute() {
+  const { t } = useTranslation();
   const [devicesState, setDevicesState] = useState<DevicesState>({
     kind: "loading",
   });
@@ -164,9 +166,9 @@ export default function DebloatRoute() {
   return (
     <>
       <PaneHeader
-        title="Debloat"
+        title={t("debloat.title")}
         milestone="R-033"
-        description="Choose an OEM-aware pack, understand the risk before applying it, and keep every change reversible through the journal."
+        description={t("debloat.description")}
         meta={
           <div className="flex flex-wrap items-center gap-2">
             {selectedSerial && (
@@ -175,7 +177,9 @@ export default function DebloatRoute() {
               </Badge>
             )}
             {packsState.kind === "ok" && (
-              <Badge tone="neutral">{packsState.packs.length} packs</Badge>
+              <Badge tone="neutral">
+                {t("debloat.packCount", { count: packsState.packs.length })}
+              </Badge>
             )}
           </div>
         }
@@ -183,14 +187,14 @@ export default function DebloatRoute() {
 
       <section className="mt-6 max-w-7xl space-y-4">
         {devicesState.kind === "no_tauri" && (
-          <StatePanel title="Desktop shell required" tone="info">
-            <p>Debloat operations run inside the Tauri runtime.</p>
+          <StatePanel title={t("common.desktopRequired")} tone="info">
+            <p>{t("debloat.desktopRequiredBody")}</p>
           </StatePanel>
         )}
 
         {devicesState.kind === "ok" && authorizedDevices.length === 0 && (
-          <StatePanel title="No authorized devices" tone="warning">
-            <p>Connect a device and accept the USB debugging prompt.</p>
+          <StatePanel title={t("common.noAuthorized")} tone="warning">
+            <p>{t("debloat.noAuthorizedBody")}</p>
           </StatePanel>
         )}
 
@@ -251,9 +255,13 @@ function DevicePicker({
   selected: string | null;
   onSelect: (serial: string) => void;
 }) {
+  const { t } = useTranslation();
+
   return (
     <Card className="p-4">
-      <h3 className="text-sm font-semibold text-anvil-50">Select device</h3>
+      <h3 className="text-sm font-semibold text-anvil-50">
+        {t("common.selectDevice")}
+      </h3>
       <div className="mt-3 flex flex-wrap gap-2">
         {devices.map((d) => (
           <Button
@@ -280,6 +288,8 @@ function PackPicker({
   onSelect: (pack: Pack) => void;
   onRefresh: () => void;
 }) {
+  const { t } = useTranslation();
+
   if (state.kind === "loading") {
     return (
       <Card className="p-5">
@@ -299,11 +309,11 @@ function PackPicker({
   if (state.kind === "error") {
     return (
       <StatePanel
-        title="Could not load packs"
+        title={t("debloat.loadPacksFailed")}
         tone="danger"
         actions={
           <Button type="button" size="sm" variant="danger" onClick={onRefresh}>
-            Retry
+            {t("runtime.retry")}
           </Button>
         }
       >
@@ -314,10 +324,11 @@ function PackPicker({
 
   if (state.packs.length === 0) {
     return (
-      <StatePanel title="No debloat packs available" tone="info">
+      <StatePanel title={t("debloat.noPacksTitle")} tone="info">
         <p>
-          Drop <code>.yaml</code> pack files into the <code>packs/</code>{" "}
-          directory. See <code>packs/_example.yaml</code> for the schema.
+          {t("debloat.noPacksBodyPrefix")} <code>.yaml</code>{" "}
+          {t("debloat.noPacksBodyMiddle")} <code>packs/</code>{" "}
+          {t("debloat.noPacksBodySuffix")} <code>packs/_example.yaml</code>.
         </p>
       </StatePanel>
     );
@@ -326,11 +337,10 @@ function PackPicker({
   return (
     <Card className="p-5">
       <h3 className="text-sm font-semibold text-anvil-50">
-        Choose a debloat pack
+        {t("debloat.choosePack")}
       </h3>
       <p className="mt-1 text-xs text-anvil-400">
-        Each pack targets a specific OEM or ROM. Packages are grouped by removal
-        safety tier.
+        {t("debloat.choosePackBody")}
       </p>
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
         {state.packs.map((pack) => (
@@ -344,7 +354,11 @@ function PackPicker({
               <h4 className="text-sm font-semibold text-anvil-50">
                 {pack.name}
               </h4>
-              <Badge tone="neutral">{pack.packages.length} pkgs</Badge>
+              <Badge tone="neutral">
+                {t("debloat.packageShortCount", {
+                  count: pack.packages.length,
+                })}
+              </Badge>
             </div>
             <p className="mt-2 line-clamp-3 text-xs leading-5 text-anvil-400">
               {pack.description}
@@ -381,6 +395,7 @@ function PackPreview({
   onApply: () => void;
   onBack: () => void;
 }) {
+  const { t } = useTranslation();
   const tiers = groupByTier(pack.packages);
 
   return (
@@ -392,8 +407,12 @@ function PackPreview({
             <p className="mt-1 text-sm text-anvil-400">{pack.description}</p>
           </div>
           <div className="flex gap-2">
-            <Badge tone="info">{selected.size} selected</Badge>
-            <Badge tone="neutral">{pack.packages.length} total</Badge>
+            <Badge tone="info">
+              {t("debloat.selected", { count: selected.size })}
+            </Badge>
+            <Badge tone="neutral">
+              {t("common.totalCount", { count: pack.packages.length })}
+            </Badge>
           </div>
         </div>
       </Card>
@@ -407,14 +426,16 @@ function PackPreview({
               <div className="flex items-center justify-between border-b border-white/10 p-4">
                 <div className="flex items-center gap-2">
                   <Badge tone={tierTone(tier)}>
-                    {tier.charAt(0).toUpperCase() + tier.slice(1)}
+                    {t(`debloat.tiers.${tier}`)}
                   </Badge>
                   <span className="text-xs text-anvil-400">
-                    {entries.length} packages
+                    {t("common.packageCount", { count: entries.length })}
                   </span>
                 </div>
                 <span className="text-xs text-anvil-500">
-                  {entries.filter((e) => selected.has(e.id)).length} selected
+                  {t("debloat.selected", {
+                    count: entries.filter((e) => selected.has(e.id)).length,
+                  })}
                 </span>
               </div>
               <div className="divide-y divide-white/10">
@@ -438,7 +459,9 @@ function PackPreview({
                       </p>
                       {entry.needed_by.length > 0 && (
                         <p className="mt-1 text-[11px] text-amber-300/80">
-                          Needed by: {entry.needed_by.join(", ")}
+                          {t("debloat.neededBy", {
+                            items: entry.needed_by.join(", "),
+                          })}
                         </p>
                       )}
                       {entry.labels.length > 0 && (
@@ -464,7 +487,7 @@ function PackPreview({
 
       <div className="flex justify-between">
         <Button type="button" onClick={onBack}>
-          Back
+          {t("debloat.back")}
         </Button>
         <Button
           type="button"
@@ -472,7 +495,7 @@ function PackPreview({
           onClick={onApply}
           disabled={selected.size === 0}
         >
-          Apply {selected.size} {selected.size === 1 ? "package" : "packages"}
+          {t("debloat.applyCount", { count: selected.size })}
         </Button>
       </div>
     </>
@@ -490,17 +513,16 @@ function ApplyProgress({
   applied: number;
   errors: string[];
 }) {
+  const { t } = useTranslation();
   const pct = total > 0 ? Math.round((applied / total) * 100) : 0;
   return (
     <Card className="p-5">
       <h3 className="text-sm font-semibold text-anvil-50">
-        Applying {pack.name}
+        {t("debloat.applyingPack", { name: pack.name })}
       </h3>
       <div className="mt-4">
         <div className="flex items-center justify-between text-xs text-anvil-400">
-          <span>
-            {applied} / {total} packages
-          </span>
+          <span>{t("debloat.progressCount", { applied, total })}</span>
           <span>{pct}%</span>
         </div>
         <div className="mt-2 h-2 overflow-hidden rounded-sm bg-white/[0.08]">
@@ -513,7 +535,7 @@ function ApplyProgress({
       {errors.length > 0 && (
         <div className="mt-4">
           <p className="text-xs font-medium text-red-300">
-            {errors.length} {errors.length === 1 ? "error" : "errors"}
+            {t("debloat.errorCount", { count: errors.length })}
           </p>
           <ul className="mt-2 space-y-1">
             {errors.map((e) => (
@@ -539,6 +561,8 @@ function ApplyResult({
   errors: string[];
   onReset: () => void;
 }) {
+  const { t } = useTranslation();
+
   return (
     <>
       <StatePanel
@@ -546,26 +570,22 @@ function ApplyResult({
         tone={errors.length > 0 ? "warning" : "success"}
         actions={
           <Button type="button" size="sm" onClick={onReset}>
-            Start over
+            {t("debloat.startOver")}
           </Button>
         }
       >
         <p>
-          {applied} {applied === 1 ? "package" : "packages"} disabled
-          successfully.
+          {t("debloat.disabledCount", { count: applied })}
           {errors.length > 0 &&
-            ` ${errors.length} ${errors.length === 1 ? "package" : "packages"} failed.`}
+            ` ${t("debloat.failedCount", { count: errors.length })}`}
         </p>
-        <p className="mt-2">
-          All changes are recorded in the per-device journal and can be undone
-          from the Apps tab.
-        </p>
+        <p className="mt-2">{t("debloat.journalUndo")}</p>
       </StatePanel>
 
       {errors.length > 0 && (
         <Card className="p-4">
           <h4 className="text-xs font-semibold text-red-200">
-            Failed packages
+            {t("debloat.failedPackages")}
           </h4>
           <ul className="mt-2 space-y-1">
             {errors.map((e) => (

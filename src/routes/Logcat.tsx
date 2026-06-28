@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 import {
   callListDevices,
@@ -33,6 +34,7 @@ type LogLine = {
 const LEVELS = ["V", "D", "I", "W", "E", "F"] as const;
 
 export default function LogcatRoute() {
+  const { t } = useTranslation();
   const [devicesState, setDevicesState] = useState<DevicesState>({
     kind: "loading",
   });
@@ -139,9 +141,9 @@ export default function LogcatRoute() {
   return (
     <>
       <PaneHeader
-        title="Logcat"
+        title={t("logcat.title")}
         milestone="R-051"
-        description="Tail device logs with level and text filters. Polling-based capture refreshes every 2 seconds."
+        description={t("logcat.description")}
         meta={
           <div className="flex flex-wrap items-center gap-2">
             {selectedSerial && (
@@ -149,29 +151,31 @@ export default function LogcatRoute() {
                 <code className="font-mono">{selectedSerial}</code>
               </Badge>
             )}
-            {tailing && <Badge tone="success">Tailing</Badge>}
-            <Badge tone="neutral">{filteredLines.length} lines</Badge>
+            {tailing && <Badge tone="success">{t("logcat.tailing")}</Badge>}
+            <Badge tone="neutral">
+              {t("logcat.lineCount", { count: filteredLines.length })}
+            </Badge>
           </div>
         }
       />
 
       <section className="mt-6 max-w-6xl space-y-4">
         {devicesState.kind === "no_tauri" && (
-          <StatePanel title="Desktop shell required" tone="info">
-            <p>Logcat runs inside the Tauri runtime.</p>
+          <StatePanel title={t("common.desktopRequired")} tone="info">
+            <p>{t("logcat.desktopRequiredBody")}</p>
           </StatePanel>
         )}
 
         {devicesState.kind === "ok" && authorizedDevices.length === 0 && (
-          <StatePanel title="No authorized devices" tone="warning">
-            <p>Connect and authorize a device to view logs.</p>
+          <StatePanel title={t("common.noAuthorized")} tone="warning">
+            <p>{t("logcat.noAuthorizedBody")}</p>
           </StatePanel>
         )}
 
         {authorizedDevices.length > 1 && (
           <Card className="p-4">
             <h3 className="text-sm font-semibold text-anvil-50">
-              Target device
+              {t("common.targetDevice")}
             </h3>
             <div className="mt-3 flex flex-wrap gap-2">
               {authorizedDevices.map((d) => (
@@ -200,7 +204,7 @@ export default function LogcatRoute() {
             <div className="flex flex-wrap items-end gap-3">
               <label className="grid gap-1.5">
                 <span className="text-xs font-medium text-anvil-400">
-                  Tag filter
+                  {t("logcat.tagFilter")}
                 </span>
                 <FieldInput
                   type="text"
@@ -212,7 +216,7 @@ export default function LogcatRoute() {
               </label>
               <label className="grid gap-1.5">
                 <span className="text-xs font-medium text-anvil-400">
-                  Min level
+                  {t("logcat.minLevel")}
                 </span>
                 <select
                   value={levelFilter}
@@ -221,21 +225,21 @@ export default function LogcatRoute() {
                 >
                   {LEVELS.map((l) => (
                     <option key={l} value={l}>
-                      {levelName(l)}
+                      {t(levelNameKey(l))}
                     </option>
                   ))}
                 </select>
               </label>
               <label className="grid gap-1.5">
                 <span className="text-xs font-medium text-anvil-400">
-                  Text search
+                  {t("logcat.textSearch")}
                 </span>
                 <FieldInput
                   type="text"
                   value={textFilter}
                   onChange={(e) => setTextFilter(e.target.value)}
                   placeholder="grep"
-                  aria-label="Filter log lines by text"
+                  aria-label={t("logcat.textSearchLabel")}
                   className="w-44 font-mono"
                 />
               </label>
@@ -247,7 +251,7 @@ export default function LogcatRoute() {
                     size="sm"
                     onClick={startTailing}
                   >
-                    Start tail
+                    {t("logcat.startTail")}
                   </Button>
                 ) : (
                   <>
@@ -257,14 +261,16 @@ export default function LogcatRoute() {
                       size="sm"
                       onClick={stopTailing}
                     >
-                      Stop
+                      {t("logcat.stop")}
                     </Button>
                     <Button
                       type="button"
                       size="sm"
                       onClick={() => setPaused((p) => !p)}
                     >
-                      {paused ? "Resume scroll" : "Pause scroll"}
+                      {paused
+                        ? t("logcat.resumeScroll")
+                        : t("logcat.pauseScroll")}
                     </Button>
                   </>
                 )}
@@ -274,7 +280,7 @@ export default function LogcatRoute() {
                   size="sm"
                   onClick={() => setLines([])}
                 >
-                  Clear
+                  {t("logcat.clear")}
                 </Button>
               </div>
             </div>
@@ -285,16 +291,14 @@ export default function LogcatRoute() {
                 className="h-[32rem] overflow-y-auto bg-[#0c0d12] p-3 font-mono text-[11px] leading-5"
                 role="log"
                 aria-live="polite"
-                aria-label="Logcat output"
+                aria-label={t("logcat.outputLabel")}
               >
                 {filteredLines.length === 0 && !tailing && (
-                  <p className="text-anvil-600">
-                    Press "Start tail" to begin capturing logs.
-                  </p>
+                  <p className="text-anvil-600">{t("logcat.startHint")}</p>
                 )}
                 {filteredLines.length === 0 && tailing && (
                   <p className="text-anvil-600 animate-pulse">
-                    Waiting for log output...
+                    {t("logcat.waiting")}
                   </p>
                 )}
                 {filteredLines.map((line, i) => (
@@ -344,20 +348,20 @@ function logLineColor(level: string): string {
   }
 }
 
-function levelName(l: string): string {
+function levelNameKey(l: string): string {
   switch (l) {
     case "V":
-      return "Verbose";
+      return "logcat.verbose";
     case "D":
-      return "Debug";
+      return "logcat.debug";
     case "I":
-      return "Info";
+      return "logcat.info";
     case "W":
-      return "Warning";
+      return "logcat.warning";
     case "E":
-      return "Error";
+      return "logcat.error";
     case "F":
-      return "Fatal";
+      return "logcat.fatal";
     default:
       return l;
   }

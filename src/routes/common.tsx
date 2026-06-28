@@ -1,4 +1,5 @@
 import type { ComponentPropsWithoutRef, ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 
 import { cn } from "../lib/cn";
 
@@ -195,9 +196,11 @@ export function Badge({
 }
 
 export function MilestoneBadge({ milestone }: { milestone: string }) {
+  const { t } = useTranslation();
+
   return (
     <Badge tone="neutral" className="font-mono uppercase tracking-[0.08em]">
-      Roadmap {milestone}
+      {t("common.roadmap", { milestone })}
     </Badge>
   );
 }

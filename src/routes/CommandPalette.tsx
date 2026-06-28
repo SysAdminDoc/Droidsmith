@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { cn } from "../lib/cn";
 
 export type PaletteItem = {
@@ -19,6 +20,7 @@ export function CommandPalette({
   items: PaletteItem[];
   onSelect: (item: PaletteItem) => void;
 }) {
+  const { t } = useTranslation();
   const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -86,16 +88,16 @@ export function CommandPalette({
               id="command-palette-title"
               className="text-sm font-semibold text-anvil-50"
             >
-              Command palette
+              {t("palette.title")}
             </h2>
             <p className="mt-0.5 text-xs text-anvil-500">
-              Jump to a Droidsmith workspace.
+              {t("palette.description")}
             </p>
           </div>
           <button
             type="button"
             onClick={onClose}
-            aria-label="Close command palette"
+            aria-label={t("palette.close")}
             className="grid h-8 w-8 place-items-center rounded-md text-anvil-400 transition hover:bg-white/[0.06] hover:text-anvil-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-circuit-300"
           >
             <svg
@@ -130,8 +132,8 @@ export function CommandPalette({
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search commands, packages, routes..."
-            aria-label="Command palette search"
+            placeholder={t("palette.searchPlaceholder")}
+            aria-label={t("palette.searchLabel")}
             className="h-8 flex-1 bg-transparent text-sm text-anvil-50 outline-none placeholder:text-anvil-500"
           />
         </div>
@@ -140,9 +142,11 @@ export function CommandPalette({
           {filtered.length === 0 && (
             <div className="px-4 py-7 text-center">
               <p className="text-sm font-medium text-anvil-200">
-                No matching workspace
+                {t("palette.noMatchesTitle")}
               </p>
-              <p className="mt-1 text-xs text-anvil-500">Try a route name.</p>
+              <p className="mt-1 text-xs text-anvil-500">
+                {t("palette.noMatchesHint")}
+              </p>
             </div>
           )}
           {filtered.map((item, index) => (

@@ -1,62 +1,64 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
+
 import { Badge, Button, Card } from "./common";
 
 type Step = {
-  title: string;
-  content: string[];
-  tip?: string;
+  titleKey: string;
+  contentKeys: string[];
+  tipKey?: string;
 };
 
 const STEPS: Step[] = [
   {
-    title: "Enable Developer Options",
-    content: [
-      "Open Settings on your Android device.",
-      "Scroll to About phone (or About tablet).",
-      'Tap Build number 7 times. You\'ll see a toast saying "You are now a developer!"',
-      "Go back to Settings — Developer options is now visible.",
+    titleKey: "onboarding.steps.developerOptions.title",
+    contentKeys: [
+      "onboarding.steps.developerOptions.content.0",
+      "onboarding.steps.developerOptions.content.1",
+      "onboarding.steps.developerOptions.content.2",
+      "onboarding.steps.developerOptions.content.3",
     ],
-    tip: "On Samsung: Settings → About phone → Software information → Build number.",
+    tipKey: "onboarding.steps.developerOptions.tip",
   },
   {
-    title: "Enable USB Debugging",
-    content: [
-      "Open Settings → Developer options.",
-      "Scroll down to USB debugging and toggle it on.",
-      "Confirm the warning dialog.",
+    titleKey: "onboarding.steps.usbDebugging.title",
+    contentKeys: [
+      "onboarding.steps.usbDebugging.content.0",
+      "onboarding.steps.usbDebugging.content.1",
+      "onboarding.steps.usbDebugging.content.2",
     ],
-    tip: 'On Xiaomi/MIUI: also enable "USB debugging (Security settings)" to allow app installs.',
+    tipKey: "onboarding.steps.usbDebugging.tip",
   },
   {
-    title: "Install USB Drivers (Windows)",
-    content: [
-      "Most devices work with the Google USB Driver: download it from the Android SDK Manager.",
-      "Samsung: install Samsung USB Driver from samsung.com.",
-      "Other OEMs: check your manufacturer's support page for ADB/USB drivers.",
-      "macOS and Linux usually don't need extra drivers.",
+    titleKey: "onboarding.steps.drivers.title",
+    contentKeys: [
+      "onboarding.steps.drivers.content.0",
+      "onboarding.steps.drivers.content.1",
+      "onboarding.steps.drivers.content.2",
+      "onboarding.steps.drivers.content.3",
     ],
-    tip: "On Linux, you may need a udev rule — Droidsmith shows the fix automatically when this happens.",
+    tipKey: "onboarding.steps.drivers.tip",
   },
   {
-    title: "Connect and Authorize",
-    content: [
-      "Connect your device via USB cable.",
-      'Your device will show an "Allow USB debugging?" dialog.',
-      'Check "Always allow from this computer" if this is your personal machine.',
-      "Tap Allow. The device should appear in Droidsmith's Devices tab.",
+    titleKey: "onboarding.steps.authorize.title",
+    contentKeys: [
+      "onboarding.steps.authorize.content.0",
+      "onboarding.steps.authorize.content.1",
+      "onboarding.steps.authorize.content.2",
+      "onboarding.steps.authorize.content.3",
     ],
-    tip: "If the dialog doesn't appear, try a different USB cable — charge-only cables don't support data.",
+    tipKey: "onboarding.steps.authorize.tip",
   },
   {
-    title: "Wireless Debugging (Android 11+)",
-    content: [
-      "Open Settings → Developer options → Wireless debugging.",
-      "Toggle it on and confirm.",
-      "In Droidsmith, go to the Wireless tab.",
-      "Use QR pairing: scan the QR code shown in Droidsmith with your device.",
-      "Or use manual pairing: enter the host, port, and 6-digit code from your device.",
+    titleKey: "onboarding.steps.wireless.title",
+    contentKeys: [
+      "onboarding.steps.wireless.content.0",
+      "onboarding.steps.wireless.content.1",
+      "onboarding.steps.wireless.content.2",
+      "onboarding.steps.wireless.content.3",
+      "onboarding.steps.wireless.content.4",
     ],
-    tip: "Both devices must be on the same Wi-Fi network. The pairing code changes each time.",
+    tipKey: "onboarding.steps.wireless.tip",
   },
 ];
 
@@ -65,6 +67,7 @@ export default function OnboardingTour({
 }: {
   onDismiss: () => void;
 }) {
+  const { t } = useTranslation();
   const [step, setStep] = useState(0);
   const current = STEPS[step]!;
   const isLast = step === STEPS.length - 1;
@@ -74,24 +77,24 @@ export default function OnboardingTour({
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <h2 className="text-lg font-semibold text-anvil-50">
-            Getting started
+            {t("onboarding.title")}
           </h2>
           <Badge tone="info">
             {step + 1} / {STEPS.length}
           </Badge>
         </div>
         <Button type="button" size="sm" variant="ghost" onClick={onDismiss}>
-          Skip tour
+          {t("onboarding.skipTour")}
         </Button>
       </div>
 
       <div className="mt-2 flex gap-1">
-        {STEPS.map((_, i) => (
+        {STEPS.map((item, index) => (
           <div
-            key={i}
+            key={item.titleKey}
             className={[
               "h-1 flex-1 rounded-sm transition-colors",
-              i <= step ? "bg-circuit-300" : "bg-white/10",
+              index <= step ? "bg-circuit-300" : "bg-white/10",
             ].join(" ")}
           />
         ))}
@@ -99,22 +102,26 @@ export default function OnboardingTour({
 
       <div className="mt-6">
         <h3 className="text-base font-semibold text-anvil-50">
-          {current.title}
+          {t(current.titleKey)}
         </h3>
         <ol className="mt-4 space-y-3">
-          {current.content.map((line, i) => (
-            <li key={i} className="flex gap-3 text-sm leading-6 text-anvil-200">
+          {current.contentKeys.map((lineKey, index) => (
+            <li
+              key={lineKey}
+              className="flex gap-3 text-sm leading-6 text-anvil-200"
+            >
               <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-white/10 bg-white/[0.04] font-mono text-[11px] text-anvil-300">
-                {i + 1}
+                {index + 1}
               </span>
-              <span>{line}</span>
+              <span>{t(lineKey)}</span>
             </li>
           ))}
         </ol>
-        {current.tip && (
+        {current.tipKey && (
           <div className="mt-4 rounded-md border border-circuit-300/20 bg-circuit-950/30 p-3">
             <p className="text-xs leading-5 text-circuit-100">
-              <span className="font-semibold">Tip:</span> {current.tip}
+              <span className="font-semibold">{t("onboarding.tip")}:</span>{" "}
+              {t(current.tipKey)}
             </p>
           </div>
         )}
@@ -125,22 +132,22 @@ export default function OnboardingTour({
           type="button"
           size="sm"
           disabled={step === 0}
-          onClick={() => setStep((s) => s - 1)}
+          onClick={() => setStep((value) => value - 1)}
         >
-          Previous
+          {t("onboarding.previous")}
         </Button>
         {isLast ? (
           <Button type="button" size="sm" variant="primary" onClick={onDismiss}>
-            Done
+            {t("onboarding.done")}
           </Button>
         ) : (
           <Button
             type="button"
             size="sm"
             variant="primary"
-            onClick={() => setStep((s) => s + 1)}
+            onClick={() => setStep((value) => value + 1)}
           >
-            Next
+            {t("onboarding.next")}
           </Button>
         )}
       </div>

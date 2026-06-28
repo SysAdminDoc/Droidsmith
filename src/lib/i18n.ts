@@ -9,13 +9,17 @@ const resources = {
   ru: { translation: ru },
 };
 
+const browserLanguage =
+  typeof navigator === "undefined" ? "en" : navigator.language;
+
 i18n.use(initReactI18next).init({
   resources,
-  lng: navigator.language.startsWith("ru") ? "ru" : "en",
+  lng: browserLanguage.startsWith("ru") ? "ru" : "en",
   fallbackLng: "en",
   interpolation: {
     escapeValue: false,
   },
 });
 
+export { resources };
 export default i18n;

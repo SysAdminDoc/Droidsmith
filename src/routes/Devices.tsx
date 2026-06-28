@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import type { ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 
 import {
   callGetDeviceInfo,
@@ -45,6 +46,7 @@ type DetailState =
   | { kind: "error"; serial: string; message: string };
 
 export default function DevicesRoute() {
+  const { t } = useTranslation();
   const [state, setState] = useState<State>({ kind: "loading" });
   const [detail, setDetail] = useState<DetailState>({ kind: "idle" });
 
@@ -86,9 +88,9 @@ export default function DevicesRoute() {
   return (
     <>
       <PaneHeader
-        title="Devices"
+        title={t("devices.title")}
         milestone="R-012"
-        description="Scan USB and TCP/IP targets, confirm ADB readiness, and see enough context to choose the right device before any action runs."
+        description={t("devices.description")}
         actions={
           <Button
             type="button"
@@ -96,7 +98,9 @@ export default function DevicesRoute() {
             disabled={state.kind === "loading"}
             variant="primary"
           >
-            {state.kind === "loading" ? "Scanning..." : "Refresh devices"}
+            {state.kind === "loading"
+              ? t("devices.scanning")
+              : t("devices.refresh")}
           </Button>
         }
         meta={<DeviceHeaderMeta state={state} />}
@@ -105,19 +109,18 @@ export default function DevicesRoute() {
       <section className="mt-6 max-w-6xl" aria-live="polite">
         {state.kind === "no_tauri" && (
           <StatePanel
-            title="Launch the desktop shell to scan hardware"
+            title={t("devices.launchDesktopTitle")}
             tone="info"
             actions={
               <Button type="button" onClick={() => void refresh()} size="sm">
-                Check again
+                {t("common.checkAgain")}
               </Button>
             }
           >
             <p>
-              This browser preview can render the interface, but device IPC only
-              exists inside Tauri. Start the desktop shell with{" "}
-              <code>npm run tauri:dev</code> when you want Droidsmith to talk to
-              ADB.
+              {t("devices.launchDesktopBodyPrefix")}{" "}
+              <code>npm run tauri:dev</code>{" "}
+              {t("devices.launchDesktopBodySuffix")}
             </p>
           </StatePanel>
         )}
@@ -126,7 +129,7 @@ export default function DevicesRoute() {
 
         {state.kind === "error" && (
           <StatePanel
-            title="Device scan did not complete"
+            title={t("devices.scanFailedTitle")}
             tone="danger"
             actions={
               <Button
@@ -135,7 +138,7 @@ export default function DevicesRoute() {
                 variant="danger"
                 size="sm"
               >
-                Retry scan
+                {t("common.retryScan")}
               </Button>
             }
           >
@@ -144,13 +147,12 @@ export default function DevicesRoute() {
         )}
 
         {state.kind === "ok" && !state.value.adb_resolved && (
-          <StatePanel title="ADB is not available yet" tone="warning">
+          <StatePanel title={t("devices.noAdb")} tone="warning">
             <p>
-              Droidsmith checked <code>$PATH</code>, <code>$ANDROID_HOME</code>,
-              Android Studio defaults, Homebrew, and common Linux
-              package-manager locations. Install Android platform tools or run{" "}
-              <code>scripts/fetch-platform-tools.*</code> when the bundled
-              sidecar lands.
+              {t("devices.noAdbBodyPrefix")} <code>$PATH</code>,{" "}
+              <code>$ANDROID_HOME</code>, {t("devices.noAdbBodyMiddle")}{" "}
+              <code>scripts/fetch-platform-tools.*</code>{" "}
+              {t("devices.noAdbBodySuffix")}
             </p>
           </StatePanel>
         )}
@@ -159,7 +161,7 @@ export default function DevicesRoute() {
           state.value.adb_resolved &&
           state.value.devices.length === 0 && (
             <StatePanel
-              title="No Android devices found"
+              title={t("devices.noDevices")}
               tone="info"
               actions={
                 <Button
@@ -168,19 +170,21 @@ export default function DevicesRoute() {
                   variant="secondary"
                   size="sm"
                 >
-                  Scan again
+                  {t("common.scanAgain")}
                 </Button>
               }
             >
               <ol className="grid gap-2 text-sm sm:grid-cols-3">
                 <li className="rounded-md border border-white/10 bg-white/[0.04] p-3">
-                  Connect USB and enable developer options.
+                  {t("devices.noDevicesStep1")}
                 </li>
                 <li className="rounded-md border border-white/10 bg-white/[0.04] p-3">
-                  Accept the <em>Allow USB debugging</em> prompt on-device.
+                  {t("devices.noDevicesStep2Prefix")}{" "}
+                  <em>{t("devices.allowUsbDebugging")}</em>{" "}
+                  {t("devices.noDevicesStep2Suffix")}
                 </li>
                 <li className="rounded-md border border-white/10 bg-white/[0.04] p-3">
-                  Or use the Wireless tab for Wi-Fi pairing.
+                  {t("devices.noDevicesStep3")}
                 </li>
               </ol>
             </StatePanel>
@@ -217,18 +221,16 @@ export default function DevicesRoute() {
           state.value.devices.some(
             (d) => typeof d.state === "string" && d.state === "no_permissions",
           ) && (
-            <StatePanel title="Linux permissions issue" tone="danger">
-              <p>
-                One or more devices report "no permissions". On Linux, add a
-                udev rule for your device's USB vendor ID:
-              </p>
+            <StatePanel title={t("devices.linuxPerms")} tone="danger">
+              <p>{t("devices.linuxPermsBody")}</p>
               <pre className="mt-2 rounded-md border border-white/10 bg-white/[0.04] p-3 font-mono text-xs text-anvil-200">
                 {`echo 'SUBSYSTEM=="usb", ATTR{idVendor}=="XXXX", MODE="0666"' | sudo tee /etc/udev/rules.d/51-android.rules\nsudo udevadm control --reload-rules && sudo udevadm trigger`}
               </pre>
               <p className="mt-2">
-                Replace <code>XXXX</code> with your device's vendor ID (e.g.{" "}
-                <code>18d1</code> for Google, <code>04e8</code> for Samsung).
-                Then unplug and reconnect.
+                {t("devices.linuxPermsReplace")} <code>XXXX</code>{" "}
+                {t("devices.linuxPermsExamples")} <code>18d1</code>{" "}
+                {t("devices.forGoogle")} <code>04e8</code>{" "}
+                {t("devices.forSamsung")} {t("devices.reconnect")}
               </p>
             </StatePanel>
           )}
@@ -250,11 +252,13 @@ export default function DevicesRoute() {
 }
 
 function DeviceHeaderMeta({ state }: { state: State }) {
+  const { t } = useTranslation();
+
   if (state.kind === "loading") {
     return (
       <div className="flex flex-wrap gap-2">
-        <Badge tone="info">Scanning bridge</Badge>
-        <Badge tone="neutral">Waiting for ADB</Badge>
+        <Badge tone="info">{t("devices.scanningBridge")}</Badge>
+        <Badge tone="neutral">{t("devices.waitingForAdb")}</Badge>
       </div>
     );
   }
@@ -262,23 +266,23 @@ function DeviceHeaderMeta({ state }: { state: State }) {
   if (state.kind === "no_tauri") {
     return (
       <div className="flex flex-wrap gap-2">
-        <Badge tone="neutral">Browser preview</Badge>
-        <Badge tone="info">Tauri IPC required</Badge>
+        <Badge tone="neutral">{t("runtime.browserPreview")}</Badge>
+        <Badge tone="info">{t("common.tauriIpcRequired")}</Badge>
       </div>
     );
   }
 
   if (state.kind === "error") {
-    return <Badge tone="danger">Scan failed</Badge>;
+    return <Badge tone="danger">{t("devices.scanFailed")}</Badge>;
   }
 
   if (!state.value.adb_resolved) {
-    return <Badge tone="warning">ADB missing</Badge>;
+    return <Badge tone="warning">{t("devices.adbMissing")}</Badge>;
   }
 
   return (
     <div className="flex min-w-0 flex-wrap items-center gap-2">
-      <Badge tone="success">ADB resolved</Badge>
+      <Badge tone="success">{t("devices.adbResolved")}</Badge>
       {state.value.adb_path && (
         <code className="max-w-full truncate font-mono text-xs">
           {state.value.adb_path}
@@ -297,30 +301,31 @@ function DeviceTable({
   selectedSerial?: string;
   onSelect: (serial: string) => void;
 }) {
+  const { t } = useTranslation();
+
   return (
     <Card className="overflow-hidden p-0">
       <div className="flex flex-col gap-3 border-b border-white/10 p-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h3 className="text-sm font-semibold text-anvil-50">
-            Connected devices
+            {t("devices.connected")}
           </h3>
           <p className="mt-1 text-xs text-anvil-400">
-            Select a device to view its dashboard. Review state and transport
-            before launching any action.
+            {t("devices.selectHint")}
           </p>
         </div>
         <Badge tone="success">
-          {devices.length} {devices.length === 1 ? "device" : "devices"}
+          {t("common.deviceCount", { count: devices.length })}
         </Badge>
       </div>
       <div className="overflow-x-auto">
         <table className="min-w-full text-sm">
           <thead className="bg-white/[0.04]">
             <tr>
-              <Th>Serial</Th>
-              <Th>State</Th>
-              <Th>Identity</Th>
-              <Th>Transport</Th>
+              <Th>{t("devices.serial")}</Th>
+              <Th>{t("devices.state")}</Th>
+              <Th>{t("devices.identity")}</Th>
+              <Th>{t("devices.transport")}</Th>
             </tr>
           </thead>
           <tbody className="divide-y divide-white/10">
@@ -356,22 +361,26 @@ function DeviceTable({
                   <Td>
                     <div className="min-w-[13rem]">
                       <p className="font-medium text-anvil-100">
-                        {device.model ?? "Unknown model"}
+                        {device.model ?? t("devices.unknownModel")}
                       </p>
                       <p className="mt-1 text-xs text-anvil-400">
                         {[device.product, device.device]
                           .filter(Boolean)
-                          .join(" / ") || "No product metadata"}
+                          .join(" / ") || t("devices.noProductMetadata")}
                       </p>
                     </div>
                   </Td>
                   <Td>
                     {device.transport_id != null ? (
                       <code className="font-mono text-xs">
-                        transport {device.transport_id}
+                        {t("devices.transportId", {
+                          id: device.transport_id,
+                        })}
                       </code>
                     ) : (
-                      <span className="text-anvil-500">Not reported</span>
+                      <span className="text-anvil-500">
+                        {t("common.notReported")}
+                      </span>
                     )}
                   </Td>
                 </tr>
@@ -391,16 +400,18 @@ function DeviceDetail({
   state: DetailState;
   onRetry: (serial: string) => void;
 }) {
+  const { t } = useTranslation();
+
   if (state.kind === "idle") return null;
 
   if (state.kind === "loading") {
     return (
       <Card className="p-5">
         <h3 className="text-sm font-semibold text-anvil-50">
-          Loading device info
+          {t("devices.loadingDeviceInfo")}
         </h3>
         <p className="mt-1 text-xs text-anvil-400">
-          Querying {state.serial}...
+          {t("devices.queryingSerial", { serial: state.serial })}
         </p>
         <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {Array.from({ length: 6 }).map((_, i) => (
@@ -417,7 +428,7 @@ function DeviceDetail({
   if (state.kind === "error") {
     return (
       <StatePanel
-        title="Could not load device info"
+        title={t("devices.deviceInfoFailed")}
         tone="danger"
         actions={
           <Button
@@ -426,7 +437,7 @@ function DeviceDetail({
             variant="danger"
             size="sm"
           >
-            Retry
+            {t("runtime.retry")}
           </Button>
         }
       >
@@ -451,35 +462,49 @@ function DeviceDetail({
           {info.android_version && (
             <Badge tone="info">Android {info.android_version}</Badge>
           )}
-          {info.sdk_level && <Badge tone="neutral">API {info.sdk_level}</Badge>}
+          {info.sdk_level && (
+            <Badge tone="neutral">
+              {t("devices.apiLevel", { level: info.sdk_level })}
+            </Badge>
+          )}
         </div>
       </div>
 
       <dl className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <InfoField label="Serial" value={info.serial} mono />
+        <InfoField label={t("devices.serial")} value={info.serial} mono />
         {info.hardware_serial && (
-          <InfoField label="HW Serial" value={info.hardware_serial} mono />
+          <InfoField
+            label={t("devices.hwSerial")}
+            value={info.hardware_serial}
+            mono
+          />
         )}
         {info.build_fingerprint && (
           <InfoField
-            label="Build fingerprint"
+            label={t("devices.buildFingerprint")}
             value={info.build_fingerprint}
             mono
             wrap
           />
         )}
         {info.security_patch && (
-          <InfoField label="Security patch" value={info.security_patch} />
+          <InfoField
+            label={t("devices.securityPatch")}
+            value={info.security_patch}
+          />
         )}
         {info.wifi_ip && (
-          <InfoField label="Wi-Fi IP" value={info.wifi_ip} mono />
+          <InfoField label={t("devices.wifiIp")} value={info.wifi_ip} mono />
         )}
         {info.battery && (
-          <InfoField label="Battery" value={formatBattery(info.battery)} />
+          <InfoField
+            label={t("devices.battery")}
+            value={formatBattery(info.battery)}
+          />
         )}
         {info.storage && (
           <InfoField
-            label="Storage (/data)"
+            label={t("devices.storageData")}
             value={formatStorage(info.storage)}
           />
         )}
@@ -531,8 +556,13 @@ function formatStorage(s: NonNullable<DeviceInfo["storage"]>): string {
 }
 
 function DeviceTableSkeleton() {
+  const { t } = useTranslation();
+
   return (
-    <Card className="overflow-hidden p-0" aria-label="Loading devices">
+    <Card
+      className="overflow-hidden p-0"
+      aria-label={t("devices.loadingDevices")}
+    >
       <div className="border-b border-white/10 p-4">
         <SkeletonLine className="w-40" />
         <SkeletonLine className="mt-3 w-80 max-w-full" />
@@ -1282,6 +1312,8 @@ function AuthorizePrompt({
   devices: ListDevicesResult["devices"];
   onRefresh: () => void;
 }) {
+  const { t } = useTranslation();
+
   return (
     <Card className="mt-4 border-amber-300/20 bg-amber-950/20 p-5">
       <div className="flex gap-4">
@@ -1292,14 +1324,16 @@ function AuthorizePrompt({
         <div className="min-w-0 flex-1">
           <h3 className="text-sm font-semibold text-anvil-50">
             {devices.length === 1
-              ? "Device waiting for authorization"
-              : `${devices.length} devices waiting for authorization`}
+              ? t("devices.authorize")
+              : t("devices.authorizeMultiple", { count: devices.length })}
           </h3>
           <div className="mt-3 text-sm leading-6 text-anvil-300">
             <p>
               {devices.length === 1
-                ? `Device ${devices[0]!.serial} is connected but hasn't been authorized yet.`
-                : "The following devices are connected but haven't been authorized yet:"}
+                ? t("devices.authorizeOneBody", {
+                    serial: devices[0]!.serial,
+                  })
+                : t("devices.authorizeManyBody")}
             </p>
             {devices.length > 1 && (
               <ul className="mt-2 space-y-1">
@@ -1319,42 +1353,37 @@ function AuthorizePrompt({
             )}
             <div className="mt-4">
               <p className="text-xs font-semibold text-anvil-200">
-                To authorize:
+                {t("devices.authorizeSteps")}
               </p>
               <ol className="mt-2 grid gap-2 text-sm sm:grid-cols-3">
                 <li className="rounded-md border border-white/10 bg-white/[0.04] p-3">
-                  <span className="font-semibold text-anvil-100">1.</span> Look
-                  at the device screen for the <em>Allow USB debugging?</em>{" "}
-                  dialog.
+                  <span className="font-semibold text-anvil-100">1.</span>{" "}
+                  {t("devices.step1")}
                 </li>
                 <li className="rounded-md border border-white/10 bg-white/[0.04] p-3">
                   <span className="font-semibold text-anvil-100">2.</span>{" "}
-                  Optionally check <em>Always allow from this computer</em> to
-                  skip this next time.
+                  {t("devices.step2")}
                 </li>
                 <li className="rounded-md border border-white/10 bg-white/[0.04] p-3">
-                  <span className="font-semibold text-anvil-100">3.</span> Tap{" "}
-                  <em>Allow</em>, then click Refresh below.
+                  <span className="font-semibold text-anvil-100">3.</span>{" "}
+                  {t("devices.step3")}
                 </li>
               </ol>
             </div>
             <div className="mt-4 rounded-md border border-white/10 bg-white/[0.04] p-3">
               <p className="text-xs font-medium text-anvil-400">
-                No dialog on-device?
+                {t("devices.noDialog")}
               </p>
               <ul className="mt-2 space-y-1 text-xs text-anvil-400">
                 <li>
-                  Revoke existing authorizations:{" "}
+                  {t("devices.revokeAuthorizations")}{" "}
                   <code className="text-anvil-200">
                     Settings → Developer options → Revoke USB debugging
                     authorizations
                   </code>
                 </li>
-                <li>Reconnect the USB cable and wait a few seconds.</li>
-                <li>
-                  Ensure USB mode is set to <em>File Transfer / MTP</em> (some
-                  devices block debugging in charge-only mode).
-                </li>
+                <li>{t("devices.reconnectUsb")}</li>
+                <li>{t("devices.fileTransferMode")}</li>
               </ul>
             </div>
           </div>
@@ -1365,7 +1394,7 @@ function AuthorizePrompt({
               variant="primary"
               onClick={onRefresh}
             >
-              Refresh devices
+              {t("devices.refresh")}
             </Button>
           </div>
         </div>

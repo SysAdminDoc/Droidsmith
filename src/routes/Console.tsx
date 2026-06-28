@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 import {
   callListDevices,
@@ -23,6 +24,7 @@ type HistoryEntry = {
 };
 
 export default function ConsoleRoute() {
+  const { t } = useTranslation();
   const [devicesState, setDevicesState] = useState<DevicesState>({
     kind: "loading",
   });
@@ -137,9 +139,9 @@ export default function ConsoleRoute() {
   return (
     <>
       <PaneHeader
-        title="Console"
+        title={t("console.title")}
         milestone="R-050"
-        description="Run ADB shell commands with output history and command recall."
+        description={t("console.description")}
         meta={
           <div className="flex flex-wrap items-center gap-2">
             {selectedSerial && (
@@ -147,7 +149,9 @@ export default function ConsoleRoute() {
                 <code className="font-mono">{selectedSerial}</code>
               </Badge>
             )}
-            <Badge tone="neutral">{history.length} commands</Badge>
+            <Badge tone="neutral">
+              {t("console.commandCount", { count: history.length })}
+            </Badge>
           </div>
         }
         actions={
@@ -158,7 +162,7 @@ export default function ConsoleRoute() {
               variant="ghost"
               size="sm"
             >
-              Clear history
+              {t("console.clearHistory")}
             </Button>
           ) : undefined
         }
@@ -166,21 +170,21 @@ export default function ConsoleRoute() {
 
       <section className="mt-6 max-w-5xl space-y-4">
         {devicesState.kind === "no_tauri" && (
-          <StatePanel title="Desktop shell required" tone="info">
-            <p>Shell commands run inside the Tauri runtime.</p>
+          <StatePanel title={t("common.desktopRequired")} tone="info">
+            <p>{t("console.desktopRequiredBody")}</p>
           </StatePanel>
         )}
 
         {devicesState.kind === "ok" && authorizedDevices.length === 0 && (
-          <StatePanel title="No authorized devices" tone="warning">
-            <p>Connect and authorize a device to use the console.</p>
+          <StatePanel title={t("common.noAuthorized")} tone="warning">
+            <p>{t("console.noAuthorizedBody")}</p>
           </StatePanel>
         )}
 
         {authorizedDevices.length > 1 && (
           <Card className="p-4">
             <h3 className="text-sm font-semibold text-anvil-50">
-              Target device
+              {t("common.targetDevice")}
             </h3>
             <div className="mt-3 flex flex-wrap gap-2">
               {authorizedDevices.map((d) => (
@@ -207,9 +211,7 @@ export default function ConsoleRoute() {
               className="h-[28rem] overflow-y-auto bg-[#0c0d12] p-4 font-mono text-xs leading-6"
             >
               {history.length === 0 && (
-                <p className="text-anvil-600">
-                  Type a command below. Arrow keys recall history.
-                </p>
+                <p className="text-anvil-600">{t("console.hint")}</p>
               )}
               {history.map((entry) => (
                 <div key={entry.timestamp} className="mb-3">
@@ -223,13 +225,13 @@ export default function ConsoleRoute() {
                       entry.error ? "text-red-300/80" : "text-anvil-400",
                     ].join(" ")}
                   >
-                    {entry.output || "(no output)"}
+                    {entry.output || t("console.noOutput")}
                   </pre>
                 </div>
               ))}
               {running && (
                 <div className="flex items-center gap-2 text-anvil-500">
-                  <span className="animate-pulse">Running...</span>
+                  <span className="animate-pulse">{t("console.running")}</span>
                 </div>
               )}
             </div>
@@ -241,10 +243,10 @@ export default function ConsoleRoute() {
                 value={command}
                 onChange={(e) => setCommand(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder="getprop ro.product.model"
+                placeholder={t("console.placeholder")}
                 disabled={running}
                 autoFocus
-                aria-label="ADB shell command"
+                aria-label={t("console.commandLabel")}
                 className="h-8 flex-1 bg-transparent font-mono text-sm text-anvil-50 outline-none placeholder:text-anvil-600"
               />
               <Button
@@ -254,7 +256,7 @@ export default function ConsoleRoute() {
                 onClick={() => void runCommand()}
                 disabled={running || !command.trim()}
               >
-                Run
+                {t("console.run")}
               </Button>
             </div>
           </Card>

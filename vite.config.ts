@@ -1,13 +1,22 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import { fileURLToPath, URL } from "node:url";
 
 // When Tauri runs `tauri dev --host`, it sets TAURI_DEV_HOST so HMR uses
 // the LAN address instead of localhost.
 const host = process.env.TAURI_DEV_HOST;
+const qrcodeGeneratorPath = fileURLToPath(
+  new URL("./node_modules/qrcode-generator/dist/qrcode.js", import.meta.url),
+);
 
 export default defineConfig({
   plugins: [react()],
   clearScreen: false,
+  resolve: {
+    alias: {
+      "qrcode-generator": qrcodeGeneratorPath,
+    },
+  },
   server: {
     port: 1420,
     strictPort: true,

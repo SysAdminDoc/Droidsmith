@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import qrcode from "qrcode-generator";
+import { useTranslation } from "react-i18next";
 
 import {
   callConnectWireless,
@@ -35,6 +36,7 @@ type ActionState =
   | { kind: "error"; label: string; message: string };
 
 export default function WirelessRoute() {
+  const { t } = useTranslation();
   const [servicesState, setServicesState] = useState<ServicesState>({
     kind: "loading",
   });
@@ -88,7 +90,7 @@ export default function WirelessRoute() {
   const pairManual = useCallback(async () => {
     await runWirelessAction(
       setActionState,
-      "Pairing",
+      t("wireless.pairing"),
       () =>
         callPairWireless({
           host: manualHost.trim(),
@@ -97,12 +99,12 @@ export default function WirelessRoute() {
         }),
       loadServices,
     );
-  }, [loadServices, manualCode, manualHost, manualPort]);
+  }, [loadServices, manualCode, manualHost, manualPort, t]);
 
   const connectManual = useCallback(async () => {
     await runWirelessAction(
       setActionState,
-      "Connecting",
+      t("wireless.connecting"),
       () =>
         callConnectWireless({
           host: connectHost.trim(),
@@ -110,13 +112,13 @@ export default function WirelessRoute() {
         }),
       loadServices,
     );
-  }, [connectHost, connectPort, loadServices]);
+  }, [connectHost, connectPort, loadServices, t]);
 
   const pairService = useCallback(
     async (service: WirelessAdbService) => {
       await runWirelessAction(
         setActionState,
-        "Pairing",
+        t("wireless.pairing"),
         () =>
           callPairWireless({
             host: service.host,
@@ -126,14 +128,14 @@ export default function WirelessRoute() {
         loadServices,
       );
     },
-    [loadServices, qrCode],
+    [loadServices, qrCode, t],
   );
 
   const connectService = useCallback(
     async (service: WirelessAdbService) => {
       await runWirelessAction(
         setActionState,
-        "Connecting",
+        t("wireless.connecting"),
         () =>
           callConnectWireless({
             host: service.host,
@@ -142,7 +144,7 @@ export default function WirelessRoute() {
         loadServices,
       );
     },
-    [loadServices],
+    [loadServices, t],
   );
 
   const regenerateQr = useCallback(() => {
@@ -161,9 +163,9 @@ export default function WirelessRoute() {
   return (
     <>
       <PaneHeader
-        title="Wireless"
+        title={t("wireless.title")}
         milestone="R-015"
-        description="Pair Android 11+ devices over Wi-Fi, discover mDNS pairing/connect endpoints, and attach paired devices without leaving Droidsmith."
+        description={t("wireless.description")}
         actions={
           <Button
             type="button"
@@ -171,7 +173,9 @@ export default function WirelessRoute() {
             disabled={servicesState.kind === "loading"}
             variant="primary"
           >
-            {servicesState.kind === "loading" ? "Scanning..." : "Scan mDNS"}
+            {servicesState.kind === "loading"
+              ? t("wireless.scanning")
+              : t("wireless.scanMdns")}
           </Button>
         }
         meta={<WirelessHeaderMeta state={servicesState} />}
@@ -185,7 +189,7 @@ export default function WirelessRoute() {
                 {qrDataUrl ? (
                   <img
                     src={qrDataUrl}
-                    alt="Wireless ADB pairing QR code"
+                    alt={t("wireless.qrAlt")}
                     className="h-full w-full"
                   />
                 ) : (
@@ -196,25 +200,29 @@ export default function WirelessRoute() {
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2">
                 <h3 className="text-sm font-semibold text-anvil-50">
-                  QR pairing
+                  {t("wireless.qrPairing")}
                 </h3>
                 <Badge tone="info">ADB QR</Badge>
               </div>
               <dl className="mt-4 grid gap-3 text-sm">
-                <QrMetric label="Name" value={qrName} />
-                <QrMetric label="Code" value={qrCode} strong />
-                <QrMetric label="Payload" value={qrPayload} mono />
+                <QrMetric label={t("wireless.name")} value={qrName} />
+                <QrMetric label={t("wireless.code")} value={qrCode} strong />
+                <QrMetric
+                  label={t("wireless.payload")}
+                  value={qrPayload}
+                  mono
+                />
               </dl>
               <div className="mt-5 flex flex-wrap gap-2">
                 <Button type="button" onClick={regenerateQr}>
-                  Regenerate
+                  {t("wireless.regenerate")}
                 </Button>
                 <Button
                   type="button"
                   onClick={() => void loadServices()}
                   variant="ghost"
                 >
-                  Refresh services
+                  {t("wireless.refreshServices")}
                 </Button>
               </div>
             </div>
@@ -226,26 +234,26 @@ export default function WirelessRoute() {
             <div>
               <div className="flex flex-wrap items-center gap-2">
                 <h3 className="text-sm font-semibold text-anvil-50">
-                  Pairing code
+                  {t("wireless.pairingCode")}
                 </h3>
                 <Badge tone="neutral">adb pair</Badge>
               </div>
               <div className="mt-4 grid gap-3">
                 <TextField
-                  label="Host"
+                  label={t("wireless.host")}
                   value={manualHost}
                   onChange={setManualHost}
                   placeholder="192.168.1.42"
                 />
                 <TextField
-                  label="Port"
+                  label={t("wireless.port")}
                   value={manualPort}
                   onChange={setManualPort}
                   placeholder="37099"
                   inputMode="numeric"
                 />
                 <TextField
-                  label="Code"
+                  label={t("wireless.code")}
                   value={manualCode}
                   onChange={setManualCode}
                   placeholder="123456"
@@ -260,26 +268,26 @@ export default function WirelessRoute() {
                 variant="primary"
                 className="mt-4"
               >
-                Pair
+                {t("wireless.pair")}
               </Button>
             </div>
 
             <div>
               <div className="flex flex-wrap items-center gap-2">
                 <h3 className="text-sm font-semibold text-anvil-50">
-                  Paired endpoint
+                  {t("wireless.pairedEndpoint")}
                 </h3>
                 <Badge tone="neutral">adb connect</Badge>
               </div>
               <div className="mt-4 grid gap-3">
                 <TextField
-                  label="Host"
+                  label={t("wireless.host")}
                   value={connectHost}
                   onChange={setConnectHost}
                   placeholder="192.168.1.42"
                 />
                 <TextField
-                  label="Port"
+                  label={t("wireless.port")}
                   value={connectPort}
                   onChange={setConnectPort}
                   placeholder="38899"
@@ -293,7 +301,7 @@ export default function WirelessRoute() {
                 variant="primary"
                 className="mt-4"
               >
-                Connect
+                {t("wireless.connect")}
               </Button>
             </div>
           </div>
@@ -338,11 +346,13 @@ async function runWirelessAction(
 }
 
 function WirelessHeaderMeta({ state }: { state: ServicesState }) {
+  const { t } = useTranslation();
+
   if (state.kind === "loading") {
     return (
       <div className="flex flex-wrap gap-2">
-        <Badge tone="info">Scanning mDNS</Badge>
-        <Badge tone="neutral">Waiting for ADB</Badge>
+        <Badge tone="info">{t("wireless.scanningMdns")}</Badge>
+        <Badge tone="neutral">{t("devices.waitingForAdb")}</Badge>
       </div>
     );
   }
@@ -350,24 +360,26 @@ function WirelessHeaderMeta({ state }: { state: ServicesState }) {
   if (state.kind === "no_tauri") {
     return (
       <div className="flex flex-wrap gap-2">
-        <Badge tone="neutral">Browser preview</Badge>
-        <Badge tone="info">Tauri IPC required</Badge>
+        <Badge tone="neutral">{t("runtime.browserPreview")}</Badge>
+        <Badge tone="info">{t("common.tauriIpcRequired")}</Badge>
       </div>
     );
   }
 
   if (state.kind === "error") {
-    return <Badge tone="danger">mDNS scan failed</Badge>;
+    return <Badge tone="danger">{t("wireless.mdnsScanFailed")}</Badge>;
   }
 
   if (!state.value.adb_resolved) {
-    return <Badge tone="warning">ADB missing</Badge>;
+    return <Badge tone="warning">{t("devices.adbMissing")}</Badge>;
   }
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <Badge tone="success">ADB resolved</Badge>
-      <Badge tone="info">{state.value.services.length} services</Badge>
+      <Badge tone="success">{t("devices.adbResolved")}</Badge>
+      <Badge tone="info">
+        {t("wireless.serviceCount", { count: state.value.services.length })}
+      </Badge>
     </div>
   );
 }
@@ -385,10 +397,12 @@ function ServicesPanel({
   onConnect: (service: WirelessAdbService) => void;
   busy: boolean;
 }) {
+  const { t } = useTranslation();
+
   if (state.kind === "no_tauri") {
     return (
-      <StatePanel title="Desktop shell required" tone="info">
-        <p>Wireless ADB commands run inside the Tauri runtime.</p>
+      <StatePanel title={t("common.desktopRequired")} tone="info">
+        <p>{t("wireless.desktopRequiredBody")}</p>
       </StatePanel>
     );
   }
@@ -400,11 +414,11 @@ function ServicesPanel({
   if (state.kind === "error") {
     return (
       <StatePanel
-        title="Wireless service scan failed"
+        title={t("wireless.serviceScanFailed")}
         tone="danger"
         actions={
           <Button type="button" onClick={onRefresh} variant="danger" size="sm">
-            Retry scan
+            {t("common.retryScan")}
           </Button>
         }
       >
@@ -415,8 +429,8 @@ function ServicesPanel({
 
   if (!state.value.adb_resolved) {
     return (
-      <StatePanel title="ADB is not available yet" tone="warning">
-        <p>Install Android platform tools or stage the bundled sidecar.</p>
+      <StatePanel title={t("devices.noAdb")} tone="warning">
+        <p>{t("wireless.noAdbBody")}</p>
       </StatePanel>
     );
   }
@@ -424,7 +438,7 @@ function ServicesPanel({
   if (state.value.services.length === 0) {
     return (
       <StatePanel
-        title="No wireless ADB services discovered"
+        title={t("wireless.noServicesTitle")}
         tone="info"
         actions={
           <Button
@@ -433,11 +447,11 @@ function ServicesPanel({
             variant="secondary"
             size="sm"
           >
-            Scan again
+            {t("common.scanAgain")}
           </Button>
         }
       >
-        <p>mDNS did not return pairing or connect targets on this network.</p>
+        <p>{t("wireless.noServicesBody")}</p>
       </StatePanel>
     );
   }
@@ -447,23 +461,24 @@ function ServicesPanel({
       <div className="flex flex-col gap-3 border-b border-white/10 p-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h3 className="text-sm font-semibold text-anvil-50">
-            Discovered wireless services
+            {t("wireless.discoveredServices")}
           </h3>
           <p className="mt-1 text-xs text-anvil-400">
-            Pairing services use the QR code above; connect services attach
-            already-paired devices.
+            {t("wireless.discoveredServicesBody")}
           </p>
         </div>
-        <Badge tone="info">{state.value.services.length} found</Badge>
+        <Badge tone="info">
+          {t("wireless.foundCount", { count: state.value.services.length })}
+        </Badge>
       </div>
       <div className="overflow-x-auto">
         <table className="min-w-full text-sm">
           <thead className="bg-white/[0.04]">
             <tr>
-              <Th>Name</Th>
-              <Th>Kind</Th>
-              <Th>Endpoint</Th>
-              <Th>Action</Th>
+              <Th>{t("wireless.name")}</Th>
+              <Th>{t("wireless.kind")}</Th>
+              <Th>{t("wireless.endpoint")}</Th>
+              <Th>{t("wireless.action")}</Th>
             </tr>
           </thead>
           <tbody className="divide-y divide-white/10">
@@ -499,7 +514,7 @@ function ServicesPanel({
                       disabled={busy}
                       variant="primary"
                     >
-                      Pair
+                      {t("wireless.pair")}
                     </Button>
                   )}
                   {service.kind === "connect" && (
@@ -510,11 +525,13 @@ function ServicesPanel({
                       disabled={busy}
                       variant="primary"
                     >
-                      Connect
+                      {t("wireless.connect")}
                     </Button>
                   )}
                   {service.kind === "other" && (
-                    <span className="text-xs text-anvil-500">No action</span>
+                    <span className="text-xs text-anvil-500">
+                      {t("common.noAction")}
+                    </span>
                   )}
                 </Td>
               </tr>
@@ -527,38 +544,49 @@ function ServicesPanel({
 }
 
 function ActionStatus({ state }: { state: ActionState }) {
+  const { t } = useTranslation();
+
   if (state.kind === "idle") {
     return null;
   }
 
   if (state.kind === "busy") {
     return (
-      <StatePanel title={`${state.label} in progress`} tone="info">
-        <p>Waiting for platform-tools to finish.</p>
+      <StatePanel
+        title={t("wireless.actionInProgress", { action: state.label })}
+        tone="info"
+      >
+        <p>{t("wireless.waitingForPlatformTools")}</p>
       </StatePanel>
     );
   }
 
   if (state.kind === "error") {
     return (
-      <StatePanel title={`${state.label} failed`} tone="danger">
+      <StatePanel
+        title={t("wireless.actionFailed", { action: state.label })}
+        tone="danger"
+      >
         <p>{state.message}</p>
       </StatePanel>
     );
   }
 
   return (
-    <StatePanel title={`${state.label} complete`} tone="success">
+    <StatePanel
+      title={t("wireless.actionComplete", { action: state.label })}
+      tone="success"
+    >
       <dl className="grid gap-2 text-sm sm:grid-cols-[auto_minmax(0,1fr)]">
-        <dt className="text-anvil-500">Endpoint</dt>
+        <dt className="text-anvil-500">{t("wireless.endpoint")}</dt>
         <dd>
           <code className="font-mono text-anvil-100">
             {state.result.endpoint}
           </code>
         </dd>
-        <dt className="text-anvil-500">ADB output</dt>
+        <dt className="text-anvil-500">{t("wireless.adbOutput")}</dt>
         <dd className="whitespace-pre-wrap font-mono text-xs text-anvil-200">
-          {state.result.stdout.trim() || "Command completed."}
+          {state.result.stdout.trim() || t("wireless.commandCompleted")}
         </dd>
       </dl>
     </StatePanel>
@@ -566,10 +594,12 @@ function ActionStatus({ state }: { state: ActionState }) {
 }
 
 function ServicesSkeleton() {
+  const { t } = useTranslation();
+
   return (
     <Card
       className="overflow-hidden p-0"
-      aria-label="Loading wireless services"
+      aria-label={t("wireless.loadingServices")}
     >
       <div className="border-b border-white/10 p-4">
         <SkeletonLine className="w-48" />

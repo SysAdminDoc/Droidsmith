@@ -768,10 +768,8 @@ fn parse_permissions(stdout: &str) -> Vec<PermissionInfo> {
             if trimmed.is_empty()
                 || (!trimmed.contains("android.permission") && !trimmed.contains(':'))
             {
-                if !trimmed.starts_with("android.permission") {
-                    in_perms = false;
-                    continue;
-                }
+                in_perms = false;
+                continue;
             }
             // Format: android.permission.CAMERA: granted=true
             if let Some((perm, rest)) = trimmed.split_once(':') {

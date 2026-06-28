@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import type { ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 
 import {
   callFastbootGetvar,
@@ -37,6 +38,7 @@ const GETVAR_KEYS = [
 ];
 
 export default function FastbootRoute() {
+  const { t } = useTranslation();
   const [fbState, setFbState] = useState<FastbootState>({ kind: "checking" });
   const [devicesState, setDevicesState] = useState<DeviceListState>({
     kind: "idle",
@@ -107,16 +109,16 @@ export default function FastbootRoute() {
   return (
     <>
       <PaneHeader
-        title="Fastboot"
+        title={t("fastboot.title")}
         milestone="R-052"
-        description="Inspect bootloader-mode devices, partition state, slots, and safety-critical variables before any destructive operation."
+        description={t("fastboot.description")}
         meta={
           <div className="flex flex-wrap items-center gap-2">
             {fbState.kind === "found" && (
-              <Badge tone="success">fastboot found</Badge>
+              <Badge tone="success">{t("fastboot.fastbootFound")}</Badge>
             )}
             {fbState.kind === "not_found" && (
-              <Badge tone="warning">fastboot missing</Badge>
+              <Badge tone="warning">{t("fastboot.fastbootMissingShort")}</Badge>
             )}
             {selectedSerial && (
               <Badge tone="info">
@@ -129,11 +131,10 @@ export default function FastbootRoute() {
 
       <section className="mt-6 max-w-5xl space-y-4">
         {fbState.kind === "not_found" && (
-          <StatePanel title="fastboot is not installed" tone="warning">
+          <StatePanel title={t("fastboot.fastbootMissing")} tone="warning">
             <p>
-              Droidsmith uses the platform-tools <code>fastboot</code> binary.
-              Install it from the Android SDK or run the platform-tools fetch
-              script.
+              {t("fastboot.installPrefix")} <code>fastboot</code>{" "}
+              {t("fastboot.installSuffix")}
             </p>
             <div className="mt-3">
               <Button
@@ -141,7 +142,7 @@ export default function FastbootRoute() {
                 size="sm"
                 onClick={() => void checkFastboot()}
               >
-                Check again
+                {t("common.checkAgain")}
               </Button>
             </div>
           </StatePanel>
@@ -153,10 +154,10 @@ export default function FastbootRoute() {
               <div className="flex items-center justify-between">
                 <div>
                   <h3 className="text-sm font-semibold text-anvil-50">
-                    Bootloader devices
+                    {t("fastboot.bootloaderDevices")}
                   </h3>
                   <p className="mt-1 text-xs text-anvil-400">
-                    fastboot at{" "}
+                    {t("fastboot.fastbootAt")}{" "}
                     <code className="text-anvil-200">{fbState.path}</code>
                   </p>
                 </div>
@@ -167,16 +168,18 @@ export default function FastbootRoute() {
                   onClick={() => void scanDevices()}
                   disabled={devicesState.kind === "loading"}
                 >
-                  {devicesState.kind === "loading" ? "Scanning..." : "Scan"}
+                  {devicesState.kind === "loading"
+                    ? t("fastboot.scanning")
+                    : t("fastboot.scan")}
                 </Button>
               </div>
 
               {devicesState.kind === "ok" &&
                 devicesState.devices.length === 0 && (
                   <p className="mt-4 text-sm text-anvil-400">
-                    No devices in bootloader/fastboot mode. Reboot a device into
-                    the bootloader with <code>adb reboot bootloader</code> or
-                    the hardware key combo.
+                    {t("fastboot.noBootloaderDevices")}{" "}
+                    <code>adb reboot bootloader</code>{" "}
+                    {t("fastboot.noBootloaderDevicesSuffix")}
                   </p>
                 )}
 
@@ -186,10 +189,10 @@ export default function FastbootRoute() {
                     <table className="min-w-full text-sm">
                       <thead className="bg-white/[0.04]">
                         <tr>
-                          <Th>Serial</Th>
-                          <Th>Mode</Th>
-                          <Th>Product</Th>
-                          <Th>Action</Th>
+                          <Th>{t("devices.serial")}</Th>
+                          <Th>{t("fastboot.mode")}</Th>
+                          <Th>{t("fastboot.product")}</Th>
+                          <Th>{t("wireless.action")}</Th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-white/10">
@@ -203,7 +206,7 @@ export default function FastbootRoute() {
                             <Td>
                               <Badge tone="info">{d.mode}</Badge>
                             </Td>
-                            <Td>{d.product ?? "Not reported"}</Td>
+                            <Td>{d.product ?? t("common.notReported")}</Td>
                             <Td>
                               <Button
                                 type="button"
@@ -219,8 +222,8 @@ export default function FastbootRoute() {
                                 }}
                               >
                                 {d.serial === selectedSerial
-                                  ? "Selected"
-                                  : "Select"}
+                                  ? t("common.selected")
+                                  : t("common.select")}
                               </Button>
                             </Td>
                           </tr>
@@ -241,7 +244,7 @@ export default function FastbootRoute() {
               <Card className="p-5">
                 <div className="flex items-center justify-between">
                   <h3 className="text-sm font-semibold text-anvil-50">
-                    Device variables
+                    {t("fastboot.deviceVariables")}
                   </h3>
                   <Button
                     type="button"
@@ -249,7 +252,9 @@ export default function FastbootRoute() {
                     onClick={() => void loadVars()}
                     disabled={loadingVars}
                   >
-                    {loadingVars ? "Querying..." : "Query vars"}
+                    {loadingVars
+                      ? t("fastboot.querying")
+                      : t("fastboot.queryVars")}
                   </Button>
                 </div>
 
@@ -270,16 +275,14 @@ export default function FastbootRoute() {
 
                 {Object.keys(vars).length === 0 && !loadingVars && (
                   <p className="mt-4 text-xs text-anvil-400">
-                    Press "Query vars" to read device information.
+                    {t("fastboot.queryHint")}
                   </p>
                 )}
 
                 <div className="mt-5 rounded-md border border-amber-300/20 bg-amber-950/20 p-3">
                   <p className="text-xs leading-5 text-amber-200">
-                    Fastboot operations can be destructive. Droidsmith
-                    intentionally does not expose flash, erase, or lock/unlock
-                    commands through the GUI. Use the Console tab with{" "}
-                    <code>fastboot</code> directly for those operations.
+                    {t("fastboot.safetyWarning")} <code>fastboot</code>{" "}
+                    {t("fastboot.safetyWarningSuffix")}
                   </p>
                 </div>
               </Card>

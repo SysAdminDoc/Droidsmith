@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 import {
   callLaunchScrcpy,
@@ -35,6 +36,7 @@ type SessionState =
   | { kind: "error"; message: string };
 
 export default function MirrorRoute() {
+  const { t } = useTranslation();
   const [devicesState, setDevicesState] = useState<DevicesState>({
     kind: "loading",
   });
@@ -130,19 +132,19 @@ export default function MirrorRoute() {
   return (
     <>
       <PaneHeader
-        title="Mirror"
+        title={t("mirror.title")}
         milestone="R-040"
-        description="Launch scrcpy sessions to mirror and control Android devices. Requires scrcpy installed on your system."
+        description={t("mirror.description")}
         meta={
           <div className="flex flex-wrap items-center gap-2">
             {scrcpyState.kind === "found" && (
-              <Badge tone="success">scrcpy found</Badge>
+              <Badge tone="success">{t("mirror.scrcpyFound")}</Badge>
             )}
             {scrcpyState.kind === "not_found" && (
-              <Badge tone="warning">scrcpy missing</Badge>
+              <Badge tone="warning">{t("mirror.scrcpyMissingShort")}</Badge>
             )}
             {scrcpyState.kind === "checking" && (
-              <Badge tone="info">Checking...</Badge>
+              <Badge tone="info">{t("common.checking")}</Badge>
             )}
             {selectedSerial && (
               <Badge tone="info">
@@ -155,16 +157,16 @@ export default function MirrorRoute() {
 
       <section className="mt-6 max-w-5xl space-y-4">
         {devicesState.kind === "no_tauri" && (
-          <StatePanel title="Desktop shell required" tone="info">
-            <p>Mirror sessions run inside the Tauri runtime.</p>
+          <StatePanel title={t("common.desktopRequired")} tone="info">
+            <p>{t("mirror.desktopRequiredBody")}</p>
           </StatePanel>
         )}
 
         {scrcpyState.kind === "not_found" && (
-          <StatePanel title="scrcpy is not installed" tone="warning">
+          <StatePanel title={t("mirror.scrcpyMissing")} tone="warning">
             <p>
-              Droidsmith uses scrcpy for device mirroring. Install it from{" "}
-              <code>scrcpy.org</code> or your package manager:
+              {t("mirror.scrcpyInstallPrefix")} <code>scrcpy.org</code> or your
+              package manager:
             </p>
             <pre className="mt-2 rounded-md border border-white/10 bg-white/[0.04] p-3 font-mono text-xs text-anvil-200">
               {`# Windows (scoop)\nscoop install scrcpy\n\n# macOS (brew)\nbrew install scrcpy\n\n# Linux (apt)\nsudo apt install scrcpy`}
@@ -175,7 +177,7 @@ export default function MirrorRoute() {
                 size="sm"
                 onClick={() => void checkScrcpy()}
               >
-                Check again
+                {t("common.checkAgain")}
               </Button>
             </div>
           </StatePanel>
@@ -184,15 +186,15 @@ export default function MirrorRoute() {
         {scrcpyState.kind === "found" && (
           <>
             {authorizedDevices.length === 0 && (
-              <StatePanel title="No authorized devices" tone="warning">
-                <p>Connect and authorize a device to start mirroring.</p>
+              <StatePanel title={t("common.noAuthorized")} tone="warning">
+                <p>{t("mirror.noAuthorizedBody")}</p>
               </StatePanel>
             )}
 
             {authorizedDevices.length > 1 && (
               <Card className="p-4">
                 <h3 className="text-sm font-semibold text-anvil-50">
-                  Target device
+                  {t("common.targetDevice")}
                 </h3>
                 <div className="mt-3 flex flex-wrap gap-2">
                   {authorizedDevices.map((d) => (
@@ -215,16 +217,16 @@ export default function MirrorRoute() {
             {selectedSerial && (
               <Card className="p-5">
                 <h3 className="text-sm font-semibold text-anvil-50">
-                  Mirror options
+                  {t("mirror.options")}
                 </h3>
                 <p className="mt-1 text-xs text-anvil-400">
-                  scrcpy at{" "}
+                  {t("mirror.scrcpyAt")}{" "}
                   <code className="text-anvil-200">{scrcpyState.path}</code>
                 </p>
                 <div className="mt-4 grid gap-4 sm:grid-cols-3">
                   <label className="grid gap-1.5">
                     <span className="text-xs font-medium text-anvil-400">
-                      Max size (px)
+                      {t("mirror.maxSize")}
                     </span>
                     <FieldInput
                       type="text"
@@ -237,7 +239,7 @@ export default function MirrorRoute() {
                   </label>
                   <label className="grid gap-1.5">
                     <span className="text-xs font-medium text-anvil-400">
-                      Video bit rate
+                      {t("mirror.bitRate")}
                     </span>
                     <FieldInput
                       type="text"
@@ -255,7 +257,7 @@ export default function MirrorRoute() {
                       className="h-4 w-4 rounded border-white/20 bg-white/[0.06] text-circuit-300 focus:ring-2 focus:ring-circuit-300/30"
                     />
                     <span className="text-sm text-anvil-200">
-                      Disable audio
+                      {t("mirror.disableAudio")}
                     </span>
                   </label>
                 </div>
@@ -268,13 +270,13 @@ export default function MirrorRoute() {
                       className="h-4 w-4 rounded border-white/20 bg-white/[0.06] text-circuit-300 focus:ring-2 focus:ring-circuit-300/30"
                     />
                     <span className="text-sm text-anvil-200">
-                      Record session
+                      {t("mirror.recordSession")}
                     </span>
                   </label>
                   {recording && (
                     <label className="grid flex-1 gap-1.5">
                       <span className="text-xs font-medium text-anvil-400">
-                        Output file
+                        {t("mirror.outputFile")}
                       </span>
                       <FieldInput
                         type="text"
@@ -296,10 +298,10 @@ export default function MirrorRoute() {
                     }
                   >
                     {session.kind === "launching"
-                      ? "Launching..."
+                      ? t("mirror.launching")
                       : session.kind === "active"
-                        ? "Session active"
-                        : "Launch mirror"}
+                        ? t("mirror.sessionActive")
+                        : t("mirror.launch")}
                   </Button>
                   {session.kind === "active" && (
                     <Badge tone="success">PID {session.pid}</Badge>
@@ -309,17 +311,14 @@ export default function MirrorRoute() {
             )}
 
             {session.kind === "error" && (
-              <StatePanel title="Mirror launch failed" tone="danger">
+              <StatePanel title={t("mirror.launchFailed")} tone="danger">
                 <p>{session.message}</p>
               </StatePanel>
             )}
 
             {session.kind === "active" && (
-              <StatePanel title="Mirror session running" tone="success">
-                <p>
-                  scrcpy is running as PID {session.pid}. Close the scrcpy
-                  window to end the session.
-                </p>
+              <StatePanel title={t("mirror.sessionRunning")} tone="success">
+                <p>{t("mirror.sessionRunningBody", { pid: session.pid })}</p>
               </StatePanel>
             )}
           </>

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 
 import { callHeartbeat, inTauri, type Heartbeat } from "./lib/tauri";
 import { cn } from "./lib/cn";
@@ -18,9 +19,18 @@ import FastbootRoute from "./routes/Fastboot";
 import { Badge, Button, SkeletonLine } from "./routes/common";
 
 export type NavItem = {
-  label: string;
+  id:
+    | "devices"
+    | "wireless"
+    | "apps"
+    | "debloat"
+    | "mirror"
+    | "console"
+    | "logcat"
+    | "fastboot";
+  labelKey: string;
   milestone: string;
-  description: string;
+  descriptionKey: string;
   render: () => ReactNode;
 };
 
@@ -28,52 +38,59 @@ export type NavItem = {
  *  the list stays aligned with `ROADMAP.md` without duplicating it. */
 export const NAV_ITEMS: ReadonlyArray<NavItem> = [
   {
-    label: "Devices",
+    id: "devices",
+    labelKey: "nav.devices",
     milestone: "R-012",
-    description: "USB + wireless discovery for every connected Android target.",
+    descriptionKey: "devices.description",
     render: () => <DevicesRoute />,
   },
   {
-    label: "Wireless",
+    id: "wireless",
+    labelKey: "nav.wireless",
     milestone: "R-015",
-    description:
-      "QR, pairing-code, and mDNS flows for Android wireless debugging.",
+    descriptionKey: "wireless.description",
     render: () => <WirelessRoute />,
   },
   {
-    label: "Apps",
+    id: "apps",
+    labelKey: "nav.apps",
     milestone: "R-020",
-    description: "Installed packages, filters, icons, and bulk actions.",
+    descriptionKey: "apps.description",
     render: () => <AppsRoute />,
   },
   {
-    label: "Debloat",
+    id: "debloat",
+    labelKey: "nav.debloat",
     milestone: "R-033",
-    description: "Pack preview, vendor warnings, journaled apply and undo.",
+    descriptionKey: "debloat.description",
     render: () => <DebloatRoute />,
   },
   {
-    label: "Mirror",
+    id: "mirror",
+    labelKey: "nav.mirror",
     milestone: "R-040",
-    description: "scrcpy sessions with audio, recording, and drag installs.",
+    descriptionKey: "mirror.description",
     render: () => <MirrorRoute />,
   },
   {
-    label: "Console",
+    id: "console",
+    labelKey: "nav.console",
     milestone: "R-050",
-    description: "Multi-tab adb shell with history and reusable snippets.",
+    descriptionKey: "console.description",
     render: () => <ConsoleRoute />,
   },
   {
-    label: "Logcat",
+    id: "logcat",
+    labelKey: "nav.logcat",
     milestone: "R-051",
-    description: "Live logs with tag, pid, level, and grep filters.",
+    descriptionKey: "logcat.description",
     render: () => <LogcatRoute />,
   },
   {
-    label: "Fastboot",
+    id: "fastboot",
+    labelKey: "nav.fastboot",
     milestone: "R-052",
-    description: "Bootloader devices, partitions, slots, and safety checks.",
+    descriptionKey: "fastboot.description",
     render: () => <FastbootRoute />,
   },
 ] as const;
@@ -85,20 +102,21 @@ type LoadState =
   | { status: "error"; error: string };
 
 export default function App() {
+  const { t } = useTranslation();
   const [hb, setHb] = useState<LoadState>({ status: "loading" });
-  const [active, setActive] = useState<string>(NAV_ITEMS[0].label);
+  const [active, setActive] = useState<NavItem["id"]>(NAV_ITEMS[0].id);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const palette = useCommandPalette();
 
   const paletteItems: PaletteItem[] = useMemo(
     () =>
       NAV_ITEMS.map((item) => ({
-        id: `nav:${item.label}`,
-        label: item.label,
-        description: item.description,
-        category: "Navigation",
+        id: `nav:${item.id}`,
+        label: t(item.labelKey),
+        description: t(item.descriptionKey),
+        category: t("palette.navigationCategory"),
       })),
-    [],
+    [t],
   );
 
   const loadHeartbeat = useCallback(async () => {
@@ -123,7 +141,7 @@ export default function App() {
     void loadHeartbeat();
   }, [loadHeartbeat]);
 
-  const activeItem = NAV_ITEMS.find((i) => i.label === active) ?? NAV_ITEMS[0];
+  const activeItem = NAV_ITEMS.find((i) => i.id === active) ?? NAV_ITEMS[0];
 
   return (
     <div className="min-h-full overflow-hidden bg-[#08090d] text-anvil-100">
@@ -131,7 +149,7 @@ export default function App() {
         href="#main-content"
         className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-md focus:bg-circuit-300 focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:text-anvil-950"
       >
-        Skip to content
+        {t("app.skipToContent")}
       </a>
       <div
         className="pointer-events-none fixed inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.035),transparent_28rem),linear-gradient(90deg,rgba(34,211,238,0.055),transparent_36rem)]"
@@ -140,7 +158,7 @@ export default function App() {
       <div className="relative flex min-h-full flex-col lg:flex-row">
         <aside
           className="border-b border-white/10 bg-anvil-950/90 p-4 backdrop-blur-xl lg:sticky lg:top-0 lg:flex lg:h-screen lg:w-80 lg:shrink-0 lg:flex-col lg:overflow-y-auto lg:border-b-0 lg:border-r lg:p-5"
-          aria-label="Application sidebar"
+          aria-label={t("app.sidebarLabel")}
         >
           <div className="flex items-start justify-between gap-4 lg:block">
             <Brand state={hb} />
@@ -151,14 +169,16 @@ export default function App() {
 
           <nav
             className="nav-strip mt-5 flex snap-x gap-2 overflow-x-auto pb-2 text-sm lg:block lg:space-y-1.5 lg:overflow-visible lg:pb-0"
-            aria-label="Primary"
+            aria-label={t("app.primaryNav")}
           >
             {NAV_ITEMS.map((item) => (
               <NavStub
-                key={item.label}
+                key={item.id}
                 item={item}
-                active={active === item.label}
-                onActivate={() => setActive(item.label)}
+                label={t(item.labelKey)}
+                description={t(item.descriptionKey)}
+                active={active === item.id}
+                onActivate={() => setActive(item.id)}
               />
             ))}
           </nav>
@@ -200,7 +220,8 @@ export default function App() {
         items={paletteItems}
         onSelect={(item) => {
           if (item.id.startsWith("nav:")) {
-            setActive(item.label);
+            const navId = item.id.slice(4) as NavItem["id"];
+            setActive(navId);
           }
         }}
       />
@@ -219,6 +240,8 @@ function ShellActions({
   onOpenGuide: () => void;
   stacked?: boolean;
 }) {
+  const { t } = useTranslation();
+
   return (
     <div
       className={cn(
@@ -235,7 +258,7 @@ function ShellActions({
         onClick={onOpenPalette}
       >
         <SearchIcon />
-        Commands
+        {t("palette.commandsButton")}
       </Button>
       <Button
         type="button"
@@ -245,33 +268,34 @@ function ShellActions({
         onClick={onOpenGuide}
       >
         <GuideIcon />
-        Guide
+        {t("app.guide")}
       </Button>
     </div>
   );
 }
 
 function Brand({ state }: { state: LoadState }) {
+  const { t } = useTranslation();
+
   return (
     <div className="min-w-0">
       <div className="flex items-center gap-3">
         <LogoMark />
         <div className="min-w-0">
           <h1 className="truncate text-lg font-semibold tracking-tight text-anvil-50">
-            Droidsmith
+            {t("app.name")}
           </h1>
           <p className="mt-0.5 text-xs leading-5 text-anvil-400">
-            Android device workshop
+            {t("app.tagline")}
           </p>
         </div>
       </div>
       <p className="mt-4 hidden max-w-[17rem] text-xs leading-5 text-anvil-400 lg:block">
-        Inspect devices, stage actions, and keep every risky Android operation
-        traceable.
+        {t("app.description")}
       </p>
       {state.status === "ok" && (
         <p className="mt-3 text-xs text-anvil-400">
-          Version {state.value.version}
+          {t("app.version", { version: state.value.version })}
         </p>
       )}
     </div>
@@ -279,24 +303,30 @@ function Brand({ state }: { state: LoadState }) {
 }
 
 function RuntimeBadge({ state }: { state: LoadState }) {
+  const { t } = useTranslation();
+
   if (state.status === "ok") {
-    return <Badge tone="success">Desktop runtime</Badge>;
+    return <Badge tone="success">{t("runtime.desktop")}</Badge>;
   }
   if (state.status === "loading") {
-    return <Badge tone="info">Starting</Badge>;
+    return <Badge tone="info">{t("runtime.starting")}</Badge>;
   }
   if (state.status === "error") {
-    return <Badge tone="danger">Runtime issue</Badge>;
+    return <Badge tone="danger">{t("runtime.issue")}</Badge>;
   }
-  return <Badge tone="neutral">Browser preview</Badge>;
+  return <Badge tone="neutral">{t("runtime.browserPreview")}</Badge>;
 }
 
 function NavStub({
   item,
+  label,
+  description,
   active,
   onActivate,
 }: {
   item: NavItem;
+  label: string;
+  description: string;
   active: boolean;
   onActivate: () => void;
 }) {
@@ -305,7 +335,7 @@ function NavStub({
       type="button"
       onClick={onActivate}
       aria-current={active ? "page" : undefined}
-      aria-describedby={`${item.label}-description`}
+      aria-describedby={`${item.id}-description`}
       className={cn(
         "group flex min-w-[12.5rem] items-start gap-3 rounded-lg border p-3 text-left transition duration-150 lg:min-w-0",
         "snap-start",
@@ -315,10 +345,10 @@ function NavStub({
           : "border-transparent text-anvil-300 hover:border-white/10 hover:bg-white/[0.05] hover:text-anvil-50",
       )}
     >
-      <NavIcon label={item.label} active={active} />
+      <NavIcon id={item.id} active={active} />
       <span className="min-w-0 flex-1">
         <span className="flex items-center justify-between gap-3">
-          <span className="font-medium">{item.label}</span>
+          <span className="font-medium">{label}</span>
           <span
             className={cn(
               "font-mono text-[10px] uppercase tracking-[0.08em]",
@@ -329,13 +359,13 @@ function NavStub({
           </span>
         </span>
         <span
-          id={`${item.label}-description`}
+          id={`${item.id}-description`}
           className={cn(
             "mt-1 text-xs leading-5 text-anvil-400",
             active ? "hidden lg:block" : "sr-only",
           )}
         >
-          {item.description}
+          {description}
         </span>
       </span>
     </button>
@@ -349,10 +379,14 @@ function HeartbeatSidebarSummary({
   state: LoadState;
   onRetry: () => void;
 }) {
+  const { t } = useTranslation();
+
   if (state.status === "loading") {
     return (
       <div className="rounded-lg border border-white/10 bg-white/[0.04] p-4">
-        <p className="text-xs font-medium text-anvil-200">Checking runtime</p>
+        <p className="text-xs font-medium text-anvil-200">
+          {t("runtime.checking")}
+        </p>
         <div className="mt-3 space-y-2" aria-hidden="true">
           <SkeletonLine className="w-4/5" />
           <SkeletonLine className="w-2/3" />
@@ -368,12 +402,11 @@ function HeartbeatSidebarSummary({
         <div className="flex items-center gap-2">
           <StatusDot tone="neutral" />
           <p className="text-xs font-medium text-anvil-200">
-            Desktop shell not attached
+            {t("runtime.notAttached")}
           </p>
         </div>
         <p className="mt-2 text-xs leading-5 text-anvil-400">
-          Device IPC is available when the app is launched with{" "}
-          <code>npm run tauri:dev</code>.
+          {t("runtime.notAttachedPrefix")} <code>npm run tauri:dev</code>.
         </p>
       </div>
     );
@@ -385,7 +418,7 @@ function HeartbeatSidebarSummary({
         <div className="flex items-center gap-2">
           <StatusDot tone="danger" />
           <p role="alert" className="text-xs font-medium text-red-100">
-            Runtime check failed
+            {t("runtime.failed")}
           </p>
         </div>
         <p className="mt-2 line-clamp-3 text-xs leading-5 text-red-100/75">
@@ -398,7 +431,7 @@ function HeartbeatSidebarSummary({
           size="sm"
           className="mt-3"
         >
-          Retry
+          {t("runtime.retry")}
         </Button>
       </div>
     );
@@ -409,11 +442,16 @@ function HeartbeatSidebarSummary({
     <div className="rounded-lg border border-white/10 bg-white/[0.04] p-4">
       <div className="flex items-center gap-2">
         <StatusDot tone="success" />
-        <p className="text-xs font-medium text-anvil-200">Runtime healthy</p>
+        <p className="text-xs font-medium text-anvil-200">
+          {t("runtime.healthy")}
+        </p>
       </div>
       <dl className="mt-3 grid gap-2 text-xs">
-        <Metric label="OS" value={`${v.os.family} ${v.os.arch}`} />
-        <Metric label="ADB" value={v.adb.path ? "Resolved" : "Missing"} />
+        <Metric label={t("runtime.os")} value={`${v.os.family} ${v.os.arch}`} />
+        <Metric
+          label={t("runtime.adb")}
+          value={v.adb.path ? t("runtime.resolved") : t("runtime.missing")}
+        />
         <Metric label="Tauri" value={`v${v.tauri_version}`} />
       </dl>
     </div>
@@ -498,7 +536,7 @@ function GuideIcon() {
   );
 }
 
-function NavIcon({ label, active }: { label: string; active: boolean }) {
+function NavIcon({ id, active }: { id: NavItem["id"]; active: boolean }) {
   const className = cn(
     "mt-0.5 h-5 w-5 shrink-0 transition",
     active ? "text-circuit-100" : "text-anvil-500 group-hover:text-anvil-300",
@@ -515,46 +553,46 @@ function NavIcon({ label, active }: { label: string; active: boolean }) {
       strokeWidth="1.75"
       aria-hidden="true"
     >
-      {label === "Devices" && (
+      {id === "devices" && (
         <>
           <path d="M8 4.5h8a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2v-11a2 2 0 0 1 2-2Z" />
           <path d="M10 7.5h4M10 16.5h4" />
         </>
       )}
-      {label === "Wireless" && (
+      {id === "wireless" && (
         <>
           <path d="M7.25 14.25a6.75 6.75 0 0 1 9.5 0M4.5 11.25a10.6 10.6 0 0 1 15 0M10 17.25a2.85 2.85 0 0 1 4 0" />
           <path d="M12 20h.01" />
         </>
       )}
-      {label === "Apps" && (
+      {id === "apps" && (
         <>
           <path d="M5 5h5v5H5zM14 5h5v5h-5zM5 14h5v5H5zM14 14h5v5h-5z" />
         </>
       )}
-      {label === "Debloat" && (
+      {id === "debloat" && (
         <>
           <path d="M12 4.5 18 7v4.5c0 3.75-2.4 6.6-6 8-3.6-1.4-6-4.25-6-8V7l6-2.5Z" />
           <path d="m9.5 12.25 1.7 1.7 3.6-4" />
         </>
       )}
-      {label === "Mirror" && (
+      {id === "mirror" && (
         <>
           <path d="M8 4.5h8a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2v-11a2 2 0 0 1 2-2Z" />
           <path d="M9 8h6v5H9zM10.5 16.5h3" />
         </>
       )}
-      {label === "Console" && (
+      {id === "console" && (
         <>
           <path d="m5 7 4 4-4 4M11 16h8" />
         </>
       )}
-      {label === "Logcat" && (
+      {id === "logcat" && (
         <>
           <path d="M6 6h12M6 10h8M6 14h12M6 18h6" />
         </>
       )}
-      {label === "Fastboot" && (
+      {id === "fastboot" && (
         <>
           <path d="m13 3.5-7 10h5l-1 7 7-10h-5l1-7Z" />
         </>
