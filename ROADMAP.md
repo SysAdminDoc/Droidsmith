@@ -17,13 +17,6 @@ instead.
 
 ## Research-Driven Additions
 
-- [ ] P0 - Patch the Vite audit advisory and add local dependency-audit gates
-  Why: Local `npm audit --json` reports a high-severity Vite advisory and a moderate transitive `js-yaml` advisory.
-  Evidence: `npm audit --json`, `GHSA-fx2h-pf6j-xcff`, `GHSA-h67p-54hq-rp68`, open Dependabot PR #22 could not be closed because `gh` mutation auth returned 401.
-  Touches: `package.json`, `package-lock.json`, local audit scripts/docs, release checklist.
-  Acceptance: `npm audit` reports zero high/moderate advisories, Vite is patched or migrated with tests green, and local dependency review does not rely on GitHub automation.
-  Complexity: M
-
 - [ ] P0 - Surface the per-device journal and undo workflow in Apps
   Why: Destructive actions are already journaled, but users cannot inspect or undo reversible entries from the current Apps route.
   Evidence: `src/lib/tauri.ts:callJournalList`, `src/lib/tauri.ts:callJournalUndo`, `src-tauri/src/commands.rs:journal_list`, `src-tauri/src/commands.rs:journal_undo`, AppManager batch/recovery depth.
