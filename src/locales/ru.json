@@ -283,7 +283,40 @@
     "failedCount_one": "{{count}} пакет не удался.",
     "failedCount_other": "{{count}} пакетов не удалось.",
     "journalUndo": "Все изменения записаны в журнал устройства и могут быть отменены из вкладки Apps.",
-    "failedPackages": "Неудачные пакеты"
+    "failedPackages": "Неудачные пакеты",
+    "currentPackage": "Текущий пакет: {{package}}",
+    "preparingQueue": "Подготовка очереди...",
+    "cancelAfterCurrent": "Отменить после текущего",
+    "cancelRequested": "Отмена запрошена",
+    "cancelledBeforeApply": "Отменено до применения к этому пакету.",
+    "cancelledCount_one": "{{count}} пакет отменен.",
+    "cancelledCount_other": "{{count}} пакетов отменено.",
+    "cancelledSummary": "Отмена остановила очередь после завершения текущего пакета.",
+    "retryFailed_one": "Повторить {{count}} ошибку",
+    "retryFailed_other": "Повторить {{count}} ошибок",
+    "queueResults": "Результаты очереди",
+    "beforeAfter": "До / после",
+    "journalId": "Журнал",
+    "noJournalEntry": "Нет записи журнала",
+    "attemptCount_one": "{{count}} попытка",
+    "attemptCount_other": "{{count}} попыток",
+    "beforeState": "До: {{state}}",
+    "afterState": "После: {{state}}",
+    "stateUnknown": "неизвестно",
+    "stateMissing": "не установлен",
+    "stateEnabled": "включен",
+    "stateDisabled": "отключен",
+    "queueStatus": {
+      "pending": "Ожидает",
+      "running": "Выполняется",
+      "verified": "Проверено",
+      "failed": "Ошибка",
+      "cancelled": "Отменено"
+    },
+    "verify": {
+      "missing": "Пакет исчез после применения; ожидалось, что он останется установленным и отключенным.",
+      "still_enabled": "Пакет все еще включен после применения."
+    }
   },
   "mirror": {
     "title": "Зеркало",

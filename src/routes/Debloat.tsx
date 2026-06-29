@@ -1,20 +1,31 @@
-import { useCallback, useEffect, useState } from "react";
+﻿import { useCallback, useEffect, useRef, useState } from "react";
+import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 
 import {
   callApplyAction,
   callListDevices,
+  callListPackages,
   callListPacks,
   callPlanAction,
   inTauri,
   type ActionKind,
   type Device,
+  type JournalEntry,
   type ListDevicesResult,
   type Pack,
   type PackEntry,
   type RemovalLevel,
 } from "../lib/tauri";
 
+import {
+  queueStats,
+  snapshotPackage,
+  verifyDisabled,
+  type DisableVerification,
+  type PackageSnapshot,
+  type QueueStatus,
+} from "./debloatQueue";
 import {
   Badge,
   Button,
@@ -35,17 +46,34 @@ type PacksState =
   | { kind: "ok"; packs: Pack[] }
   | { kind: "error"; message: string };
 
+type DebloatQueueRow = {
+  entry: PackEntry;
+  status: QueueStatus;
+  attempts: number;
+  before: PackageSnapshot | null;
+  after: PackageSnapshot | null;
+  journalId: number | null;
+  error: string | null;
+};
+
 type WizardStep =
   | { step: "pick_pack" }
   | { step: "preview"; pack: Pack; selected: Set<string> }
   | {
       step: "applying";
       pack: Pack;
-      queue: PackEntry[];
-      applied: number;
-      errors: string[];
+      queue: DebloatQueueRow[];
+      currentPackage: string | null;
+      cancelRequested: boolean;
     }
-  | { step: "done"; pack: Pack; applied: number; errors: string[] };
+  | {
+      step: "done";
+      pack: Pack;
+      queue: DebloatQueueRow[];
+      cancelled: boolean;
+    };
+
+const DEBLOAT_ACTION_KIND: ActionKind = "disable";
 
 export default function DebloatRoute() {
   const { t } = useTranslation();
@@ -55,6 +83,7 @@ export default function DebloatRoute() {
   const [packsState, setPacksState] = useState<PacksState>({ kind: "loading" });
   const [selectedSerial, setSelectedSerial] = useState<string | null>(null);
   const [wizard, setWizard] = useState<WizardStep>({ step: "pick_pack" });
+  const cancelRequestedRef = useRef(false);
 
   const loadDevices = useCallback(async () => {
     if (!inTauri()) {
@@ -118,43 +147,142 @@ export default function DebloatRoute() {
     });
   }, []);
 
-  const applyPack = useCallback(async () => {
-    if (wizard.step !== "preview" || !selectedSerial) return;
-    const queue = wizard.pack.packages.filter((p) => wizard.selected.has(p.id));
-    setWizard({
-      step: "applying",
-      pack: wizard.pack,
-      queue,
-      applied: 0,
-      errors: [],
-    });
+  const readPackageSnapshot = useCallback(
+    async (serial: string, packageId: string): Promise<PackageSnapshot> => {
+      const packages = await callListPackages(serial, "all");
+      return snapshotPackage(packages, packageId);
+    },
+    [],
+  );
 
-    let applied = 0;
-    const errors: string[] = [];
+  const verificationMessage = useCallback(
+    (result: DisableVerification): string | null => {
+      if (result === "ok") return null;
+      return t(`debloat.verify.${result}`);
+    },
+    [t],
+  );
 
-    for (const entry of queue) {
-      try {
-        const plan = await callPlanAction({
-          serial: selectedSerial,
-          package: entry.id,
-          kind: "disable" as ActionKind,
-        });
-        await callApplyAction(plan);
-        applied++;
-      } catch (e) {
-        errors.push(
-          `${entry.id}: ${e instanceof Error ? e.message : String(e)}`,
+  const runQueue = useCallback(
+    async (pack: Pack, rows: DebloatQueueRow[]) => {
+      if (!selectedSerial) return;
+      cancelRequestedRef.current = false;
+      let queue = rows;
+
+      const commitQueue = (
+        patch: Partial<Extract<WizardStep, { step: "applying" }>> = {},
+      ) => {
+        setWizard((prev) =>
+          prev.step === "applying" ? { ...prev, queue, ...patch } : prev,
+        );
+      };
+
+      setWizard({
+        step: "applying",
+        pack,
+        queue,
+        currentPackage: null,
+        cancelRequested: false,
+      });
+
+      for (const row of queue.filter((item) => item.status === "pending")) {
+        if (cancelRequestedRef.current) break;
+
+        queue = patchQueueRow(queue, row.entry.id, (current) => ({
+          ...current,
+          status: "running",
+          attempts: current.attempts + 1,
+          before: null,
+          after: null,
+          journalId: null,
+          error: null,
+        }));
+        commitQueue({ currentPackage: row.entry.id });
+
+        let before: PackageSnapshot | null = null;
+        let after: PackageSnapshot | null = null;
+        let journal: JournalEntry | null = null;
+        let error: string | null = null;
+
+        try {
+          before = await readPackageSnapshot(selectedSerial, row.entry.id);
+          const plan = await callPlanAction({
+            serial: selectedSerial,
+            package: row.entry.id,
+            kind: DEBLOAT_ACTION_KIND,
+          });
+          journal = await callApplyAction(plan);
+          after = await readPackageSnapshot(selectedSerial, row.entry.id);
+          error = verificationMessage(verifyDisabled(after));
+        } catch (e) {
+          error = e instanceof Error ? e.message : String(e);
+          try {
+            after = await readPackageSnapshot(selectedSerial, row.entry.id);
+          } catch {
+            // Preserve the original apply error; missing after-state is visible as null.
+          }
+        }
+
+        queue = patchQueueRow(queue, row.entry.id, (current) => ({
+          ...current,
+          status: error ? "failed" : "verified",
+          before,
+          after,
+          journalId: journal?.id ?? null,
+          error,
+        }));
+        commitQueue({ currentPackage: row.entry.id });
+      }
+
+      const cancelled = cancelRequestedRef.current;
+      if (cancelled) {
+        queue = queue.map((row) =>
+          row.status === "pending"
+            ? {
+                ...row,
+                status: "cancelled",
+                error: t("debloat.cancelledBeforeApply"),
+              }
+            : row,
         );
       }
-      setWizard((prev) =>
-        prev.step === "applying"
-          ? { ...prev, applied: applied, errors: [...errors] }
-          : prev,
-      );
-    }
 
-    setWizard({ step: "done", pack: wizard.pack, applied, errors });
-  }, [wizard, selectedSerial]);
+      setWizard({ step: "done", pack, queue, cancelled });
+    },
+    [readPackageSnapshot, selectedSerial, t, verificationMessage],
+  );
+
+  const applyPack = useCallback(async () => {
+    if (wizard.step !== "preview" || !selectedSerial) return;
+    const queue = makeQueueRows(
+      wizard.pack.packages.filter((p) => wizard.selected.has(p.id)),
+    );
+    await runQueue(wizard.pack, queue);
+  }, [runQueue, selectedSerial, wizard]);
+
+  const cancelAfterCurrent = useCallback(() => {
+    cancelRequestedRef.current = true;
+    setWizard((prev) =>
+      prev.step === "applying" ? { ...prev, cancelRequested: true } : prev,
+    );
+  }, []);
+
+  const retryFailed = useCallback(async () => {
+    if (wizard.step !== "done" || !selectedSerial) return;
+    const queue = wizard.queue.map((row) =>
+      row.status === "failed"
+        ? {
+            ...row,
+            status: "pending" as QueueStatus,
+            before: null,
+            after: null,
+            journalId: null,
+            error: null,
+          }
+        : row,
+    );
+    await runQueue(wizard.pack, queue);
+  }, [runQueue, selectedSerial, wizard]);
 
   const authorizedDevices =
     devicesState.kind === "ok"
@@ -225,19 +353,21 @@ export default function DebloatRoute() {
         )}
 
         {wizard.step === "applying" && (
-          <ApplyProgress
+          <QueueApplyProgress
             pack={wizard.pack}
-            total={wizard.queue.length}
-            applied={wizard.applied}
-            errors={wizard.errors}
+            queue={wizard.queue}
+            currentPackage={wizard.currentPackage}
+            cancelRequested={wizard.cancelRequested}
+            onCancel={cancelAfterCurrent}
           />
         )}
 
         {wizard.step === "done" && (
-          <ApplyResult
+          <QueueApplyResult
             pack={wizard.pack}
-            applied={wizard.applied}
-            errors={wizard.errors}
+            queue={wizard.queue}
+            cancelled={wizard.cancelled}
+            onRetryFailed={() => void retryFailed()}
             onReset={() => setWizard({ step: "pick_pack" })}
           />
         )}
@@ -502,27 +632,78 @@ function PackPreview({
   );
 }
 
-function ApplyProgress({
+function makeQueueRows(entries: PackEntry[]): DebloatQueueRow[] {
+  return entries.map((entry) => ({
+    entry,
+    status: "pending",
+    attempts: 0,
+    before: null,
+    after: null,
+    journalId: null,
+    error: null,
+  }));
+}
+
+function patchQueueRow(
+  rows: DebloatQueueRow[],
+  entryId: string,
+  patch: (row: DebloatQueueRow) => DebloatQueueRow,
+): DebloatQueueRow[] {
+  return rows.map((row) => (row.entry.id === entryId ? patch(row) : row));
+}
+
+function QueueApplyProgress({
   pack,
-  total,
-  applied,
-  errors,
+  queue,
+  currentPackage,
+  cancelRequested,
+  onCancel,
 }: {
   pack: Pack;
-  total: number;
-  applied: number;
-  errors: string[];
+  queue: DebloatQueueRow[];
+  currentPackage: string | null;
+  cancelRequested: boolean;
+  onCancel: () => void;
 }) {
   const { t } = useTranslation();
-  const pct = total > 0 ? Math.round((applied / total) * 100) : 0;
+  const stats = queueStats(queue);
+  const pct =
+    stats.total > 0 ? Math.round((stats.completed / stats.total) * 100) : 0;
+
   return (
     <Card className="p-5">
-      <h3 className="text-sm font-semibold text-anvil-50">
-        {t("debloat.applyingPack", { name: pack.name })}
-      </h3>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h3 className="text-sm font-semibold text-anvil-50">
+            {t("debloat.applyingPack", { name: pack.name })}
+          </h3>
+          <p className="mt-1 text-xs text-anvil-400">
+            {currentPackage
+              ? t("debloat.currentPackage", { package: currentPackage })
+              : t("debloat.preparingQueue")}
+          </p>
+        </div>
+        <Button
+          type="button"
+          size="sm"
+          variant="danger"
+          onClick={onCancel}
+          disabled={cancelRequested}
+        >
+          {cancelRequested
+            ? t("debloat.cancelRequested")
+            : t("debloat.cancelAfterCurrent")}
+        </Button>
+      </div>
+
       <div className="mt-4">
         <div className="flex items-center justify-between text-xs text-anvil-400">
-          <span>{t("debloat.progressCount", { applied, total })}</span>
+          <span>
+            {t("debloat.progressCount", {
+              applied: stats.completed,
+              total: stats.total,
+            })}
+          </span>
           <span>{pct}%</span>
         </div>
         <div className="mt-2 h-2 overflow-hidden rounded-sm bg-white/[0.08]">
@@ -532,72 +713,185 @@ function ApplyProgress({
           />
         </div>
       </div>
-      {errors.length > 0 && (
-        <div className="mt-4">
-          <p className="text-xs font-medium text-red-300">
-            {t("debloat.errorCount", { count: errors.length })}
-          </p>
-          <ul className="mt-2 space-y-1">
-            {errors.map((e) => (
-              <li key={e} className="font-mono text-[11px] text-red-200/70">
-                {e}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+
+      <QueueRows rows={queue} />
     </Card>
   );
 }
 
-function ApplyResult({
+function QueueApplyResult({
   pack,
-  applied,
-  errors,
+  queue,
+  cancelled,
+  onRetryFailed,
   onReset,
 }: {
   pack: Pack;
-  applied: number;
-  errors: string[];
+  queue: DebloatQueueRow[];
+  cancelled: boolean;
+  onRetryFailed: () => void;
   onReset: () => void;
 }) {
   const { t } = useTranslation();
+  const stats = queueStats(queue);
+  const failedRows = queue.filter((row) => row.status === "failed");
+  const tone =
+    stats.failed > 0 || cancelled
+      ? "warning"
+      : stats.verified === stats.total
+        ? "success"
+        : "info";
 
   return (
     <>
       <StatePanel
-        title={`${pack.name} — debloat complete`}
-        tone={errors.length > 0 ? "warning" : "success"}
+        title={t("debloat.completeTitle", { name: pack.name })}
+        tone={tone}
         actions={
-          <Button type="button" size="sm" onClick={onReset}>
-            {t("debloat.startOver")}
-          </Button>
+          <>
+            {failedRows.length > 0 && (
+              <Button
+                type="button"
+                size="sm"
+                variant="primary"
+                onClick={onRetryFailed}
+              >
+                {t("debloat.retryFailed", { count: failedRows.length })}
+              </Button>
+            )}
+            <Button type="button" size="sm" onClick={onReset}>
+              {t("debloat.startOver")}
+            </Button>
+          </>
         }
       >
         <p>
-          {t("debloat.disabledCount", { count: applied })}
-          {errors.length > 0 &&
-            ` ${t("debloat.failedCount", { count: errors.length })}`}
+          {t("debloat.disabledCount", { count: stats.verified })}
+          {stats.failed > 0 &&
+            ` ${t("debloat.failedCount", { count: stats.failed })}`}
+          {stats.cancelled > 0 &&
+            ` ${t("debloat.cancelledCount", { count: stats.cancelled })}`}
         </p>
+        {cancelled && <p className="mt-2">{t("debloat.cancelledSummary")}</p>}
         <p className="mt-2">{t("debloat.journalUndo")}</p>
       </StatePanel>
 
-      {errors.length > 0 && (
-        <Card className="p-4">
-          <h4 className="text-xs font-semibold text-red-200">
-            {t("debloat.failedPackages")}
-          </h4>
-          <ul className="mt-2 space-y-1">
-            {errors.map((e) => (
-              <li key={e} className="font-mono text-[11px] text-red-200/70">
-                {e}
-              </li>
-            ))}
-          </ul>
-        </Card>
-      )}
+      <Card className="p-4">
+        <h4 className="text-xs font-semibold text-anvil-200">
+          {t("debloat.queueResults")}
+        </h4>
+        <QueueRows rows={queue} />
+      </Card>
     </>
   );
+}
+
+function QueueRows({ rows }: { rows: DebloatQueueRow[] }) {
+  const { t } = useTranslation();
+
+  return (
+    <div className="mt-4 overflow-x-auto rounded-lg border border-white/10">
+      <table className="min-w-full text-sm">
+        <thead className="bg-white/[0.04]">
+          <tr>
+            <Th>{t("apps.package")}</Th>
+            <Th>{t("devices.state")}</Th>
+            <Th>{t("debloat.beforeAfter")}</Th>
+            <Th>{t("debloat.journalId")}</Th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-white/10">
+          {rows.map((row) => (
+            <tr key={row.entry.id} className="bg-anvil-950/20">
+              <Td>
+                <code className="font-mono text-xs text-anvil-100">
+                  {row.entry.id}
+                </code>
+                {row.error && (
+                  <p className="mt-1 max-w-xl text-xs leading-5 text-red-200/80">
+                    {row.error}
+                  </p>
+                )}
+              </Td>
+              <Td>
+                <Badge tone={queueStatusTone(row.status)}>
+                  {t(`debloat.queueStatus.${row.status}`)}
+                </Badge>
+                {row.attempts > 0 && (
+                  <p className="mt-1 text-[11px] text-anvil-500">
+                    {t("debloat.attemptCount", { count: row.attempts })}
+                  </p>
+                )}
+              </Td>
+              <Td>
+                <div className="min-w-[12rem] text-xs text-anvil-400">
+                  <p>
+                    {t("debloat.beforeState", snapshotLabel(row.before, t))}
+                  </p>
+                  <p className="mt-1">
+                    {t("debloat.afterState", snapshotLabel(row.after, t))}
+                  </p>
+                </div>
+              </Td>
+              <Td>
+                {row.journalId ? (
+                  <code className="font-mono text-xs text-circuit-100">
+                    #{row.journalId}
+                  </code>
+                ) : (
+                  <span className="text-xs text-anvil-500">
+                    {t("debloat.noJournalEntry")}
+                  </span>
+                )}
+              </Td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function queueStatusTone(
+  status: QueueStatus,
+): "neutral" | "info" | "success" | "warning" | "danger" {
+  switch (status) {
+    case "pending":
+      return "neutral";
+    case "running":
+      return "info";
+    case "verified":
+      return "success";
+    case "failed":
+      return "danger";
+    case "cancelled":
+      return "warning";
+  }
+}
+
+function snapshotLabel(
+  snapshot: PackageSnapshot | null,
+  t: ReturnType<typeof useTranslation>["t"],
+): { state: string } {
+  if (!snapshot) return { state: t("debloat.stateUnknown") };
+  if (!snapshot.present) return { state: t("debloat.stateMissing") };
+  return {
+    state: snapshot.enabled
+      ? t("debloat.stateEnabled")
+      : t("debloat.stateDisabled"),
+  };
+}
+
+function Th({ children }: { children: ReactNode }) {
+  return (
+    <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-anvil-400">
+      {children}
+    </th>
+  );
+}
+
+function Td({ children }: { children: ReactNode }) {
+  return <td className="px-4 py-4 align-middle text-anvil-200">{children}</td>;
 }
 
 function groupByTier(entries: PackEntry[]): Map<RemovalLevel, PackEntry[]> {

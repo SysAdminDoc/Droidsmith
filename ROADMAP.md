@@ -17,13 +17,6 @@ instead.
 
 ## Research-Driven Additions
 
-- [ ] P0 - Add debloat queue cancellation, retry, and before/after verification
-  Why: `Debloat.tsx` applies selected entries in a renderer loop with only an error list, which is weak for batch destructive work.
-  Evidence: `src/routes/Debloat.tsx:applyPack`, UAD-NG risk warnings, Canta restore-state expectations.
-  Touches: `src/routes/Debloat.tsx`, `src-tauri/src/adb/actions.rs`, `src-tauri/src/journal/`, `src/locales/*.json`.
-  Acceptance: Batch apply shows current package, supports cancel-after-current, retries failed packages, records journal IDs, and verifies each selected package state after apply.
-  Complexity: L
-
 - [ ] P1 - Make backup behavior honest and path-safe for modern Android
   Why: Current backup uses `adb backup` to `${pkg}.ab` without a path picker or compatibility warning, so users may trust incomplete or unsupported backups.
   Evidence: `src-tauri/src/commands.rs:backup_package`, `src/routes/Apps.tsx:startBackup`, Android Auto Backup docs, AppManager backup/restore feature set.

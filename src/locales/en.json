@@ -283,7 +283,40 @@
     "failedCount_one": "{{count}} package failed.",
     "failedCount_other": "{{count}} packages failed.",
     "journalUndo": "All changes are recorded in the per-device journal and can be undone from the Apps tab.",
-    "failedPackages": "Failed packages"
+    "failedPackages": "Failed packages",
+    "currentPackage": "Current package: {{package}}",
+    "preparingQueue": "Preparing queue...",
+    "cancelAfterCurrent": "Cancel after current",
+    "cancelRequested": "Cancel requested",
+    "cancelledBeforeApply": "Cancelled before this package was applied.",
+    "cancelledCount_one": "{{count}} package cancelled.",
+    "cancelledCount_other": "{{count}} packages cancelled.",
+    "cancelledSummary": "Cancellation stopped the queue after the current package finished.",
+    "retryFailed_one": "Retry {{count}} failed",
+    "retryFailed_other": "Retry {{count}} failed",
+    "queueResults": "Queue results",
+    "beforeAfter": "Before / after",
+    "journalId": "Journal",
+    "noJournalEntry": "No journal entry",
+    "attemptCount_one": "{{count}} attempt",
+    "attemptCount_other": "{{count}} attempts",
+    "beforeState": "Before: {{state}}",
+    "afterState": "After: {{state}}",
+    "stateUnknown": "unknown",
+    "stateMissing": "not installed",
+    "stateEnabled": "enabled",
+    "stateDisabled": "disabled",
+    "queueStatus": {
+      "pending": "Pending",
+      "running": "Running",
+      "verified": "Verified",
+      "failed": "Failed",
+      "cancelled": "Cancelled"
+    },
+    "verify": {
+      "missing": "Package disappeared after apply; expected it to remain installed and disabled.",
+      "still_enabled": "Package is still enabled after apply."
+    }
   },
   "mirror": {
     "title": "Mirror",
