@@ -157,13 +157,15 @@ export type PlannedAction = {
   description: string;
 };
 
+export type AppliedAction = {
+  plan: PlannedAction;
+  stdout: string;
+  applied_at: string;
+};
+
 export type JournalEntry = {
   id: number;
-  action: string;
-  package: string;
-  kind: ActionKind;
-  applied_at: string;
-  stdout: string;
+  applied: AppliedAction;
   undone_by: number | null;
   undoes: number | null;
 };

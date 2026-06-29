@@ -5,6 +5,8 @@ import { useTranslation } from "react-i18next";
 import {
   callApplyAction,
   callBackupPackage,
+  callJournalList,
+  callJournalUndo,
   callListDevices,
   callListPackages,
   callListPermissions,
@@ -14,12 +16,14 @@ import {
   type ActionKind,
   type AppPackage,
   type Device,
+  type JournalEntry,
   type ListDevicesResult,
   type PackageFilter,
   type PermissionInfo,
   type PlannedAction,
 } from "../lib/tauri";
 
+import { journalEntryStatus, type JournalEntryStatus } from "./appsJournal";
 import {
   Badge,
   Button,
@@ -50,6 +54,12 @@ type ActionState =
   | { kind: "success"; message: string }
   | { kind: "error"; message: string };
 
+type JournalState =
+  | { kind: "idle" }
+  | { kind: "loading" }
+  | { kind: "ok"; entries: JournalEntry[] }
+  | { kind: "error"; message: string };
+
 const FILTERS: { value: PackageFilter; labelKey: string }[] = [
   { value: "all", labelKey: "apps.filterAll" },
   { value: "user", labelKey: "apps.filterUser" },
@@ -67,6 +77,10 @@ export default function AppsRoute() {
   const [filter, setFilter] = useState<PackageFilter>("all");
   const [pkgState, setPkgState] = useState<PackagesState>({ kind: "idle" });
   const [actionState, setActionState] = useState<ActionState>({ kind: "idle" });
+  const [journalState, setJournalState] = useState<JournalState>({
+    kind: "idle",
+  });
+  const [undoingEntryId, setUndoingEntryId] = useState<number | null>(null);
   const [search, setSearch] = useState("");
   const [inspectedPkg, setInspectedPkg] = useState<string | null>(null);
   const [backupMsg, setBackupMsg] = useState<string | null>(null);
@@ -108,6 +122,23 @@ export default function AppsRoute() {
     }
   }, [selectedSerial, filter]);
 
+  const loadJournal = useCallback(async () => {
+    if (!selectedSerial) {
+      setJournalState({ kind: "idle" });
+      return;
+    }
+    setJournalState({ kind: "loading" });
+    try {
+      const entries = await callJournalList(selectedSerial);
+      setJournalState({ kind: "ok", entries });
+    } catch (e) {
+      setJournalState({
+        kind: "error",
+        message: e instanceof Error ? e.message : String(e),
+      });
+    }
+  }, [selectedSerial]);
+
   useEffect(() => {
     void loadDevices();
   }, [loadDevices]);
@@ -115,8 +146,11 @@ export default function AppsRoute() {
   useEffect(() => {
     if (selectedSerial) {
       void loadPackages();
+      void loadJournal();
+    } else {
+      setJournalState({ kind: "idle" });
     }
-  }, [selectedSerial, filter, loadPackages]);
+  }, [selectedSerial, filter, loadPackages, loadJournal]);
 
   const startAction = useCallback(
     async (pkg: string, kind: ActionKind) => {
@@ -167,13 +201,39 @@ export default function AppsRoute() {
         message: t("apps.planCompleted", { description: plan.description }),
       });
       void loadPackages();
+      void loadJournal();
     } catch (e) {
       setActionState({
         kind: "error",
         message: e instanceof Error ? e.message : String(e),
       });
     }
-  }, [actionState, loadPackages, t]);
+  }, [actionState, loadJournal, loadPackages, t]);
+
+  const undoJournalEntry = useCallback(
+    async (entry: JournalEntry) => {
+      if (!selectedSerial) return;
+      setUndoingEntryId(entry.id);
+      try {
+        await callJournalUndo(selectedSerial, entry.id);
+        setActionState({
+          kind: "success",
+          message: t("apps.journalUndoCompleted", {
+            package: entry.applied.plan.request.package,
+          }),
+        });
+        await Promise.all([loadPackages(), loadJournal()]);
+      } catch (e) {
+        setActionState({
+          kind: "error",
+          message: e instanceof Error ? e.message : String(e),
+        });
+      } finally {
+        setUndoingEntryId(null);
+      }
+    },
+    [loadJournal, loadPackages, selectedSerial, t],
+  );
 
   const authorizedDevices =
     devicesState.kind === "ok"
@@ -297,6 +357,13 @@ export default function AppsRoute() {
                 onBackup={(pkg) => void startBackup(pkg)}
               />
             )}
+
+            <JournalPanel
+              state={journalState}
+              undoingEntryId={undoingEntryId}
+              onRefresh={() => void loadJournal()}
+              onUndo={(entry) => void undoJournalEntry(entry)}
+            />
           </>
         )}
 
@@ -563,6 +630,226 @@ function PackageTable({
       )}
     </Card>
   );
+}
+
+function JournalPanel({
+  state,
+  undoingEntryId,
+  onRefresh,
+  onUndo,
+}: {
+  state: JournalState;
+  undoingEntryId: number | null;
+  onRefresh: () => void;
+  onUndo: (entry: JournalEntry) => void;
+}) {
+  const { t } = useTranslation();
+
+  if (state.kind === "idle") return null;
+
+  const entries =
+    state.kind === "ok"
+      ? [...state.entries].sort((a, b) => b.id - a.id).slice(0, 8)
+      : [];
+
+  return (
+    <Card className="overflow-hidden p-0">
+      <div className="flex flex-col gap-3 border-b border-white/10 p-4 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h3 className="text-sm font-semibold text-anvil-50">
+            {t("apps.journalTitle")}
+          </h3>
+          <p className="mt-1 text-xs leading-5 text-anvil-400">
+            {t("apps.journalBody")}
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {state.kind === "ok" && (
+            <Badge tone="neutral">
+              {t("apps.journalEntryCount", { count: state.entries.length })}
+            </Badge>
+          )}
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            onClick={onRefresh}
+            disabled={state.kind === "loading"}
+          >
+            {state.kind === "loading"
+              ? t("apps.journalLoading")
+              : t("apps.journalRefresh")}
+          </Button>
+        </div>
+      </div>
+
+      {state.kind === "loading" && (
+        <div className="divide-y divide-white/10">
+          {[0, 1, 2].map((i) => (
+            <div
+              key={i}
+              className="grid gap-4 p-4 md:grid-cols-[0.5fr_1.2fr_1.6fr_1fr_1fr]"
+            >
+              <SkeletonLine className="w-14" />
+              <SkeletonLine className="w-32" />
+              <SkeletonLine className="w-56" />
+              <SkeletonLine className="w-24" />
+              <SkeletonLine className="w-20" />
+            </div>
+          ))}
+        </div>
+      )}
+
+      {state.kind === "error" && (
+        <div className="border-t border-red-300/20 bg-red-950/15 p-4">
+          <Badge tone="danger">{t("apps.journalLoadFailed")}</Badge>
+          <p className="mt-3 text-sm leading-6 text-red-100">{state.message}</p>
+        </div>
+      )}
+
+      {state.kind === "ok" && entries.length === 0 && (
+        <EmptyState title={t("apps.journalEmpty")}>
+          <p>{t("apps.journalEmptyBody")}</p>
+        </EmptyState>
+      )}
+
+      {state.kind === "ok" && entries.length > 0 && (
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-sm">
+            <thead className="bg-white/[0.04]">
+              <tr>
+                <Th>{t("apps.journalId")}</Th>
+                <Th>{t("apps.journalAction")}</Th>
+                <Th>{t("apps.package")}</Th>
+                <Th>{t("devices.state")}</Th>
+                <Th>{t("apps.journalOutput")}</Th>
+                <Th>{t("apps.actions")}</Th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-white/10">
+              {entries.map((entry) => {
+                const status = journalEntryStatus(entry);
+                const request = entry.applied.plan.request;
+                return (
+                  <tr
+                    key={entry.id}
+                    className="bg-anvil-950/20 transition hover:bg-white/[0.035]"
+                  >
+                    <Td>
+                      <div className="min-w-[6rem]">
+                        <code className="font-mono text-xs text-anvil-50">
+                          #{entry.id}
+                        </code>
+                        <p className="mt-1 text-[11px] text-anvil-500">
+                          {formatJournalTime(entry.applied.applied_at)}
+                        </p>
+                      </div>
+                    </Td>
+                    <Td>
+                      <div className="min-w-[8rem]">
+                        <Badge tone="info">
+                          {t(journalActionKey(request.kind))}
+                        </Badge>
+                        <p className="mt-2 max-w-xs text-xs leading-5 text-anvil-400">
+                          {entry.applied.plan.description}
+                        </p>
+                      </div>
+                    </Td>
+                    <Td>
+                      <code className="block min-w-[16rem] font-mono text-xs text-anvil-100">
+                        {request.package}
+                      </code>
+                    </Td>
+                    <Td>
+                      <Badge tone={journalStatusTone(status)}>
+                        {journalStatusLabel(entry, status, t)}
+                      </Badge>
+                    </Td>
+                    <Td>
+                      <pre className="max-w-[22rem] whitespace-pre-wrap break-words font-mono text-[11px] leading-5 text-anvil-400">
+                        {summarizeJournalOutput(entry.applied.stdout) ||
+                          t("apps.journalNoOutput")}
+                      </pre>
+                    </Td>
+                    <Td>
+                      {status === "undoable" ? (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="primary"
+                          onClick={() => onUndo(entry)}
+                          disabled={undoingEntryId === entry.id}
+                        >
+                          {undoingEntryId === entry.id
+                            ? t("apps.journalUndoing")
+                            : t("apps.journalUndo")}
+                        </Button>
+                      ) : (
+                        <span className="text-xs text-anvil-500">
+                          {t("apps.journalNoUndo")}
+                        </span>
+                      )}
+                    </Td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </Card>
+  );
+}
+
+function journalActionKey(kind: ActionKind): string {
+  return `apps.actionKind.${kind}`;
+}
+
+function journalStatusTone(
+  status: JournalEntryStatus,
+): "neutral" | "info" | "success" | "warning" | "danger" {
+  switch (status) {
+    case "undoable":
+      return "warning";
+    case "undone":
+      return "success";
+    case "undo_record":
+      return "info";
+    case "irreversible":
+      return "neutral";
+  }
+}
+
+function journalStatusLabel(
+  entry: JournalEntry,
+  status: JournalEntryStatus,
+  t: ReturnType<typeof useTranslation>["t"],
+): string {
+  switch (status) {
+    case "undoable":
+      return t("apps.journalUndoable");
+    case "undone":
+      return t("apps.journalUndoneBy", { id: entry.undone_by });
+    case "undo_record":
+      return t("apps.journalUndoRecord", { id: entry.undoes });
+    case "irreversible":
+      return t("apps.journalIrreversible");
+  }
+}
+
+function formatJournalTime(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: "short",
+    timeStyle: "short",
+  }).format(date);
+}
+
+function summarizeJournalOutput(output: string): string {
+  const trimmed = output.trim();
+  if (trimmed.length <= 180) return trimmed;
+  return `${trimmed.slice(0, 180)}...`;
 }
 
 function ActionOverlay({

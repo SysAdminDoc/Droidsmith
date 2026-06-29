@@ -17,13 +17,6 @@ instead.
 
 ## Research-Driven Additions
 
-- [ ] P0 - Surface the per-device journal and undo workflow in Apps
-  Why: Destructive actions are already journaled, but users cannot inspect or undo reversible entries from the current Apps route.
-  Evidence: `src/lib/tauri.ts:callJournalList`, `src/lib/tauri.ts:callJournalUndo`, `src-tauri/src/commands.rs:journal_list`, `src-tauri/src/commands.rs:journal_undo`, AppManager batch/recovery depth.
-  Touches: `src/routes/Apps.tsx`, `src/lib/tauri.ts`, `src-tauri/src/journal/`, `src/locales/*.json`, tests.
-  Acceptance: Apps shows recent actions for the selected device, marks irreversible/already-undone rows, can undo disable/enable entries, refreshes package state, and has renderer/backend tests.
-  Complexity: M
-
 - [ ] P0 - Add debloat queue cancellation, retry, and before/after verification
   Why: `Debloat.tsx` applies selected entries in a renderer loop with only an error list, which is weak for batch destructive work.
   Evidence: `src/routes/Debloat.tsx:applyPack`, UAD-NG risk warnings, Canta restore-state expectations.
