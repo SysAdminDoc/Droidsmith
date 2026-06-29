@@ -17,13 +17,6 @@ instead.
 
 ## Research-Driven Additions
 
-- [ ] P2 - Add route-level accessibility and visual regression checks
-  Why: The app has many dense tables, overlays, dialogs, and status panels; current tests mostly cover nav/i18n structure, not keyboard flow or clipping.
-  Evidence: `src/App.test.tsx`, `src/lib/i18n.test.ts`, Apps action overlay, command palette, Onboarding, Android Studio dense-tooling benchmarks.
-  Touches: Playwright or Vitest browser setup, route components, screenshots.
-  Acceptance: Automated checks cover sidebar navigation, command palette, action overlay, Debloat queue states, Apps table, and mobile/narrow widths with no keyboard trap or text overflow.
-  Complexity: M
-
 - [ ] P2 - Prepare plugin boundaries without shipping a marketplace
   Why: Plugin and marketplace work is deferred, but pack/quirk/profile schemas need stable extension seams before third-party OEM modules accumulate.
   Evidence: `Roadmap_Blocked.md` R-062/R-063, `src-tauri/src/packs/mod.rs`, `src-tauri/src/quirks/mod.rs`, README plugin claim.

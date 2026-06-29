@@ -105,12 +105,15 @@ npm run format:check
 npm run lint
 npm run typecheck
 npm test
+npm run ui:smoke
 npm run release:smoke
 ```
 
-`npm run release:smoke` builds the frontend and Tauri bundle, checks bundled
-resource metadata, validates third-party notices, and fails if expected local
-installer artifacts are missing.
+`npm run ui:smoke` starts Vite with mocked Tauri IPC and checks sidebar
+navigation, command palette focus, Apps action overlays, Debloat queue results,
+and mobile/narrow overflow. `npm run release:smoke` builds the frontend and
+Tauri bundle, checks bundled resource metadata, validates third-party notices,
+and fails if expected local installer artifacts are missing.
 
 ## Translation contributions
 

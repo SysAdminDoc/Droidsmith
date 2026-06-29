@@ -1,0 +1,451 @@
+/* global window, document, getComputedStyle, HTMLElement */
+import fs from "node:fs";
+import http from "node:http";
+import net from "node:net";
+import path from "node:path";
+import { spawn, spawnSync } from "node:child_process";
+import { env, execPath, platform, stdout } from "node:process";
+import { setTimeout as delay } from "node:timers/promises";
+import { fileURLToPath } from "node:url";
+
+import { chromium } from "playwright";
+
+const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const uiSmokePort = env.DROIDSMITH_UI_SMOKE_PORT ?? String(await findOpenPort());
+const baseUrl = `http://127.0.0.1:${uiSmokePort}`;
+const screenshotDir = path.join(repoRoot, "test-results", "rendered-routes");
+
+fs.mkdirSync(screenshotDir, { recursive: true });
+
+const server = startVite();
+
+try {
+  await waitForHttp(baseUrl);
+
+  const browser = await chromium.launch();
+  try {
+    await runDesktopFlow(browser);
+    await runMobileFlow(browser);
+  } finally {
+    await browser.close();
+  }
+
+  stdout.write("Rendered route smoke OK\n");
+} finally {
+  stopServer(server);
+}
+
+async function runDesktopFlow(browser) {
+  const page = await browser.newPage({ viewport: { width: 1366, height: 900 } });
+  const errors = collectConsoleErrors(page);
+  await installTauriMock(page);
+  await page.goto(baseUrl, { waitUntil: "networkidle" });
+
+  await page.getByRole("heading", { name: "Droidsmith" }).waitFor();
+  for (const route of ["Devices", "Apps", "Debloat", "Console"]) {
+    await page.getByRole("button", { name: new RegExp(route) }).click();
+    await page.getByRole("heading", { name: route, exact: true }).waitFor();
+  }
+
+  await page.getByRole("button", { name: /Apps/ }).click();
+  await page.getByText("com.example.app").waitFor();
+  await page.getByText("com.android.settings").waitFor();
+  await assertNoHorizontalOverflow(page, "desktop Apps table");
+  await page.screenshot({
+    path: path.join(screenshotDir, "desktop-apps-table.png"),
+    fullPage: false,
+  });
+
+  await page
+    .getByRole("row")
+    .filter({ hasText: "com.example.app" })
+    .getByRole("button", { name: "Disable" })
+    .click();
+  await page.getByRole("alertdialog").waitFor();
+  await page.getByText(/pm disable-user --user 0 com\.example\.app/).waitFor();
+  await assertTabMovesFocus(page, "Apps action overlay");
+  await page.getByRole("button", { name: "Cancel" }).click();
+
+  await page.getByRole("button", { name: "Commands", exact: true }).click();
+  await page.getByRole("dialog", { name: "Command palette" }).waitFor();
+  await assertFocusedLabel(page, "Command palette search");
+  await page.getByLabel("Command palette search").fill("debloat");
+  await page.getByRole("option", { name: /Debloat/ }).click();
+  await page.getByRole("heading", { name: "Debloat", exact: true }).waitFor();
+
+  await page.getByRole("button", { name: /QA Debloat Pack/ }).click();
+  await page.getByRole("button", { name: /Apply 2 packages/ }).click();
+  await page.getByText(/QA Debloat Pack - debloat complete/).waitFor();
+  await page.getByText("Failed", { exact: true }).waitFor();
+  await page.getByRole("button", { name: /Retry 1 failed/ }).waitFor();
+  await assertNoHorizontalOverflow(page, "desktop Debloat queue");
+  await page.screenshot({
+    path: path.join(screenshotDir, "desktop-debloat-queue.png"),
+    fullPage: false,
+  });
+
+  assertNoConsoleErrors(errors, "desktop route smoke");
+  await page.close();
+}
+
+async function runMobileFlow(browser) {
+  const context = await browser.newContext({
+    viewport: { width: 390, height: 844 },
+    isMobile: true,
+  });
+  const page = await context.newPage();
+  const errors = collectConsoleErrors(page);
+  await installTauriMock(page);
+  await page.goto(baseUrl, { waitUntil: "networkidle" });
+  await page.getByRole("button", { name: /Apps/ }).click();
+  await page.getByText("com.example.app").waitFor();
+  await assertNoHorizontalOverflow(page, "mobile Apps route");
+  await page.screenshot({
+    path: path.join(screenshotDir, "mobile-apps-route.png"),
+    fullPage: false,
+  });
+  assertNoConsoleErrors(errors, "mobile route smoke");
+  await context.close();
+}
+
+function collectConsoleErrors(page) {
+  const errors = [];
+  page.on("console", (msg) => {
+    if (msg.type() === "error") {
+      errors.push(msg.text());
+    }
+  });
+  page.on("pageerror", (error) => errors.push(error.message));
+  return errors;
+}
+
+function assertNoConsoleErrors(errors, label) {
+  if (errors.length > 0) {
+    throw new Error(`${label} console errors:\n${errors.join("\n")}`);
+  }
+}
+
+async function assertFocusedLabel(page, label) {
+  await page.waitForFunction(
+    (expected) => document.activeElement?.getAttribute("aria-label") === expected,
+    label,
+  );
+  const activeLabel = await page.evaluate(() => {
+    const active = document.activeElement;
+    if (!active) return "";
+    return active.getAttribute("aria-label") ?? "";
+  });
+  if (activeLabel !== label) {
+    throw new Error(`Expected focus on ${label}, got ${activeLabel}`);
+  }
+}
+
+async function assertTabMovesFocus(page, label) {
+  await page.keyboard.press("Tab");
+  const focused = await page.evaluate(() => {
+    const active = document.activeElement;
+    if (!active || active === document.body) return "";
+    return `${active.tagName}:${active.textContent?.trim() ?? ""}`;
+  });
+  if (!focused) {
+    throw new Error(`${label} did not expose a tabbable control`);
+  }
+}
+
+async function assertNoHorizontalOverflow(page, label) {
+  const offenders = await page
+    .locator("button, select, input, label, h1, h2, h3, h4, p, [role='option'], [role='radio']")
+    .evaluateAll((elements) =>
+      elements.flatMap((element) => {
+        if (!(element instanceof HTMLElement)) return [];
+        if (element.closest(".overflow-x-auto")) return [];
+        const rect = element.getBoundingClientRect();
+        if (rect.width < 1 || rect.height < 1) return [];
+        const style = getComputedStyle(element);
+        if (style.display === "none" || style.visibility === "hidden") return [];
+        if (element.scrollWidth <= element.clientWidth + 2) return [];
+        const text = (element.textContent ?? "").trim().replace(/\s+/g, " ");
+        return [`${element.tagName.toLowerCase()}: ${text.slice(0, 120)}`];
+      }),
+    );
+
+  if (offenders.length > 0) {
+    throw new Error(`${label} horizontal overflow:\n${offenders.join("\n")}`);
+  }
+}
+
+async function installTauriMock(page) {
+  await page.addInitScript(() => {
+    const device = {
+      serial: "QA123",
+      state: "device",
+      model: "Pixel QA",
+      product: "oriole",
+      device: "oriole",
+      transport_id: 7,
+      wireless: false,
+    };
+    const packages = [
+      {
+        package: "com.example.app",
+        enabled: true,
+        system: false,
+        apk_path: "/data/app/com.example.app/base.apk",
+        uid: 10101,
+        installer: "com.android.vending",
+      },
+      {
+        package: "com.android.settings",
+        enabled: true,
+        system: true,
+        apk_path: "/system/priv-app/Settings/Settings.apk",
+        uid: 1000,
+        installer: null,
+      },
+      {
+        package: "com.example.disabled",
+        enabled: false,
+        system: false,
+        apk_path: "/data/app/com.example.disabled/base.apk",
+        uid: 10102,
+        installer: null,
+      },
+      {
+        package: "com.example.fail",
+        enabled: true,
+        system: false,
+        apk_path: "/data/app/com.example.fail/base.apk",
+        uid: 10103,
+        installer: null,
+      },
+    ];
+    let journalId = 20;
+
+    window.__TAURI_INTERNALS__ = {
+      async invoke(cmd, args = {}) {
+        if (cmd === "heartbeat") {
+          return {
+            version: "0.1.0",
+            os: { family: "Windows", version: "11", arch: "x86_64" },
+            tauri_version: "2.0.0",
+            rust_version: "1.88.0",
+            app_data_dir: "C:/Users/QA/AppData/Roaming/Droidsmith",
+            adb: {
+              path: "C:/Android/platform-tools/adb.exe",
+              source: "path",
+              version: "35.0.2",
+            },
+          };
+        }
+        if (cmd === "list_devices") {
+          return {
+            adb_resolved: true,
+            adb_path: "C:/Android/platform-tools/adb.exe",
+            devices: [device],
+          };
+        }
+        if (cmd === "list_packages") {
+          return filterPackages(packages, args.filter ?? "all");
+        }
+        if (cmd === "journal_list") {
+          return [
+            {
+              id: 1,
+              applied: {
+                plan: {
+                  request: {
+                    serial: "QA123",
+                    package: "com.example.disabled",
+                    kind: "disable",
+                  },
+                  args: ["pm", "disable-user", "--user", "0", "com.example.disabled"],
+                  description: "Disable com.example.disabled",
+                },
+                stdout: "Package com.example.disabled new state: disabled-user",
+                applied_at: "2026-06-29T10:00:00Z",
+              },
+              undone_by: null,
+              undoes: null,
+            },
+          ];
+        }
+        if (cmd === "plan_action") {
+          return planFor(args.request);
+        }
+        if (cmd === "apply_action") {
+          const request = args.plan.request;
+          if (request.package === "com.example.fail") {
+            throw new Error("OEM policy blocked this package");
+          }
+          const pkg = packages.find((item) => item.package === request.package);
+          if (pkg && request.kind === "disable") pkg.enabled = false;
+          if (pkg && request.kind === "enable") pkg.enabled = true;
+          return {
+            id: ++journalId,
+            applied: {
+              plan: args.plan,
+              stdout: `Applied ${request.kind} to ${request.package}`,
+              applied_at: "2026-06-29T10:05:00Z",
+            },
+            undone_by: null,
+            undoes: null,
+          };
+        }
+        if (cmd === "list_packs") {
+          return [
+            {
+              name: "QA Debloat Pack",
+              version: "1.0.0",
+              description: "Synthetic pack used by rendered route smoke tests.",
+              targets: {
+                manufacturer: ["Google"],
+                rom: ["Pixel"],
+                android_min: 13,
+                android_max: null,
+              },
+              packages: [
+                {
+                  id: "com.example.app",
+                  removal: "recommended",
+                  description: "Safe QA package.",
+                  depends_on: [],
+                  needed_by: [],
+                  labels: ["qa"],
+                },
+                {
+                  id: "com.example.fail",
+                  removal: "recommended",
+                  description: "Package that simulates an OEM policy failure.",
+                  depends_on: [],
+                  needed_by: [],
+                  labels: ["qa", "failure"],
+                },
+                {
+                  id: "com.android.settings",
+                  removal: "expert",
+                  description: "System settings is intentionally not preselected.",
+                  depends_on: [],
+                  needed_by: ["device settings"],
+                  labels: ["system"],
+                },
+              ],
+              attribution: null,
+            },
+          ];
+        }
+        if (cmd === "locate_scrcpy" || cmd === "locate_fastboot") return null;
+        if (cmd === "list_fastboot_devices") return [];
+        if (cmd === "list_permissions") return [];
+        throw new Error(`Unhandled mocked command: ${cmd}`);
+      },
+      transformCallback() {
+        return 1;
+      },
+      unregisterCallback() {},
+      runCallback() {},
+      convertFileSrc(filePath) {
+        return filePath;
+      },
+    };
+
+    function filterPackages(items, filter) {
+      if (filter === "user") return items.filter((item) => !item.system);
+      if (filter === "system") return items.filter((item) => item.system);
+      if (filter === "enabled") return items.filter((item) => item.enabled);
+      if (filter === "disabled") return items.filter((item) => !item.enabled);
+      return items;
+    }
+
+    function planFor(request) {
+      const action =
+        request.kind === "enable"
+          ? ["pm", "enable", request.package]
+          : ["pm", "disable-user", "--user", "0", request.package];
+      return {
+        request,
+        args: action,
+        description: `${request.kind} ${request.package}`,
+      };
+    }
+  });
+}
+
+function startVite() {
+  const command = npmCommand("dev", [
+    "--",
+    "--host",
+    "127.0.0.1",
+    "--port",
+    uiSmokePort,
+    "--strictPort",
+  ]);
+  const child = spawn(command.file, command.args, {
+    cwd: repoRoot,
+    stdio: ["ignore", "pipe", "pipe"],
+    windowsHide: true,
+  });
+  child.stdout.on("data", (chunk) => stdout.write(chunk));
+  child.stderr.on("data", (chunk) => stdout.write(chunk));
+  return child;
+}
+
+function npmCommand(scriptName, extraArgs = []) {
+  if (env.npm_execpath && fs.existsSync(env.npm_execpath)) {
+    return {
+      file: execPath,
+      args: [env.npm_execpath, "run", scriptName, ...extraArgs],
+    };
+  }
+  if (platform === "win32") {
+    const command = ["npm", "run", scriptName, ...extraArgs]
+      .map((part) => (part.includes(" ") ? `"${part}"` : part))
+      .join(" ");
+    return { file: "cmd.exe", args: ["/d", "/s", "/c", command] };
+  }
+  return { file: "npm", args: ["run", scriptName, ...extraArgs] };
+}
+
+async function waitForHttp(url) {
+  for (let attempt = 0; attempt < 80; attempt += 1) {
+    if (await canReach(url)) return;
+    await delay(250);
+  }
+  throw new Error(`Timed out waiting for ${url}`);
+}
+
+function canReach(url) {
+  return new Promise((resolve) => {
+    const req = http.get(url, (res) => {
+      res.resume();
+      resolve(Boolean(res.statusCode && res.statusCode < 500));
+    });
+    req.on("error", () => resolve(false));
+    req.setTimeout(1000, () => {
+      req.destroy();
+      resolve(false);
+    });
+  });
+}
+
+function stopServer(child) {
+  if (child.exitCode !== null) return;
+  if (platform === "win32" && child.pid) {
+    spawnSync("taskkill", ["/pid", String(child.pid), "/t", "/f"], {
+      stdio: "ignore",
+    });
+    return;
+  }
+  child.kill();
+}
+
+function findOpenPort() {
+  return new Promise((resolve, reject) => {
+    const server = net.createServer();
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", () => {
+      const address = server.address();
+      const port = typeof address === "object" && address ? address.port : 0;
+      server.close(() => resolve(port));
+    });
+  });
+}
