@@ -410,12 +410,42 @@ export type LaunchScrcpyOptions = {
   bit_rate?: string | null;
   no_audio: boolean;
   record_path?: string | null;
+  keyboard_mode?: string | null;
+  turn_screen_off: boolean;
+  stay_awake: boolean;
+  show_touches: boolean;
+};
+
+export type ScrcpySessionState = "running" | "exited" | "stopped";
+
+export type ScrcpySession = {
+  id: number;
+  serial: string;
+  pid: number;
+  args: string[];
+  started_at: string;
+  state: ScrcpySessionState;
+  exit_code: number | null;
 };
 
 export async function callLaunchScrcpy(
   opts: LaunchScrcpyOptions,
-): Promise<number> {
-  return invoke<number>("launch_scrcpy", opts);
+): Promise<ScrcpySession> {
+  return invoke<ScrcpySession>("launch_scrcpy", { request: opts });
+}
+
+export async function callScrcpySessionStatus(
+  sessionId: number,
+): Promise<ScrcpySession> {
+  return invoke<ScrcpySession>("scrcpy_session_status", {
+    session_id: sessionId,
+  });
+}
+
+export async function callStopScrcpy(
+  sessionId: number,
+): Promise<ScrcpySession> {
+  return invoke<ScrcpySession>("stop_scrcpy", { session_id: sessionId });
 }
 
 export async function callShellRun(

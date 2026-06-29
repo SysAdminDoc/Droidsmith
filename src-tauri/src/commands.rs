@@ -766,47 +766,38 @@ pub fn locate_scrcpy() -> Option<String> {
 }
 
 /// Launch scrcpy for a device. Fire-and-forget: we spawn the process
-/// detached so it outlives the IPC call. Returns the PID.
+/// and track it so the renderer can poll or stop the session.
 #[tauri::command]
 pub fn launch_scrcpy(
-    serial: String,
-    max_size: Option<u32>,
-    bit_rate: Option<String>,
-    no_audio: bool,
-    record_path: Option<String>,
-) -> Result<u32, CommandError> {
-    validate_serial_arg(&serial)?;
+    request: crate::scrcpy::LaunchScrcpyRequest,
+) -> Result<crate::scrcpy::ScrcpySession, CommandError> {
+    validate_serial_arg(&request.serial)?;
     let scrcpy_path = which::which("scrcpy").map_err(|_| CommandError {
         code: "scrcpy_not_found",
         message: "scrcpy binary not found on PATH".to_string(),
     })?;
+    crate::scrcpy::launch(&scrcpy_path, request, iso_now()).map_err(|e| CommandError {
+        code: "scrcpy_spawn_failed",
+        message: e,
+    })
+}
 
-    let mut cmd = std::process::Command::new(scrcpy_path);
-    cmd.arg("-s").arg(&serial);
-    if let Some(ms) = max_size {
-        cmd.arg("--max-size").arg(ms.to_string());
-    }
-    if let Some(br) = &bit_rate {
-        cmd.arg("--video-bit-rate").arg(br);
-    }
-    if no_audio {
-        cmd.arg("--no-audio");
-    }
-    if let Some(rp) = &record_path {
-        cmd.arg("--record").arg(rp);
-    }
+#[tauri::command]
+pub fn scrcpy_session_status(
+    session_id: u64,
+) -> Result<crate::scrcpy::ScrcpySession, CommandError> {
+    crate::scrcpy::status(session_id).map_err(|e| CommandError {
+        code: "scrcpy_session_not_found",
+        message: e,
+    })
+}
 
-    let child = cmd
-        .stdin(std::process::Stdio::null())
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .spawn()
-        .map_err(|e| CommandError {
-            code: "scrcpy_spawn_failed",
-            message: format!("failed to launch scrcpy: {e}"),
-        })?;
-
-    Ok(child.id())
+#[tauri::command]
+pub fn stop_scrcpy(session_id: u64) -> Result<crate::scrcpy::ScrcpySession, CommandError> {
+    crate::scrcpy::stop(session_id).map_err(|e| CommandError {
+        code: "scrcpy_stop_failed",
+        message: e,
+    })
 }
 
 /// Install an APK file on a device. The `apk_path` is a local filesystem

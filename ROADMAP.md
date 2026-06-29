@@ -17,13 +17,6 @@ instead.
 
 ## Research-Driven Additions
 
-- [ ] P1 - Add scrcpy session presets and process supervision
-  Why: Droidsmith can launch scrcpy, but scrcpy's core value is option depth, session lifecycle, and reliable feedback when launch/control fails.
-  Evidence: `src/routes/Mirror.tsx`, `src-tauri/src/commands.rs:launch_scrcpy`, scrcpy v4.0 README, Escrcpy multi-device/control-bar features.
-  Touches: `src/routes/Mirror.tsx`, `src-tauri/src/commands.rs`, scrcpy resolver/supervisor module, `src/locales/*.json`.
-  Acceptance: Users can save per-device presets for max size, bitrate, audio, recording, keyboard/HID mode, and screen-off options; UI tracks running PID/exited/error state.
-  Complexity: L
-
 - [ ] P1 - Reconcile docs and README claims with shipped behavior
   Why: `docs/DEVELOPMENT.md` still says every nav item is a stub, while README claims side-by-side device tabs and plugins that are not implemented.
   Evidence: `docs/DEVELOPMENT.md`, `README.md`, `src/App.tsx`, `Roadmap_Blocked.md`.

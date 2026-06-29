@@ -12,6 +12,7 @@ mod journal;
 pub mod packs;
 pub mod profile;
 mod quirks;
+mod scrcpy;
 pub mod time;
 
 use commands::{
@@ -19,8 +20,8 @@ use commands::{
     get_device_info, heartbeat, install_apk, journal_list, journal_undo, launch_scrcpy,
     list_devices, list_fastboot_devices, list_network_connections, list_packages, list_packs,
     list_permissions, list_processes, list_remote_files, list_wireless_services, locate_fastboot,
-    locate_scrcpy, pair_wireless, plan_action, pull_file, push_file, set_permission, shell_run,
-    take_screenshot,
+    locate_scrcpy, pair_wireless, plan_action, pull_file, push_file, scrcpy_session_status,
+    set_permission, shell_run, stop_scrcpy, take_screenshot,
 };
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -55,6 +56,8 @@ pub fn run() {
             take_screenshot,
             locate_scrcpy,
             launch_scrcpy,
+            scrcpy_session_status,
+            stop_scrcpy,
             install_apk,
             extract_apk,
             journal_list,
