@@ -16,10 +16,3 @@ instead.
 ## Remaining
 
 ## Research-Driven Additions
-
-- [ ] P2 - Prepare plugin boundaries without shipping a marketplace
-  Why: Plugin and marketplace work is deferred, but pack/quirk/profile schemas need stable extension seams before third-party OEM modules accumulate.
-  Evidence: `Roadmap_Blocked.md` R-062/R-063, `src-tauri/src/packs/mod.rs`, `src-tauri/src/quirks/mod.rs`, README plugin claim.
-  Touches: `src-tauri/src/packs/`, `src-tauri/src/quirks/`, `src-tauri/src/profile.rs`, schema docs.
-  Acceptance: Pack, quirk, and profile schemas have versioned compatibility rules, lint errors name migration paths, and README stops implying a shipped plugin system.
-  Complexity: L

@@ -27,7 +27,11 @@ use serde::{Deserialize, Serialize};
 
 use crate::adb::actions::{ActionKind, ActionRequest};
 
+pub const PROFILE_SCHEMA_VERSION: &str = "1";
+
 const MAX_PROFILE_BYTES: u64 = 256 * 1024;
+const PROFILE_SCHEMA_MIGRATION: &str =
+    "convert the file to the v1 profile schema in src-tauri/src/profile.rs, set version: \"1\", then rerun the CLI profile lint/load path";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Profile {
@@ -107,10 +111,10 @@ pub fn lint(p: &Profile) -> Vec<String> {
     if p.name.trim().is_empty() {
         issues.push("name is empty".to_string());
     }
-    if p.version != "1" {
+    if p.version != PROFILE_SCHEMA_VERSION {
         issues.push(format!(
-            "unsupported profile version {:?} (this build expects \"1\")",
-            p.version
+            "unsupported profile version {:?} (supported: {:?}; migration path: {PROFILE_SCHEMA_MIGRATION})",
+            p.version, PROFILE_SCHEMA_VERSION
         ));
     }
     if p.actions.is_empty() {
@@ -209,6 +213,7 @@ actions:
         assert!(issues
             .iter()
             .any(|i| i.contains("unsupported profile version")));
+        assert!(issues.iter().any(|i| i.contains("migration path")));
     }
 
     #[test]

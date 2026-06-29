@@ -43,7 +43,11 @@ use serde::{Deserialize, Serialize};
 
 use crate::adb::packages::valid_package_name;
 
+pub const PACK_SCHEMA_VERSION: &str = "1";
+
 const MAX_PACK_BYTES: u64 = 512 * 1024;
+const PACK_SCHEMA_MIGRATION: &str =
+    "convert the file to the v1 pack schema in src-tauri/src/packs/mod.rs, set version: \"1\", then run droidsmith-pack-lint";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Pack {
@@ -164,10 +168,10 @@ pub fn lint(p: &Pack) -> Vec<String> {
     if p.name.trim().is_empty() {
         issues.push("name is empty".to_string());
     }
-    if p.version != "1" {
+    if p.version != PACK_SCHEMA_VERSION {
         issues.push(format!(
-            "unsupported pack version {:?} (this build expects \"1\")",
-            p.version
+            "unsupported pack version {:?} (supported: {:?}; migration path: {PACK_SCHEMA_MIGRATION})",
+            p.version, PACK_SCHEMA_VERSION
         ));
     }
     if p.description.trim().is_empty() {
@@ -267,6 +271,7 @@ packages:
         assert!(issues
             .iter()
             .any(|i| i.contains("unsupported pack version")));
+        assert!(issues.iter().any(|i| i.contains("migration path")));
     }
 
     #[test]

@@ -52,7 +52,7 @@ ADB front end, but it has hard limits that an open project can fix:
 | Screen mirror | Virtual buttons + screenshots | System scrcpy launch/supervision with per-device presets; bundled scrcpy remains planned |
 | Wireless ADB | Manual `adb pair` in console | First-class pairing UI (Android 11+) |
 | Automation | None | YAML profiles + headless CLI for reproducible device actions |
-| Extensibility | None | Pack, quirk, and profile schemas now; plugin API and marketplace are deferred |
+| Extensibility | None | Versioned local pack, quirk, and profile schemas; plugin API and marketplace are deferred |
 | i18n | EN + RU | i18next-driven, contributor-friendly |
 | Multi-device | One at a time | Device selector and per-device workflows; side-by-side device tabs remain planned |
 
@@ -65,13 +65,17 @@ ADB front end, but it has hard limits that an open project can fix:
   `adb` binary, with direct parser coverage for device/package/process/file
   transcripts
 - **scrcpy on PATH** — detected and supervised for mirror/control sessions
-- **YAML packs, quirks, and profiles** — packaged as Tauri resources for local
-  linting and reproducible actions
+- **Versioned YAML packs, quirks, and profiles** — packaged as Tauri resources
+  for local linting and reproducible actions
 - **Tailwind** — dark-first route surfaces
 - **i18next** — translations
 
 Bundled platform-tools and bundled scrcpy are not wired into the installer yet;
 that work is held with release signing in [Roadmap_Blocked.md](Roadmap_Blocked.md).
+The current extension surface is schema-only: this build accepts schema version
+`"1"` for packs, quirks, and profiles and rejects future revisions with a
+migration hint. The plugin API and marketplace remain deferred in
+[Roadmap_Blocked.md](Roadmap_Blocked.md).
 See [RESEARCH_REPORT.md](RESEARCH_REPORT.md) for the rationale and the
 alternatives considered.
 

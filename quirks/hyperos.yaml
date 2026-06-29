@@ -4,40 +4,42 @@
 # follows the schema in src-tauri/src/quirks/mod.rs. More-specific rules
 # go first; the explain() function takes the first match.
 
-- id: hyperos-pm-disable-blocked
-  title: "Xiaomi HyperOS blocks `pm disable-user` for many system apps"
-  matches:
-    error_contains:
-      - "DELETE_FAILED_INTERNAL_ERROR"
-      - "not allowed"
-      - "shell uid is not allowed"
-    manufacturer: ["Xiaomi", "Redmi", "POCO"]
-    rom: ["hyperos"]
-  explanation: |
-    HyperOS hardened MIUI's package manager so the `shell` UID can no
-    longer run `pm disable-user --user 0 <pkg>` against many bundled
-    apps — the call returns `DELETE_FAILED_INTERNAL_ERROR` or
-    "not allowed".
+version: "1"
+quirks:
+  - id: hyperos-pm-disable-blocked
+    title: "Xiaomi HyperOS blocks `pm disable-user` for many system apps"
+    matches:
+      error_contains:
+        - "DELETE_FAILED_INTERNAL_ERROR"
+        - "not allowed"
+        - "shell uid is not allowed"
+      manufacturer: ["Xiaomi", "Redmi", "POCO"]
+      rom: ["hyperos"]
+    explanation: |
+      HyperOS hardened MIUI's package manager so the `shell` UID can no
+      longer run `pm disable-user --user 0 <pkg>` against many bundled
+      apps - the call returns `DELETE_FAILED_INTERNAL_ERROR` or
+      "not allowed".
 
-    What still works:
+      What still works:
 
-    * `pm uninstall --user 0 <pkg>` — removes the user-side state.
-      The system APK stays on `/system` so a factory reset restores
-      it. This is the standard Xiaomi-debloat workaround.
-    * Disabling on a *secondary* user via the `--user N` flag
-      sometimes works where `--user 0` does not.
+      * `pm uninstall --user 0 <pkg>` - removes the user-side state.
+        The system APK stays on `/system` so a factory reset restores
+        it. This is the standard Xiaomi-debloat workaround.
+      * Disabling on a *secondary* user via the `--user N` flag
+        sometimes works where `--user 0` does not.
 
-    What does NOT work:
+      What does NOT work:
 
-    * Trying again with `pm disable` (no `-user`). Same restriction.
-    * Re-running as root unless your device has a verified Magisk
-      install AND you've granted ADB shell `su` access — not in
-      scope for Droidsmith.
-  mitigation:
-    kind: try_alternative_action
-    suggest_kind: uninstall_for_user
-    rationale: >
-      `pm uninstall --user 0` is the documented HyperOS-friendly path.
-      It's reversible by factory reset but cannot be undone from
-      Droidsmith (the package leaves `/data/app`). Click below to
-      retry with that action.
+      * Trying again with `pm disable` (no `-user`). Same restriction.
+      * Re-running as root unless your device has a verified Magisk
+        install AND you've granted ADB shell `su` access. Droidsmith
+        does not manage root-only flows.
+    mitigation:
+      kind: try_alternative_action
+      suggest_kind: uninstall_for_user
+      rationale: >
+        `pm uninstall --user 0` is the documented HyperOS-friendly path.
+        It's reversible by factory reset but cannot be undone from
+        Droidsmith (the package leaves `/data/app`). Click below to
+        retry with that action.

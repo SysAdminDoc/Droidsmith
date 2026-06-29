@@ -4,8 +4,9 @@
 //! `pm disable`, BBK devices restricting adb, etc.) the raw failure
 //! string is opaque. This module owns:
 //!
-//! - The [`Quirk`] data model: detection signature + human explanation
-//!   + suggested mitigation.
+//! - The [`QuirkDocument`] file envelope and [`Quirk`] data model:
+//!   schema version + detection signature + human explanation +
+//!   suggested mitigation.
 //! - A loader that reads `quirks/*.yaml` files at startup.
 //! - [`explain`] which matches a failed action against the loaded
 //!   quirks and returns the best match (or None).
@@ -13,12 +14,44 @@
 //! Design tenet from RESEARCH_DEEPDIVE.md: "Don't lie to the user."
 //! When an OEM blocks a `pm disable`, we surface the exact reason
 //! instead of "Operation failed".
+//!
+//! ```yaml
+//! version: "1"
+//! quirks:
+//!   - id: hyperos-pm-disable-blocked
+//!     title: "Xiaomi HyperOS blocks pm disable-user"
+//!     matches:
+//!       error_contains: ["DELETE_FAILED_INTERNAL_ERROR"]
+//!       manufacturer: ["Xiaomi"]
+//!       rom: ["hyperos"]
+//!     explanation: "HyperOS blocks pm disable-user for many system apps."
+//! ```
 
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
+pub const QUIRK_SCHEMA_VERSION: &str = "1";
+
 const MAX_QUIRKS_BYTES: u64 = 512 * 1024;
+const QUIRK_SCHEMA_MIGRATION: &str =
+    "wrap the quirk list as version: \"1\" plus quirks: [...], then validate it with the bundled quirk loader";
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct QuirkDocument {
+    /// Bump on every breaking change; this build accepts only v1 files.
+    pub version: String,
+    /// Ordered rules. The first matching quirk wins.
+    #[serde(default)]
+    pub quirks: Vec<Quirk>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+enum QuirkFile {
+    Document(QuirkDocument),
+    Legacy(Vec<Quirk>),
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Quirk {
@@ -104,6 +137,8 @@ pub enum QuirkError {
         #[source]
         source: serde_yml::Error,
     },
+    #[error("quirk file {path:?} failed validation: {reasons}")]
+    Validate { path: PathBuf, reasons: String },
 }
 
 pub fn load_file(path: &Path) -> Result<Vec<Quirk>, QuirkError> {
@@ -114,10 +149,30 @@ pub fn load_file(path: &Path) -> Result<Vec<Quirk>, QuirkError> {
                 source,
             }
         })?;
-    serde_yml::from_str(&text).map_err(|source| QuirkError::Parse {
+    let file: QuirkFile = serde_yml::from_str(&text).map_err(|source| QuirkError::Parse {
         path: path.to_path_buf(),
         source,
-    })
+    })?;
+
+    match file {
+        QuirkFile::Document(document) => {
+            let issues = lint_document(&document);
+            if !issues.is_empty() {
+                return Err(QuirkError::Validate {
+                    path: path.to_path_buf(),
+                    reasons: issues.join("; "),
+                });
+            }
+            Ok(document.quirks)
+        }
+        QuirkFile::Legacy(quirks) => Err(QuirkError::Validate {
+            path: path.to_path_buf(),
+            reasons: format!(
+                "legacy quirk file contains {} unversioned entries; files without a schema version are no longer accepted (migration path: {QUIRK_SCHEMA_MIGRATION})",
+                quirks.len()
+            ),
+        }),
+    }
 }
 
 pub fn load_dir(path: &Path) -> Result<Vec<Quirk>, QuirkError> {
@@ -146,6 +201,102 @@ pub fn load_dir(path: &Path) -> Result<Vec<Quirk>, QuirkError> {
         out.extend(load_file(&file)?);
     }
     Ok(out)
+}
+
+pub fn lint_document(document: &QuirkDocument) -> Vec<String> {
+    let mut issues = Vec::new();
+
+    if document.version != QUIRK_SCHEMA_VERSION {
+        issues.push(format!(
+            "unsupported quirk schema version {:?} (supported: {:?}; migration path: {QUIRK_SCHEMA_MIGRATION})",
+            document.version, QUIRK_SCHEMA_VERSION
+        ));
+    }
+    if document.quirks.is_empty() {
+        issues.push("quirk document has no entries".to_string());
+    }
+
+    for (i, quirk) in document.quirks.iter().enumerate() {
+        let label = format!("quirk #{} {:?}", i + 1, quirk.id);
+        if quirk.id.trim().is_empty() {
+            issues.push(format!("{label}: id is empty"));
+        }
+        if quirk.title.trim().is_empty() {
+            issues.push(format!("{label}: title is empty"));
+        }
+        if quirk.explanation.trim().is_empty() {
+            issues.push(format!("{label}: explanation is empty"));
+        }
+        if quirk.matches.error_contains.is_empty()
+            && quirk.matches.manufacturer.is_empty()
+            && quirk.matches.rom.is_empty()
+            && quirk.matches.package_id.is_empty()
+        {
+            issues.push(format!("{label}: matches has no constraints"));
+        }
+
+        lint_non_empty_values(
+            &mut issues,
+            &label,
+            "matches.error_contains",
+            &quirk.matches.error_contains,
+        );
+        lint_non_empty_values(
+            &mut issues,
+            &label,
+            "matches.manufacturer",
+            &quirk.matches.manufacturer,
+        );
+        lint_non_empty_values(&mut issues, &label, "matches.rom", &quirk.matches.rom);
+        lint_non_empty_values(
+            &mut issues,
+            &label,
+            "matches.package_id",
+            &quirk.matches.package_id,
+        );
+        for package_id in &quirk.matches.package_id {
+            if !crate::adb::packages::valid_package_name(package_id) {
+                issues.push(format!(
+                    "{label}: matches.package_id contains invalid id {package_id:?}"
+                ));
+            }
+        }
+
+        if let Some(mitigation) = &quirk.mitigation {
+            match mitigation {
+                Mitigation::TryAlternativeAction {
+                    suggest_kind,
+                    rationale,
+                } => {
+                    if suggest_kind.trim().is_empty() {
+                        issues.push(format!("{label}: mitigation.suggest_kind is empty"));
+                    }
+                    if rationale.trim().is_empty() {
+                        issues.push(format!("{label}: mitigation.rationale is empty"));
+                    }
+                }
+                Mitigation::Documentation { url, note } => {
+                    if url.trim().is_empty() {
+                        issues.push(format!("{label}: mitigation.url is empty"));
+                    }
+                    if note.trim().is_empty() {
+                        issues.push(format!("{label}: mitigation.note is empty"));
+                    }
+                }
+                Mitigation::None => {}
+            }
+        }
+    }
+
+    issues
+}
+
+fn lint_non_empty_values(issues: &mut Vec<String>, label: &str, field: &str, values: &[String]) {
+    for value in values {
+        if value.trim().is_empty() {
+            issues.push(format!("{label}: {field} contains an empty value"));
+        }
+    }
 }
 
 /// Search loaded quirks for the best match. Returns the first quirk
@@ -316,22 +467,26 @@ mod tests {
     #[test]
     fn yaml_round_trip() {
         let yaml = r#"
-- id: hyperos-pm-disable-blocked
-  title: "Xiaomi HyperOS blocks pm disable"
-  matches:
-    error_contains: ["DELETE_FAILED_INTERNAL_ERROR"]
-    manufacturer: ["Xiaomi"]
-    rom: ["hyperos"]
-  explanation: "Use uninstall instead."
-  mitigation:
-    kind: try_alternative_action
-    suggest_kind: uninstall_for_user
-    rationale: "pm uninstall --user 0 works where pm disable doesn't"
+version: "1"
+quirks:
+  - id: hyperos-pm-disable-blocked
+    title: "Xiaomi HyperOS blocks pm disable"
+    matches:
+      error_contains: ["DELETE_FAILED_INTERNAL_ERROR"]
+      manufacturer: ["Xiaomi"]
+      rom: ["hyperos"]
+    explanation: "Use uninstall instead."
+    mitigation:
+      kind: try_alternative_action
+      suggest_kind: uninstall_for_user
+      rationale: "pm uninstall --user 0 works where pm disable doesn't"
 "#;
-        let quirks: Vec<Quirk> = serde_yml::from_str(yaml).unwrap();
-        assert_eq!(quirks.len(), 1);
-        assert_eq!(quirks[0].id, "hyperos-pm-disable-blocked");
-        match quirks[0].mitigation.as_ref().unwrap() {
+        let document: QuirkDocument = serde_yml::from_str(yaml).unwrap();
+        assert!(lint_document(&document).is_empty());
+        assert_eq!(document.version, "1");
+        assert_eq!(document.quirks.len(), 1);
+        assert_eq!(document.quirks[0].id, "hyperos-pm-disable-blocked");
+        match document.quirks[0].mitigation.as_ref().unwrap() {
             Mitigation::TryAlternativeAction { suggest_kind, .. } => {
                 assert_eq!(suggest_kind, "uninstall_for_user");
             }
@@ -348,18 +503,26 @@ mod tests {
         std::fs::write(
             dir.join("b.yaml"),
             r#"
-- id: second
-  title: "Second"
-  explanation: "Second quirk"
+version: "1"
+quirks:
+  - id: second
+    title: "Second"
+    matches:
+      error_contains: ["second"]
+    explanation: "Second quirk"
 "#,
         )
         .unwrap();
         std::fs::write(
             dir.join("a.yaml"),
             r#"
-- id: first
-  title: "First"
-  explanation: "First quirk"
+version: "1"
+quirks:
+  - id: first
+    title: "First"
+    matches:
+      error_contains: ["first"]
+    explanation: "First quirk"
 "#,
         )
         .unwrap();
@@ -369,5 +532,60 @@ mod tests {
         assert_eq!(loaded[0].id, "first");
         assert_eq!(loaded[1].id, "second");
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn load_file_rejects_legacy_sequence_with_migration_path() {
+        let dir = std::env::temp_dir().join("droidsmith-quirks-legacy-test");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("legacy.yaml");
+        std::fs::write(
+            &path,
+            r#"
+- id: legacy
+  title: "Legacy"
+  matches:
+    error_contains: ["legacy"]
+  explanation: "Legacy shape"
+"#,
+        )
+        .unwrap();
+
+        let err = load_file(&path).unwrap_err().to_string();
+        assert!(err.contains("legacy quirk file"));
+        assert!(err.contains("migration path"));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn lint_document_names_unsupported_version_migration_path() {
+        let document = QuirkDocument {
+            version: "2".into(),
+            quirks: vec![hyperos_quirk()],
+        };
+        let issues = lint_document(&document);
+        assert!(issues
+            .iter()
+            .any(|i| i.contains("unsupported quirk schema version")));
+        assert!(issues.iter().any(|i| i.contains("migration path")));
+    }
+
+    #[test]
+    fn lint_document_rejects_unconstrained_rules() {
+        let document = QuirkDocument {
+            version: "1".into(),
+            quirks: vec![Quirk {
+                id: "wildcard".into(),
+                title: "always".into(),
+                matches: QuirkMatch::default(),
+                explanation: "always".into(),
+                mitigation: None,
+            }],
+        };
+        let issues = lint_document(&document);
+        assert!(issues
+            .iter()
+            .any(|i| i.contains("matches has no constraints")));
     }
 }
