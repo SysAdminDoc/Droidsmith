@@ -297,12 +297,19 @@ export async function callListNetworkConnections(
   return invoke<NetworkConnection[]>("list_network_connections", { serial });
 }
 
+export type BackupPackageResult = {
+  local_path: string;
+  stdout: string;
+  size_bytes: number | null;
+  empty: boolean;
+};
+
 export async function callBackupPackage(
   serial: string,
   pkg: string,
   localPath: string,
-): Promise<string> {
-  return invoke<string>("backup_package", {
+): Promise<BackupPackageResult> {
+  return invoke<BackupPackageResult>("backup_package", {
     serial,
     package: pkg,
     local_path: localPath,

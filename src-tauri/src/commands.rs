@@ -686,15 +686,68 @@ fn parse_ss_output(stdout: &str) -> Vec<NetworkConnection> {
     out
 }
 
+#[derive(Debug, Clone, Serialize)]
+pub struct BackupPackageResult {
+    pub local_path: String,
+    pub stdout: String,
+    pub size_bytes: Option<u64>,
+    pub empty: bool,
+}
+
+fn validate_backup_target(local_path: &str) -> Result<PathBuf, CommandError> {
+    let trimmed = local_path.trim();
+    if trimmed.is_empty() {
+        return Err(CommandError {
+            code: "invalid_backup_path",
+            message: "backup destination cannot be empty".to_string(),
+        });
+    }
+
+    let path = PathBuf::from(trimmed);
+    if !path.is_absolute() {
+        return Err(CommandError {
+            code: "invalid_backup_path",
+            message: format!("backup destination must be an absolute path: {trimmed}"),
+        });
+    }
+    if path.is_dir() {
+        return Err(CommandError {
+            code: "invalid_backup_path",
+            message: format!("backup destination is a directory: {}", path.display()),
+        });
+    }
+    let Some(parent) = path.parent() else {
+        return Err(CommandError {
+            code: "invalid_backup_path",
+            message: format!(
+                "backup destination has no parent directory: {}",
+                path.display()
+            ),
+        });
+    };
+    if !parent.is_dir() {
+        return Err(CommandError {
+            code: "invalid_backup_path",
+            message: format!(
+                "backup destination parent does not exist: {}",
+                parent.display()
+            ),
+        });
+    }
+
+    Ok(path)
+}
+
 /// Backup a package's data using `adb backup`. The user must confirm
-/// on the device screen. Returns the adb output.
+/// on the device screen. Returns the adb output and local artifact metadata.
 #[tauri::command]
 pub fn backup_package(
     serial: String,
     package: String,
     local_path: String,
-) -> Result<String, CommandError> {
+) -> Result<BackupPackageResult, CommandError> {
     validate_serial_arg(&serial)?;
+    let target = validate_backup_target(&local_path)?;
     let resolution = adb::locate_adb();
     let adb_path = resolution
         .path
@@ -702,12 +755,23 @@ pub fn backup_package(
         .ok_or(adb::TransportError::AdbNotFound)?;
 
     let timeout = std::time::Duration::from_secs(300);
+    let target_arg = target.display().to_string();
     let output = run_adb_simple(
         std::path::Path::new(adb_path),
-        &["-s", &serial, "backup", "-f", &local_path, "-apk", &package],
+        &["-s", &serial, "backup", "-f", &target_arg, "-apk", &package],
         timeout,
     )?;
-    Ok(output)
+    let size_bytes = std::fs::metadata(&target)
+        .ok()
+        .map(|metadata| metadata.len());
+    let empty = size_bytes.map_or(true, |size| size == 0);
+
+    Ok(BackupPackageResult {
+        local_path: target.display().to_string(),
+        stdout: output,
+        size_bytes,
+        empty,
+    })
 }
 
 /// List runtime permissions for a package.
@@ -979,6 +1043,40 @@ pub fn list_packs(app: tauri::AppHandle) -> Result<Vec<crate::packs::Pack>, Comm
 
 fn iso_now() -> String {
     crate::time::iso_utc_now()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::validate_backup_target;
+
+    #[test]
+    fn backup_target_rejects_empty_and_relative_paths() {
+        let empty = validate_backup_target("   ").unwrap_err();
+        assert_eq!(empty.code, "invalid_backup_path");
+
+        let relative = validate_backup_target("package.ab").unwrap_err();
+        assert_eq!(relative.code, "invalid_backup_path");
+    }
+
+    #[test]
+    fn backup_target_requires_existing_parent_and_file_target() {
+        let dir = std::env::temp_dir();
+        let dir_err = validate_backup_target(&dir.display().to_string()).unwrap_err();
+        assert_eq!(dir_err.code, "invalid_backup_path");
+
+        let missing_parent = dir
+            .join("droidsmith-missing-backup-parent")
+            .join("package.ab");
+        let missing_err =
+            validate_backup_target(&missing_parent.display().to_string()).unwrap_err();
+        assert_eq!(missing_err.code, "invalid_backup_path");
+
+        let valid = dir.join("package.ab");
+        assert_eq!(
+            validate_backup_target(&valid.display().to_string()).unwrap(),
+            valid
+        );
+    }
 }
 
 /// Request shape for [`explain_failure`].

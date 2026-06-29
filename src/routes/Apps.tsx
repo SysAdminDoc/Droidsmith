@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import type { ReactNode } from "react";
+import { save } from "@tauri-apps/plugin-dialog";
 import { useTranslation } from "react-i18next";
 
 import {
@@ -23,6 +24,11 @@ import {
   type PlannedAction,
 } from "../lib/tauri";
 
+import {
+  backupDefaultFileName,
+  backupDisplayState,
+  formatBackupSize,
+} from "./appsBackup";
 import { journalEntryStatus, type JournalEntryStatus } from "./appsJournal";
 import {
   Badge,
@@ -60,6 +66,16 @@ type JournalState =
   | { kind: "ok"; entries: JournalEntry[] }
   | { kind: "error"; message: string };
 
+type BackupNotice = {
+  title: string;
+  message: string;
+  tone: "neutral" | "info" | "success" | "warning" | "danger";
+  path?: string;
+  output?: string;
+  sizeBytes?: number | null;
+  showLimitations?: boolean;
+};
+
 const FILTERS: { value: PackageFilter; labelKey: string }[] = [
   { value: "all", labelKey: "apps.filterAll" },
   { value: "user", labelKey: "apps.filterUser" },
@@ -83,7 +99,7 @@ export default function AppsRoute() {
   const [undoingEntryId, setUndoingEntryId] = useState<number | null>(null);
   const [search, setSearch] = useState("");
   const [inspectedPkg, setInspectedPkg] = useState<string | null>(null);
-  const [backupMsg, setBackupMsg] = useState<string | null>(null);
+  const [backupNotice, setBackupNotice] = useState<BackupNotice | null>(null);
 
   const loadDevices = useCallback(async () => {
     if (!inTauri()) {
@@ -175,16 +191,58 @@ export default function AppsRoute() {
   const startBackup = useCallback(
     async (pkg: string) => {
       if (!selectedSerial) return;
-      setBackupMsg(t("apps.backingUp", { package: pkg }));
+      setBackupNotice({
+        title: t("apps.backupChooseDestination"),
+        message: t("apps.backupLimitations"),
+        tone: "info",
+      });
       try {
-        await callBackupPackage(selectedSerial, pkg, `${pkg}.ab`);
-        setBackupMsg(t("apps.backupSaved", { file: `${pkg}.ab` }));
+        const localPath = await save({
+          title: t("apps.backupChooseDestination"),
+          defaultPath: backupDefaultFileName(pkg),
+          filters: [{ name: t("apps.backupFileFilter"), extensions: ["ab"] }],
+        });
+        if (!localPath) {
+          setBackupNotice({
+            title: t("apps.backupCancelledTitle"),
+            message: t("apps.backupCancelled"),
+            tone: "neutral",
+          });
+          return;
+        }
+
+        setBackupNotice({
+          title: t("apps.backupRunningTitle", { package: pkg }),
+          message: t("apps.backupLimitations"),
+          tone: "info",
+          path: localPath,
+        });
+
+        const result = await callBackupPackage(selectedSerial, pkg, localPath);
+        const displayState = backupDisplayState(result);
+        setBackupNotice({
+          title:
+            displayState === "empty"
+              ? t("apps.backupEmptyTitle")
+              : t("apps.backupSavedTitle"),
+          message:
+            displayState === "empty"
+              ? t("apps.backupEmptyBody")
+              : t("apps.backupSaved", { file: result.local_path }),
+          tone: displayState === "empty" ? "warning" : "success",
+          path: result.local_path,
+          output: result.stdout,
+          sizeBytes: result.size_bytes,
+          showLimitations: true,
+        });
       } catch (e) {
-        setBackupMsg(
-          t("apps.backupFailed", {
+        setBackupNotice({
+          title: t("apps.backupFailedTitle"),
+          message: t("apps.backupFailed", {
             message: e instanceof Error ? e.message : String(e),
           }),
-        );
+          tone: "danger",
+        });
       }
     },
     [selectedSerial, t],
@@ -375,23 +433,11 @@ export default function AppsRoute() {
           />
         )}
 
-        {backupMsg && (
-          <StatePanel
-            title={t("apps.backup")}
-            tone="info"
-            actions={
-              <Button
-                type="button"
-                size="sm"
-                variant="ghost"
-                onClick={() => setBackupMsg(null)}
-              >
-                {t("common.dismiss")}
-              </Button>
-            }
-          >
-            <p>{backupMsg}</p>
-          </StatePanel>
+        {backupNotice && (
+          <BackupStatePanel
+            notice={backupNotice}
+            onDismiss={() => setBackupNotice(null)}
+          />
         )}
 
         <ActionOverlay
@@ -402,6 +448,73 @@ export default function AppsRoute() {
         />
       </section>
     </>
+  );
+}
+
+function BackupStatePanel({
+  notice,
+  onDismiss,
+}: {
+  notice: BackupNotice;
+  onDismiss: () => void;
+}) {
+  const { t } = useTranslation();
+  const formattedSize =
+    notice.sizeBytes === undefined
+      ? undefined
+      : formatBackupSize(notice.sizeBytes);
+
+  return (
+    <StatePanel
+      title={notice.title}
+      tone={notice.tone}
+      actions={
+        <Button type="button" size="sm" variant="ghost" onClick={onDismiss}>
+          {t("common.dismiss")}
+        </Button>
+      }
+    >
+      <p>{notice.message}</p>
+      {notice.showLimitations && (
+        <p className="mt-2 text-xs leading-5 text-anvil-400">
+          {t("apps.backupLimitations")}
+        </p>
+      )}
+      {(notice.path || formattedSize !== undefined) && (
+        <dl className="mt-3 grid gap-2 text-xs sm:grid-cols-[8rem_minmax(0,1fr)]">
+          {notice.path && (
+            <>
+              <dt className="font-medium text-anvil-400">
+                {t("apps.backupPath")}
+              </dt>
+              <dd className="min-w-0 break-words font-mono text-anvil-100">
+                {notice.path}
+              </dd>
+            </>
+          )}
+          {formattedSize !== undefined && (
+            <>
+              <dt className="font-medium text-anvil-400">
+                {t("apps.backupSize")}
+              </dt>
+              <dd className="font-mono text-anvil-100">
+                {formattedSize ?? t("common.notReported")}
+              </dd>
+            </>
+          )}
+        </dl>
+      )}
+      {notice.output !== undefined && (
+        <div className="mt-4">
+          <p className="text-xs font-medium text-anvil-400">
+            {t("apps.backupOutput")}
+          </p>
+          <pre className="mt-2 max-h-48 overflow-auto rounded-md border border-white/10 bg-black/30 p-3 font-mono text-xs leading-5 text-anvil-200">
+            {notice.output.trim() || t("apps.backupNoOutput")}
+          </pre>
+        </div>
+      )}
+    </StatePanel>
   );
 }
 

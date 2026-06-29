@@ -17,13 +17,6 @@ instead.
 
 ## Research-Driven Additions
 
-- [ ] P1 - Make backup behavior honest and path-safe for modern Android
-  Why: Current backup uses `adb backup` to `${pkg}.ab` without a path picker or compatibility warning, so users may trust incomplete or unsupported backups.
-  Evidence: `src-tauri/src/commands.rs:backup_package`, `src/routes/Apps.tsx:startBackup`, Android Auto Backup docs, AppManager backup/restore feature set.
-  Touches: `src/routes/Apps.tsx`, `src-tauri/src/commands.rs`, dialog plugin usage, `src/locales/*.json`, tests.
-  Acceptance: Backup requires a chosen destination, explains Android/app opt-out limits, records raw output and file path, and clearly reports zero-byte/failed backups.
-  Complexity: M
-
 - [ ] P1 - Harden file, process, network, and fastboot parsers with transcript fixtures
   Why: Several command parsers are ad hoc and likely fragile across Android toybox, busybox, OEM, and fastboot variants.
   Evidence: `src-tauri/src/commands.rs:parse_ls_output`, `parse_ss_output`, `parse_ps_output`, `parse_fastboot_devices`, Android Device Explorer/logcat docs, AppManager inspection depth.
