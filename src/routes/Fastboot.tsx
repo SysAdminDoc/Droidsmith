@@ -205,6 +205,11 @@ export default function FastbootRoute() {
                             </Td>
                             <Td>
                               <Badge tone="info">{d.mode}</Badge>
+                              {d.parse_error && (
+                                <Badge tone="warning" className="ml-2">
+                                  Parse issue
+                                </Badge>
+                              )}
                             </Td>
                             <Td>{d.product ?? t("common.notReported")}</Td>
                             <Td>

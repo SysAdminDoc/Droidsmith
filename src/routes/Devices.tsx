@@ -951,8 +951,11 @@ function ProcessManager({ serial }: { serial: string }) {
               </tr>
             </thead>
             <tbody className="divide-y divide-white/5">
-              {filtered.slice(0, 100).map((p) => (
-                <tr key={p.pid} className="hover:bg-white/[0.03]">
+              {filtered.slice(0, 100).map((p, i) => (
+                <tr
+                  key={`${p.pid}-${p.name}-${i}`}
+                  className="hover:bg-white/[0.03]"
+                >
                   <td className="px-3 py-1.5 font-mono text-anvil-300">
                     {p.pid}
                   </td>
@@ -961,7 +964,12 @@ function ProcessManager({ serial }: { serial: string }) {
                     {formatKb(p.rss_kb)}
                   </td>
                   <td className="px-3 py-1.5 font-mono text-anvil-100">
-                    {p.name}
+                    <span>{p.name}</span>
+                    {p.parse_error && (
+                      <Badge tone="warning" className="ml-2">
+                        Parse issue
+                      </Badge>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -1096,9 +1104,9 @@ function FileManager({ serial }: { serial: string }) {
                 <p>This path has no visible entries.</p>
               </EmptyState>
             )}
-            {listing.entries.map((entry) => (
+            {listing.entries.map((entry, index) => (
               <div
-                key={entry.name}
+                key={`${entry.name}-${index}`}
                 className="flex items-center gap-3 px-4 py-2 text-xs hover:bg-white/[0.03]"
               >
                 <FileGlyph directory={entry.is_dir} />
@@ -1127,6 +1135,11 @@ function FileManager({ serial }: { serial: string }) {
                 <span className="hidden shrink-0 font-mono text-anvil-600 sm:inline">
                   {entry.permissions}
                 </span>
+                {entry.parse_error && (
+                  <Badge tone="warning" className="shrink-0">
+                    Parse issue
+                  </Badge>
+                )}
                 {!entry.is_dir && (
                   <Button
                     type="button"
@@ -1289,6 +1302,11 @@ function NetworkInspector({ serial }: { serial: string }) {
                   </td>
                   <td className="px-3 py-1.5 font-mono text-anvil-400">
                     {c.process ?? "Not reported"}
+                    {c.parse_error && (
+                      <Badge tone="warning" className="ml-2">
+                        Parse issue
+                      </Badge>
+                    )}
                   </td>
                 </tr>
               ))}

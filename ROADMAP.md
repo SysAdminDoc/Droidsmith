@@ -17,13 +17,6 @@ instead.
 
 ## Research-Driven Additions
 
-- [ ] P1 - Harden file, process, network, and fastboot parsers with transcript fixtures
-  Why: Several command parsers are ad hoc and likely fragile across Android toybox, busybox, OEM, and fastboot variants.
-  Evidence: `src-tauri/src/commands.rs:parse_ls_output`, `parse_ss_output`, `parse_ps_output`, `parse_fastboot_devices`, Android Device Explorer/logcat docs, AppManager inspection depth.
-  Touches: `src-tauri/src/commands.rs`, new parser modules, Rust fixture tests, route error states.
-  Acceptance: Parser fixtures cover Pixel, Samsung, Xiaomi/HyperOS, Oppo/ColorOS, Fire OS, emulator, no-permission, and empty-output cases; malformed rows degrade visibly instead of silently disappearing.
-  Complexity: M
-
 - [ ] P1 - Add scrcpy session presets and process supervision
   Why: Droidsmith can launch scrcpy, but scrcpy's core value is option depth, session lifecycle, and reliable feedback when launch/control fails.
   Evidence: `src/routes/Mirror.tsx`, `src-tauri/src/commands.rs:launch_scrcpy`, scrcpy v4.0 README, Escrcpy multi-device/control-bar features.

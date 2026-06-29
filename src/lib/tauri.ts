@@ -275,6 +275,7 @@ export type RemoteFileEntry = {
   is_dir: boolean;
   size: number | null;
   permissions: string;
+  parse_error?: string;
 };
 
 export type RemoteListing = {
@@ -289,6 +290,7 @@ export type NetworkConnection = {
   local_addr: string;
   remote_addr: string;
   process: string | null;
+  parse_error?: string;
 };
 
 export async function callListNetworkConnections(
@@ -382,6 +384,7 @@ export type ProcessInfo = {
   vsz_kb: number;
   rss_kb: number;
   name: string;
+  parse_error?: string;
 };
 
 export async function callListProcesses(
@@ -445,6 +448,7 @@ export type FastbootDevice = {
   serial: string;
   mode: string;
   product: string | null;
+  parse_error?: string;
 };
 
 export async function callLocateFastboot(): Promise<string | null> {

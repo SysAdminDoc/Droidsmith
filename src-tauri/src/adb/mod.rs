@@ -27,6 +27,7 @@ pub mod actions;
 pub mod device;
 pub mod device_info;
 pub mod packages;
+pub mod parsers;
 pub mod resolver;
 pub mod transport;
 pub mod wireless;

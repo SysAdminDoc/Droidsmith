@@ -15,6 +15,10 @@ use serde::Serialize;
 use tauri::Manager;
 
 use crate::adb::device::valid_serial;
+use crate::adb::parsers::{
+    parse_fastboot_devices, parse_ls_output, parse_ps_output, parse_ss_output, FastbootDevice,
+    NetworkConnection, ProcessInfo, RemoteFileEntry,
+};
 use crate::adb::transport::AdbTransport;
 use crate::adb::{self, actions};
 use crate::journal::{self, Journal, JournalEntry};
@@ -348,7 +352,7 @@ pub fn list_remote_files(
         .ok_or(adb::TransportError::AdbNotFound)?;
     let transport = adb::ShellTransport::new(path);
     let stdout = transport.shell(&serial, &["ls", "-la", &remote_path])?;
-    let entries = parse_ls_output(&stdout, &remote_path);
+    let entries = parse_ls_output(&stdout);
     let free_space = transport
         .shell(&serial, &["df", &remote_path])
         .ok()
@@ -411,51 +415,6 @@ pub struct RemoteListing {
     pub path: String,
     pub entries: Vec<RemoteFileEntry>,
     pub free_space_kb: Option<u64>,
-}
-
-#[derive(Debug, Clone, Serialize)]
-pub struct RemoteFileEntry {
-    pub name: String,
-    pub is_dir: bool,
-    pub size: Option<u64>,
-    pub permissions: String,
-}
-
-fn parse_ls_output(stdout: &str, _parent: &str) -> Vec<RemoteFileEntry> {
-    let mut out = Vec::new();
-    for line in stdout.lines() {
-        let line = line.trim();
-        if line.is_empty() || line.starts_with("total") {
-            continue;
-        }
-        let tokens: Vec<&str> = line.splitn(8, char::is_whitespace).collect();
-        if tokens.len() < 7 {
-            continue;
-        }
-        let perms = tokens[0];
-        let name_part = if tokens.len() >= 8 {
-            tokens[7].trim()
-        } else {
-            tokens[tokens.len() - 1].trim()
-        };
-        if name_part == "." || name_part == ".." {
-            continue;
-        }
-        let is_dir = perms.starts_with('d');
-        let size = if is_dir {
-            None
-        } else {
-            tokens[4].parse::<u64>().ok()
-        };
-        out.push(RemoteFileEntry {
-            name: name_part.to_string(),
-            is_dir,
-            size,
-            permissions: perms.to_string(),
-        });
-    }
-    out.sort_by(|a, b| b.is_dir.cmp(&a.is_dir).then(a.name.cmp(&b.name)));
-    out
 }
 
 fn parse_df_free(stdout: &str) -> Option<u64> {
@@ -586,40 +545,6 @@ pub fn fastboot_getvar(serial: String, key: String) -> Result<String, CommandErr
     Ok(stdout)
 }
 
-#[derive(Debug, Clone, Serialize)]
-pub struct FastbootDevice {
-    pub serial: String,
-    pub mode: String,
-    pub product: Option<String>,
-}
-
-fn parse_fastboot_devices(stdout: &str) -> Vec<FastbootDevice> {
-    let mut out = Vec::new();
-    for line in stdout.lines() {
-        let line = line.trim();
-        if line.is_empty() {
-            continue;
-        }
-        let mut tokens = line.split_whitespace();
-        let Some(serial) = tokens.next() else {
-            continue;
-        };
-        let mode = tokens.next().unwrap_or("fastboot").to_string();
-        let mut product = None;
-        for tok in tokens {
-            if let Some(val) = tok.strip_prefix("product:") {
-                product = Some(val.to_string());
-            }
-        }
-        out.push(FastbootDevice {
-            serial: serial.to_string(),
-            mode,
-            product,
-        });
-    }
-    out
-}
-
 /// Get network connections from the device using `ss -tunp`.
 #[tauri::command]
 pub fn list_network_connections(serial: String) -> Result<Vec<NetworkConnection>, CommandError> {
@@ -634,56 +559,6 @@ pub fn list_network_connections(serial: String) -> Result<Vec<NetworkConnection>
         .shell(&serial, &["ss", "-tunp"])
         .or_else(|_| transport.shell(&serial, &["netstat", "-tunp"]))?;
     Ok(parse_ss_output(&stdout))
-}
-
-#[derive(Debug, Clone, Serialize)]
-pub struct NetworkConnection {
-    pub state: String,
-    pub protocol: String,
-    pub local_addr: String,
-    pub remote_addr: String,
-    pub process: Option<String>,
-}
-
-fn parse_ss_output(stdout: &str) -> Vec<NetworkConnection> {
-    let mut out = Vec::new();
-    for line in stdout.lines().skip(1) {
-        let tokens: Vec<&str> = line.split_whitespace().collect();
-        if tokens.len() < 5 {
-            continue;
-        }
-        let state = tokens[0].to_string();
-        let protocol = if line.contains("tcp") {
-            "tcp".to_string()
-        } else if line.contains("udp") {
-            "udp".to_string()
-        } else {
-            "?".to_string()
-        };
-
-        let (local_addr, remote_addr, process) = if tokens.len() >= 6 {
-            (
-                tokens[4].to_string(),
-                tokens[5].to_string(),
-                tokens.get(6).map(|s| s.to_string()),
-            )
-        } else {
-            (
-                tokens[3].to_string(),
-                tokens[4].to_string(),
-                tokens.get(5).map(|s| s.to_string()),
-            )
-        };
-
-        out.push(NetworkConnection {
-            state,
-            protocol,
-            local_addr,
-            remote_addr,
-            process,
-        });
-    }
-    out
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -864,40 +739,6 @@ pub fn list_processes(serial: String) -> Result<Vec<ProcessInfo>, CommandError> 
     let transport = adb::ShellTransport::new(path);
     let stdout = transport.shell(&serial, &["ps", "-A", "-o", "PID,USER,VSZ,RSS,NAME"])?;
     Ok(parse_ps_output(&stdout))
-}
-
-#[derive(Debug, Clone, Serialize)]
-pub struct ProcessInfo {
-    pub pid: u32,
-    pub user: String,
-    pub vsz_kb: u64,
-    pub rss_kb: u64,
-    pub name: String,
-}
-
-fn parse_ps_output(stdout: &str) -> Vec<ProcessInfo> {
-    let mut out = Vec::new();
-    for line in stdout.lines().skip(1) {
-        let tokens: Vec<&str> = line.split_whitespace().collect();
-        if tokens.len() < 5 {
-            continue;
-        }
-        let Some(pid) = tokens[0].parse::<u32>().ok() else {
-            continue;
-        };
-        let user = tokens[1].to_string();
-        let vsz_kb = tokens[2].parse::<u64>().unwrap_or(0);
-        let rss_kb = tokens[3].parse::<u64>().unwrap_or(0);
-        let name = tokens[4..].join(" ");
-        out.push(ProcessInfo {
-            pid,
-            user,
-            vsz_kb,
-            rss_kb,
-            name,
-        });
-    }
-    out
 }
 
 /// Take a screenshot on the device and pull it to a local path.
