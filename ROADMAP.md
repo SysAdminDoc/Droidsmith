@@ -17,13 +17,6 @@ instead.
 
 ## Research-Driven Additions
 
-- [ ] P2 - Add persisted language selection and translation contribution path
-  Why: English/Russian parity exists, but language is auto-detected only and there is no contributor workflow comparable to AppManager Weblate or Canta Crowdin.
-  Evidence: `src/lib/i18n.ts`, `src/lib/i18n.test.ts`, AppManager translations, Canta translations.
-  Touches: `src/lib/i18n.ts`, settings/shell UI, `src/locales/*.json`, README contributor docs.
-  Acceptance: User can switch language in-app, choice persists, fallback is tested, and contributor docs explain locale keys and parity tests.
-  Complexity: M
-
 - [ ] P2 - Add route-level accessibility and visual regression checks
   Why: The app has many dense tables, overlays, dialogs, and status panels; current tests mostly cover nav/i18n structure, not keyboard flow or clipping.
   Evidence: `src/App.test.tsx`, `src/lib/i18n.test.ts`, Apps action overlay, command palette, Onboarding, Android Studio dense-tooling benchmarks.

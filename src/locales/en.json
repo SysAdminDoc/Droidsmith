@@ -10,6 +10,11 @@
     "sidebarLabel": "Application sidebar",
     "primaryNav": "Primary navigation"
   },
+  "language": {
+    "label": "Language",
+    "english": "English",
+    "russian": "Русский"
+  },
   "runtime": {
     "desktop": "Desktop runtime",
     "starting": "Starting",

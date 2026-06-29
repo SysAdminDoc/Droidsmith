@@ -10,6 +10,11 @@
     "sidebarLabel": "Боковая панель приложения",
     "primaryNav": "Основная навигация"
   },
+  "language": {
+    "label": "Язык",
+    "english": "English",
+    "russian": "Русский"
+  },
   "runtime": {
     "desktop": "Десктопная среда",
     "starting": "Запуск",

@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 
 import { NAV_ITEMS } from "../App";
+import {
+  detectInitialLanguage,
+  LANGUAGE_STORAGE_KEY,
+  persistLanguage,
+  readStoredLanguage,
+} from "./i18n";
 import en from "../locales/en.json";
 import ru from "../locales/ru.json";
 
@@ -19,7 +25,44 @@ describe("i18n resources", () => {
       expect(hasKey(ru, item.descriptionKey)).toBe(true);
     }
   });
+
+  it("prefers a persisted language over browser detection", () => {
+    const storage = memoryStorage({ [LANGUAGE_STORAGE_KEY]: "ru" });
+
+    expect(detectInitialLanguage({ storage, browserLanguage: "en-US" })).toBe(
+      "ru",
+    );
+  });
+
+  it("falls back from invalid persisted values to browser language", () => {
+    const storage = memoryStorage({ [LANGUAGE_STORAGE_KEY]: "jp" });
+
+    expect(detectInitialLanguage({ storage, browserLanguage: "ru-RU" })).toBe(
+      "ru",
+    );
+  });
+
+  it("persists validated language choices", () => {
+    const storage = memoryStorage();
+
+    persistLanguage("ru", storage);
+
+    expect(readStoredLanguage(storage)).toBe("ru");
+    expect(storage.getItem(LANGUAGE_STORAGE_KEY)).toBe("ru");
+  });
 });
+
+function memoryStorage(initial: Record<string, string> = {}) {
+  const values = new Map(Object.entries(initial));
+  return {
+    getItem(key: string) {
+      return values.get(key) ?? null;
+    },
+    setItem(key: string, value: string) {
+      values.set(key, value);
+    },
+  };
+}
 
 function flattenKeys(tree: LocaleTree, prefix = ""): string[] {
   return Object.entries(tree)

@@ -1,9 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { ReactNode } from "react";
+import type { ChangeEvent, ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 
 import { callHeartbeat, inTauri, type Heartbeat } from "./lib/tauri";
 import { cn } from "./lib/cn";
+import {
+  normalizeLanguage,
+  persistLanguage,
+  SUPPORTED_LANGUAGES,
+} from "./lib/i18n";
 import { CommandPalette, type PaletteItem } from "./routes/CommandPalette";
 import { useCommandPalette } from "./routes/useCommandPalette";
 import OnboardingTour from "./routes/Onboarding";
@@ -193,6 +198,7 @@ export default function App() {
             onOpenPalette={() => palette.setOpen(true)}
             onOpenGuide={() => setShowOnboarding(true)}
           />
+          <LanguageSelector className="mt-3" />
 
           <div className="runtime-panel mt-5 hidden lg:block lg:mt-auto lg:pt-8">
             <HeartbeatSidebarSummary
@@ -271,6 +277,41 @@ function ShellActions({
         {t("app.guide")}
       </Button>
     </div>
+  );
+}
+
+function LanguageSelector({ className }: { className?: string }) {
+  const { t, i18n } = useTranslation();
+  const currentLanguage =
+    normalizeLanguage(i18n.resolvedLanguage ?? i18n.language) ?? "en";
+
+  const handleChange = useCallback(
+    (event: ChangeEvent<HTMLSelectElement>) => {
+      const nextLanguage = normalizeLanguage(event.target.value);
+      if (!nextLanguage) return;
+      persistLanguage(nextLanguage);
+      void i18n.changeLanguage(nextLanguage);
+    },
+    [i18n],
+  );
+
+  return (
+    <label className={cn("block", className)}>
+      <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.08em] text-anvil-500">
+        {t("language.label")}
+      </span>
+      <select
+        value={currentLanguage}
+        onChange={handleChange}
+        className="h-9 w-full rounded-md border border-white/10 bg-white/[0.06] px-3 text-sm text-anvil-50 outline-none transition hover:border-white/20 focus:border-circuit-300/60 focus:ring-2 focus:ring-circuit-300/20"
+      >
+        {SUPPORTED_LANGUAGES.map((language) => (
+          <option key={language.code} value={language.code}>
+            {t(language.labelKey)}
+          </option>
+        ))}
+      </select>
+    </label>
   );
 }
 

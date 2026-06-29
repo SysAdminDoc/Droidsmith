@@ -112,6 +112,14 @@ npm run release:smoke
 resource metadata, validates third-party notices, and fails if expected local
 installer artifacts are missing.
 
+## Translation contributions
+
+Locale files live in `src/locales/<code>.json`. Keep each locale's key tree
+identical, add new supported language codes in `src/lib/i18n.ts`, and include
+language selector labels under `language.*`. Run `npm test -- src/lib/i18n.test.ts`
+before submitting translation changes; it checks English/Russian parity and
+navigation key coverage.
+
 ## Getting involved
 
 Use [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for local setup and verification.
