@@ -17,13 +17,6 @@ instead.
 
 ## Research-Driven Additions
 
-- [ ] P1 - Reconcile docs and README claims with shipped behavior
-  Why: `docs/DEVELOPMENT.md` still says every nav item is a stub, while README claims side-by-side device tabs and plugins that are not implemented.
-  Evidence: `docs/DEVELOPMENT.md`, `README.md`, `src/App.tsx`, `Roadmap_Blocked.md`.
-  Touches: `README.md`, `docs/DEVELOPMENT.md`, `RESEARCH_REPORT.md`, screenshots if UI claims change.
-  Acceptance: Public docs describe the current live routes, blocked sidecars/plugins are named as planned, and no setup text points users at obsolete stub-route status.
-  Complexity: S
-
 - [ ] P1 - Add a local production-bundle smoke test
   Why: Tauri resource, sidecar, and frontend build drift can pass unit tests while installed builds miss data files or binaries.
   Evidence: `src-tauri/tauri.conf.json`, `Roadmap_Blocked.md` R-006/R-010, UAD-NG privacy/update notes, scrcpy official-source warning.
