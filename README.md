@@ -98,6 +98,20 @@ Droidsmith/
 - [CHANGELOG.md](CHANGELOG.md) - shipped roadmap history and release notes.
 - [RESEARCH_REPORT.md](RESEARCH_REPORT.md) - research summary and archive index.
 
+## Local verification
+
+```bash
+npm run format:check
+npm run lint
+npm run typecheck
+npm test
+npm run release:smoke
+```
+
+`npm run release:smoke` builds the frontend and Tauri bundle, checks bundled
+resource metadata, validates third-party notices, and fails if expected local
+installer artifacts are missing.
+
 ## Getting involved
 
 Use [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for local setup and verification.

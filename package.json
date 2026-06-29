@@ -13,6 +13,7 @@
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build",
     "bundle:check": "node scripts/check-tauri-resources.mjs",
+    "release:smoke": "node scripts/check-production-bundle.mjs",
     "security:audit": "npm audit --audit-level=moderate",
     "lint": "eslint .",
     "format:check": "prettier --check \"src/**/*.{ts,tsx,css,json}\" \"*.json\" \"*.config.ts\"",

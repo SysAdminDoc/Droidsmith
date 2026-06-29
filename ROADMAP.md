@@ -17,13 +17,6 @@ instead.
 
 ## Research-Driven Additions
 
-- [ ] P1 - Add a local production-bundle smoke test
-  Why: Tauri resource, sidecar, and frontend build drift can pass unit tests while installed builds miss data files or binaries.
-  Evidence: `src-tauri/tauri.conf.json`, `Roadmap_Blocked.md` R-006/R-010, UAD-NG privacy/update notes, scrcpy official-source warning.
-  Touches: package scripts, `scripts/`, `src-tauri/tauri.conf.json`, local release checklist.
-  Acceptance: A local command builds the frontend, verifies bundle metadata/resources, checks third-party license entries for adb/fastboot/scrcpy/data packs, and fails on missing artifacts.
-  Complexity: M
-
 - [ ] P2 - Add persisted language selection and translation contribution path
   Why: English/Russian parity exists, but language is auto-detected only and there is no contributor workflow comparable to AppManager Weblate or Canta Crowdin.
   Evidence: `src/lib/i18n.ts`, `src/lib/i18n.test.ts`, AppManager translations, Canta translations.

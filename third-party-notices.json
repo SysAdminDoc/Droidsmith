@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "notices": [
+    {
+      "id": "android-platform-tools-adb",
+      "component": "adb",
+      "source": "https://developer.android.com/tools/releases/platform-tools",
+      "license": "Apache-2.0",
+      "status": "planned-sidecar",
+      "usage": "Android Debug Bridge binary used for device transport when platform-tools sidecars are enabled."
+    },
+    {
+      "id": "android-platform-tools-fastboot",
+      "component": "fastboot",
+      "source": "https://developer.android.com/tools/releases/platform-tools",
+      "license": "Apache-2.0",
+      "status": "planned-sidecar",
+      "usage": "Fastboot binary used for bootloader inspection and recovery flows when platform-tools sidecars are enabled."
+    },
+    {
+      "id": "scrcpy",
+      "component": "scrcpy",
+      "source": "https://github.com/Genymobile/scrcpy",
+      "license": "Apache-2.0",
+      "status": "system-or-planned-sidecar",
+      "usage": "External mirror and control engine launched and supervised by Droidsmith."
+    },
+    {
+      "id": "droidsmith-packs",
+      "component": "packs",
+      "source": "packs/",
+      "license": "MIT",
+      "status": "bundled-resource",
+      "usage": "Droidsmith-maintained YAML debloat packs bundled as Tauri resources."
+    },
+    {
+      "id": "droidsmith-quirks",
+      "component": "quirks",
+      "source": "quirks/",
+      "license": "MIT",
+      "status": "bundled-resource",
+      "usage": "Droidsmith-maintained YAML vendor quirk rules bundled as Tauri resources."
+    },
+    {
+      "id": "universal-android-debloater-ng",
+      "component": "UAD-NG data",
+      "source": "https://github.com/Universal-Debloater-Alliance/universal-android-debloater-next-generation",
+      "license": "GPL-3.0",
+      "status": "blocked-on-redistribution-permission",
+      "usage": "Planned optional supplementary debloat data source; not bundled until permission and attribution are resolved."
+    }
+  ]
+}
