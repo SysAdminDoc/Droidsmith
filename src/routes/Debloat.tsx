@@ -98,8 +98,8 @@ export default function DebloatRoute() {
       const authorized = value.devices.filter(
         (d) => typeof d.state === "string" && d.state === "device",
       );
-      if (authorized.length === 1 && !selectedSerial) {
-        setSelectedSerial(authorized[0]!.serial);
+      if (authorized.length === 1) {
+        setSelectedSerial((prev) => prev ?? authorized[0]!.serial);
       }
     } catch (e) {
       setDevicesState({
@@ -107,7 +107,7 @@ export default function DebloatRoute() {
         message: e instanceof Error ? e.message : String(e),
       });
     }
-  }, [selectedSerial]);
+  }, []);
 
   const loadPacks = useCallback(async () => {
     if (!inTauri()) return;

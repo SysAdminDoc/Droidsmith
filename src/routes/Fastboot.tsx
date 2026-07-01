@@ -77,8 +77,8 @@ export default function FastbootRoute() {
     try {
       const devices = await callListFastbootDevices();
       setDevicesState({ kind: "ok", devices });
-      if (devices.length === 1 && !selectedSerial) {
-        setSelectedSerial(devices[0]!.serial);
+      if (devices.length === 1) {
+        setSelectedSerial((prev) => prev ?? devices[0]!.serial);
       }
     } catch (e) {
       setDevicesState({
@@ -86,7 +86,7 @@ export default function FastbootRoute() {
         message: e instanceof Error ? e.message : String(e),
       });
     }
-  }, [selectedSerial]);
+  }, []);
 
   const loadVars = useCallback(async () => {
     if (!selectedSerial) return;
