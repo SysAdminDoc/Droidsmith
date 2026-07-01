@@ -105,7 +105,12 @@ fn parse_ls_line(line: &str) -> Option<RemoteFileEntry> {
 }
 
 fn is_iso_date(token: &str) -> bool {
-    token.len() >= 8 && token.contains('-')
+    token.len() >= 10
+        && token.as_bytes()[4] == b'-'
+        && token.as_bytes()[7] == b'-'
+        && token.as_bytes()[0..4].iter().all(u8::is_ascii_digit)
+        && token.as_bytes()[5..7].iter().all(u8::is_ascii_digit)
+        && token.as_bytes()[8..10].iter().all(u8::is_ascii_digit)
 }
 
 fn is_month_name(token: &str) -> bool {

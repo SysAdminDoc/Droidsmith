@@ -103,6 +103,7 @@ pub fn looks_wireless(s: &str) -> bool {
 pub fn valid_serial(s: &str) -> bool {
     !s.is_empty()
         && s.len() <= 256
+        && !s.starts_with('-')
         && s.chars()
             .all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '-' | '.' | ':'))
 }
@@ -170,5 +171,7 @@ mod tests {
         assert!(!valid_serial("serial with spaces"));
         assert!(!valid_serial("serial/with/slash"));
         assert!(!valid_serial(&"a".repeat(257)));
+        assert!(!valid_serial("-e"));
+        assert!(!valid_serial("--help"));
     }
 }

@@ -143,6 +143,7 @@ fn reap_locked(sessions: &mut HashMap<u64, ManagedScrcpySession>) {
     for managed in sessions.values_mut() {
         let _ = refresh_status(managed);
     }
+    sessions.retain(|_, managed| managed.session.state == ScrcpySessionState::Running);
 }
 
 pub fn build_args(request: &LaunchScrcpyRequest) -> Result<Vec<String>, String> {

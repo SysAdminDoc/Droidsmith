@@ -15,6 +15,7 @@ use serde::Serialize;
 use tauri::Manager;
 
 use crate::adb::device::valid_serial;
+use crate::adb::packages::valid_package_name;
 use crate::adb::parsers::{
     parse_fastboot_devices, parse_ls_output, parse_ps_output, parse_ss_output, FastbootDevice,
     NetworkConnection, ProcessInfo, RemoteFileEntry,
@@ -248,6 +249,54 @@ fn validate_serial_arg(serial: &str) -> Result<(), CommandError> {
     }
 }
 
+fn validate_package_arg(package: &str) -> Result<(), CommandError> {
+    if valid_package_name(package) {
+        Ok(())
+    } else {
+        Err(CommandError {
+            code: "invalid_package",
+            message: format!("invalid package name {package:?}"),
+        })
+    }
+}
+
+fn validate_local_path(local_path: &str) -> Result<PathBuf, CommandError> {
+    let trimmed = local_path.trim();
+    if trimmed.is_empty() {
+        return Err(CommandError {
+            code: "invalid_path",
+            message: "file path cannot be empty".to_string(),
+        });
+    }
+    let path = PathBuf::from(trimmed);
+    if !path.is_absolute() {
+        return Err(CommandError {
+            code: "invalid_path",
+            message: format!("file path must be absolute: {trimmed}"),
+        });
+    }
+    Ok(path)
+}
+
+fn validate_fastboot_key(key: &str) -> Result<(), CommandError> {
+    if key.is_empty() || key.len() > 128 {
+        return Err(CommandError {
+            code: "invalid_key",
+            message: "fastboot variable key is empty or too long".to_string(),
+        });
+    }
+    if !key
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '-' | '.'))
+    {
+        return Err(CommandError {
+            code: "invalid_key",
+            message: format!("fastboot variable key contains invalid characters: {key:?}"),
+        });
+    }
+    Ok(())
+}
+
 /// Apply a previously-planned action and record it in the per-device
 /// journal. Returns the freshly-written journal entry.
 #[tauri::command]
@@ -372,16 +421,18 @@ pub fn push_file(
     remote_path: String,
 ) -> Result<String, CommandError> {
     validate_serial_arg(&serial)?;
+    let validated_path = validate_local_path(&local_path)?;
     let resolution = adb::locate_adb();
     let adb_path = resolution
         .path
         .as_ref()
         .ok_or(adb::TransportError::AdbNotFound)?;
 
+    let local_arg = validated_path.display().to_string();
     let timeout = std::time::Duration::from_secs(120);
     let output = run_adb_simple(
         std::path::Path::new(adb_path),
-        &["-s", &serial, "push", &local_path, &remote_path],
+        &["-s", &serial, "push", &local_arg, &remote_path],
         timeout,
     )?;
     Ok(output)
@@ -395,16 +446,18 @@ pub fn pull_file(
     local_path: String,
 ) -> Result<String, CommandError> {
     validate_serial_arg(&serial)?;
+    let validated_path = validate_local_path(&local_path)?;
     let resolution = adb::locate_adb();
     let adb_path = resolution
         .path
         .as_ref()
         .ok_or(adb::TransportError::AdbNotFound)?;
 
+    let local_arg = validated_path.display().to_string();
     let timeout = std::time::Duration::from_secs(120);
     let output = run_adb_simple(
         std::path::Path::new(adb_path),
-        &["-s", &serial, "pull", &remote_path, &local_path],
+        &["-s", &serial, "pull", &remote_path, &local_arg],
         timeout,
     )?;
     Ok(output)
@@ -524,6 +577,7 @@ pub fn list_fastboot_devices() -> Result<Vec<FastbootDevice>, CommandError> {
 #[tauri::command]
 pub fn fastboot_getvar(serial: String, key: String) -> Result<String, CommandError> {
     validate_serial_arg(&serial)?;
+    validate_fastboot_key(&key)?;
     let fastboot_path = which::which("fastboot").map_err(|_| CommandError {
         code: "fastboot_not_found",
         message: "fastboot binary not found on PATH".to_string(),
@@ -532,15 +586,17 @@ pub fn fastboot_getvar(serial: String, key: String) -> Result<String, CommandErr
     let timeout = std::time::Duration::from_secs(10);
     let stdout = run_adb_simple(&fastboot_path, &["-s", &serial, "getvar", &key], timeout)
         .or_else(|_| {
-            // fastboot getvar outputs to stderr, retry capturing stderr
-            let output = std::process::Command::new(&fastboot_path)
-                .args(["-s", &serial, "getvar", &key])
-                .output()
-                .map_err(|e| CommandError {
-                    code: "spawn_failed",
-                    message: e.to_string(),
-                })?;
-            Ok::<String, CommandError>(String::from_utf8_lossy(&output.stderr).into_owned())
+            // fastboot getvar outputs to stderr — retry capturing stderr
+            // via the same timeout-guarded helper
+            let stderr_attempt =
+                run_adb_simple(&fastboot_path, &["-s", &serial, "getvar", &key], timeout);
+            match stderr_attempt {
+                Ok(output) => Ok(output),
+                Err(_) => Err(CommandError {
+                    code: "fastboot_timeout",
+                    message: format!("fastboot getvar {key:?} timed out"),
+                }),
+            }
         })?;
     Ok(stdout)
 }
@@ -622,6 +678,7 @@ pub fn backup_package(
     local_path: String,
 ) -> Result<BackupPackageResult, CommandError> {
     validate_serial_arg(&serial)?;
+    validate_package_arg(&package)?;
     let target = validate_backup_target(&local_path)?;
     let resolution = adb::locate_adb();
     let adb_path = resolution
@@ -656,6 +713,7 @@ pub fn list_permissions(
     package: String,
 ) -> Result<Vec<PermissionInfo>, CommandError> {
     validate_serial_arg(&serial)?;
+    validate_package_arg(&package)?;
     let resolution = adb::locate_adb();
     let path = resolution
         .path
@@ -675,6 +733,17 @@ pub fn set_permission(
     grant: bool,
 ) -> Result<String, CommandError> {
     validate_serial_arg(&serial)?;
+    validate_package_arg(&package)?;
+    if permission.is_empty()
+        || !permission
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_'))
+    {
+        return Err(CommandError {
+            code: "invalid_permission",
+            message: format!("invalid permission identifier {permission:?}"),
+        });
+    }
     let resolution = adb::locate_adb();
     let path = resolution
         .path
@@ -745,6 +814,7 @@ pub fn list_processes(serial: String) -> Result<Vec<ProcessInfo>, CommandError> 
 #[tauri::command]
 pub fn take_screenshot(serial: String, local_path: String) -> Result<String, CommandError> {
     validate_serial_arg(&serial)?;
+    let validated_path = validate_local_path(&local_path)?;
     let resolution = adb::locate_adb();
     let path = resolution
         .path
@@ -753,10 +823,11 @@ pub fn take_screenshot(serial: String, local_path: String) -> Result<String, Com
     let transport = adb::ShellTransport::new(path);
 
     let remote = "/sdcard/droidsmith-screenshot.png";
+    let local_arg = validated_path.display().to_string();
     transport.shell(&serial, &["screencap", "-p", remote])?;
-    actions::extract_apk(std::path::Path::new(path), &serial, remote, &local_path)?;
+    actions::extract_apk(std::path::Path::new(path), &serial, remote, &local_arg)?;
     let _ = transport.shell(&serial, &["rm", remote]);
-    Ok(local_path)
+    Ok(local_arg)
 }
 
 /// Locate the scrcpy binary on the system. Returns the path if found.
@@ -805,12 +876,14 @@ pub fn stop_scrcpy(session_id: u64) -> Result<crate::scrcpy::ScrcpySession, Comm
 #[tauri::command]
 pub fn install_apk(serial: String, apk_path: String) -> Result<String, CommandError> {
     validate_serial_arg(&serial)?;
+    let validated_path = validate_local_path(&apk_path)?;
     let resolution = adb::locate_adb();
     let path = resolution
         .path
         .as_ref()
         .ok_or(adb::TransportError::AdbNotFound)?;
-    let stdout = actions::install_apk(std::path::Path::new(path), &serial, &apk_path)?;
+    let apk_arg = validated_path.display().to_string();
+    let stdout = actions::install_apk(std::path::Path::new(path), &serial, &apk_arg)?;
     Ok(stdout)
 }
 
@@ -822,16 +895,18 @@ pub fn extract_apk(
     local_path: String,
 ) -> Result<String, CommandError> {
     validate_serial_arg(&serial)?;
+    let validated_path = validate_local_path(&local_path)?;
     let resolution = adb::locate_adb();
     let path = resolution
         .path
         .as_ref()
         .ok_or(adb::TransportError::AdbNotFound)?;
+    let local_arg = validated_path.display().to_string();
     let stdout = actions::extract_apk(
         std::path::Path::new(path),
         &serial,
         &remote_path,
-        &local_path,
+        &local_arg,
     )?;
     Ok(stdout)
 }
@@ -918,13 +993,10 @@ pub struct ExplainFailureRequest {
     pub rom: Option<String>,
     pub package_id: Option<String>,
     pub raw_error: Option<String>,
-    /// Optional path to a `quirks/*.yaml` file. If `None`, we look in
-    /// the app-resource folder for the bundled quirks.
-    pub quirks_path: Option<String>,
 }
 
-/// Load quirks from the given YAML file or bundled resource directory and
-/// match against the failure context.
+/// Load quirks from the bundled resource directory and match against the
+/// failure context.
 /// Returns `Some(quirk)` if a rule applies, `None` if the raw error
 /// should be shown as-is.
 #[tauri::command]
@@ -932,16 +1004,11 @@ pub fn explain_failure(
     app: tauri::AppHandle,
     req: ExplainFailureRequest,
 ) -> Result<Option<Quirk>, CommandError> {
-    let quirks_list = if let Some(path) = req.quirks_path.as_deref() {
-        quirks::load_file(std::path::Path::new(path))
-    } else {
-        let resource_dir = app.path().resource_dir().map_err(|e| CommandError {
-            code: "no_resource_dir",
-            message: e.to_string(),
-        })?;
-        quirks::load_dir(&resource_dir.join("quirks"))
-    }
-    .map_err(|e| CommandError {
+    let resource_dir = app.path().resource_dir().map_err(|e| CommandError {
+        code: "no_resource_dir",
+        message: e.to_string(),
+    })?;
+    let quirks_list = quirks::load_dir(&resource_dir.join("quirks")).map_err(|e| CommandError {
         code: "quirks_load_failed",
         message: e.to_string(),
     })?;

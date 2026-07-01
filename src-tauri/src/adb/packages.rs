@@ -166,12 +166,12 @@ fn is_system_path(p: &str) -> bool {
 /// Conservative validator for Android package identifiers. The platform
 /// allows letters/digits/dot/underscore; this catches obvious junk
 /// (empty, leading dot, etc.) without rejecting real packages.
-pub(crate) fn valid_package_name(s: &str) -> bool {
+pub fn valid_package_name(s: &str) -> bool {
     if s.is_empty() || s.starts_with('.') || s.ends_with('.') {
         return false;
     }
     s.chars()
-        .all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '_')
+        .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-'))
 }
 
 #[cfg(test)]
@@ -220,7 +220,7 @@ package:/system/app/FacebookStub/FacebookStub.apk=com.facebook.appmanager uid:10
     fn skips_blank_lines_and_garbage() {
         let s = concat!(
             "\n",
-            "package:not-a-package\n",
+            "package:.leading-dot\n",
             "package:com.valid.id\n",
             "some-garbage-line\n",
         );
