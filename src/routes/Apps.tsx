@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState } from "react";
-import type { ReactNode } from "react";
 import { save } from "@tauri-apps/plugin-dialog";
 import { useTranslation } from "react-i18next";
 
@@ -39,6 +38,8 @@ import {
   PaneHeader,
   SkeletonLine,
   StatePanel,
+  TableCell,
+  TableHeaderCell,
 } from "./common";
 
 type DevicesState =
@@ -637,10 +638,10 @@ function PackageTable({
           <table className="min-w-full text-sm">
             <thead className="bg-white/[0.04]">
               <tr>
-                <Th>{t("apps.package")}</Th>
-                <Th>{t("apps.type")}</Th>
-                <Th>{t("devices.state")}</Th>
-                <Th>{t("apps.actions")}</Th>
+                <TableHeaderCell>{t("apps.package")}</TableHeaderCell>
+                <TableHeaderCell>{t("apps.type")}</TableHeaderCell>
+                <TableHeaderCell>{t("devices.state")}</TableHeaderCell>
+                <TableHeaderCell>{t("apps.actions")}</TableHeaderCell>
               </tr>
             </thead>
             <tbody className="divide-y divide-white/10">
@@ -649,7 +650,7 @@ function PackageTable({
                   key={pkg.package}
                   className="bg-anvil-950/20 transition hover:bg-white/[0.035]"
                 >
-                  <Td>
+                  <TableCell>
                     <div className="min-w-[16rem]">
                       <code className="font-mono text-xs text-anvil-50">
                         {pkg.package}
@@ -662,22 +663,22 @@ function PackageTable({
                         </p>
                       )}
                     </div>
-                  </Td>
-                  <Td>
+                  </TableCell>
+                  <TableCell>
                     <Badge tone={pkg.system ? "warning" : "neutral"}>
                       {pkg.system
                         ? t("apps.filterSystem")
                         : t("apps.filterUser")}
                     </Badge>
-                  </Td>
-                  <Td>
+                  </TableCell>
+                  <TableCell>
                     <Badge tone={pkg.enabled ? "success" : "danger"}>
                       {pkg.enabled
                         ? t("apps.filterEnabled")
                         : t("apps.filterDisabled")}
                     </Badge>
-                  </Td>
-                  <Td>
+                  </TableCell>
+                  <TableCell>
                     <div className="flex min-w-[10rem] flex-wrap gap-1.5">
                       {pkg.enabled ? (
                         <>
@@ -734,7 +735,7 @@ function PackageTable({
                         {t("apps.backup")}
                       </Button>
                     </div>
-                  </Td>
+                  </TableCell>
                 </tr>
               ))}
             </tbody>
@@ -831,12 +832,12 @@ function JournalPanel({
           <table className="min-w-full text-sm">
             <thead className="bg-white/[0.04]">
               <tr>
-                <Th>{t("apps.journalId")}</Th>
-                <Th>{t("apps.journalAction")}</Th>
-                <Th>{t("apps.package")}</Th>
-                <Th>{t("devices.state")}</Th>
-                <Th>{t("apps.journalOutput")}</Th>
-                <Th>{t("apps.actions")}</Th>
+                <TableHeaderCell>{t("apps.journalId")}</TableHeaderCell>
+                <TableHeaderCell>{t("apps.journalAction")}</TableHeaderCell>
+                <TableHeaderCell>{t("apps.package")}</TableHeaderCell>
+                <TableHeaderCell>{t("devices.state")}</TableHeaderCell>
+                <TableHeaderCell>{t("apps.journalOutput")}</TableHeaderCell>
+                <TableHeaderCell>{t("apps.actions")}</TableHeaderCell>
               </tr>
             </thead>
             <tbody className="divide-y divide-white/10">
@@ -848,7 +849,7 @@ function JournalPanel({
                     key={entry.id}
                     className="bg-anvil-950/20 transition hover:bg-white/[0.035]"
                   >
-                    <Td>
+                    <TableCell>
                       <div className="min-w-[6rem]">
                         <code className="font-mono text-xs text-anvil-50">
                           #{entry.id}
@@ -857,8 +858,8 @@ function JournalPanel({
                           {formatJournalTime(entry.applied.applied_at)}
                         </p>
                       </div>
-                    </Td>
-                    <Td>
+                    </TableCell>
+                    <TableCell>
                       <div className="min-w-[8rem]">
                         <Badge tone="info">
                           {t(journalActionKey(request.kind))}
@@ -867,24 +868,24 @@ function JournalPanel({
                           {entry.applied.plan.description}
                         </p>
                       </div>
-                    </Td>
-                    <Td>
+                    </TableCell>
+                    <TableCell>
                       <code className="block min-w-[16rem] font-mono text-xs text-anvil-100">
                         {request.package}
                       </code>
-                    </Td>
-                    <Td>
+                    </TableCell>
+                    <TableCell>
                       <Badge tone={journalStatusTone(status)}>
                         {journalStatusLabel(entry, status, t)}
                       </Badge>
-                    </Td>
-                    <Td>
+                    </TableCell>
+                    <TableCell>
                       <pre className="max-w-[22rem] whitespace-pre-wrap break-words font-mono text-[11px] leading-5 text-anvil-400">
                         {summarizeJournalOutput(entry.applied.stdout) ||
                           t("apps.journalNoOutput")}
                       </pre>
-                    </Td>
-                    <Td>
+                    </TableCell>
+                    <TableCell>
                       {status === "undoable" ? (
                         <Button
                           type="button"
@@ -902,7 +903,7 @@ function JournalPanel({
                           {t("apps.journalNoUndo")}
                         </span>
                       )}
-                    </Td>
+                    </TableCell>
                   </tr>
                 );
               })}
@@ -1213,14 +1214,4 @@ function PackagesSkeleton() {
   );
 }
 
-function Th({ children }: { children: ReactNode }) {
-  return (
-    <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-anvil-400">
-      {children}
-    </th>
-  );
-}
 
-function Td({ children }: { children: ReactNode }) {
-  return <td className="px-4 py-4 align-middle text-anvil-200">{children}</td>;
-}

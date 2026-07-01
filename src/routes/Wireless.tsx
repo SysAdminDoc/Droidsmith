@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { ReactNode } from "react";
 import qrcode from "qrcode-generator";
 import { useTranslation } from "react-i18next";
 
@@ -21,6 +20,8 @@ import {
   PaneHeader,
   SkeletonLine,
   StatePanel,
+  TableCell,
+  TableHeaderCell,
 } from "./common";
 
 type ServicesState =
@@ -475,10 +476,10 @@ function ServicesPanel({
         <table className="min-w-full text-sm">
           <thead className="bg-white/[0.04]">
             <tr>
-              <Th>{t("wireless.name")}</Th>
-              <Th>{t("wireless.kind")}</Th>
-              <Th>{t("wireless.endpoint")}</Th>
-              <Th>{t("wireless.action")}</Th>
+              <TableHeaderCell>{t("wireless.name")}</TableHeaderCell>
+              <TableHeaderCell>{t("wireless.kind")}</TableHeaderCell>
+              <TableHeaderCell>{t("wireless.endpoint")}</TableHeaderCell>
+              <TableHeaderCell>{t("wireless.action")}</TableHeaderCell>
             </tr>
           </thead>
           <tbody className="divide-y divide-white/10">
@@ -487,25 +488,25 @@ function ServicesPanel({
                 key={`${service.service_type}:${service.endpoint}:${service.name}`}
                 className="bg-anvil-950/20 transition hover:bg-white/[0.035]"
               >
-                <Td>
+                <TableCell>
                   <code className="font-mono text-xs text-anvil-50">
                     {service.name}
                   </code>
                   <p className="mt-1 font-mono text-[11px] text-anvil-500">
                     {service.service_type}
                   </p>
-                </Td>
-                <Td>
+                </TableCell>
+                <TableCell>
                   <Badge tone={serviceKindTone(service.kind)}>
                     {service.kind}
                   </Badge>
-                </Td>
-                <Td>
+                </TableCell>
+                <TableCell>
                   <code className="font-mono text-xs text-anvil-100">
                     {service.endpoint}
                   </code>
-                </Td>
-                <Td>
+                </TableCell>
+                <TableCell>
                   {service.kind === "pairing" && (
                     <Button
                       type="button"
@@ -533,7 +534,7 @@ function ServicesPanel({
                       {t("common.noAction")}
                     </span>
                   )}
-                </Td>
+                </TableCell>
               </tr>
             ))}
           </tbody>
@@ -682,17 +683,6 @@ function QrMetric({
   );
 }
 
-function Th({ children }: { children: ReactNode }) {
-  return (
-    <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-anvil-400">
-      {children}
-    </th>
-  );
-}
-
-function Td({ children }: { children: ReactNode }) {
-  return <td className="px-4 py-4 align-middle text-anvil-200">{children}</td>;
-}
 
 function serviceKindTone(
   kind: WirelessAdbService["kind"],

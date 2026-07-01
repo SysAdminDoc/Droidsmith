@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState } from "react";
-import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 
 import {
@@ -10,7 +9,15 @@ import {
   type FastbootDevice,
 } from "../lib/tauri";
 
-import { Badge, Button, Card, PaneHeader, StatePanel } from "./common";
+import {
+  Badge,
+  Button,
+  Card,
+  PaneHeader,
+  StatePanel,
+  TableCell,
+  TableHeaderCell,
+} from "./common";
 
 type FastbootState =
   | { kind: "checking" }
@@ -189,30 +196,30 @@ export default function FastbootRoute() {
                     <table className="min-w-full text-sm">
                       <thead className="bg-white/[0.04]">
                         <tr>
-                          <Th>{t("devices.serial")}</Th>
-                          <Th>{t("fastboot.mode")}</Th>
-                          <Th>{t("fastboot.product")}</Th>
-                          <Th>{t("wireless.action")}</Th>
+                          <TableHeaderCell>{t("devices.serial")}</TableHeaderCell>
+                          <TableHeaderCell>{t("fastboot.mode")}</TableHeaderCell>
+                          <TableHeaderCell>{t("fastboot.product")}</TableHeaderCell>
+                          <TableHeaderCell>{t("wireless.action")}</TableHeaderCell>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-white/10">
                         {devicesState.devices.map((d) => (
                           <tr key={d.serial} className="hover:bg-white/[0.03]">
-                            <Td>
+                            <TableCell>
                               <code className="font-mono text-xs text-anvil-50">
                                 {d.serial}
                               </code>
-                            </Td>
-                            <Td>
+                            </TableCell>
+                            <TableCell>
                               <Badge tone="info">{d.mode}</Badge>
                               {d.parse_error && (
                                 <Badge tone="warning" className="ml-2">
                                   Parse issue
                                 </Badge>
                               )}
-                            </Td>
-                            <Td>{d.product ?? t("common.notReported")}</Td>
-                            <Td>
+                            </TableCell>
+                            <TableCell>{d.product ?? t("common.notReported")}</TableCell>
+                            <TableCell>
                               <Button
                                 type="button"
                                 size="sm"
@@ -230,7 +237,7 @@ export default function FastbootRoute() {
                                   ? t("common.selected")
                                   : t("common.select")}
                               </Button>
-                            </Td>
+                            </TableCell>
                           </tr>
                         ))}
                       </tbody>
@@ -299,14 +306,4 @@ export default function FastbootRoute() {
   );
 }
 
-function Th({ children }: { children: ReactNode }) {
-  return (
-    <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-anvil-400">
-      {children}
-    </th>
-  );
-}
 
-function Td({ children }: { children: ReactNode }) {
-  return <td className="px-4 py-3 align-middle text-anvil-200">{children}</td>;
-}

@@ -1,5 +1,4 @@
 ﻿import { useCallback, useEffect, useRef, useState } from "react";
-import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 
 import {
@@ -33,6 +32,8 @@ import {
   PaneHeader,
   SkeletonLine,
   StatePanel,
+  TableCell,
+  TableHeaderCell,
 } from "./common";
 
 type DevicesState =
@@ -794,16 +795,16 @@ function QueueRows({ rows }: { rows: DebloatQueueRow[] }) {
       <table className="min-w-full text-sm">
         <thead className="bg-white/[0.04]">
           <tr>
-            <Th>{t("apps.package")}</Th>
-            <Th>{t("devices.state")}</Th>
-            <Th>{t("debloat.beforeAfter")}</Th>
-            <Th>{t("debloat.journalId")}</Th>
+            <TableHeaderCell>{t("apps.package")}</TableHeaderCell>
+            <TableHeaderCell>{t("devices.state")}</TableHeaderCell>
+            <TableHeaderCell>{t("debloat.beforeAfter")}</TableHeaderCell>
+            <TableHeaderCell>{t("debloat.journalId")}</TableHeaderCell>
           </tr>
         </thead>
         <tbody className="divide-y divide-white/10">
           {rows.map((row) => (
             <tr key={row.entry.id} className="bg-anvil-950/20">
-              <Td>
+              <TableCell>
                 <code className="font-mono text-xs text-anvil-100">
                   {row.entry.id}
                 </code>
@@ -812,8 +813,8 @@ function QueueRows({ rows }: { rows: DebloatQueueRow[] }) {
                     {row.error}
                   </p>
                 )}
-              </Td>
-              <Td>
+              </TableCell>
+              <TableCell>
                 <Badge tone={queueStatusTone(row.status)}>
                   {t(`debloat.queueStatus.${row.status}`)}
                 </Badge>
@@ -822,8 +823,8 @@ function QueueRows({ rows }: { rows: DebloatQueueRow[] }) {
                     {t("debloat.attemptCount", { count: row.attempts })}
                   </p>
                 )}
-              </Td>
-              <Td>
+              </TableCell>
+              <TableCell>
                 <div className="min-w-[12rem] text-xs text-anvil-400">
                   <p>
                     {t("debloat.beforeState", snapshotLabel(row.before, t))}
@@ -832,8 +833,8 @@ function QueueRows({ rows }: { rows: DebloatQueueRow[] }) {
                     {t("debloat.afterState", snapshotLabel(row.after, t))}
                   </p>
                 </div>
-              </Td>
-              <Td>
+              </TableCell>
+              <TableCell>
                 {row.journalId ? (
                   <code className="font-mono text-xs text-circuit-100">
                     #{row.journalId}
@@ -843,7 +844,7 @@ function QueueRows({ rows }: { rows: DebloatQueueRow[] }) {
                     {t("debloat.noJournalEntry")}
                   </span>
                 )}
-              </Td>
+              </TableCell>
             </tr>
           ))}
         </tbody>
@@ -882,17 +883,6 @@ function snapshotLabel(
   };
 }
 
-function Th({ children }: { children: ReactNode }) {
-  return (
-    <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-anvil-400">
-      {children}
-    </th>
-  );
-}
-
-function Td({ children }: { children: ReactNode }) {
-  return <td className="px-4 py-4 align-middle text-anvil-200">{children}</td>;
-}
 
 function groupByTier(entries: PackEntry[]): Map<RemovalLevel, PackEntry[]> {
   const map = new Map<RemovalLevel, PackEntry[]>();

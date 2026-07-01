@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState } from "react";
-import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 
 import {
@@ -31,6 +30,8 @@ import {
   PaneHeader,
   SkeletonLine,
   StatePanel,
+  TableCell,
+  TableHeaderCell,
 } from "./common";
 
 type State =
@@ -322,10 +323,10 @@ function DeviceTable({
         <table className="min-w-full text-sm">
           <thead className="bg-white/[0.04]">
             <tr>
-              <Th>{t("devices.serial")}</Th>
-              <Th>{t("devices.state")}</Th>
-              <Th>{t("devices.identity")}</Th>
-              <Th>{t("devices.transport")}</Th>
+              <TableHeaderCell>{t("devices.serial")}</TableHeaderCell>
+              <TableHeaderCell>{t("devices.state")}</TableHeaderCell>
+              <TableHeaderCell>{t("devices.identity")}</TableHeaderCell>
+              <TableHeaderCell>{t("devices.transport")}</TableHeaderCell>
             </tr>
           </thead>
           <tbody className="divide-y divide-white/10">
@@ -336,29 +337,38 @@ function DeviceTable({
               return (
                 <tr
                   key={device.serial}
+                  role={isDevice ? "button" : undefined}
+                  tabIndex={isDevice ? 0 : undefined}
                   onClick={isDevice ? () => onSelect(device.serial) : undefined}
+                  onKeyDown={isDevice ? (e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      onSelect(device.serial);
+                    }
+                  } : undefined}
+                  title={!isDevice ? "Device must be authorized before it can be selected" : undefined}
                   className={[
                     "transition",
                     isDevice
-                      ? "cursor-pointer hover:bg-white/[0.055]"
-                      : "bg-anvil-950/20",
+                      ? "cursor-pointer hover:bg-white/[0.055] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-circuit-300 focus-visible:outline-none"
+                      : "bg-anvil-950/20 opacity-75",
                     isSelected ? "bg-circuit-300/[0.06]" : "",
                   ].join(" ")}
                 >
-                  <Td>
+                  <TableCell>
                     <div className="flex min-w-[13rem] items-center gap-2">
                       <code className="font-mono text-xs text-anvil-50">
                         {device.serial}
                       </code>
                       {device.wireless && <Badge tone="info">Wi-Fi</Badge>}
                     </div>
-                  </Td>
-                  <Td>
+                  </TableCell>
+                  <TableCell>
                     <Badge tone={deviceStateTone(device.state)}>
                       {formatStateLabel(device.state)}
                     </Badge>
-                  </Td>
-                  <Td>
+                  </TableCell>
+                  <TableCell>
                     <div className="min-w-[13rem]">
                       <p className="font-medium text-anvil-100">
                         {device.model ?? t("devices.unknownModel")}
@@ -369,8 +379,8 @@ function DeviceTable({
                           .join(" / ") || t("devices.noProductMetadata")}
                       </p>
                     </div>
-                  </Td>
-                  <Td>
+                  </TableCell>
+                  <TableCell>
                     {device.transport_id != null ? (
                       <code className="font-mono text-xs">
                         {t("devices.transportId", {
@@ -382,7 +392,7 @@ function DeviceTable({
                         {t("common.notReported")}
                       </span>
                     )}
-                  </Td>
+                  </TableCell>
                 </tr>
               );
             })}
@@ -587,17 +597,6 @@ function DeviceTableSkeleton() {
   );
 }
 
-function Th({ children }: { children: ReactNode }) {
-  return (
-    <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-anvil-400">
-      {children}
-    </th>
-  );
-}
-
-function Td({ children }: { children: ReactNode }) {
-  return <td className="px-4 py-4 align-middle text-anvil-200">{children}</td>;
-}
 
 function formatStateLabel(state: SerializedDeviceState): string {
   const label = summarizeState(state);
