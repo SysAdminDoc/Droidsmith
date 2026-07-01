@@ -115,14 +115,14 @@ export function PlaceholderBody({
 
 export function Card({
   children,
-  className = "",
+  className,
   ...props
 }: ComponentPropsWithoutRef<"div">) {
   return (
     <div
       className={cn(
         "rounded-lg border border-white/10 bg-anvil-900/70 shadow-glow backdrop-blur",
-        className || "p-4",
+        className ?? "p-4",
       )}
       {...props}
     >

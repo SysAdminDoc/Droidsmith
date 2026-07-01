@@ -216,7 +216,12 @@ export default function App() {
         </main>
       </div>
       {showOnboarding && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+          onKeyDown={(e) => {
+            if (e.key === "Escape") setShowOnboarding(false);
+          }}
+        >
           <OnboardingTour onDismiss={() => setShowOnboarding(false)} />
         </div>
       )}
@@ -239,23 +244,15 @@ function ShellActions({
   className,
   onOpenPalette,
   onOpenGuide,
-  stacked = false,
 }: {
   className?: string;
   onOpenPalette: () => void;
   onOpenGuide: () => void;
-  stacked?: boolean;
 }) {
   const { t } = useTranslation();
 
   return (
-    <div
-      className={cn(
-        "grid gap-2",
-        stacked ? "grid-cols-1" : "grid-cols-2",
-        className,
-      )}
-    >
+    <div className={cn("grid grid-cols-2 gap-2", className)}>
       <Button
         type="button"
         variant="secondary"

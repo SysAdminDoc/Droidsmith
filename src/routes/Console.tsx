@@ -21,7 +21,10 @@ type HistoryEntry = {
   output: string;
   error: boolean;
   timestamp: number;
+  id: number;
 };
+
+let nextEntryId = 1;
 
 export default function ConsoleRoute() {
   const { t } = useTranslation();
@@ -83,7 +86,7 @@ export default function ConsoleRoute() {
       const output = await callShellRun(selectedSerial, argv);
       setHistory((prev) => [
         ...prev,
-        { command: trimmed, output, error: false, timestamp: Date.now() },
+        { command: trimmed, output, error: false, timestamp: Date.now(), id: nextEntryId++ },
       ]);
     } catch (e) {
       setHistory((prev) => [
@@ -93,6 +96,7 @@ export default function ConsoleRoute() {
           output: e instanceof Error ? e.message : String(e),
           error: true,
           timestamp: Date.now(),
+          id: nextEntryId++,
         },
       ]);
     } finally {
@@ -214,7 +218,7 @@ export default function ConsoleRoute() {
                 <p className="text-anvil-600">{t("console.hint")}</p>
               )}
               {history.map((entry) => (
-                <div key={entry.timestamp} className="mb-3">
+                <div key={entry.id} className="mb-3">
                   <div className="flex items-center gap-2">
                     <span className="text-circuit-300">$</span>
                     <span className="text-anvil-100">{entry.command}</span>

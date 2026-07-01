@@ -26,7 +26,7 @@ export default defineConfig({
       ignored: ["**/src-tauri/**"],
     },
   },
-  envPrefix: ["VITE_", "TAURI_ENV_*"],
+  envPrefix: ["VITE_", "TAURI_ENV_"],
   build: {
     // Tauri sets TAURI_ENV_PLATFORM in the build step. Windows WebView2
     // is current Chrome; Linux WebKitGTK / macOS WKWebView are Safari-ish.

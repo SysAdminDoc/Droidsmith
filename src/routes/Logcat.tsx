@@ -45,8 +45,14 @@ export default function LogcatRoute() {
   const [tagFilter, setTagFilter] = useState("");
   const [levelFilter, setLevelFilter] = useState<string>("V");
   const [textFilter, setTextFilter] = useState("");
+  const [fetchError, setFetchError] = useState(false);
   const tailRef = useRef(false);
+  const serialRef = useRef(selectedSerial);
+  const tagFilterRef = useRef(tagFilter);
   const outputRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => { serialRef.current = selectedSerial; }, [selectedSerial]);
+  useEffect(() => { tagFilterRef.current = tagFilter; }, [tagFilter]);
 
   const loadDevices = useCallback(async () => {
     if (!inTauri()) {
@@ -76,27 +82,30 @@ export default function LogcatRoute() {
   }, [loadDevices]);
 
   const fetchLogcat = useCallback(async () => {
-    if (!selectedSerial || !tailRef.current) return;
+    const serial = serialRef.current;
+    if (!serial || !tailRef.current) return;
 
     try {
       const argv = ["logcat", "-v", "brief", "-d", "-t", "200"];
-      if (tagFilter.trim()) {
-        argv.push("-s", tagFilter.trim());
+      const currentTag = tagFilterRef.current.trim();
+      if (currentTag) {
+        argv.push("-s", currentTag);
       }
-      const output = await callShellRun(selectedSerial, argv);
+      const output = await callShellRun(serial, argv);
       const parsed = output
         .split("\n")
         .filter((l) => l.trim())
         .map(parseLogcatLine);
       setLines(parsed);
+      setFetchError(false);
     } catch {
-      // Silently handle — logcat may fail during device transitions
+      setFetchError(true);
     }
 
     if (tailRef.current) {
       setTimeout(() => void fetchLogcat(), 2000);
     }
-  }, [selectedSerial, tagFilter]);
+  }, []);
 
   const startTailing = useCallback(() => {
     tailRef.current = true;
@@ -151,7 +160,8 @@ export default function LogcatRoute() {
                 <code className="font-mono">{selectedSerial}</code>
               </Badge>
             )}
-            {tailing && <Badge tone="success">{t("logcat.tailing")}</Badge>}
+            {tailing && !fetchError && <Badge tone="success">{t("logcat.tailing")}</Badge>}
+            {tailing && fetchError && <Badge tone="danger">{t("logcat.fetchFailed")}</Badge>}
             <Badge tone="neutral">
               {t("logcat.lineCount", { count: filteredLines.length })}
             </Badge>

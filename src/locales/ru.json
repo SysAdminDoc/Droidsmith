@@ -410,6 +410,7 @@
     "error": "Error",
     "fatal": "Fatal",
     "tailing": "Tailing",
+    "fetchFailed": "Ошибка загрузки",
     "lineCount_one": "{{count}} строка",
     "lineCount_other": "{{count}} строк",
     "desktopRequiredBody": "Logcat выполняется внутри среды Tauri.",

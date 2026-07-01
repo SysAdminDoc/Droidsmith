@@ -410,6 +410,7 @@
     "error": "Error",
     "fatal": "Fatal",
     "tailing": "Tailing",
+    "fetchFailed": "Fetch failed",
     "lineCount_one": "{{count}} line",
     "lineCount_other": "{{count}} lines",
     "desktopRequiredBody": "Logcat runs inside the Tauri runtime.",
