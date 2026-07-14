@@ -22,6 +22,7 @@ use std::process::ExitCode;
 use droidsmith_lib::adb::{
     self, actions, device::valid_serial, AdbTransport, DeviceTarget, ShellTransport,
 };
+use droidsmith_lib::journal;
 use droidsmith_lib::profile;
 
 fn main() -> ExitCode {
@@ -248,13 +249,30 @@ fn cmd_run(argv: &[String]) -> ExitCode {
     }
 
     let mut failures = 0;
+    let journal_dir = match journal::default_journal_dir() {
+        Ok(path) => path,
+        Err(error) => {
+            eprintln!("[droidsmith-cli] cannot resolve operation journal: {error}");
+            return ExitCode::from(1);
+        }
+    };
     for (i, plan) in plans.into_iter().enumerate() {
         let now = iso_now();
-        match actions::apply(&transport, plan, &now) {
+        let result = journal::with_journal(&journal_dir, &target.serial, |journal| {
+            journal.execute(plan, None, &now, |plan| {
+                actions::apply(&transport, plan, &iso_now())
+            })
+        });
+        match result {
             Ok(_) => println!("  [{:>2}] ok", i + 1),
-            Err(e) => {
+            Err(journal::ExecuteError::Operation(e)) => {
                 eprintln!("  [{:>2}] FAILED: {e}", i + 1);
                 failures += 1;
+            }
+            Err(journal::ExecuteError::Journal(e)) => {
+                eprintln!("  [{:>2}] JOURNAL FAILED: {e}", i + 1);
+                eprintln!("\nStopped before any later actions to preserve auditability.");
+                return ExitCode::from(1);
             }
         }
     }

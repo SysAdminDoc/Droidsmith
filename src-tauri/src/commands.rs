@@ -271,6 +271,23 @@ fn validate_serial_arg(serial: &str) -> Result<(), CommandError> {
     }
 }
 
+fn execute_journaled(
+    journal: &mut Journal,
+    transport: &adb::ShellTransport,
+    plan: actions::PlannedAction,
+    undoes: Option<u64>,
+) -> Result<JournalEntry, CommandError> {
+    let started_at = iso_now();
+    journal
+        .execute(plan, undoes, &started_at, |plan| {
+            actions::apply(transport, plan, &iso_now())
+        })
+        .map_err(|error| match error {
+            journal::ExecuteError::Journal(error) => CommandError::from(error),
+            journal::ExecuteError::Operation(error) => CommandError::from(error),
+        })
+}
+
 fn validated_transport(target: &adb::DeviceTarget) -> Result<adb::ShellTransport, CommandError> {
     validate_serial_arg(&target.serial)?;
     let resolution = adb::locate_adb();
@@ -374,13 +391,11 @@ pub fn apply_action(
     let transport = adb::ShellTransport::new(path);
 
     let serial = plan.request.serial.clone();
-    let applied = actions::apply(&transport, plan, &iso_now())?;
-
-    // Serialize the open→record cycle per device so concurrent applies
-    // cannot assign duplicate journal ids.
+    // Serialize intent → device mutation → terminal outcome per device. The
+    // durable intent is written and synced before `actions::apply` runs.
     let dir = journal_dir(&app)?;
     let entry = journal::with_journal(&dir, &serial, |journal| {
-        Ok::<_, CommandError>(journal.record(applied)?.clone())
+        execute_journaled(journal, &transport, plan, None)
     })?;
     Ok(entry)
 }
@@ -391,8 +406,10 @@ pub fn journal_list(
     serial: String,
 ) -> Result<Vec<JournalEntry>, CommandError> {
     validate_serial_arg(&serial)?;
-    let journal = Journal::open(&journal_dir(&app)?, &serial)?;
-    Ok(journal.entries().to_vec())
+    let dir = journal_dir(&app)?;
+    journal::with_journal(&dir, &serial, |journal| {
+        Ok::<_, CommandError>(journal.entries().to_vec())
+    })
 }
 
 /// Undo entry `entry_id` in `serial`'s journal. Returns the new
@@ -423,8 +440,7 @@ pub fn journal_undo(
         undo_request.target = target.clone();
 
         let plan = actions::plan(undo_request);
-        let applied = actions::apply(&transport, plan, &iso_now())?;
-        Ok::<_, CommandError>(journal.record_undo(entry_id, applied)?.clone())
+        execute_journaled(journal, &transport, plan, Some(entry_id))
     })?;
     Ok(entry)
 }

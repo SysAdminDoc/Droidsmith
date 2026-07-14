@@ -5,7 +5,7 @@ pub mod adb;
 mod commands;
 mod diagnostics;
 mod fs_util;
-mod journal;
+pub mod journal;
 /// `packs` is `pub` so the `droidsmith-pack-lint` binary (which links
 /// against this crate as `droidsmith_lib`) can reach the loader + lint
 /// types. Tauri-internal callers go through `crate::packs` as usual.

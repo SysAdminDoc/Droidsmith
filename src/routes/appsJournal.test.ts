@@ -34,6 +34,8 @@ function entry(
     },
     undone_by: null,
     undoes: null,
+    outcome: "succeeded",
+    failure: null,
     ...overrides,
   };
 }
@@ -59,5 +61,20 @@ describe("journalEntryStatus", () => {
     );
     expect(journalEntryStatus(entry("clear_data"))).toBe("irreversible");
     expect(journalEntryStatus(entry("force_stop"))).toBe("irreversible");
+  });
+
+  it("surfaces pending, failed, and interrupted operation records", () => {
+    expect(
+      journalEntryStatus({ ...entry("disable"), outcome: "pending" }),
+    ).toBe("pending");
+    expect(journalEntryStatus({ ...entry("disable"), outcome: "failed" })).toBe(
+      "failed",
+    );
+    expect(
+      journalEntryStatus({ ...entry("disable"), outcome: "interrupted" }),
+    ).toBe("interrupted");
+    expect(
+      journalEntryStatus({ ...entry("disable"), undone_by: 2 }, "interrupted"),
+    ).toBe("undo_interrupted");
   });
 });

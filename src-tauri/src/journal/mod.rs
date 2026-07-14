@@ -19,9 +19,11 @@
 //!
 //! ## File layout
 //!
-//! `<app_data_dir>/journal/<serial>.jsonl`, one [`JournalEntry`] per
-//! line. The directory is created on demand. Per-device files isolate
-//! noise — a wedged file lock on one device doesn't poison others.
+//! `<app_data_dir>/journal/<serial>.jsonl`, one immutable state transition per
+//! line. Repeated ids form a write-ahead intent followed by one terminal
+//! outcome; replay keeps the last durable transition. The directory is created
+//! on demand. Per-device files isolate noise — a wedged file lock on one device
+//! doesn't poison others.
 
 use std::collections::HashMap;
 use std::fs::{self, File, OpenOptions};
@@ -32,7 +34,7 @@ use std::sync::{Arc, Mutex, OnceLock};
 
 use serde::{Deserialize, Serialize};
 
-use crate::adb::actions::{ActionRequest, AppliedAction};
+use crate::adb::actions::{ActionRequest, AppliedAction, PlannedAction};
 
 /// Per-device lock so the open → read → record → write cycle is atomic.
 /// Two concurrent `apply_action` calls on the same device would otherwise
@@ -79,6 +81,72 @@ pub struct JournalEntry {
     /// `Some(undone_entry_id)` if this entry was created to undo an
     /// earlier one. Lets the UI render an "Undo of #N" hint.
     pub undoes: Option<u64>,
+    /// Durable lifecycle for this operation. Missing on legacy rows, which
+    /// were only written after success and therefore deserialize as succeeded.
+    #[serde(default)]
+    pub outcome: JournalOutcome,
+    /// Redacted terminal failure or recovery detail. Pending and successful
+    /// entries keep this empty.
+    #[serde(default)]
+    pub failure: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum JournalOutcome {
+    Pending,
+    #[default]
+    Succeeded,
+    Failed,
+    Interrupted,
+}
+
+#[derive(Debug)]
+pub enum ExecuteError<E> {
+    Journal(std::io::Error),
+    Operation(E),
+}
+
+impl<E> From<std::io::Error> for ExecuteError<E> {
+    fn from(error: std::io::Error) -> Self {
+        Self::Journal(error)
+    }
+}
+
+impl<E: std::fmt::Display> std::fmt::Display for ExecuteError<E> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Journal(error) => write!(f, "operation journal failed: {error}"),
+            Self::Operation(error) => error.fmt(f),
+        }
+    }
+}
+
+/// Journal location used by the headless CLI. It mirrors Tauri's app-data
+/// convention for the `com.droidsmith.app` identifier so GUI and CLI recovery
+/// share one per-device log.
+pub fn default_journal_dir() -> std::io::Result<PathBuf> {
+    #[cfg(target_os = "windows")]
+    let base = std::env::var_os("APPDATA").map(PathBuf::from);
+    #[cfg(target_os = "macos")]
+    let base = std::env::var_os("HOME")
+        .map(PathBuf::from)
+        .map(|home| home.join("Library").join("Application Support"));
+    #[cfg(all(unix, not(target_os = "macos")))]
+    let base = std::env::var_os("XDG_DATA_HOME")
+        .map(PathBuf::from)
+        .or_else(|| {
+            std::env::var_os("HOME")
+                .map(PathBuf::from)
+                .map(|home| home.join(".local").join("share"))
+        });
+    base.map(|path| path.join("com.droidsmith.app").join("journal"))
+        .ok_or_else(|| {
+            std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                "could not resolve the Droidsmith app-data directory",
+            )
+        })
 }
 
 /// In-memory journal. Loaded on demand, persisted line-by-line.
@@ -86,6 +154,18 @@ pub struct Journal {
     path: PathBuf,
     entries: Vec<JournalEntry>,
     next_id: AtomicU64,
+    #[cfg(test)]
+    fail_persist: Option<PersistFailure>,
+}
+
+#[cfg(test)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum PersistFailure {
+    Open,
+    Write,
+    Flush,
+    Sync,
+    PartialWrite,
 }
 
 impl Journal {
@@ -97,6 +177,7 @@ impl Journal {
         let mut entries: Vec<JournalEntry> = Vec::new();
         let mut max_id = 0u64;
         if path.exists() {
+            repair_partial_tail(&path)?;
             let f = File::open(&path)?;
             for line in BufReader::new(f).lines() {
                 let line = line?;
@@ -123,11 +204,16 @@ impl Journal {
             }
         }
         let next_id = max_id + 1;
-        Ok(Self {
+        let mut journal = Self {
             path,
             entries,
             next_id: AtomicU64::new(next_id),
-        })
+            #[cfg(test)]
+            fail_persist: None,
+        };
+        journal.rebuild_undo_links();
+        journal.reconcile_interrupted()?;
+        Ok(journal)
     }
 
     /// On-disk path. Used by the future Settings → Diagnostics screen
@@ -141,54 +227,130 @@ impl Journal {
         &self.entries
     }
 
-    /// Append an applied action.
-    pub fn record(&mut self, applied: AppliedAction) -> std::io::Result<&JournalEntry> {
+    /// Durably record intent before any device mutation is attempted.
+    fn begin(
+        &mut self,
+        plan: PlannedAction,
+        started_at: &str,
+        undoes: Option<u64>,
+    ) -> std::io::Result<u64> {
+        if let Some(original_id) = undoes {
+            if undo_request_for(self, original_id).is_none() {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidInput,
+                    format!("journal entry {original_id} is not safely undoable"),
+                ));
+            }
+        }
+        let id = self.next_id.fetch_add(1, Ordering::Relaxed);
         let entry = JournalEntry {
-            id: self.next_id.fetch_add(1, Ordering::Relaxed),
-            applied,
+            id,
+            applied: AppliedAction {
+                plan,
+                stdout: String::new(),
+                applied_at: started_at.to_string(),
+            },
             undone_by: None,
-            undoes: None,
+            undoes,
+            outcome: JournalOutcome::Pending,
+            failure: None,
         };
-        self.append(entry)
+        self.append(entry)?;
+        self.rebuild_undo_links();
+        Ok(id)
     }
 
-    /// Append an undo entry for an existing entry, then mark the
-    /// original as `undone_by`. Returns the new entry. Caller must have
-    /// already executed the inverse `apply()` against the transport.
-    pub fn record_undo(
+    /// Complete a pending intent. Repeating the exact success transition is
+    /// idempotent; conflicting terminal transitions are rejected.
+    fn succeed(&mut self, id: u64, applied: AppliedAction) -> std::io::Result<&JournalEntry> {
+        let current = self.entry(id)?.clone();
+        if !same_plan(&current.applied.plan, &applied.plan) {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                format!("journal outcome does not match intent {id}"),
+            ));
+        }
+        if current.outcome == JournalOutcome::Succeeded {
+            return Ok(self.entry(id)?);
+        }
+        if current.outcome != JournalOutcome::Pending {
+            return Err(invalid_transition(id, current.outcome));
+        }
+        let mut terminal = current;
+        terminal.applied = applied;
+        terminal.outcome = JournalOutcome::Succeeded;
+        terminal.failure = None;
+        self.replace(terminal)
+    }
+
+    fn fail(
+        &mut self,
+        id: u64,
+        message: String,
+        finished_at: &str,
+    ) -> std::io::Result<&JournalEntry> {
+        let current = self.entry(id)?.clone();
+        if current.outcome == JournalOutcome::Failed {
+            return Ok(self.entry(id)?);
+        }
+        if current.outcome != JournalOutcome::Pending {
+            return Err(invalid_transition(id, current.outcome));
+        }
+        let mut terminal = current;
+        terminal.outcome = JournalOutcome::Failed;
+        terminal.failure = Some(message);
+        terminal.applied.applied_at = finished_at.to_string();
+        self.replace(terminal)
+    }
+
+    /// Execute one mutation between a durable intent and terminal outcome.
+    /// A journal write/sync failure before `run` means `run` is never called;
+    /// a terminal-write failure leaves the durable intent for recovery.
+    pub fn execute<E: std::fmt::Display>(
+        &mut self,
+        plan: PlannedAction,
+        undoes: Option<u64>,
+        started_at: &str,
+        run: impl FnOnce(PlannedAction) -> Result<AppliedAction, E>,
+    ) -> Result<JournalEntry, ExecuteError<E>> {
+        let id = self
+            .begin(plan.clone(), started_at, undoes)
+            .map_err(ExecuteError::Journal)?;
+        match run(plan) {
+            Ok(applied) => self
+                .succeed(id, applied)
+                .cloned()
+                .map_err(ExecuteError::Journal),
+            Err(error) => {
+                self.fail(id, error.to_string(), &crate::time::iso_utc_now())
+                    .map_err(ExecuteError::Journal)?;
+                Err(ExecuteError::Operation(error))
+            }
+        }
+    }
+
+    /// Compatibility helper for import/tests that already hold a completed
+    /// action. Production mutation paths use [`Journal::execute`] so intent
+    /// is durable before the device call.
+    #[cfg(test)]
+    fn record(&mut self, applied: AppliedAction) -> std::io::Result<&JournalEntry> {
+        let id = self.begin(applied.plan.clone(), &applied.applied_at.clone(), None)?;
+        self.succeed(id, applied)
+    }
+
+    /// Compatibility counterpart to [`Journal::record`].
+    #[cfg(test)]
+    fn record_undo(
         &mut self,
         original_id: u64,
         applied: AppliedAction,
     ) -> std::io::Result<&JournalEntry> {
-        if !self.entries.iter().any(|e| e.id == original_id) {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::NotFound,
-                format!("journal has no entry id {original_id}"),
-            ));
-        }
-
-        let id = self.next_id.fetch_add(1, Ordering::Relaxed);
-        let undo_entry = JournalEntry {
-            id,
-            applied,
-            undone_by: None,
-            undoes: Some(original_id),
-        };
-        self.append(undo_entry)?;
-
-        // Patch the original in-memory and rewrite the file. Append-only
-        // semantics for the on-disk format are preserved by writing a
-        // *new* line with the patched original (the loader returns the
-        // last-seen state per id, which matches this rewrite).
-        if let Some(orig) = self.entries.iter_mut().find(|e| e.id == original_id) {
-            orig.undone_by = Some(id);
-            let patched = orig.clone();
-            self.persist_line(&patched)?;
-        }
-
-        // Safe: we just pushed the undo entry; the entries Vec was
-        // appended to inside `append`.
-        Ok(self.entries.last().expect("we just appended"))
+        let id = self.begin(
+            applied.plan.clone(),
+            &applied.applied_at.clone(),
+            Some(original_id),
+        )?;
+        self.succeed(id, applied)
     }
 
     fn append(&mut self, entry: JournalEntry) -> std::io::Result<&JournalEntry> {
@@ -197,16 +359,167 @@ impl Journal {
         Ok(self.entries.last().expect("just pushed"))
     }
 
+    fn replace(&mut self, entry: JournalEntry) -> std::io::Result<&JournalEntry> {
+        self.persist_line(&entry)?;
+        let id = entry.id;
+        let index = self
+            .entries
+            .iter()
+            .position(|candidate| candidate.id == id)
+            .ok_or_else(|| {
+                std::io::Error::new(
+                    std::io::ErrorKind::NotFound,
+                    format!("journal has no entry id {id}"),
+                )
+            })?;
+        self.entries[index] = entry;
+        self.rebuild_undo_links();
+        self.entries
+            .iter()
+            .find(|candidate| candidate.id == id)
+            .ok_or_else(|| {
+                std::io::Error::new(
+                    std::io::ErrorKind::NotFound,
+                    format!("journal has no entry id {id}"),
+                )
+            })
+    }
+
+    fn entry(&self, id: u64) -> std::io::Result<&JournalEntry> {
+        self.entries
+            .iter()
+            .find(|entry| entry.id == id)
+            .ok_or_else(|| {
+                std::io::Error::new(
+                    std::io::ErrorKind::NotFound,
+                    format!("journal has no entry id {id}"),
+                )
+            })
+    }
+
+    fn rebuild_undo_links(&mut self) {
+        let known: std::collections::HashSet<u64> =
+            self.entries.iter().map(|entry| entry.id).collect();
+        for entry in &mut self.entries {
+            if entry.undone_by.is_some_and(|id| known.contains(&id)) {
+                entry.undone_by = None;
+            }
+        }
+        let links: Vec<(u64, u64)> = self
+            .entries
+            .iter()
+            .filter(|entry| {
+                matches!(
+                    entry.outcome,
+                    JournalOutcome::Pending
+                        | JournalOutcome::Succeeded
+                        | JournalOutcome::Interrupted
+                )
+            })
+            .filter_map(|entry| entry.undoes.map(|original| (original, entry.id)))
+            .collect();
+        for (original, undo_id) in links {
+            if let Some(entry) = self.entries.iter_mut().find(|entry| entry.id == original) {
+                entry.undone_by = Some(undo_id);
+            }
+        }
+    }
+
+    fn reconcile_interrupted(&mut self) -> std::io::Result<()> {
+        let pending: Vec<JournalEntry> = self
+            .entries
+            .iter()
+            .filter(|entry| entry.outcome == JournalOutcome::Pending)
+            .cloned()
+            .collect();
+        for mut entry in pending {
+            entry.outcome = JournalOutcome::Interrupted;
+            entry.failure = Some(
+                "Droidsmith stopped before the device operation recorded a terminal outcome; verify device state before retrying"
+                    .to_string(),
+            );
+            self.replace(entry)?;
+        }
+        Ok(())
+    }
+
     fn persist_line(&self, entry: &JournalEntry) -> std::io::Result<()> {
+        #[cfg(test)]
+        if self.fail_persist == Some(PersistFailure::Open) {
+            return Err(injected("open"));
+        }
         let mut f = OpenOptions::new()
             .create(true)
             .append(true)
             .open(&self.path)?;
         let line = serde_json::to_string(entry)
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+        #[cfg(test)]
+        if self.fail_persist == Some(PersistFailure::PartialWrite) {
+            f.write_all(&line.as_bytes()[..line.len() / 2])?;
+            f.flush()?;
+            f.sync_data()?;
+            return Err(injected("partial write"));
+        }
+        #[cfg(test)]
+        if self.fail_persist == Some(PersistFailure::Write) {
+            return Err(injected("write"));
+        }
         writeln!(f, "{line}")?;
+        #[cfg(test)]
+        if self.fail_persist == Some(PersistFailure::Flush) {
+            return Err(injected("flush"));
+        }
+        f.flush()?;
+        #[cfg(test)]
+        if self.fail_persist == Some(PersistFailure::Sync) {
+            return Err(injected("sync"));
+        }
+        f.sync_data()?;
         Ok(())
     }
+}
+
+fn invalid_transition(id: u64, outcome: JournalOutcome) -> std::io::Error {
+    std::io::Error::new(
+        std::io::ErrorKind::InvalidInput,
+        format!("journal entry {id} cannot transition from {outcome:?}"),
+    )
+}
+
+fn same_plan(left: &PlannedAction, right: &PlannedAction) -> bool {
+    left.args == right.args
+        && left.request.serial == right.request.serial
+        && left.request.target == right.request.target
+        && left.request.package == right.request.package
+        && left.request.kind == right.request.kind
+        && left.request.user_id == right.request.user_id
+}
+
+/// Every production record ends in `\n`. If a process or filesystem failure
+/// leaves an incomplete tail, discard only that tail before replay/appending.
+/// A truncate/sync failure aborts journal open, so no mutation can proceed on
+/// top of an unrepaired log.
+fn repair_partial_tail(path: &Path) -> std::io::Result<()> {
+    let bytes = fs::read(path)?;
+    if bytes.is_empty() || bytes.last() == Some(&b'\n') {
+        return Ok(());
+    }
+    let keep = bytes
+        .iter()
+        .rposition(|byte| *byte == b'\n')
+        .map_or(0, |index| index + 1);
+    let file = OpenOptions::new().write(true).open(path)?;
+    file.set_len(keep as u64)?;
+    file.sync_data()
+}
+
+#[cfg(test)]
+fn injected(point: &str) -> std::io::Error {
+    std::io::Error::new(
+        std::io::ErrorKind::Other,
+        format!("injected journal {point} failure"),
+    )
 }
 
 /// Build a filename-safe variant of a device serial. Wireless serials
@@ -426,6 +739,8 @@ mod tests {
             },
             undone_by: None,
             undoes: None,
+            outcome: JournalOutcome::Succeeded,
+            failure: None,
         };
         let mut f = File::create(&path).unwrap();
         writeln!(f, "{{this is not valid json").unwrap();
@@ -436,5 +751,221 @@ mod tests {
         // The corrupt line was dropped, the good one survived.
         assert_eq!(j.entries().len(), 1);
         assert_eq!(j.entries()[0].id, 1);
+    }
+
+    #[test]
+    fn execute_syncs_pending_intent_before_running_operation() {
+        let dir = fresh_tmp_dir("wal-order");
+        let mut journal = Journal::open(&dir, "abc").unwrap();
+        let applied = fake_applied("abc", "com.foo", ActionKind::Disable);
+        let path = journal.path().to_path_buf();
+        let result = journal
+            .execute(applied.plan.clone(), None, "2026-05-25T11:59:59Z", |plan| {
+                let first = fs::read_to_string(&path).unwrap();
+                let intent: JournalEntry =
+                    serde_json::from_str(first.lines().next().unwrap()).unwrap();
+                assert_eq!(intent.outcome, JournalOutcome::Pending);
+                assert_eq!(intent.applied.plan.args, plan.args);
+                Ok::<_, &'static str>(applied)
+            })
+            .unwrap();
+        assert_eq!(result.outcome, JournalOutcome::Succeeded);
+    }
+
+    #[test]
+    fn persistence_failures_never_run_the_device_operation() {
+        for (index, failure) in [
+            PersistFailure::Open,
+            PersistFailure::Write,
+            PersistFailure::Flush,
+            PersistFailure::Sync,
+            PersistFailure::PartialWrite,
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let dir = fresh_tmp_dir(&format!("wal-failure-{index}"));
+            let mut journal = Journal::open(&dir, "abc").unwrap();
+            journal.fail_persist = Some(failure);
+            let ran = std::cell::Cell::new(false);
+            let applied = fake_applied("abc", "com.foo", ActionKind::Disable);
+            let result =
+                journal.execute(applied.plan.clone(), None, "2026-05-25T11:59:59Z", |_| {
+                    ran.set(true);
+                    Ok::<_, &'static str>(applied)
+                });
+            assert!(matches!(result, Err(ExecuteError::Journal(_))));
+            assert!(!ran.get(), "device operation ran after {failure:?} failure");
+        }
+    }
+
+    #[test]
+    fn startup_marks_a_crashed_operation_interrupted() {
+        let dir = fresh_tmp_dir("crash-recovery");
+        let mut journal = Journal::open(&dir, "abc").unwrap();
+        let applied = fake_applied("abc", "com.foo", ActionKind::Disable);
+        let id = journal
+            .begin(applied.plan, "2026-05-25T11:59:59Z", None)
+            .unwrap();
+        drop(journal); // process stopped after durable intent, before outcome
+
+        let recovered = Journal::open(&dir, "abc").unwrap();
+        let entry = recovered.entry(id).unwrap();
+        assert_eq!(entry.outcome, JournalOutcome::Interrupted);
+        assert!(entry
+            .failure
+            .as_deref()
+            .unwrap()
+            .contains("verify device state"));
+    }
+
+    #[test]
+    fn failed_terminal_sync_recovers_as_visible_interrupted_operation() {
+        let dir = fresh_tmp_dir("terminal-sync-failure");
+        let mut journal = Journal::open(&dir, "abc").unwrap();
+        let applied = fake_applied("abc", "com.foo", ActionKind::Disable);
+        let id = journal
+            .begin(applied.plan.clone(), "2026-05-25T11:59:59Z", None)
+            .unwrap();
+        journal.fail_persist = Some(PersistFailure::Sync);
+        assert!(journal.succeed(id, applied).is_err());
+        drop(journal);
+
+        let recovered = Journal::open(&dir, "abc").unwrap();
+        assert!(matches!(
+            recovered.entry(id).unwrap().outcome,
+            JournalOutcome::Succeeded | JournalOutcome::Interrupted
+        ));
+    }
+
+    #[test]
+    fn operation_errors_receive_a_durable_failed_outcome() {
+        let dir = fresh_tmp_dir("terminal-operation-failure");
+        let mut journal = Journal::open(&dir, "abc").unwrap();
+        let applied = fake_applied("abc", "com.foo", ActionKind::Disable);
+        let result = journal.execute(applied.plan, None, "2026-05-25T11:59:59Z", |_| {
+            Err::<AppliedAction, _>("adb rejected the mutation")
+        });
+        assert!(matches!(result, Err(ExecuteError::Operation(_))));
+        assert_eq!(journal.entries().len(), 1);
+        assert_eq!(journal.entries()[0].outcome, JournalOutcome::Failed);
+        assert_eq!(
+            journal.entries()[0].failure.as_deref(),
+            Some("adb rejected the mutation")
+        );
+        drop(journal);
+        assert_eq!(
+            Journal::open(&dir, "abc").unwrap().entries()[0].outcome,
+            JournalOutcome::Failed
+        );
+    }
+
+    #[test]
+    fn truncated_terminal_record_recovers_the_durable_intent() {
+        let dir = fresh_tmp_dir("truncated-outcome");
+        let mut journal = Journal::open(&dir, "abc").unwrap();
+        let applied = fake_applied("abc", "com.foo", ActionKind::Disable);
+        let id = journal
+            .begin(applied.plan.clone(), "2026-05-25T11:59:59Z", None)
+            .unwrap();
+        let mut terminal = journal.entry(id).unwrap().clone();
+        terminal.outcome = JournalOutcome::Succeeded;
+        terminal.applied = applied;
+        let encoded = serde_json::to_string(&terminal).unwrap();
+        let path = journal.path().to_path_buf();
+        drop(journal);
+        let mut file = OpenOptions::new().append(true).open(&path).unwrap();
+        file.write_all(&encoded.as_bytes()[..encoded.len() / 2])
+            .unwrap();
+        file.flush().unwrap();
+        file.sync_data().unwrap();
+        drop(file);
+
+        let recovered = Journal::open(&dir, "abc").unwrap();
+        assert_eq!(
+            recovered.entry(id).unwrap().outcome,
+            JournalOutcome::Interrupted
+        );
+        assert!(fs::read(&path).unwrap().ends_with(b"\n"));
+    }
+
+    #[test]
+    fn interrupted_undo_is_idempotently_blocked_after_restart() {
+        let dir = fresh_tmp_dir("undo-interrupted");
+        let mut journal = Journal::open(&dir, "abc").unwrap();
+        journal
+            .record(fake_applied("abc", "com.foo", ActionKind::Disable))
+            .unwrap();
+        let inverse = fake_applied("abc", "com.foo", ActionKind::Enable);
+        let undo_id = journal
+            .begin(inverse.plan.clone(), "2026-05-25T12:01:00Z", Some(1))
+            .unwrap();
+        assert!(undo_request_for(&journal, 1).is_none());
+        drop(journal);
+
+        let mut recovered = Journal::open(&dir, "abc").unwrap();
+        assert_eq!(
+            recovered.entry(undo_id).unwrap().outcome,
+            JournalOutcome::Interrupted
+        );
+        assert_eq!(recovered.entry(1).unwrap().undone_by, Some(undo_id));
+        assert!(recovered
+            .begin(inverse.plan, "2026-05-25T12:02:00Z", Some(1))
+            .is_err());
+    }
+
+    #[test]
+    fn failed_undo_releases_original_and_success_is_idempotent() {
+        let dir = fresh_tmp_dir("undo-terminal");
+        let mut journal = Journal::open(&dir, "abc").unwrap();
+        journal
+            .record(fake_applied("abc", "com.foo", ActionKind::Disable))
+            .unwrap();
+        let inverse = fake_applied("abc", "com.foo", ActionKind::Enable);
+        let failed_id = journal
+            .begin(inverse.plan.clone(), "2026-05-25T12:01:00Z", Some(1))
+            .unwrap();
+        journal
+            .fail(failed_id, "adb failed".into(), "2026-05-25T12:01:01Z")
+            .unwrap();
+        assert_eq!(journal.entry(1).unwrap().undone_by, None);
+        assert!(undo_request_for(&journal, 1).is_some());
+
+        let success_id = journal
+            .begin(inverse.plan.clone(), "2026-05-25T12:02:00Z", Some(1))
+            .unwrap();
+        journal.succeed(success_id, inverse.clone()).unwrap();
+        let line_count = fs::read_to_string(journal.path()).unwrap().lines().count();
+        journal.succeed(success_id, inverse).unwrap();
+        assert_eq!(
+            fs::read_to_string(journal.path()).unwrap().lines().count(),
+            line_count,
+            "repeating success must not append another transition"
+        );
+        assert_eq!(journal.entry(1).unwrap().undone_by, Some(success_id));
+    }
+
+    #[test]
+    fn legacy_success_rows_default_to_succeeded() {
+        let dir = fresh_tmp_dir("legacy-outcome");
+        fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("abc.jsonl");
+        let mut value = serde_json::to_value(JournalEntry {
+            id: 1,
+            applied: fake_applied("abc", "com.foo", ActionKind::Disable),
+            undone_by: None,
+            undoes: None,
+            outcome: JournalOutcome::Succeeded,
+            failure: None,
+        })
+        .unwrap();
+        value.as_object_mut().unwrap().remove("outcome");
+        value.as_object_mut().unwrap().remove("failure");
+        let mut file = File::create(path).unwrap();
+        writeln!(file, "{}", serde_json::to_string(&value).unwrap()).unwrap();
+        file.sync_data().unwrap();
+
+        let journal = Journal::open(&dir, "abc").unwrap();
+        assert_eq!(journal.entry(1).unwrap().outcome, JournalOutcome::Succeeded);
     }
 }

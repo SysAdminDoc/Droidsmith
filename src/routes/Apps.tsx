@@ -945,7 +945,12 @@ function JournalPanel({
             </thead>
             <tbody className="divide-y divide-white/10">
               {entries.map((entry) => {
-                const status = journalEntryStatus(entry);
+                const status = journalEntryStatus(
+                  entry,
+                  state.entries.find(
+                    (candidate) => candidate.id === entry.undone_by,
+                  )?.outcome,
+                );
                 const request = entry.applied.plan.request;
                 return (
                   <tr
@@ -984,7 +989,8 @@ function JournalPanel({
                     </TableCell>
                     <TableCell>
                       <pre className="max-w-[22rem] whitespace-pre-wrap break-words font-mono text-[11px] leading-5 text-anvil-400">
-                        {summarizeJournalOutput(entry.applied.stdout) ||
+                        {entry.failure ||
+                          summarizeJournalOutput(entry.applied.stdout) ||
                           t("apps.journalNoOutput")}
                       </pre>
                     </TableCell>
@@ -1026,6 +1032,14 @@ function journalStatusTone(
   status: JournalEntryStatus,
 ): "neutral" | "info" | "success" | "warning" | "danger" {
   switch (status) {
+    case "pending":
+      return "info";
+    case "failed":
+      return "danger";
+    case "interrupted":
+      return "warning";
+    case "undo_interrupted":
+      return "warning";
     case "undoable":
       return "warning";
     case "undone":
@@ -1043,6 +1057,14 @@ function journalStatusLabel(
   t: ReturnType<typeof useTranslation>["t"],
 ): string {
   switch (status) {
+    case "pending":
+      return t("apps.journalPending");
+    case "failed":
+      return t("apps.journalFailed");
+    case "interrupted":
+      return t("apps.journalInterrupted");
+    case "undo_interrupted":
+      return t("apps.journalUndoInterrupted", { id: entry.undone_by });
     case "undoable":
       return t("apps.journalUndoable");
     case "undone":

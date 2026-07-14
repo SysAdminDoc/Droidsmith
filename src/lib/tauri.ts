@@ -212,6 +212,8 @@ export type JournalEntry = {
   applied: AppliedAction;
   undone_by: number | null;
   undoes: number | null;
+  outcome: "pending" | "succeeded" | "failed" | "interrupted";
+  failure: string | null;
 };
 
 export type RemovalLevel = "recommended" | "advanced" | "expert" | "unsafe";
