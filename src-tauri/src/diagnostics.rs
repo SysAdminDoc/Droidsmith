@@ -172,15 +172,18 @@ fn escape_applescript(s: &str) -> String {
     out
 }
 
-/// Hook Rust panics so they land in a rotating log file. Idempotent in
-/// the sense that each call chains the prior hook, so calling multiple
-/// times records each panic once per installed hook (avoid that).
+/// Hook Rust panics so they land in a rotating log file. Idempotent: a
+/// second call is a no-op, so a panic is never written multiple times
+/// even if setup runs more than once (tests, re-init).
 pub fn install_panic_hook(log_dir: PathBuf) {
-    let original = std::panic::take_hook();
-    std::panic::set_hook(Box::new(move |info| {
-        let _ = write_panic_record(&log_dir, info);
-        original(info);
-    }));
+    static INSTALLED: std::sync::Once = std::sync::Once::new();
+    INSTALLED.call_once(move || {
+        let original = std::panic::take_hook();
+        std::panic::set_hook(Box::new(move |info| {
+            let _ = write_panic_record(&log_dir, info);
+            original(info);
+        }));
+    });
 }
 
 fn write_panic_record(dir: &Path, info: &std::panic::PanicHookInfo<'_>) -> std::io::Result<()> {

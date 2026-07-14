@@ -229,19 +229,18 @@ fn parse_protocol_first_network(tokens: &[&str]) -> Option<NetworkConnection> {
         });
     }
     if tokens.len() >= 5 {
-        let state_idx = if tokens.get(5).is_some_and(|token| is_tcp_state(token)) {
-            5
-        } else {
-            1
+        // netstat-style `proto recv-q send-q local foreign [state]`. The
+        // state column is optional (UDP rows omit it), so use tokens[5]
+        // only when it is a real TCP state; otherwise the socket is
+        // stateless — never fall back to the numeric recv-q column, which
+        // would surface a bogus `state = "0"`.
+        let (state, process_idx) = match tokens.get(5) {
+            Some(token) if is_tcp_state(token) => ((*token).to_string(), 6),
+            _ => ("UNCONN".to_string(), 5),
         };
-        let process_idx = if state_idx == 5 { 6 } else { 5 };
         return Some(NetworkConnection {
             protocol,
-            state: tokens
-                .get(state_idx)
-                .copied()
-                .unwrap_or("UNCONN")
-                .to_string(),
+            state,
             local_addr: tokens[3].to_string(),
             remote_addr: tokens[4].to_string(),
             process: process_tail(tokens, process_idx),
@@ -466,6 +465,7 @@ tcp ESTAB 0 0 192.168.1.10:43210 142.250.190.14:443 users:(("chrome",pid=231,fd=
 udp UNCONN 0 0 0.0.0.0:5353 0.0.0.0:* users:(("mdnsd",pid=44,fd=12))
 Proto Recv-Q Send-Q Local Address Foreign Address State PID/Program name
 tcp 0 0 127.0.0.1:5037 0.0.0.0:* LISTEN 1234/adb
+udp 0 0 10.0.0.1:68 0.0.0.0:*
 hyperos-short-row
 "#,
         );
@@ -475,6 +475,14 @@ hyperos-short-row
         assert!(rows
             .iter()
             .any(|row| row.protocol == "udp" && row.state == "UNCONN"));
+        // Netstat-style stateless UDP row must not surface the recv-q
+        // number ("0") as its state.
+        let netstat_udp = rows
+            .iter()
+            .find(|row| row.local_addr == "10.0.0.1:68")
+            .expect("netstat udp row parsed");
+        assert_eq!(netstat_udp.state, "UNCONN");
+        assert_eq!(netstat_udp.protocol, "udp");
         assert!(rows.iter().any(
             |row| row.remote_addr == "0.0.0.0:*" && row.process.as_deref() == Some("1234/adb")
         ));
