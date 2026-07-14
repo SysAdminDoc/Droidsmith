@@ -314,6 +314,8 @@
     "noPermissionsFoundBody": "Этот пакет не сообщил runtime или install permissions.",
     "permissionToggleFailed": "Не удалось изменить это разрешение: {{message}}. Некоторые разрешения заданы системой или политикой приложения и не переключаются здесь.",
     "granted": "Granted",
+    "grantPermission": "Предоставить {{permission}}",
+    "revokePermission": "Отозвать {{permission}}",
     "denied": "Denied",
     "loadingPackages": "Загрузка пакетов",
     "journalTitle": "Журнал действий",

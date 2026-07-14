@@ -314,6 +314,8 @@
     "noPermissionsFoundBody": "This package did not report runtime or install permissions.",
     "permissionToggleFailed": "Couldn't change this permission: {{message}}. Some permissions are fixed by the system or app policy and can't be toggled here.",
     "granted": "Granted",
+    "grantPermission": "Grant {{permission}}",
+    "revokePermission": "Revoke {{permission}}",
     "denied": "Denied",
     "loadingPackages": "Loading packages",
     "journalTitle": "Action journal",

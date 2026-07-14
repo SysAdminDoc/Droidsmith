@@ -1254,6 +1254,11 @@ function PermissionsPanel({
                 type="button"
                 onClick={() => void togglePerm(p.permission, !p.granted)}
                 disabled={toggling === p.permission}
+                aria-pressed={p.granted}
+                aria-label={t(
+                  p.granted ? "apps.revokePermission" : "apps.grantPermission",
+                  { permission: p.permission },
+                )}
                 className={[
                   "shrink-0 rounded-md border px-3 py-1 text-xs font-medium transition",
                   p.granted
