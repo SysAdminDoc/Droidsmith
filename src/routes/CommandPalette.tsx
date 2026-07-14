@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { cn } from "../lib/cn";
+import { useFocusTrap } from "../lib/useFocusTrap";
 
 export type PaletteItem = {
   id: string;
@@ -24,6 +25,7 @@ export function CommandPalette({
   const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
+  const trapRef = useFocusTrap<HTMLDivElement>(open);
 
   const filtered = useMemo(() => {
     if (!query.trim()) return items;
@@ -78,7 +80,9 @@ export function CommandPalette({
       aria-labelledby="command-palette-title"
     >
       <div
-        className="w-full max-w-xl overflow-hidden rounded-lg border border-white/10 bg-anvil-900 shadow-2xl"
+        ref={trapRef}
+        tabIndex={-1}
+        className="w-full max-w-xl overflow-hidden rounded-lg border border-white/10 bg-anvil-900 shadow-2xl outline-none"
         onClick={(e) => e.stopPropagation()}
         onKeyDown={handleKeyDown}
       >

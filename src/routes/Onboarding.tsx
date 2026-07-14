@@ -76,7 +76,10 @@ export default function OnboardingTour({
     <Card className="mx-auto max-w-2xl p-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <h2 className="text-lg font-semibold text-anvil-50">
+          <h2
+            id="onboarding-title"
+            className="text-lg font-semibold text-anvil-50"
+          >
             {t("onboarding.title")}
           </h2>
           <Badge tone="info">

@@ -31,6 +31,7 @@ import {
   formatBackupSize,
 } from "./appsBackup";
 import { journalEntryStatus, type JournalEntryStatus } from "./appsJournal";
+import { useFocusTrap } from "../lib/useFocusTrap";
 import {
   Badge,
   Button,
@@ -1032,13 +1033,26 @@ function ActionOverlay({
   onDismiss: () => void;
 }) {
   const { t } = useTranslation();
+  const confirming = state.kind === "confirming";
+  const trapRef = useFocusTrap<HTMLDivElement>(confirming);
+
+  useEffect(() => {
+    if (!confirming) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onCancel();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [confirming, onCancel]);
 
   if (state.kind === "idle") return null;
 
   if (state.kind === "confirming") {
     return (
       <div
-        className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 px-4 backdrop-blur-sm"
+        ref={trapRef}
+        tabIndex={-1}
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 px-4 outline-none backdrop-blur-sm"
         role="alertdialog"
         aria-modal="true"
         aria-labelledby="confirm-dialog-title"

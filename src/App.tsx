@@ -11,6 +11,7 @@ import {
 } from "./lib/i18n";
 import { CommandPalette, type PaletteItem } from "./routes/CommandPalette";
 import { useCommandPalette } from "./routes/useCommandPalette";
+import { useFocusTrap } from "./lib/useFocusTrap";
 import OnboardingTour from "./routes/Onboarding";
 
 import DevicesRoute from "./routes/Devices";
@@ -216,14 +217,7 @@ export default function App() {
         </main>
       </div>
       {showOnboarding && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
-          onKeyDown={(e) => {
-            if (e.key === "Escape") setShowOnboarding(false);
-          }}
-        >
-          <OnboardingTour onDismiss={() => setShowOnboarding(false)} />
-        </div>
+        <OnboardingModal onDismiss={() => setShowOnboarding(false)} />
       )}
       <CommandPalette
         open={palette.open}
@@ -236,6 +230,30 @@ export default function App() {
           }
         }}
       />
+    </div>
+  );
+}
+
+function OnboardingModal({ onDismiss }: { onDismiss: () => void }) {
+  const trapRef = useFocusTrap<HTMLDivElement>();
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onDismiss();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onDismiss]);
+
+  return (
+    <div
+      ref={trapRef}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="onboarding-title"
+      tabIndex={-1}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 outline-none backdrop-blur-sm"
+    >
+      <OnboardingTour onDismiss={onDismiss} />
     </div>
   );
 }
