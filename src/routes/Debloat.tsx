@@ -3,7 +3,6 @@ import { useTranslation } from "react-i18next";
 
 import {
   callApplyAction,
-  callListDevices,
   callListPackages,
   callListPacks,
   callListUsers,
@@ -14,7 +13,6 @@ import {
   type CompatibilityStatus,
   type Device,
   type JournalEntry,
-  type ListDevicesResult,
   type Pack,
   type PackAssessment,
   type PackCandidate,
@@ -24,6 +22,7 @@ import {
   type PlannedAction,
   type RemovalLevel,
 } from "../lib/tauri";
+import { useAuthorizedDevices } from "../lib/useAuthorizedDevices";
 
 import {
   queueStats,
@@ -44,12 +43,6 @@ import {
   TableCell,
   TableHeaderCell,
 } from "./common";
-
-type DevicesState =
-  | { kind: "loading" }
-  | { kind: "no_tauri" }
-  | { kind: "ok"; value: ListDevicesResult }
-  | { kind: "error"; message: string };
 
 type PacksState =
   | { kind: "loading" }
@@ -96,9 +89,7 @@ type WizardStep =
 
 export default function DebloatRoute() {
   const { t } = useTranslation();
-  const [devicesState, setDevicesState] = useState<DevicesState>({
-    kind: "loading",
-  });
+  const { devicesState, authorizedDevices } = useAuthorizedDevices();
   const [packsState, setPacksState] = useState<PacksState>({ kind: "loading" });
   const [selectedSerial, setSelectedSerial] = useState<string | null>(null);
   const [selectedTransportId, setSelectedTransportId] = useState<number | null>(
@@ -111,42 +102,12 @@ export default function DebloatRoute() {
   const [wizard, setWizard] = useState<WizardStep>({ step: "pick_pack" });
   const cancelRequestedRef = useRef(false);
 
-  const authorizedDevices =
-    devicesState.kind === "ok"
-      ? devicesState.value.devices.filter(
-          (d) => typeof d.state === "string" && d.state === "device",
-        )
-      : [];
   const selectedDevice =
     authorizedDevices.find((device) =>
       selectedTransportId != null
         ? device.transport_id === selectedTransportId
         : device.serial === selectedSerial,
     ) ?? null;
-
-  const loadDevices = useCallback(async () => {
-    if (!inTauri()) {
-      setDevicesState({ kind: "no_tauri" });
-      return;
-    }
-    setDevicesState({ kind: "loading" });
-    try {
-      const value = await callListDevices();
-      setDevicesState({ kind: "ok", value });
-      const authorized = value.devices.filter(
-        (d) => typeof d.state === "string" && d.state === "device",
-      );
-      if (authorized.length === 1) {
-        setSelectedSerial((prev) => prev ?? authorized[0]!.serial);
-        setSelectedTransportId((prev) => prev ?? authorized[0]!.transport_id);
-      }
-    } catch (e) {
-      setDevicesState({
-        kind: "error",
-        message: e instanceof Error ? e.message : String(e),
-      });
-    }
-  }, []);
 
   const loadPacks = useCallback(async () => {
     if (!inTauri() || !selectedDevice || !usersReady) return;
@@ -193,8 +154,25 @@ export default function DebloatRoute() {
   }, [selectedDevice]);
 
   useEffect(() => {
-    void loadDevices();
-  }, [loadDevices]);
+    const current = authorizedDevices.find((device) =>
+      selectedTransportId != null
+        ? device.transport_id === selectedTransportId
+        : device.serial === selectedSerial,
+    );
+    if (current) return;
+
+    const sameSerial = authorizedDevices.filter(
+      (device) => device.serial === selectedSerial,
+    );
+    const next =
+      sameSerial.length === 1
+        ? sameSerial[0]!
+        : authorizedDevices.length === 1
+          ? authorizedDevices[0]!
+          : null;
+    setSelectedSerial(next?.serial ?? null);
+    setSelectedTransportId(next?.transport_id ?? null);
+  }, [authorizedDevices, selectedSerial, selectedTransportId]);
 
   useEffect(() => {
     void loadUsers();

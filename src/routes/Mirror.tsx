@@ -3,16 +3,18 @@ import { useTranslation } from "react-i18next";
 
 import {
   callLaunchScrcpy,
-  callListDevices,
   callLocateScrcpy,
   callScrcpySessionStatus,
   callStopScrcpy,
   deviceTarget,
   inTauri,
   type DeviceTarget,
-  type ListDevicesResult,
   type ScrcpySession,
 } from "../lib/tauri";
+import {
+  resolveAuthorizedTarget,
+  useAuthorizedDevices,
+} from "../lib/useAuthorizedDevices";
 
 import {
   DEFAULT_MIRROR_PRESET,
@@ -30,12 +32,6 @@ import {
   PaneHeader,
   StatePanel,
 } from "./common";
-
-type DevicesState =
-  | { kind: "loading" }
-  | { kind: "no_tauri" }
-  | { kind: "ok"; value: ListDevicesResult }
-  | { kind: "error"; message: string };
 
 type ScrcpyState =
   | { kind: "checking" }
@@ -59,9 +55,7 @@ const KEYBOARD_MODES: { value: KeyboardMode; labelKey: string }[] = [
 
 export default function MirrorRoute() {
   const { t } = useTranslation();
-  const [devicesState, setDevicesState] = useState<DevicesState>({
-    kind: "loading",
-  });
+  const { devicesState, authorizedDevices } = useAuthorizedDevices();
   const [scrcpyState, setScrcpyState] = useState<ScrcpyState>({
     kind: "checking",
   });
@@ -71,29 +65,6 @@ export default function MirrorRoute() {
   const [session, setSession] = useState<SessionState>({ kind: "idle" });
   const [preset, setPreset] = useState<MirrorPreset>(DEFAULT_MIRROR_PRESET);
   const [presetMessage, setPresetMessage] = useState<string | null>(null);
-
-  const loadDevices = useCallback(async () => {
-    if (!inTauri()) {
-      setDevicesState({ kind: "no_tauri" });
-      return;
-    }
-    setDevicesState({ kind: "loading" });
-    try {
-      const value = await callListDevices();
-      setDevicesState({ kind: "ok", value });
-      const authorized = value.devices.filter(
-        (d) => typeof d.state === "string" && d.state === "device",
-      );
-      if (authorized.length === 1) {
-        setSelectedTarget((prev) => prev ?? deviceTarget(authorized[0]!));
-      }
-    } catch (e) {
-      setDevicesState({
-        kind: "error",
-        message: e instanceof Error ? e.message : String(e),
-      });
-    }
-  }, []);
 
   const checkScrcpy = useCallback(async () => {
     if (!inTauri()) return;
@@ -111,9 +82,14 @@ export default function MirrorRoute() {
   }, []);
 
   useEffect(() => {
-    void loadDevices();
     void checkScrcpy();
-  }, [loadDevices, checkScrcpy]);
+  }, [checkScrcpy]);
+
+  useEffect(() => {
+    setSelectedTarget((previous) =>
+      resolveAuthorizedTarget(previous, authorizedDevices),
+    );
+  }, [authorizedDevices]);
 
   useEffect(() => {
     if (!selectedTarget) return;
@@ -222,13 +198,6 @@ export default function MirrorRoute() {
       });
     }
   }, [session]);
-
-  const authorizedDevices =
-    devicesState.kind === "ok"
-      ? devicesState.value.devices.filter(
-          (d) => typeof d.state === "string" && d.state === "device",
-        )
-      : [];
 
   return (
     <>

@@ -3,6 +3,7 @@ import type { ChangeEvent, ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 
 import { callHeartbeat, inTauri, type Heartbeat } from "./lib/tauri";
+import { startDeviceLifecycle, stopDeviceLifecycle } from "./lib/deviceStore";
 import { cn } from "./lib/cn";
 import {
   normalizeLanguage,
@@ -146,6 +147,13 @@ export default function App() {
   useEffect(() => {
     void loadHeartbeat();
   }, [loadHeartbeat]);
+
+  useEffect(() => {
+    startDeviceLifecycle();
+    return () => {
+      void stopDeviceLifecycle();
+    };
+  }, []);
 
   const activeItem = NAV_ITEMS.find((i) => i.id === active) ?? NAV_ITEMS[0];
 

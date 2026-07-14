@@ -22,9 +22,9 @@ use commands::{
     journal_list, journal_undo, launch_scrcpy, list_devices, list_fastboot_devices,
     list_network_connections, list_packages, list_packs, list_permissions, list_processes,
     list_remote_files, list_users, list_wireless_services, locate_fastboot, locate_scrcpy,
-    pair_wireless, plan_action, plan_pack, plan_shell_action, pull_file, push_file,
+    pair_wireless, plan_action, plan_pack, plan_shell_action, pull_file, push_file, recover_adb,
     save_logcat_export, scrcpy_session_status, set_permission, shell_run, stop_scrcpy,
-    stream_logcat, take_screenshot,
+    stream_logcat, take_screenshot, watch_devices,
 };
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -50,6 +50,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             heartbeat,
             list_devices,
+            watch_devices,
+            recover_adb,
             get_device_info,
             list_wireless_services,
             pair_wireless,

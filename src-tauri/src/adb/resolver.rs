@@ -241,7 +241,14 @@ fn probe_version(path: &Path) -> Option<String> {
         return None;
     }
     let text = String::from_utf8_lossy(&buf);
-    let line = text.lines().next()?.trim();
+    // `adb version` starts with the stable protocol version (`1.0.41`) and
+    // reports the actionable Platform Tools release on the following
+    // `Version 37.0.0-...` line. Prefer that release for health guidance.
+    let line = text
+        .lines()
+        .map(str::trim)
+        .find_map(|line| line.strip_prefix("Version "))
+        .or_else(|| text.lines().next().map(str::trim))?;
     if line.is_empty() {
         None
     } else {

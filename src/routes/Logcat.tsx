@@ -4,16 +4,18 @@ import { save } from "@tauri-apps/plugin-dialog";
 
 import {
   callCancelOperation,
-  callListDevices,
   callSaveLogcatExport,
   callStreamLogcat,
   deviceTarget,
-  inTauri,
   newOperationId,
   type DeviceTarget,
-  type ListDevicesResult,
   type OperationEvent,
 } from "../lib/tauri";
+import {
+  resolveAuthorizedTarget,
+  sameDeviceTarget,
+  useAuthorizedDevices,
+} from "../lib/useAuthorizedDevices";
 
 import {
   Badge,
@@ -23,12 +25,6 @@ import {
   PaneHeader,
   StatePanel,
 } from "./common";
-
-type DevicesState =
-  | { kind: "loading" }
-  | { kind: "no_tauri" }
-  | { kind: "ok"; value: ListDevicesResult }
-  | { kind: "error"; message: string };
 
 type LogLine = {
   raw: string;
@@ -43,9 +39,7 @@ const MAX_LOG_LINES = 2_000;
 
 export default function LogcatRoute() {
   const { t } = useTranslation();
-  const [devicesState, setDevicesState] = useState<DevicesState>({
-    kind: "loading",
-  });
+  const { devicesState, authorizedDevices } = useAuthorizedDevices();
   const [selectedTarget, setSelectedTarget] = useState<DeviceTarget | null>(
     null,
   );
@@ -62,33 +56,6 @@ export default function LogcatRoute() {
   const partialLineRef = useRef("");
   const generationRef = useRef(0);
   const outputRef = useRef<HTMLDivElement>(null);
-
-  const loadDevices = useCallback(async () => {
-    if (!inTauri()) {
-      setDevicesState({ kind: "no_tauri" });
-      return;
-    }
-    setDevicesState({ kind: "loading" });
-    try {
-      const value = await callListDevices();
-      setDevicesState({ kind: "ok", value });
-      const authorized = value.devices.filter(
-        (d) => typeof d.state === "string" && d.state === "device",
-      );
-      if (authorized.length === 1) {
-        setSelectedTarget((prev) => prev ?? deviceTarget(authorized[0]!));
-      }
-    } catch (e) {
-      setDevicesState({
-        kind: "error",
-        message: e instanceof Error ? e.message : String(e),
-      });
-    }
-  }, []);
-
-  useEffect(() => {
-    void loadDevices();
-  }, [loadDevices]);
 
   const startTailing = useCallback(() => {
     if (!selectedTarget || operationRef.current) return;
@@ -163,6 +130,15 @@ export default function LogcatRoute() {
   }, []);
 
   useEffect(() => {
+    const next = resolveAuthorizedTarget(selectedTarget, authorizedDevices);
+    if (sameDeviceTarget(selectedTarget, next)) return;
+    stopTailing();
+    setSelectedTarget(next);
+    setLines([]);
+    setStreamError(null);
+  }, [authorizedDevices, selectedTarget, stopTailing]);
+
+  useEffect(() => {
     return () => {
       const operationId = operationRef.current;
       operationRef.current = null;
@@ -215,13 +191,6 @@ export default function LogcatRoute() {
       );
     }
   }, [lines, t]);
-
-  const authorizedDevices =
-    devicesState.kind === "ok"
-      ? devicesState.value.devices.filter(
-          (d) => typeof d.state === "string" && d.state === "device",
-        )
-      : [];
 
   return (
     <>

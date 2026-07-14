@@ -26,6 +26,7 @@
 pub mod actions;
 pub mod device;
 pub mod device_info;
+pub mod health;
 pub mod packages;
 pub mod parsers;
 pub mod resolver;

@@ -6,25 +6,21 @@ import { useFocusTrap } from "../lib/useFocusTrap";
 import {
   callApplyAction,
   callCancelOperation,
-  callListDevices,
   callPlanShellAction,
   callShellRun,
   deviceTarget,
-  inTauri,
   newOperationId,
   type DeviceTarget,
-  type ListDevicesResult,
   type OperationEvent,
   type PlannedAction,
 } from "../lib/tauri";
+import {
+  resolveAuthorizedTarget,
+  sameDeviceTarget,
+  useAuthorizedDevices,
+} from "../lib/useAuthorizedDevices";
 
 import { Badge, Button, Card, PaneHeader, StatePanel } from "./common";
-
-type DevicesState =
-  | { kind: "loading" }
-  | { kind: "no_tauri" }
-  | { kind: "ok"; value: ListDevicesResult }
-  | { kind: "error"; message: string };
 
 type HistoryEntry = {
   command: string;
@@ -44,9 +40,7 @@ let nextEntryId = 1;
 
 export default function ConsoleRoute() {
   const { t } = useTranslation();
-  const [devicesState, setDevicesState] = useState<DevicesState>({
-    kind: "loading",
-  });
+  const { devicesState, authorizedDevices } = useAuthorizedDevices();
   const [selectedTarget, setSelectedTarget] = useState<DeviceTarget | null>(
     null,
   );
@@ -74,32 +68,21 @@ export default function ConsoleRoute() {
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [pendingAction]);
 
-  const loadDevices = useCallback(async () => {
-    if (!inTauri()) {
-      setDevicesState({ kind: "no_tauri" });
-      return;
-    }
-    setDevicesState({ kind: "loading" });
-    try {
-      const value = await callListDevices();
-      setDevicesState({ kind: "ok", value });
-      const authorized = value.devices.filter(
-        (d) => typeof d.state === "string" && d.state === "device",
-      );
-      if (authorized.length === 1) {
-        setSelectedTarget((prev) => prev ?? deviceTarget(authorized[0]!));
-      }
-    } catch (e) {
-      setDevicesState({
-        kind: "error",
-        message: e instanceof Error ? e.message : String(e),
-      });
-    }
-  }, []);
-
   useEffect(() => {
-    void loadDevices();
-  }, [loadDevices]);
+    const next = resolveAuthorizedTarget(selectedTarget, authorizedDevices);
+    if (sameDeviceTarget(selectedTarget, next)) return;
+    commandGenerationRef.current += 1;
+    const operationId = activeOperationRef.current;
+    activeOperationRef.current = null;
+    if (operationId) void callCancelOperation(operationId);
+    setSelectedTarget(next);
+    setHistory([]);
+    setHistoryIndex(-1);
+    setLiveOutput("");
+    setOperationStatus(null);
+    setPendingAction(null);
+    setRunning(false);
+  }, [authorizedDevices, selectedTarget]);
 
   useEffect(() => {
     return () => {
@@ -273,13 +256,6 @@ export default function ConsoleRoute() {
     },
     [history, historyIndex, runCommand],
   );
-
-  const authorizedDevices =
-    devicesState.kind === "ok"
-      ? devicesState.value.devices.filter(
-          (d) => typeof d.state === "string" && d.state === "device",
-        )
-      : [];
 
   return (
     <>

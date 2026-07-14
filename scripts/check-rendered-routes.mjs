@@ -48,6 +48,24 @@ async function runDesktopFlow(browser) {
   await page.goto(baseUrl, { waitUntil: "networkidle" });
 
   await page.getByRole("heading", { name: "Droidsmith" }).waitFor();
+  await page.getByText("ADB lifecycle health", { exact: true }).waitFor();
+  await page.getByRole("button", { name: "Review recovery" }).click();
+  await page
+    .getByRole("dialog", { name: "Review ADB restart and reconnect" })
+    .waitFor();
+  await page.getByText("adb kill-server", { exact: true }).waitFor();
+  await page.getByText("adb reconnect offline", { exact: true }).waitFor();
+  await assertTabMovesFocus(page, "ADB recovery review");
+  await page.getByRole("button", { name: "Confirm and run" }).click();
+  await page
+    .getByText("ADB restarted and the offline reconnect request completed.")
+    .waitFor();
+  await page.getByLabel("Copyable diagnostics").waitFor({ state: "visible" });
+  await page.screenshot({
+    path: path.join(screenshotDir, "desktop-adb-health-recovery.png"),
+    fullPage: false,
+  });
+  await page.getByRole("button", { name: "Close", exact: true }).click();
   for (const route of ["Devices", "Apps", "Debloat", "Console"]) {
     await page.getByRole("button", { name: new RegExp(route) }).click();
     await page.getByRole("heading", { name: route, exact: true }).waitFor();
@@ -88,6 +106,11 @@ async function runDesktopFlow(browser) {
   await page.getByRole("button", { name: /Apps/ }).click();
   await page.getByText("com.example.app").waitFor();
   await page.getByText("com.android.settings").waitFor();
+  await page.evaluate(() => window.__DROIDSMITH_MOCK_HOTPLUG__(false));
+  await page.getByText("No authorized devices", { exact: true }).waitFor();
+  await page.getByText("com.example.app").waitFor({ state: "hidden" });
+  await page.evaluate(() => window.__DROIDSMITH_MOCK_HOTPLUG__(true));
+  await page.getByText("com.example.app").waitFor();
   await assertNoHorizontalOverflow(page, "desktop Apps table");
   await page.screenshot({
     path: path.join(screenshotDir, "desktop-apps-table.png"),
@@ -235,8 +258,25 @@ async function installTauriMock(page) {
       model: "Pixel QA",
       product: "oriole",
       device: "oriole",
+      build_fingerprint: "google/oriole/oriole:15/QA",
       transport_id: 7,
+      connection_generation: 8,
       wireless: false,
+    };
+    const adbHealth = {
+      server_status_supported: true,
+      client_version: "37.0.0",
+      server_version: "37.0.0",
+      server_build: "123456",
+      usb_backend: "NATIVE",
+      mdns_backend: "LIBADBMDNS",
+      mdns_enabled: true,
+      mdns_check: "mDNS responder available",
+      burst_mode: true,
+      recommended_for_wifi_v2: true,
+      wifi_v2_state: "supported",
+      wifi_v2_devices: ["Pixel QA"],
+      warning: null,
     };
     const packages = [
       {
@@ -324,6 +364,73 @@ async function installTauriMock(page) {
             adb_resolved: true,
             adb_path: "C:/Android/platform-tools/adb.exe",
             devices: [device],
+          };
+        }
+        if (cmd === "watch_devices") {
+          window.__DROIDSMITH_MOCK_HOTPLUG__ = (connected) => {
+            if (connected) {
+              device.transport_id += 1;
+              device.connection_generation += 1;
+            }
+            emitChannel(args.on_event, {
+              kind: "snapshot",
+              result: {
+                adb_resolved: true,
+                adb_path: "C:/Android/platform-tools/adb.exe",
+                devices: connected ? [{ ...device }] : [],
+              },
+              health: adbHealth,
+              observed_at: "2026-07-14T18:00:03Z",
+            });
+          };
+          emitChannel(args.on_event, {
+            kind: "snapshot",
+            result: {
+              adb_resolved: true,
+              adb_path: "C:/Android/platform-tools/adb.exe",
+              devices: [device],
+            },
+            health: adbHealth,
+            observed_at: "2026-07-14T18:00:00Z",
+          });
+          return new Promise((resolve) => {
+            pendingOperations.set(args.operation_id, {
+              resolve,
+              channel: args.on_event,
+            });
+          });
+        }
+        if (cmd === "recover_adb") {
+          emitChannel(args.on_event, {
+            operation_id: args.operation_id,
+            kind: "started",
+            message: "Recovery sequence started",
+          });
+          emitChannel(args.on_event, {
+            operation_id: args.operation_id,
+            kind: "progress",
+            message: "Step 3/3: adb reconnect offline",
+          });
+          return {
+            record_path:
+              "C:/Users/QA/AppData/Roaming/Droidsmith/host-operations.jsonl",
+            record: {
+              schema_version: 1,
+              operation_id: args.operation_id,
+              operation: "adb_server_recovery",
+              confirmation_source: "devices_health_review",
+              outcome: "succeeded",
+              started_at: "2026-07-14T18:00:00Z",
+              completed_at: "2026-07-14T18:00:02Z",
+              commands: [
+                ["kill-server"],
+                ["start-server"],
+                ["reconnect", "offline"],
+              ],
+              health_before: adbHealth,
+              health_after: adbHealth,
+              failure: null,
+            },
           };
         }
         if (cmd === "list_packages") {

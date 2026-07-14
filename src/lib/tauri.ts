@@ -102,6 +102,58 @@ export type ListDevicesResult = {
   devices: Device[];
 };
 
+export type WifiV2State = "supported" | "not_detected" | "probe_unavailable";
+
+export type AdbHealth = {
+  server_status_supported: boolean;
+  client_version: string | null;
+  server_version: string | null;
+  server_build: string | null;
+  usb_backend: string | null;
+  mdns_backend: string | null;
+  mdns_enabled: boolean | null;
+  mdns_check: string | null;
+  burst_mode: boolean | null;
+  recommended_for_wifi_v2: boolean;
+  wifi_v2_state: WifiV2State;
+  wifi_v2_devices: string[];
+  warning: string | null;
+};
+
+export type DeviceLifecycleEvent =
+  | {
+      kind: "snapshot";
+      result: ListDevicesResult;
+      health: AdbHealth | null;
+      observed_at: string;
+    }
+  | { kind: "error"; message: string; observed_at: string };
+
+export type AdbRecoveryOutcome =
+  | "pending"
+  | "succeeded"
+  | "failed"
+  | "cancelled";
+
+export type AdbRecoveryRecord = {
+  schema_version: number;
+  operation_id: string;
+  operation: "adb_server_recovery";
+  confirmation_source: "devices_health_review";
+  outcome: AdbRecoveryOutcome;
+  started_at: string;
+  completed_at: string | null;
+  commands: string[][];
+  health_before: AdbHealth | null;
+  health_after: AdbHealth | null;
+  failure: string | null;
+};
+
+export type AdbRecoveryResult = {
+  record: AdbRecoveryRecord;
+  record_path: string;
+};
+
 export type OperationEventKind =
   | "started"
   | "output"
@@ -120,9 +172,9 @@ export type OperationEvent = {
   attempt?: number;
 };
 
-export type OperationOptions = {
+export type OperationOptions<TEvent = OperationEvent> = {
   operationId?: string;
-  onEvent?: (event: OperationEvent) => void;
+  onEvent?: (event: TEvent) => void;
 };
 
 let operationCounter = 0;
@@ -133,14 +185,14 @@ export function newOperationId(prefix: string): string {
   return `${safePrefix}-${Date.now().toString(36)}-${operationCounter.toString(36)}`;
 }
 
-function invokeOperation<T>(
+function invokeOperation<T, TEvent = OperationEvent>(
   command: string,
   args: Record<string, unknown>,
   prefix: string,
-  options?: OperationOptions,
+  options?: OperationOptions<TEvent>,
 ): Promise<T> {
   const operationId = options?.operationId ?? newOperationId(prefix);
-  const channel = new Channel<OperationEvent>();
+  const channel = new Channel<TEvent>();
   channel.onmessage = (event) => options?.onEvent?.(event);
   return invoke<T>(command, {
     ...args,
@@ -389,6 +441,29 @@ export async function callHeartbeat(): Promise<Heartbeat> {
 
 export async function callListDevices(): Promise<ListDevicesResult> {
   return invoke<ListDevicesResult>("list_devices");
+}
+
+export async function callWatchDevices(
+  options?: OperationOptions<DeviceLifecycleEvent>,
+): Promise<void> {
+  return invokeOperation<void, DeviceLifecycleEvent>(
+    "watch_devices",
+    {},
+    "devices",
+    options,
+  );
+}
+
+export async function callRecoverAdb(
+  confirmed: boolean,
+  options?: OperationOptions,
+): Promise<AdbRecoveryResult> {
+  return invokeOperation<AdbRecoveryResult>(
+    "recover_adb",
+    { confirmed },
+    "adb-recovery",
+    options,
+  );
 }
 
 export async function callListWirelessServices(): Promise<ListWirelessServicesResult> {

@@ -8,14 +8,12 @@ import {
   callCancelOperation,
   callJournalList,
   callJournalUndo,
-  callListDevices,
   callListPackages,
   callListPermissions,
   callListUsers,
   callPlanAction,
   callSetPermission,
   deviceTarget,
-  inTauri,
   newOperationId,
   type ActionKind,
   type AndroidUser,
@@ -23,12 +21,12 @@ import {
   type Device,
   type DeviceTarget,
   type JournalEntry,
-  type ListDevicesResult,
   type PackageFilter,
   type OperationEvent,
   type PermissionInfo,
   type PlannedAction,
 } from "../lib/tauri";
+import { useAuthorizedDevices } from "../lib/useAuthorizedDevices";
 
 import {
   backupDefaultFileName,
@@ -49,12 +47,6 @@ import {
   TableCell,
   TableHeaderCell,
 } from "./common";
-
-type DevicesState =
-  | { kind: "loading" }
-  | { kind: "no_tauri" }
-  | { kind: "ok"; value: ListDevicesResult }
-  | { kind: "error"; message: string };
 
 type PackagesState =
   | { kind: "idle" }
@@ -97,9 +89,7 @@ const FILTERS: { value: PackageFilter; labelKey: string }[] = [
 
 export default function AppsRoute() {
   const { t } = useTranslation();
-  const [devicesState, setDevicesState] = useState<DevicesState>({
-    kind: "loading",
-  });
+  const { devicesState, authorizedDevices } = useAuthorizedDevices();
   const [selectedSerial, setSelectedSerial] = useState<string | null>(null);
   const [selectedTransportId, setSelectedTransportId] = useState<number | null>(
     null,
@@ -121,42 +111,12 @@ export default function AppsRoute() {
   const activeBackupRef = useRef<string | null>(null);
   const backupGenerationRef = useRef(0);
 
-  const authorizedDevices =
-    devicesState.kind === "ok"
-      ? devicesState.value.devices.filter(
-          (d) => typeof d.state === "string" && d.state === "device",
-        )
-      : [];
   const selectedDevice =
     authorizedDevices.find((device) =>
       selectedTransportId != null
         ? device.transport_id === selectedTransportId
         : device.serial === selectedSerial,
     ) ?? null;
-
-  const loadDevices = useCallback(async () => {
-    if (!inTauri()) {
-      setDevicesState({ kind: "no_tauri" });
-      return;
-    }
-    setDevicesState({ kind: "loading" });
-    try {
-      const value = await callListDevices();
-      setDevicesState({ kind: "ok", value });
-      const authorized = value.devices.filter(
-        (d) => typeof d.state === "string" && d.state === "device",
-      );
-      if (authorized.length === 1) {
-        setSelectedSerial((prev) => prev ?? authorized[0]!.serial);
-        setSelectedTransportId((prev) => prev ?? authorized[0]!.transport_id);
-      }
-    } catch (e) {
-      setDevicesState({
-        kind: "error",
-        message: e instanceof Error ? e.message : String(e),
-      });
-    }
-  }, []);
 
   const loadUsers = useCallback(async () => {
     if (!selectedDevice) {
@@ -219,8 +179,32 @@ export default function AppsRoute() {
   }, [selectedSerial]);
 
   useEffect(() => {
-    void loadDevices();
-  }, [loadDevices]);
+    const current = authorizedDevices.find((device) =>
+      selectedTransportId != null
+        ? device.transport_id === selectedTransportId
+        : device.serial === selectedSerial,
+    );
+    if (current) return;
+
+    const sameSerial = authorizedDevices.filter(
+      (device) => device.serial === selectedSerial,
+    );
+    const next =
+      sameSerial.length === 1
+        ? sameSerial[0]!
+        : authorizedDevices.length === 1
+          ? authorizedDevices[0]!
+          : null;
+    backupGenerationRef.current += 1;
+    const operationId = activeBackupRef.current;
+    activeBackupRef.current = null;
+    if (operationId) void callCancelOperation(operationId);
+    setSelectedSerial(next?.serial ?? null);
+    setSelectedTransportId(next?.transport_id ?? null);
+    setActionState({ kind: "idle" });
+    setInspectedPkg(null);
+    setBackupNotice(null);
+  }, [authorizedDevices, selectedSerial, selectedTransportId]);
 
   useEffect(() => {
     return () => {
@@ -531,6 +515,9 @@ export default function AppsRoute() {
               if (operationId) void callCancelOperation(operationId);
               setSelectedSerial(device.serial);
               setSelectedTransportId(device.transport_id);
+              setActionState({ kind: "idle" });
+              setInspectedPkg(null);
+              setBackupNotice(null);
             }}
           />
         )}

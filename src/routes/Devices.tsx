@@ -6,17 +6,18 @@ import {
   callApplyDeviceControl,
   callCancelOperation,
   callGetDeviceInfo,
-  callListDevices,
   callListNetworkConnections,
   callListProcesses,
   callListRemoteFiles,
   callPullFile,
+  callRecoverAdb,
   callTakeScreenshot,
   deviceTarget,
-  inTauri,
   newOperationId,
   summarizeState,
   type Device,
+  type AdbHealth,
+  type AdbRecoveryResult,
   type DeviceInfo,
   type DeviceTarget,
   type ListDevicesResult,
@@ -27,6 +28,12 @@ import {
   type RemoteListing,
   type SerializedDeviceState,
 } from "../lib/tauri";
+import { useFocusTrap } from "../lib/useFocusTrap";
+import {
+  restartDeviceLifecycle,
+  useDeviceStore,
+  type SharedDevicesState,
+} from "../lib/deviceStore";
 
 import {
   Badge,
@@ -40,12 +47,9 @@ import {
   TableCell,
   TableHeaderCell,
 } from "./common";
+import { ADB_RECOVERY_COMMANDS, formatAdbDiagnostics } from "./adbHealth";
 
-type State =
-  | { kind: "loading" }
-  | { kind: "no_tauri" }
-  | { kind: "ok"; value: ListDevicesResult }
-  | { kind: "error"; message: string };
+type State = SharedDevicesState;
 
 type DetailState =
   | { kind: "idle" }
@@ -53,26 +57,26 @@ type DetailState =
   | { kind: "ok"; info: DeviceInfo; target: DeviceTarget }
   | { kind: "error"; target: DeviceTarget; message: string };
 
+type RecoveryState =
+  | { kind: "idle" }
+  | { kind: "running"; status: string }
+  | { kind: "done"; result: AdbRecoveryResult }
+  | { kind: "error"; message: string };
+
 export default function DevicesRoute() {
   const { t } = useTranslation();
-  const [state, setState] = useState<State>({ kind: "loading" });
+  const state = useDeviceStore((store) => store.devicesState);
+  const health = useDeviceStore((store) => store.health);
+  const observedAt = useDeviceStore((store) => store.observedAt);
+  const watching = useDeviceStore((store) => store.watching);
   const [detail, setDetail] = useState<DetailState>({ kind: "idle" });
+  const [recoveryOpen, setRecoveryOpen] = useState(false);
+  const [recovery, setRecovery] = useState<RecoveryState>({ kind: "idle" });
+  const recoveryOperationRef = useRef<string | null>(null);
+  const recoveryGenerationRef = useRef(0);
 
   const refresh = useCallback(async () => {
-    if (!inTauri()) {
-      setState({ kind: "no_tauri" });
-      return;
-    }
-    setState({ kind: "loading" });
-    try {
-      const value = await callListDevices();
-      setState({ kind: "ok", value });
-    } catch (e) {
-      setState({
-        kind: "error",
-        message: e instanceof Error ? e.message : String(e),
-      });
-    }
+    await restartDeviceLifecycle();
   }, []);
 
   const selectDevice = useCallback(async (device: Device) => {
@@ -90,9 +94,67 @@ export default function DevicesRoute() {
     }
   }, []);
 
+  const runRecovery = useCallback(async () => {
+    const operationId = newOperationId("adb-recovery");
+    const generation = recoveryGenerationRef.current + 1;
+    recoveryGenerationRef.current = generation;
+    recoveryOperationRef.current = operationId;
+    setRecovery({ kind: "running", status: t("devices.health.starting") });
+    try {
+      const result = await callRecoverAdb(true, {
+        operationId,
+        onEvent: (event) => {
+          if (
+            recoveryGenerationRef.current !== generation ||
+            recoveryOperationRef.current !== operationId
+          )
+            return;
+          if (event.message) {
+            setRecovery({ kind: "running", status: event.message });
+          }
+        },
+      });
+      if (recoveryGenerationRef.current !== generation) return;
+      setRecovery({ kind: "done", result });
+      await restartDeviceLifecycle();
+    } catch (error) {
+      if (recoveryGenerationRef.current !== generation) return;
+      setRecovery({
+        kind: "error",
+        message: error instanceof Error ? error.message : String(error),
+      });
+    } finally {
+      if (recoveryGenerationRef.current === generation) {
+        recoveryOperationRef.current = null;
+      }
+    }
+  }, [t]);
+
+  const cancelRecovery = useCallback(() => {
+    const operationId = recoveryOperationRef.current;
+    if (!operationId) return;
+    setRecovery({ kind: "running", status: t("devices.health.cancelling") });
+    void callCancelOperation(operationId);
+  }, [t]);
+
   useEffect(() => {
-    void refresh();
-  }, [refresh]);
+    return () => {
+      recoveryGenerationRef.current += 1;
+      const operationId = recoveryOperationRef.current;
+      recoveryOperationRef.current = null;
+      if (operationId) void callCancelOperation(operationId);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (detail.kind === "idle" || state.kind !== "ok") return;
+    const stillConnected = state.value.devices.some(
+      (device) =>
+        device.transport_id === detail.target.transport_id &&
+        device.connection_generation === detail.target.connection_generation,
+    );
+    if (!stillConnected) setDetail({ kind: "idle" });
+  }, [detail, state]);
 
   return (
     <>
@@ -116,6 +178,17 @@ export default function DevicesRoute() {
       />
 
       <section className="mt-6 max-w-6xl" aria-live="polite">
+        {state.kind === "ok" && state.value.adb_resolved && (
+          <AdbHealthPanel
+            health={health}
+            observedAt={observedAt}
+            watching={watching}
+            onReviewRecovery={() => {
+              setRecovery({ kind: "idle" });
+              setRecoveryOpen(true);
+            }}
+          />
+        )}
         {state.kind === "no_tauri" && (
           <StatePanel
             title={t("devices.launchDesktopTitle")}
@@ -274,7 +347,289 @@ export default function DevicesRoute() {
           )}
         </section>
       )}
+      {recoveryOpen && (
+        <RecoveryDialog
+          health={health}
+          observedAt={observedAt}
+          state={recovery}
+          onConfirm={() => void runRecovery()}
+          onCancel={cancelRecovery}
+          onDismiss={() => setRecoveryOpen(false)}
+        />
+      )}
     </>
+  );
+}
+
+function AdbHealthPanel({
+  health,
+  observedAt,
+  watching,
+  onReviewRecovery,
+}: {
+  health: AdbHealth | null;
+  observedAt: string | null;
+  watching: boolean;
+  onReviewRecovery: () => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <Card className="mb-4 p-5" aria-labelledby="adb-health-title">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <div className="flex flex-wrap items-center gap-2">
+            <h3
+              id="adb-health-title"
+              className="text-sm font-semibold text-anvil-50"
+            >
+              {t("devices.health.title")}
+            </h3>
+            <Badge tone={watching ? "success" : "warning"}>
+              {watching
+                ? t("devices.health.live")
+                : t("devices.health.stopped")}
+            </Badge>
+            {health?.wifi_v2_state === "supported" && (
+              <Badge tone="success">
+                {t("devices.health.wifiTwoDetected")}
+              </Badge>
+            )}
+          </div>
+          <p className="mt-1 text-xs leading-5 text-anvil-400">
+            {observedAt
+              ? t("devices.health.observed", {
+                  time: new Date(observedAt).toLocaleString(),
+                })
+              : t("devices.health.probing")}
+          </p>
+        </div>
+        <Button type="button" size="sm" onClick={onReviewRecovery}>
+          {t("devices.health.reviewRecovery")}
+        </Button>
+      </div>
+
+      {health ? (
+        <dl className="mt-4 grid gap-3 text-xs sm:grid-cols-2 lg:grid-cols-4">
+          <HealthMetric
+            label={t("devices.health.client")}
+            value={health.client_version ?? t("common.notReported")}
+          />
+          <HealthMetric
+            label={t("devices.health.server")}
+            value={health.server_version ?? t("common.notReported")}
+          />
+          <HealthMetric
+            label={t("devices.health.usbBackend")}
+            value={health.usb_backend ?? t("common.notReported")}
+          />
+          <HealthMetric
+            label={t("devices.health.mdnsBackend")}
+            value={health.mdns_backend ?? t("common.notReported")}
+          />
+          <HealthMetric
+            label={t("devices.health.mdns")}
+            value={
+              health.mdns_enabled == null
+                ? t("common.notReported")
+                : health.mdns_enabled
+                  ? t("devices.health.enabled")
+                  : t("devices.health.disabled")
+            }
+          />
+          <HealthMetric
+            label={t("devices.health.wifiTwo")}
+            value={t(`devices.health.wifiTwoState.${health.wifi_v2_state}`)}
+          />
+          <HealthMetric
+            label={t("devices.health.wifiTwoDevices")}
+            value={
+              health.wifi_v2_devices.join(", ") ||
+              t("devices.health.noneDetected")
+            }
+          />
+          <HealthMetric
+            label={t("devices.health.mdnsCheck")}
+            value={health.mdns_check ?? t("common.notReported")}
+          />
+        </dl>
+      ) : (
+        <div className="mt-4 grid gap-2 sm:grid-cols-3" aria-hidden="true">
+          <SkeletonLine />
+          <SkeletonLine />
+          <SkeletonLine />
+        </div>
+      )}
+      {health?.warning && (
+        <p
+          role="status"
+          className="mt-4 rounded-md border border-amber-300/20 bg-amber-400/10 px-3 py-2 text-xs leading-5 text-amber-100"
+        >
+          {health.warning}
+        </p>
+      )}
+    </Card>
+  );
+}
+
+function HealthMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-md border border-white/10 bg-white/[0.03] p-3">
+      <dt className="text-anvil-500">{label}</dt>
+      <dd className="mt-1 break-words font-mono text-anvil-100">{value}</dd>
+    </div>
+  );
+}
+
+function RecoveryDialog({
+  health,
+  observedAt,
+  state,
+  onConfirm,
+  onCancel,
+  onDismiss,
+}: {
+  health: AdbHealth | null;
+  observedAt: string | null;
+  state: RecoveryState;
+  onConfirm: () => void;
+  onCancel: () => void;
+  onDismiss: () => void;
+}) {
+  const { t } = useTranslation();
+  const trapRef = useFocusTrap<HTMLDivElement>();
+  const [copyStatus, setCopyStatus] = useState<string | null>(null);
+  const running = state.kind === "running";
+  const diagnostics = formatAdbDiagnostics({
+    health:
+      state.kind === "done"
+        ? (state.result.record.health_after ?? health)
+        : health,
+    observedAt,
+    recovery: state.kind === "done" ? state.result : null,
+  });
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !running) onDismiss();
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [onDismiss, running]);
+
+  const copyDiagnostics = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(diagnostics);
+      setCopyStatus(t("devices.health.copied"));
+    } catch {
+      setCopyStatus(t("devices.health.copyFallback"));
+    }
+  }, [diagnostics, t]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
+      <div
+        ref={trapRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="adb-recovery-title"
+        tabIndex={-1}
+        className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-lg border border-white/10 bg-anvil-950 p-5 shadow-2xl outline-none"
+      >
+        <h3
+          id="adb-recovery-title"
+          className="text-lg font-semibold text-anvil-50"
+        >
+          {t("devices.health.recoveryTitle")}
+        </h3>
+        <p className="mt-2 text-sm leading-6 text-anvil-300">
+          {t("devices.health.recoveryBody")}
+        </p>
+        <ol className="mt-4 space-y-2">
+          {ADB_RECOVERY_COMMANDS.map((command, index) => (
+            <li
+              key={command}
+              className="flex items-center gap-3 rounded-md border border-white/10 bg-black/30 px-3 py-2"
+            >
+              <span className="font-mono text-xs text-anvil-500">
+                {index + 1}
+              </span>
+              <code className="font-mono text-xs text-anvil-100">
+                {command}
+              </code>
+            </li>
+          ))}
+        </ol>
+        <p className="mt-4 rounded-md border border-amber-300/20 bg-amber-400/10 p-3 text-xs leading-5 text-amber-100">
+          {t("devices.health.recoveryWarning")}
+        </p>
+
+        {state.kind === "running" && (
+          <p role="status" className="mt-4 text-sm text-circuit-100">
+            {state.status}
+          </p>
+        )}
+        {state.kind === "error" && (
+          <p role="alert" className="mt-4 text-sm text-red-100">
+            {state.message}
+          </p>
+        )}
+        {state.kind === "done" && (
+          <p
+            role="status"
+            className={
+              state.result.record.outcome === "succeeded"
+                ? "mt-4 text-sm text-emerald-200"
+                : "mt-4 text-sm text-amber-100"
+            }
+          >
+            {t(`devices.health.recoveryOutcome.${state.result.record.outcome}`)}
+          </p>
+        )}
+
+        {(state.kind === "done" || state.kind === "error") && (
+          <div className="mt-4">
+            <label
+              htmlFor="adb-recovery-diagnostics"
+              className="text-xs font-medium text-anvil-300"
+            >
+              {t("devices.health.copyableDiagnostics")}
+            </label>
+            <textarea
+              id="adb-recovery-diagnostics"
+              readOnly
+              value={diagnostics}
+              rows={11}
+              className="mt-2 w-full resize-y rounded-md border border-white/10 bg-black/30 p-3 font-mono text-xs leading-5 text-anvil-200 outline-none focus:border-circuit-300/60 focus:ring-2 focus:ring-circuit-300/20"
+            />
+            {copyStatus && (
+              <p className="mt-2 text-xs text-anvil-400">{copyStatus}</p>
+            )}
+          </div>
+        )}
+
+        <div className="mt-5 flex flex-wrap justify-end gap-2">
+          {(state.kind === "done" || state.kind === "error") && (
+            <Button type="button" onClick={() => void copyDiagnostics()}>
+              {t("devices.health.copyDiagnostics")}
+            </Button>
+          )}
+          {running ? (
+            <Button type="button" variant="danger" onClick={onCancel}>
+              {t("common.cancel")}
+            </Button>
+          ) : (
+            <Button type="button" variant="ghost" onClick={onDismiss}>
+              {state.kind === "idle" ? t("common.cancel") : t("common.close")}
+            </Button>
+          )}
+          {state.kind === "idle" && (
+            <Button type="button" variant="danger" onClick={onConfirm}>
+              {t("devices.health.confirmRecovery")}
+            </Button>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
 

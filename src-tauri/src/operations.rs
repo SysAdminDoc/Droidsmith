@@ -113,6 +113,24 @@ struct Registration {
     cancelled: Arc<AtomicBool>,
 }
 
+pub(crate) struct CancellationGuard {
+    registration: Registration,
+}
+
+impl CancellationGuard {
+    pub(crate) fn is_cancelled(&self) -> bool {
+        self.registration.cancelled.load(Ordering::Acquire)
+    }
+}
+
+pub(crate) fn register_cancellable(
+    operation_id: &str,
+) -> Result<CancellationGuard, OperationError> {
+    Ok(CancellationGuard {
+        registration: Registration::new(operation_id)?,
+    })
+}
+
 impl Registration {
     fn new(operation_id: &str) -> Result<Self, OperationError> {
         if !valid_operation_id(operation_id) {
@@ -199,6 +217,84 @@ pub fn run_process(
         Err(_) => {}
     }
     result
+}
+
+/// Run an ordered set of subprocess stages under an existing cancellation
+/// token. The sequence stops at the first non-zero exit so recovery workflows
+/// cannot report later steps as successful after a prerequisite failed.
+pub(crate) fn run_registered_sequence(
+    program: &Path,
+    stages: &[(String, Vec<String>)],
+    timeout_per_stage: Duration,
+    operation_id: &str,
+    sink: EventSink,
+    cancellation: &CancellationGuard,
+) -> Result<Vec<ProcessOutput>, OperationError> {
+    let started = Instant::now();
+    if cancellation.is_cancelled() {
+        sink(OperationEvent::status(
+            operation_id,
+            OperationEventKind::Cancelled,
+            "Recovery cancelled",
+        ));
+        return Err(OperationError::Cancelled);
+    }
+    sink(OperationEvent::status(
+        operation_id,
+        OperationEventKind::Started,
+        "Recovery sequence started",
+    ));
+    let mut outputs = Vec::with_capacity(stages.len());
+
+    for (index, (label, args)) in stages.iter().enumerate() {
+        sink(OperationEvent {
+            operation_id: operation_id.to_string(),
+            kind: OperationEventKind::Progress,
+            stream: None,
+            chunk: None,
+            message: Some(format!("Step {}/{}: {label}", index + 1, stages.len())),
+            elapsed_ms: Some(saturating_millis(started.elapsed())),
+            attempt: None,
+        });
+        match execute_child(
+            program,
+            args,
+            timeout_per_stage,
+            operation_id,
+            &cancellation.registration.cancelled,
+            &sink,
+            true,
+        ) {
+            Ok(output) => {
+                let success = output.success();
+                outputs.push(output);
+                if !success {
+                    sink(OperationEvent::status(
+                        operation_id,
+                        OperationEventKind::Finished,
+                        format!("Recovery stopped after {label}"),
+                    ));
+                    return Ok(outputs);
+                }
+            }
+            Err(OperationError::Cancelled) => {
+                sink(OperationEvent::status(
+                    operation_id,
+                    OperationEventKind::Cancelled,
+                    "Recovery cancelled",
+                ));
+                return Err(OperationError::Cancelled);
+            }
+            Err(error) => return Err(error),
+        }
+    }
+
+    sink(OperationEvent::status(
+        operation_id,
+        OperationEventKind::Finished,
+        "Recovery sequence completed",
+    ));
+    Ok(outputs)
 }
 
 /// Run one long-lived Logcat process, reconnecting after unexpected exits until
@@ -549,5 +645,37 @@ mod tests {
         ));
         assert!(started.elapsed() < Duration::from_secs(2));
         assert!(!cancel(id));
+    }
+
+    #[test]
+    fn sequence_stops_after_the_first_failed_stage() {
+        #[cfg(windows)]
+        let (program, fail_args, later_args) = (
+            Path::new("cmd.exe"),
+            vec!["/C".to_string(), "exit 7".to_string()],
+            vec!["/C".to_string(), "exit 0".to_string()],
+        );
+        #[cfg(not(windows))]
+        let (program, fail_args, later_args) = (
+            Path::new("sh"),
+            vec!["-c".to_string(), "exit 7".to_string()],
+            vec!["-c".to_string(), "exit 0".to_string()],
+        );
+        let stages = vec![
+            ("fails".to_string(), fail_args),
+            ("must not run".to_string(), later_args),
+        ];
+        let cancellation = register_cancellable("sequence-failure-test").unwrap();
+        let outputs = run_registered_sequence(
+            program,
+            &stages,
+            Duration::from_secs(2),
+            "sequence-failure-test",
+            no_events(),
+            &cancellation,
+        )
+        .unwrap();
+        assert_eq!(outputs.len(), 1);
+        assert_eq!(outputs[0].code, Some(7));
     }
 }
