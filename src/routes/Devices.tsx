@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { save } from "@tauri-apps/plugin-dialog";
 import { useTranslation } from "react-i18next";
 
 import {
@@ -340,13 +341,21 @@ function DeviceTable({
                   role={isDevice ? "button" : undefined}
                   tabIndex={isDevice ? 0 : undefined}
                   onClick={isDevice ? () => onSelect(device.serial) : undefined}
-                  onKeyDown={isDevice ? (e) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                      e.preventDefault();
-                      onSelect(device.serial);
-                    }
-                  } : undefined}
-                  title={!isDevice ? "Device must be authorized before it can be selected" : undefined}
+                  onKeyDown={
+                    isDevice
+                      ? (e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            onSelect(device.serial);
+                          }
+                        }
+                      : undefined
+                  }
+                  title={
+                    !isDevice
+                      ? "Device must be authorized before it can be selected"
+                      : undefined
+                  }
                   className={[
                     "transition",
                     isDevice
@@ -597,7 +606,6 @@ function DeviceTableSkeleton() {
   );
 }
 
-
 function formatStateLabel(state: SerializedDeviceState): string {
   const label = summarizeState(state);
   return label.charAt(0).toUpperCase() + label.slice(1);
@@ -637,10 +645,19 @@ function DeviceControls({ serial }: { serial: string }) {
   );
 
   const takeScreenshot = useCallback(async () => {
-    setScreenshotMsg("Capturing...");
     try {
-      const ts = Date.now();
-      const localPath = `screenshot-${serial}-${ts}.png`;
+      // The host destination comes from the native save dialog, never a
+      // renderer-built path; the backend rejects non-absolute paths.
+      const localPath = await save({
+        title: "Save screenshot as",
+        defaultPath: `screenshot-${serial}-${Date.now()}.png`,
+        filters: [{ name: "PNG", extensions: ["png"] }],
+      });
+      if (!localPath) {
+        setScreenshotMsg(null);
+        return;
+      }
+      setScreenshotMsg("Capturing...");
       await callTakeScreenshot(serial, localPath);
       setScreenshotMsg(`Saved to ${localPath}`);
     } catch (e) {
@@ -1029,14 +1046,24 @@ function FileManager({ serial }: { serial: string }) {
 
   const pullRemote = useCallback(
     async (entry: RemoteFileEntry) => {
-      setPullMsg(`Pulling ${entry.name}...`);
       try {
+        // Destination is chosen through the native save dialog so the
+        // renderer never dictates an arbitrary host path.
+        const localPath = await save({
+          title: `Save ${entry.name} as`,
+          defaultPath: entry.name,
+        });
+        if (!localPath) {
+          setPullMsg(null);
+          return;
+        }
+        setPullMsg(`Pulling ${entry.name}...`);
         const remoteFull =
           currentPath === "/"
             ? `/${entry.name}`
             : `${currentPath}/${entry.name}`;
-        await callPullFile(serial, remoteFull, entry.name);
-        setPullMsg(`Saved ${entry.name} to working directory`);
+        await callPullFile(serial, remoteFull, localPath);
+        setPullMsg(`Saved ${entry.name} to ${localPath}`);
       } catch (e) {
         setPullMsg(`Failed: ${e instanceof Error ? e.message : String(e)}`);
       }

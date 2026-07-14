@@ -932,12 +932,31 @@ pub fn take_screenshot(serial: String, local_path: String) -> Result<String, Com
         .ok_or(adb::TransportError::AdbNotFound)?;
     let transport = adb::ShellTransport::new(path);
 
-    let remote = "/sdcard/droidsmith-screenshot.png";
+    // Unique device-side temp so concurrent captures (multiple devices or
+    // rapid clicks) never clobber each other's PNG mid-pull.
+    let remote = unique_screenshot_remote();
     let local_arg = validated_path.display().to_string();
-    transport.shell(&serial, &["screencap", "-p", remote])?;
-    actions::extract_apk(std::path::Path::new(path), &serial, remote, &local_arg)?;
-    let _ = transport.shell(&serial, &["rm", remote]);
+    transport.shell(&serial, &["screencap", "-p", &remote])?;
+    let pulled = actions::extract_apk(std::path::Path::new(path), &serial, &remote, &local_arg);
+    // Always remove the device temp, even when the pull failed, so a
+    // partial capture never leaks onto /sdcard.
+    let _ = transport.shell(&serial, &["rm", "-f", &remote]);
+    pulled?;
     Ok(local_arg)
+}
+
+/// Build a per-capture unique `/sdcard` path. Uses the process id plus a
+/// monotonic counter so two in-flight screenshots cannot collide without
+/// depending on wall-clock time.
+fn unique_screenshot_remote() -> String {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static COUNTER: AtomicU64 = AtomicU64::new(0);
+    let n = COUNTER.fetch_add(1, Ordering::Relaxed);
+    format!(
+        "/sdcard/droidsmith-screenshot-{}-{}.png",
+        std::process::id(),
+        n
+    )
 }
 
 /// Locate the scrcpy binary on the system. Returns the path if found.
@@ -1064,7 +1083,44 @@ fn iso_now() -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_fastboot_getvar, validate_backup_target, ProcessOutput};
+    use super::{
+        parse_fastboot_getvar, unique_screenshot_remote, validate_backup_target,
+        validate_local_path, ProcessOutput,
+    };
+
+    #[test]
+    fn local_path_requires_absolute() {
+        assert_eq!(
+            validate_local_path("   ").unwrap_err().code,
+            "invalid_path"
+        );
+        // Relative paths (the old screenshot/pull bug) are rejected.
+        assert_eq!(
+            validate_local_path("screenshot-abc.png").unwrap_err().code,
+            "invalid_path"
+        );
+        assert_eq!(
+            validate_local_path("./sub/dir/file.png").unwrap_err().code,
+            "invalid_path"
+        );
+
+        // An absolute path for the current platform is accepted.
+        let abs = if cfg!(windows) {
+            "C:\\Users\\qa\\shot.png"
+        } else {
+            "/home/qa/shot.png"
+        };
+        assert!(validate_local_path(abs).is_ok());
+    }
+
+    #[test]
+    fn screenshot_remote_paths_are_unique() {
+        let a = unique_screenshot_remote();
+        let b = unique_screenshot_remote();
+        assert_ne!(a, b);
+        assert!(a.starts_with("/sdcard/droidsmith-screenshot-"));
+        assert!(a.ends_with(".png"));
+    }
 
     fn fake(stdout: &str, stderr: &str, code: Option<i32>, timed_out: bool) -> ProcessOutput {
         ProcessOutput {
