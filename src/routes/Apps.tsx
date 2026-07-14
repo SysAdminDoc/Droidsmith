@@ -1142,14 +1142,17 @@ function PermissionsPanel({
   const [perms, setPerms] = useState<PermissionInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [toggling, setToggling] = useState<string | null>(null);
+  const [permError, setPermError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
+    setPermError(null);
     try {
       const result = await callListPermissions(serial, pkg);
       setPerms(result);
-    } catch {
+    } catch (e) {
       setPerms([]);
+      setPermError(e instanceof Error ? e.message : String(e));
     } finally {
       setLoading(false);
     }
@@ -1162,6 +1165,7 @@ function PermissionsPanel({
   const togglePerm = useCallback(
     async (permission: string, grant: boolean) => {
       setToggling(permission);
+      setPermError(null);
       try {
         await callSetPermission(serial, pkg, permission, grant);
         setPerms((prev) =>
@@ -1169,14 +1173,21 @@ function PermissionsPanel({
             p.permission === permission ? { ...p, granted: grant } : p,
           ),
         );
-      } catch {
-        // Reload on failure to get accurate state
+      } catch (e) {
+        // Many permissions (signature/system, or fixed by policy) can't be
+        // changed via `pm grant`. Surface why instead of silently snapping
+        // the toggle back, then reload to show the real state.
+        setPermError(
+          t("apps.permissionToggleFailed", {
+            message: e instanceof Error ? e.message : String(e),
+          }),
+        );
         void load();
       } finally {
         setToggling(null);
       }
     },
-    [serial, pkg, load],
+    [serial, pkg, load, t],
   );
 
   return (
@@ -1194,6 +1205,14 @@ function PermissionsPanel({
           {t("common.close")}
         </Button>
       </div>
+      {permError && (
+        <div
+          role="alert"
+          className="border-b border-rose-500/20 bg-rose-500/10 px-4 py-3 text-xs text-rose-200"
+        >
+          {permError}
+        </div>
+      )}
       {loading ? (
         <div className="p-4">
           <SkeletonLine className="w-48" />

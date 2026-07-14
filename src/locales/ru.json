@@ -230,6 +230,7 @@
     "permissions": "Разрешения",
     "noPermissionsFound": "Разрешения не найдены",
     "noPermissionsFoundBody": "Этот пакет не сообщил runtime или install permissions.",
+    "permissionToggleFailed": "Не удалось изменить это разрешение: {{message}}. Некоторые разрешения заданы системой или политикой приложения и не переключаются здесь.",
     "granted": "Granted",
     "denied": "Denied",
     "loadingPackages": "Загрузка пакетов",
@@ -447,7 +448,9 @@
     "mode": "Режим",
     "product": "Product",
     "querying": "Запрос...",
-    "queryHint": "Нажмите Query vars, чтобы прочитать информацию устройства."
+    "queryHint": "Нажмите Query vars, чтобы прочитать информацию устройства.",
+    "queryAllFailed": "Не удалось прочитать ни одной переменной fastboot. Устройство могло выйти из режима fastboot, или загрузчик отклонил запрос. Переподключите и повторите.",
+    "queryNoValues": "Запрос выполнен, но устройство не вернуло значений для этих переменных."
   },
   "onboarding": {
     "title": "Начало работы",

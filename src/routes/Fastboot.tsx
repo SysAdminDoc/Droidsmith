@@ -53,6 +53,8 @@ export default function FastbootRoute() {
   const [selectedSerial, setSelectedSerial] = useState<string | null>(null);
   const [vars, setVars] = useState<VarMap>({});
   const [loadingVars, setLoadingVars] = useState(false);
+  const [queried, setQueried] = useState(false);
+  const [varsError, setVarsError] = useState<string | null>(null);
 
   const checkFastboot = useCallback(async () => {
     if (!inTauri()) {
@@ -91,23 +93,30 @@ export default function FastbootRoute() {
   const loadVars = useCallback(async () => {
     if (!selectedSerial) return;
     setLoadingVars(true);
+    setVarsError(null);
     const result: VarMap = {};
+    let failures = 0;
     for (const key of GETVAR_KEYS) {
       try {
-        const val = await callFastbootGetvar(selectedSerial, key);
-        const cleaned = val
-          .split("\n")
-          .find((l) => l.includes(key))
-          ?.replace(/.*:\s*/, "")
-          .trim();
-        if (cleaned) result[key] = cleaned;
+        // The backend returns the parsed value directly (fastboot writes
+        // it to stderr as `key: value`), so just trim it.
+        const val = (await callFastbootGetvar(selectedSerial, key)).trim();
+        if (val) result[key] = val;
       } catch {
-        // Skip unavailable vars
+        failures += 1;
       }
     }
     setVars(result);
+    setQueried(true);
+    if (Object.keys(result).length === 0) {
+      setVarsError(
+        failures === GETVAR_KEYS.length
+          ? t("fastboot.queryAllFailed")
+          : t("fastboot.queryNoValues"),
+      );
+    }
     setLoadingVars(false);
-  }, [selectedSerial]);
+  }, [selectedSerial, t]);
 
   useEffect(() => {
     void checkFastboot();
@@ -196,10 +205,18 @@ export default function FastbootRoute() {
                     <table className="min-w-full text-sm">
                       <thead className="bg-white/[0.04]">
                         <tr>
-                          <TableHeaderCell>{t("devices.serial")}</TableHeaderCell>
-                          <TableHeaderCell>{t("fastboot.mode")}</TableHeaderCell>
-                          <TableHeaderCell>{t("fastboot.product")}</TableHeaderCell>
-                          <TableHeaderCell>{t("wireless.action")}</TableHeaderCell>
+                          <TableHeaderCell>
+                            {t("devices.serial")}
+                          </TableHeaderCell>
+                          <TableHeaderCell>
+                            {t("fastboot.mode")}
+                          </TableHeaderCell>
+                          <TableHeaderCell>
+                            {t("fastboot.product")}
+                          </TableHeaderCell>
+                          <TableHeaderCell>
+                            {t("wireless.action")}
+                          </TableHeaderCell>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-white/10">
@@ -218,7 +235,9 @@ export default function FastbootRoute() {
                                 </Badge>
                               )}
                             </TableCell>
-                            <TableCell>{d.product ?? t("common.notReported")}</TableCell>
+                            <TableCell>
+                              {d.product ?? t("common.notReported")}
+                            </TableCell>
                             <TableCell>
                               <Button
                                 type="button"
@@ -285,11 +304,20 @@ export default function FastbootRoute() {
                   </dl>
                 )}
 
-                {Object.keys(vars).length === 0 && !loadingVars && (
-                  <p className="mt-4 text-xs text-anvil-400">
-                    {t("fastboot.queryHint")}
-                  </p>
-                )}
+                {Object.keys(vars).length === 0 &&
+                  !loadingVars &&
+                  (varsError && queried ? (
+                    <div
+                      role="alert"
+                      className="mt-4 rounded-md border border-rose-500/20 bg-rose-500/10 p-3 text-xs text-rose-200"
+                    >
+                      {varsError}
+                    </div>
+                  ) : (
+                    <p className="mt-4 text-xs text-anvil-400">
+                      {t("fastboot.queryHint")}
+                    </p>
+                  ))}
 
                 <div className="mt-5 rounded-md border border-amber-300/20 bg-amber-950/20 p-3">
                   <p className="text-xs leading-5 text-amber-200">
@@ -305,5 +333,3 @@ export default function FastbootRoute() {
     </>
   );
 }
-
-

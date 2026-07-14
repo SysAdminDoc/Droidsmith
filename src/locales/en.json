@@ -230,6 +230,7 @@
     "permissions": "Permissions",
     "noPermissionsFound": "No permissions found",
     "noPermissionsFoundBody": "This package did not report runtime or install permissions.",
+    "permissionToggleFailed": "Couldn't change this permission: {{message}}. Some permissions are fixed by the system or app policy and can't be toggled here.",
     "granted": "Granted",
     "denied": "Denied",
     "loadingPackages": "Loading packages",
@@ -447,7 +448,9 @@
     "mode": "Mode",
     "product": "Product",
     "querying": "Querying...",
-    "queryHint": "Press Query vars to read device information."
+    "queryHint": "Press Query vars to read device information.",
+    "queryAllFailed": "Couldn't read any fastboot variables. The device may have left fastboot mode, or the bootloader rejected the query. Reconnect and try again.",
+    "queryNoValues": "The query completed but the device reported no values for these variables."
   },
   "onboarding": {
     "title": "Getting started",

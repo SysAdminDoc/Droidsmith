@@ -49,10 +49,15 @@ export default function LogcatRoute() {
   const tailRef = useRef(false);
   const serialRef = useRef(selectedSerial);
   const tagFilterRef = useRef(tagFilter);
+  const timerRef = useRef<number | null>(null);
   const outputRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => { serialRef.current = selectedSerial; }, [selectedSerial]);
-  useEffect(() => { tagFilterRef.current = tagFilter; }, [tagFilter]);
+  useEffect(() => {
+    serialRef.current = selectedSerial;
+  }, [selectedSerial]);
+  useEffect(() => {
+    tagFilterRef.current = tagFilter;
+  }, [tagFilter]);
 
   const loadDevices = useCallback(async () => {
     if (!inTauri()) {
@@ -103,7 +108,7 @@ export default function LogcatRoute() {
     }
 
     if (tailRef.current) {
-      setTimeout(() => void fetchLogcat(), 2000);
+      timerRef.current = window.setTimeout(() => void fetchLogcat(), 2000);
     }
   }, []);
 
@@ -111,17 +116,27 @@ export default function LogcatRoute() {
     tailRef.current = true;
     setTailing(true);
     setPaused(false);
+    setFetchError(false);
     void fetchLogcat();
   }, [fetchLogcat]);
 
   const stopTailing = useCallback(() => {
     tailRef.current = false;
+    if (timerRef.current !== null) {
+      window.clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
     setTailing(false);
+    setFetchError(false);
   }, []);
 
   useEffect(() => {
     return () => {
       tailRef.current = false;
+      if (timerRef.current !== null) {
+        window.clearTimeout(timerRef.current);
+        timerRef.current = null;
+      }
     };
   }, []);
 
@@ -160,8 +175,12 @@ export default function LogcatRoute() {
                 <code className="font-mono">{selectedSerial}</code>
               </Badge>
             )}
-            {tailing && !fetchError && <Badge tone="success">{t("logcat.tailing")}</Badge>}
-            {tailing && fetchError && <Badge tone="danger">{t("logcat.fetchFailed")}</Badge>}
+            {tailing && !fetchError && (
+              <Badge tone="success">{t("logcat.tailing")}</Badge>
+            )}
+            {tailing && fetchError && (
+              <Badge tone="danger">{t("logcat.fetchFailed")}</Badge>
+            )}
             <Badge tone="neutral">
               {t("logcat.lineCount", { count: filteredLines.length })}
             </Badge>

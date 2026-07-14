@@ -114,6 +114,11 @@ export default function MirrorRoute() {
   useEffect(() => {
     if (!selectedSerial) return;
     setPresetMessage(null);
+    // A mirror session belongs to a specific device — reset tracking when
+    // the target changes so the UI doesn't show device A's running session
+    // (and disabled launch button) while device B is selected. The A scrcpy
+    // window keeps running independently.
+    setSession({ kind: "idle" });
     try {
       const raw = window.localStorage.getItem(presetStorageKey(selectedSerial));
       setPreset(raw ? normalizePreset(JSON.parse(raw)) : DEFAULT_MIRROR_PRESET);

@@ -245,7 +245,14 @@ export default function DevicesRoute() {
             onRetry={(serial) => void selectDevice(serial)}
           />
           {detail.kind === "ok" && (
-            <DeviceControls serial={detail.info.serial} />
+            // Key by serial so every sub-panel's internal state (process
+            // list, file listing, network sockets, screenshot/density
+            // messages) resets on device switch instead of showing device
+            // A's data while device B is selected.
+            <DeviceControls
+              key={detail.info.serial}
+              serial={detail.info.serial}
+            />
           )}
         </section>
       )}
@@ -877,16 +884,19 @@ function RemoteGlyph({ label }: { label: string }) {
 function ProcessManager({ serial }: { serial: string }) {
   const [processes, setProcesses] = useState<ProcessInfo[]>([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState<"rss" | "name">("rss");
 
   const refresh = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
       const procs = await callListProcesses(serial);
       setProcesses(procs);
-    } catch {
+    } catch (e) {
       setProcesses([]);
+      setError(e instanceof Error ? e.message : String(e));
     } finally {
       setLoading(false);
     }
@@ -931,7 +941,12 @@ function ProcessManager({ serial }: { serial: string }) {
           </Button>
         </div>
       </div>
-      {processes.length === 0 && !loading && (
+      {error && (
+        <div className="border-b border-rose-500/20 bg-rose-500/10 px-4 py-3 text-xs text-rose-200">
+          Couldn't read processes: {error}
+        </div>
+      )}
+      {processes.length === 0 && !loading && !error && (
         <EmptyState title="No process snapshot loaded">
           <p>Load a process snapshot to inspect memory-heavy apps.</p>
         </EmptyState>
@@ -1020,18 +1035,21 @@ function FileManager({ serial }: { serial: string }) {
   const [listing, setListing] = useState<RemoteListing | null>(null);
   const [currentPath, setCurrentPath] = useState("/sdcard");
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [pullMsg, setPullMsg] = useState<string | null>(null);
 
   const browse = useCallback(
     async (path: string) => {
       setLoading(true);
       setPullMsg(null);
+      setError(null);
       try {
         const result = await callListRemoteFiles(serial, path);
         setListing(result);
         setCurrentPath(path);
-      } catch {
+      } catch (e) {
         setListing(null);
+        setError(e instanceof Error ? e.message : String(e));
       } finally {
         setLoading(false);
       }
@@ -1096,7 +1114,13 @@ function FileManager({ serial }: { serial: string }) {
         </div>
       </div>
 
-      {!listing && !loading && (
+      {error && (
+        <div className="border-b border-rose-500/20 bg-rose-500/10 px-4 py-3 text-xs text-rose-200">
+          Couldn't list {currentPath}: {error}
+        </div>
+      )}
+
+      {!listing && !loading && !error && (
         <EmptyState title="No directory loaded">
           <p>
             Browse <code>/sdcard</code> to inspect device files and pull local
@@ -1221,15 +1245,18 @@ function FileGlyph({ directory }: { directory: boolean }) {
 function NetworkInspector({ serial }: { serial: string }) {
   const [connections, setConnections] = useState<NetworkConnection[]>([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
 
   const refresh = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
       const conns = await callListNetworkConnections(serial);
       setConnections(conns);
-    } catch {
+    } catch (e) {
       setConnections([]);
+      setError(e instanceof Error ? e.message : String(e));
     } finally {
       setLoading(false);
     }
@@ -1279,7 +1306,13 @@ function NetworkInspector({ serial }: { serial: string }) {
           </Button>
         </div>
       </div>
-      {connections.length === 0 && !loading && (
+      {error && (
+        <div className="border-b border-rose-500/20 bg-rose-500/10 px-4 py-3 text-xs text-rose-200">
+          Couldn't read connections: {error}. Some devices restrict{" "}
+          <code>ss</code>/<code>netstat</code> without root.
+        </div>
+      )}
+      {connections.length === 0 && !loading && !error && (
         <EmptyState title="No network snapshot loaded">
           <p>Load active sockets to review endpoints and owning processes.</p>
         </EmptyState>
