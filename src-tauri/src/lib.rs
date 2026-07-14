@@ -32,6 +32,17 @@ pub fn run() {
     diagnostics::install_panic_hook(log_dir.clone());
 
     let builder = tauri::Builder::default()
+        // Single-instance must be the FIRST plugin registered (Tauri
+        // requirement). A second launch focuses the existing window and
+        // exits instead of spawning a rival adb server.
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            use tauri::Manager;
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.unminimize();
+                let _ = window.show();
+                let _ = window.set_focus();
+            }
+        }))
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             heartbeat,
