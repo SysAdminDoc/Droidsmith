@@ -23,14 +23,50 @@
 //! line. The directory is created on demand. Per-device files isolate
 //! noise — a wedged file lock on one device doesn't poison others.
 
+use std::collections::HashMap;
 use std::fs::{self, File, OpenOptions};
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, Mutex, OnceLock};
 
 use serde::{Deserialize, Serialize};
 
 use crate::adb::actions::{ActionRequest, AppliedAction};
+
+/// Per-device lock so the open → read → record → write cycle is atomic.
+/// Two concurrent `apply_action` calls on the same device would otherwise
+/// each open an independent [`Journal`], both derive the same `next_id`
+/// from the file, and append duplicate ids with stale undo state.
+fn device_lock(serial: &str) -> Arc<Mutex<()>> {
+    static LOCKS: OnceLock<Mutex<HashMap<String, Arc<Mutex<()>>>>> = OnceLock::new();
+    let map = LOCKS.get_or_init(|| Mutex::new(HashMap::new()));
+    let mut guard = map.lock().unwrap_or_else(|e| e.into_inner());
+    guard
+        .entry(safe_serial(serial))
+        .or_insert_with(|| Arc::new(Mutex::new(())))
+        .clone()
+}
+
+/// Run `f` with exclusive access to `serial`'s journal. The closure
+/// receives a freshly-opened journal; the whole open→mutate cycle holds
+/// the per-device lock, so concurrent callers serialize instead of racing
+/// on ids. Long work inside `f` (e.g. an undo's inverse ADB call) is
+/// intentionally serialized per device — a device cannot meaningfully run
+/// two package mutations at once anyway.
+pub fn with_journal<T, E>(
+    dir: &Path,
+    serial: &str,
+    f: impl FnOnce(&mut Journal) -> Result<T, E>,
+) -> Result<T, E>
+where
+    E: From<std::io::Error>,
+{
+    let lock = device_lock(serial);
+    let _guard = lock.lock().unwrap_or_else(|e| e.into_inner());
+    let mut journal = Journal::open(dir, serial)?;
+    f(&mut journal)
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct JournalEntry {
@@ -258,6 +294,37 @@ mod tests {
         assert_eq!(j2.entries().len(), 2);
         assert_eq!(j2.entries()[0].id, 1);
         assert_eq!(j2.entries()[1].id, 2);
+    }
+
+    #[test]
+    fn concurrent_records_produce_unique_ids() {
+        // Regression for IMP-30: independent `Journal::open` instances
+        // used to derive the same next_id and append duplicate ids under
+        // concurrency. `with_journal` serializes the open→record cycle.
+        let dir = fresh_tmp_dir("concurrent");
+        std::fs::create_dir_all(&dir).unwrap();
+        const THREADS: usize = 16;
+
+        std::thread::scope(|scope| {
+            for i in 0..THREADS {
+                let dir = dir.clone();
+                scope.spawn(move || {
+                    let pkg = format!("com.example.p{i}");
+                    with_journal(&dir, "race", |journal| {
+                        journal.record(fake_applied("race", &pkg, ActionKind::Disable))?;
+                        Ok::<_, std::io::Error>(())
+                    })
+                    .unwrap();
+                });
+            }
+        });
+
+        let reloaded = Journal::open(&dir, "race").unwrap();
+        assert_eq!(reloaded.entries().len(), THREADS);
+        let mut ids: Vec<u64> = reloaded.entries().iter().map(|e| e.id).collect();
+        ids.sort_unstable();
+        ids.dedup();
+        assert_eq!(ids.len(), THREADS, "all journal ids must be unique");
     }
 
     #[test]

@@ -333,8 +333,12 @@ pub fn apply_action(
     let serial = plan.request.serial.clone();
     let applied = actions::apply(&transport, plan, &iso_now())?;
 
-    let mut journal = Journal::open(&journal_dir(&app)?, &serial)?;
-    let entry = journal.record(applied)?.clone();
+    // Serialize the open→record cycle per device so concurrent applies
+    // cannot assign duplicate journal ids.
+    let dir = journal_dir(&app)?;
+    let entry = journal::with_journal(&dir, &serial, |journal| {
+        Ok::<_, CommandError>(journal.record(applied)?.clone())
+    })?;
     Ok(entry)
 }
 
@@ -365,17 +369,22 @@ pub fn journal_undo(
         .ok_or(adb::TransportError::AdbNotFound)?;
     let transport = adb::ShellTransport::new(path);
 
-    let mut journal = Journal::open(&journal_dir(&app)?, &serial)?;
-    let undo_request = journal::undo_request_for(&journal, entry_id).ok_or(CommandError {
-        code: "not_reversible",
-        message: format!(
-            "journal entry {entry_id} either doesn't exist, is already undone, or its action kind cannot be reversed"
-        ),
-    })?;
+    // Hold the per-device lock across the reversibility check, the inverse
+    // ADB call, and the undo record so two undos of the same entry cannot
+    // both pass the check and double-apply.
+    let dir = journal_dir(&app)?;
+    let entry = journal::with_journal(&dir, &serial, |journal| {
+        let undo_request = journal::undo_request_for(journal, entry_id).ok_or(CommandError {
+            code: "not_reversible",
+            message: format!(
+                "journal entry {entry_id} either doesn't exist, is already undone, or its action kind cannot be reversed"
+            ),
+        })?;
 
-    let plan = actions::plan(undo_request);
-    let applied = actions::apply(&transport, plan, &iso_now())?;
-    let entry = journal.record_undo(entry_id, applied)?.clone();
+        let plan = actions::plan(undo_request);
+        let applied = actions::apply(&transport, plan, &iso_now())?;
+        Ok::<_, CommandError>(journal.record_undo(entry_id, applied)?.clone())
+    })?;
     Ok(entry)
 }
 
