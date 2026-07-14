@@ -195,6 +195,8 @@
     "backupSavedTitle": "Backup сохранен",
     "backupEmptyTitle": "Backup не содержит данных",
     "backupEmptyBody": "ADB завершился, но файл backup пустой или отсутствует. Считайте этот пакет не сохраненным.",
+    "backupHeaderOnlyTitle": "Backup не содержит данных приложения",
+    "backupHeaderOnlyBody": "Файл .ab содержит только заголовок. Приложения с целевым Android 12 (API 31) и новее отключают устаревший `adb backup`, поэтому личные данные не сохранены — только APK. Считайте это резервной копией только APK.",
     "backupFailedTitle": "Backup не удался",
     "backupFailed": "Backup не удался: {{message}}",
     "backupPath": "Путь",

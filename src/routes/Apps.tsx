@@ -253,16 +253,20 @@ export default function AppsRoute() {
 
         const result = await callBackupPackage(selectedSerial, pkg, localPath);
         const displayState = backupDisplayState(result);
+        const titleByState: Record<typeof displayState, string> = {
+          empty: t("apps.backupEmptyTitle"),
+          header_only: t("apps.backupHeaderOnlyTitle"),
+          saved: t("apps.backupSavedTitle"),
+        };
+        const messageByState: Record<typeof displayState, string> = {
+          empty: t("apps.backupEmptyBody"),
+          header_only: t("apps.backupHeaderOnlyBody"),
+          saved: t("apps.backupSaved", { file: result.local_path }),
+        };
         setBackupNotice({
-          title:
-            displayState === "empty"
-              ? t("apps.backupEmptyTitle")
-              : t("apps.backupSavedTitle"),
-          message:
-            displayState === "empty"
-              ? t("apps.backupEmptyBody")
-              : t("apps.backupSaved", { file: result.local_path }),
-          tone: displayState === "empty" ? "warning" : "success",
+          title: titleByState[displayState],
+          message: messageByState[displayState],
+          tone: displayState === "saved" ? "success" : "warning",
           path: result.local_path,
           output: result.stdout,
           sizeBytes: result.size_bytes,

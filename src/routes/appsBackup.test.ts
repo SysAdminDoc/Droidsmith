@@ -8,11 +8,25 @@ import {
 
 describe("apps backup helpers", () => {
   it("classifies zero-byte or missing backup artifacts as empty", () => {
-    expect(backupDisplayState({ empty: true, size_bytes: null })).toBe("empty");
-    expect(backupDisplayState({ empty: false, size_bytes: 0 })).toBe("empty");
-    expect(backupDisplayState({ empty: false, size_bytes: 4096 })).toBe(
-      "saved",
-    );
+    expect(
+      backupDisplayState({ empty: true, size_bytes: null, header_only: false }),
+    ).toBe("empty");
+    expect(
+      backupDisplayState({ empty: false, size_bytes: 0, header_only: false }),
+    ).toBe("empty");
+    expect(
+      backupDisplayState({
+        empty: false,
+        size_bytes: 4096,
+        header_only: false,
+      }),
+    ).toBe("saved");
+  });
+
+  it("classifies header-only artifacts (adb backup data exclusion) distinctly", () => {
+    expect(
+      backupDisplayState({ empty: false, size_bytes: 41, header_only: true }),
+    ).toBe("header_only");
   });
 
   it("builds a safe default backup filename from a package id", () => {

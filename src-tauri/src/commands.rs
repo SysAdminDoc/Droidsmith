@@ -733,6 +733,10 @@ pub struct BackupPackageResult {
     pub stdout: String,
     pub size_bytes: Option<u64>,
     pub empty: bool,
+    /// True when the artifact is non-empty but only large enough to hold
+    /// the `.ab` header — i.e. `adb backup` excluded the app's data
+    /// (targetSDK 31+/Android 12 deprecation). The UI warns on this.
+    pub header_only: bool,
 }
 
 fn validate_backup_target(local_path: &str) -> Result<PathBuf, CommandError> {
@@ -806,14 +810,31 @@ pub fn backup_package(
     let size_bytes = std::fs::metadata(&target)
         .ok()
         .map(|metadata| metadata.len());
-    let empty = size_bytes.map_or(true, |size| size == 0);
+    let (empty, header_only) = classify_backup_size(size_bytes);
 
     Ok(BackupPackageResult {
         local_path: target.display().to_string(),
         stdout: output,
         size_bytes,
         empty,
+        header_only,
     })
+}
+
+/// A `.ab` archive of an app that targets SDK 31+ (Android 12) contains
+/// only the ~24-byte "ANDROID BACKUP" header with no payload, because
+/// `adb backup` is deprecated and excludes such apps' private data. Treat
+/// any non-zero artifact at or below this size as header-only so the UI
+/// warns instead of claiming a real backup.
+const BACKUP_HEADER_ONLY_MAX_BYTES: u64 = 512;
+
+/// Returns `(empty, header_only)` for a produced backup artifact size.
+fn classify_backup_size(size_bytes: Option<u64>) -> (bool, bool) {
+    match size_bytes {
+        None | Some(0) => (true, false),
+        Some(size) if size <= BACKUP_HEADER_ONLY_MAX_BYTES => (false, true),
+        Some(_) => (false, false),
+    }
 }
 
 /// List runtime permissions for a package.
@@ -1084,16 +1105,26 @@ fn iso_now() -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        parse_fastboot_getvar, unique_screenshot_remote, validate_backup_target,
-        validate_local_path, ProcessOutput,
+        classify_backup_size, parse_fastboot_getvar, unique_screenshot_remote,
+        validate_backup_target, validate_local_path, ProcessOutput,
     };
 
     #[test]
+    fn backup_size_classification() {
+        // Missing or zero → empty.
+        assert_eq!(classify_backup_size(None), (true, false));
+        assert_eq!(classify_backup_size(Some(0)), (true, false));
+        // Bare .ab header (targetSDK 31+ apps) → header-only warning.
+        assert_eq!(classify_backup_size(Some(24)), (false, true));
+        assert_eq!(classify_backup_size(Some(512)), (false, true));
+        // Real payload → a genuine backup.
+        assert_eq!(classify_backup_size(Some(513)), (false, false));
+        assert_eq!(classify_backup_size(Some(4096)), (false, false));
+    }
+
+    #[test]
     fn local_path_requires_absolute() {
-        assert_eq!(
-            validate_local_path("   ").unwrap_err().code,
-            "invalid_path"
-        );
+        assert_eq!(validate_local_path("   ").unwrap_err().code, "invalid_path");
         // Relative paths (the old screenshot/pull bug) are rejected.
         assert_eq!(
             validate_local_path("screenshot-abc.png").unwrap_err().code,

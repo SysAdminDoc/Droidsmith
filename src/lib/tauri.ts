@@ -318,6 +318,8 @@ export type BackupPackageResult = {
   stdout: string;
   size_bytes: number | null;
   empty: boolean;
+  /** Non-empty but header-only: `adb backup` excluded the app's data. */
+  header_only: boolean;
 };
 
 export async function callBackupPackage(

@@ -1,11 +1,15 @@
 import type { BackupPackageResult } from "../lib/tauri";
 
-export type BackupDisplayState = "saved" | "empty";
+export type BackupDisplayState = "saved" | "empty" | "header_only";
 
 export function backupDisplayState(
-  result: Pick<BackupPackageResult, "empty" | "size_bytes">,
+  result: Pick<BackupPackageResult, "empty" | "size_bytes" | "header_only">,
 ): BackupDisplayState {
-  return result.empty || result.size_bytes === 0 ? "empty" : "saved";
+  if (result.empty || result.size_bytes === 0) return "empty";
+  // A non-empty but header-only .ab means adb backup excluded the app's
+  // private data (targetSDK 31+/Android 12 deprecation).
+  if (result.header_only) return "header_only";
+  return "saved";
 }
 
 export function backupDefaultFileName(packageId: string): string {
