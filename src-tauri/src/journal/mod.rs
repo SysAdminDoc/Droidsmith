@@ -208,6 +208,10 @@ pub fn undo_request_for(journal: &Journal, entry_id: u64) -> Option<ActionReques
         serial: entry.applied.plan.request.serial.clone(),
         package: entry.applied.plan.request.package.clone(),
         kind,
+        // Undo must target the exact same Android user the original
+        // action mutated, or a work-profile disable would re-enable on
+        // the owner instead.
+        user_id: entry.applied.plan.request.user_id,
     })
 }
 
@@ -233,6 +237,7 @@ mod tests {
                 serial: serial.into(),
                 package: pkg.into(),
                 kind,
+                user_id: 0,
             }),
             stdout: "Package x new state: disabled\n".into(),
             applied_at: "2026-05-25T12:00:00Z".into(),
@@ -328,6 +333,7 @@ mod tests {
             serial: "abc".into(),
             package: "com.foo".into(),
             kind: ActionKind::Disable,
+            user_id: 0,
         });
         let entry = JournalEntry {
             id: 1,

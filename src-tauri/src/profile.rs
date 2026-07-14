@@ -61,6 +61,11 @@ pub struct ProfileAction {
     pub package: String,
     #[serde(default)]
     pub note: String,
+    /// Android user id this action targets. Defaults to `0` (owner) so
+    /// existing v1 profiles authored before multi-user targeting keep the
+    /// same behavior.
+    #[serde(default)]
+    pub user: u32,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -92,10 +97,11 @@ pub fn load(path: &std::path::Path) -> Result<Profile, ProfileError> {
                 source,
             }
         })?;
-    let profile: Profile = serde_yaml_ng::from_str(&text).map_err(|source| ProfileError::Parse {
-        path: path.to_path_buf(),
-        source,
-    })?;
+    let profile: Profile =
+        serde_yaml_ng::from_str(&text).map_err(|source| ProfileError::Parse {
+            path: path.to_path_buf(),
+            source,
+        })?;
     let issues = lint(&profile);
     if !issues.is_empty() {
         return Err(ProfileError::Validate {
@@ -143,6 +149,7 @@ pub fn requests_for(profile: &Profile, serial: &str) -> Vec<ActionRequest> {
             serial: serial.to_string(),
             package: a.package.clone(),
             kind: a.kind,
+            user_id: a.user,
         })
         .collect()
 }

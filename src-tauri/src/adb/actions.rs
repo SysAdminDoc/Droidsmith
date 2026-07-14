@@ -230,6 +230,11 @@ pub struct ActionRequest {
     pub serial: String,
     pub package: String,
     pub kind: ActionKind,
+    /// Android user id the action targets (`pm --user`). Defaults to `0`
+    /// (the primary/owner user) so legacy journal entries and older
+    /// callers that predate multi-user targeting deserialize unchanged.
+    #[serde(default)]
+    pub user_id: u32,
 }
 
 /// Synthesised plan. The `args` field is exactly what the action will
@@ -277,37 +282,62 @@ pub fn plan(request: ActionRequest) -> PlannedAction {
 }
 
 fn synth_args(r: &ActionRequest) -> Vec<String> {
+    // Every package/user command carries the explicit `--user <id>` the
+    // request targets. `pm enable/disable-user/uninstall/clear` and
+    // `am force-stop` all accept `--user` (AOSP Pm.java / Am.java), so a
+    // debloat sweep on the work profile (user 10) never silently mutates
+    // the owner (user 0).
+    let user = r.user_id.to_string();
     match r.kind {
         ActionKind::Disable => vec![
             "pm".into(),
             "disable-user".into(),
             "--user".into(),
-            "0".into(),
+            user,
             r.package.clone(),
         ],
-        ActionKind::Enable => vec!["pm".into(), "enable".into(), r.package.clone()],
+        ActionKind::Enable => vec![
+            "pm".into(),
+            "enable".into(),
+            "--user".into(),
+            user,
+            r.package.clone(),
+        ],
         ActionKind::UninstallForUser => vec![
             "pm".into(),
             "uninstall".into(),
             "--user".into(),
-            "0".into(),
+            user,
             r.package.clone(),
         ],
-        ActionKind::ClearData => vec!["pm".into(), "clear".into(), r.package.clone()],
-        ActionKind::ForceStop => vec!["am".into(), "force-stop".into(), r.package.clone()],
+        ActionKind::ClearData => vec![
+            "pm".into(),
+            "clear".into(),
+            "--user".into(),
+            user,
+            r.package.clone(),
+        ],
+        ActionKind::ForceStop => vec![
+            "am".into(),
+            "force-stop".into(),
+            "--user".into(),
+            user,
+            r.package.clone(),
+        ],
     }
 }
 
 fn describe(r: &ActionRequest) -> String {
+    let u = r.user_id;
     match r.kind {
-        ActionKind::Disable => format!("Disable {} for the current user", r.package),
-        ActionKind::Enable => format!("Re-enable {}", r.package),
+        ActionKind::Disable => format!("Disable {} for user {u}", r.package),
+        ActionKind::Enable => format!("Re-enable {} for user {u}", r.package),
         ActionKind::UninstallForUser => format!(
-            "Uninstall {} for the current user (system APK preserved on /system)",
+            "Uninstall {} for user {u} (system APK preserved on /system)",
             r.package
         ),
-        ActionKind::ClearData => format!("Clear data and cache for {}", r.package),
-        ActionKind::ForceStop => format!("Force-stop {}", r.package),
+        ActionKind::ClearData => format!("Clear data and cache for {} (user {u})", r.package),
+        ActionKind::ForceStop => format!("Force-stop {} (user {u})", r.package),
     }
 }
 
@@ -388,6 +418,7 @@ mod tests {
             serial: "abc".into(),
             package: "com.facebook.appmanager".into(),
             kind: ActionKind::Disable,
+            user_id: 0,
         };
         let p = plan(r);
         assert_eq!(
@@ -409,8 +440,9 @@ mod tests {
             serial: "abc".into(),
             package: "com.x".into(),
             kind: ActionKind::Enable,
+            user_id: 0,
         });
-        assert_eq!(p.args, vec!["pm", "enable", "com.x"]);
+        assert_eq!(p.args, vec!["pm", "enable", "--user", "0", "com.x"]);
     }
 
     #[test]
@@ -419,8 +451,36 @@ mod tests {
             serial: "abc".into(),
             package: "com.x".into(),
             kind: ActionKind::UninstallForUser,
+            user_id: 0,
         });
         assert_eq!(p.args, vec!["pm", "uninstall", "--user", "0", "com.x"]);
+    }
+
+    #[test]
+    fn plan_targets_explicit_secondary_user() {
+        // A debloat action aimed at the work profile (user 10) must carry
+        // --user 10 through every command shape, proving user 0 and user
+        // 10 stay independent.
+        for (kind, head) in [
+            (ActionKind::Disable, vec!["pm", "disable-user"]),
+            (ActionKind::Enable, vec!["pm", "enable"]),
+            (ActionKind::UninstallForUser, vec!["pm", "uninstall"]),
+            (ActionKind::ClearData, vec!["pm", "clear"]),
+            (ActionKind::ForceStop, vec!["am", "force-stop"]),
+        ] {
+            let p = plan(ActionRequest {
+                serial: "abc".into(),
+                package: "com.x".into(),
+                kind,
+                user_id: 10,
+            });
+            let mut expected: Vec<String> = head.into_iter().map(String::from).collect();
+            expected.push("--user".into());
+            expected.push("10".into());
+            expected.push("com.x".into());
+            assert_eq!(p.args, expected, "kind {kind:?} must target user 10");
+            assert!(p.description.contains("user 10"));
+        }
     }
 
     #[test]
@@ -429,6 +489,7 @@ mod tests {
             serial: "abc".into(),
             package: ".dotleading".into(),
             kind: ActionKind::Disable,
+            user_id: 0,
         });
         assert!(p.description.starts_with("[suspicious package id"));
         // Args still synthesised — the caller decides whether to
@@ -458,6 +519,7 @@ mod tests {
             serial: "abc".into(),
             package: "com.x".into(),
             kind: ActionKind::Disable,
+            user_id: 0,
         });
         let applied = apply(&mock, p, "2026-05-25T12:00:00Z").unwrap();
         assert_eq!(applied.applied_at, "2026-05-25T12:00:00Z");
@@ -476,6 +538,7 @@ mod tests {
             serial: "abc".into(),
             package: "com.x".into(),
             kind: ActionKind::UninstallForUser,
+            user_id: 0,
         });
         let err = apply(&mock, p, "2026-05-25T12:00:00Z").unwrap_err();
         match err {
@@ -494,6 +557,7 @@ mod tests {
             serial: "abc".into(),
             package: "com.x".into(),
             kind: ActionKind::Disable,
+            user_id: 0,
         });
         p.args = vec!["pm".into(), "clear".into(), "com.x".into()];
         let err = apply(&mock, p, "2026-05-25T12:00:00Z").unwrap_err();
@@ -507,6 +571,7 @@ mod tests {
             serial: "abc".into(),
             package: ".dotleading".into(),
             kind: ActionKind::Disable,
+            user_id: 0,
         });
         let err = apply(&mock, p, "2026-05-25T12:00:00Z").unwrap_err();
         assert!(matches!(err, TransportError::Parse(_)));
@@ -519,6 +584,7 @@ mod tests {
             serial: "../journal".into(),
             package: "com.x".into(),
             kind: ActionKind::Disable,
+            user_id: 0,
         });
         let err = apply(&mock, p, "2026-05-25T12:00:00Z").unwrap_err();
         assert!(matches!(err, TransportError::Parse(_)));

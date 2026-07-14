@@ -6,9 +6,11 @@ import {
   callListDevices,
   callListPackages,
   callListPacks,
+  callListUsers,
   callPlanAction,
   inTauri,
   type ActionKind,
+  type AndroidUser,
   type Device,
   type JournalEntry,
   type ListDevicesResult,
@@ -83,6 +85,8 @@ export default function DebloatRoute() {
   });
   const [packsState, setPacksState] = useState<PacksState>({ kind: "loading" });
   const [selectedSerial, setSelectedSerial] = useState<string | null>(null);
+  const [users, setUsers] = useState<AndroidUser[]>([]);
+  const [selectedUser, setSelectedUser] = useState<number>(0);
   const [wizard, setWizard] = useState<WizardStep>({ step: "pick_pack" });
   const cancelRequestedRef = useRef(false);
 
@@ -123,10 +127,30 @@ export default function DebloatRoute() {
     }
   }, []);
 
+  const loadUsers = useCallback(async () => {
+    if (!selectedSerial) {
+      setUsers([]);
+      return;
+    }
+    try {
+      const found = await callListUsers(selectedSerial);
+      setUsers(found);
+      const foreground = found.find((u) => u.current) ?? found[0];
+      setSelectedUser(foreground ? foreground.id : 0);
+    } catch {
+      setUsers([]);
+      setSelectedUser(0);
+    }
+  }, [selectedSerial]);
+
   useEffect(() => {
     void loadDevices();
     void loadPacks();
   }, [loadDevices, loadPacks]);
+
+  useEffect(() => {
+    void loadUsers();
+  }, [loadUsers]);
 
   const selectPack = useCallback((pack: Pack) => {
     const recommended = new Set(
@@ -150,10 +174,10 @@ export default function DebloatRoute() {
 
   const readPackageSnapshot = useCallback(
     async (serial: string, packageId: string): Promise<PackageSnapshot> => {
-      const packages = await callListPackages(serial, "all");
+      const packages = await callListPackages(serial, "all", selectedUser);
       return snapshotPackage(packages, packageId);
     },
-    [],
+    [selectedUser],
   );
 
   const verificationMessage = useCallback(
@@ -211,6 +235,7 @@ export default function DebloatRoute() {
             serial: selectedSerial,
             package: row.entry.id,
             kind: DEBLOAT_ACTION_KIND,
+            user_id: selectedUser,
           });
           journal = await callApplyAction(plan);
           after = await readPackageSnapshot(selectedSerial, row.entry.id);
@@ -250,7 +275,7 @@ export default function DebloatRoute() {
 
       setWizard({ step: "done", pack, queue, cancelled });
     },
-    [readPackageSnapshot, selectedSerial, t, verificationMessage],
+    [readPackageSnapshot, selectedSerial, selectedUser, t, verificationMessage],
   );
 
   const applyPack = useCallback(async () => {
@@ -333,6 +358,25 @@ export default function DebloatRoute() {
             selected={selectedSerial}
             onSelect={setSelectedSerial}
           />
+        )}
+
+        {selectedSerial && users.length > 1 && (
+          <label className="flex items-center gap-2 text-sm text-slate-300">
+            <span>{t("apps.userLabel")}</span>
+            <select
+              value={selectedUser}
+              onChange={(e) => setSelectedUser(Number(e.target.value))}
+              aria-label={t("apps.userLabel")}
+              className="rounded-md border border-slate-700 bg-slate-900 px-2 py-1 font-mono text-slate-100"
+            >
+              {users.map((u) => (
+                <option key={u.id} value={u.id}>
+                  {u.id} · {u.name}
+                  {u.current ? ` (${t("apps.userCurrent")})` : ""}
+                </option>
+              ))}
+            </select>
+          </label>
         )}
 
         {selectedSerial && wizard.step === "pick_pack" && (
@@ -882,7 +926,6 @@ function snapshotLabel(
       : t("debloat.stateDisabled"),
   };
 }
-
 
 function groupByTier(entries: PackEntry[]): Map<RemovalLevel, PackEntry[]> {
   const map = new Map<RemovalLevel, PackEntry[]>();

@@ -170,6 +170,7 @@ pub fn connect_wireless(
 pub fn list_packages(
     serial: String,
     filter: adb::PackageFilter,
+    #[allow(non_snake_case)] userId: Option<u32>,
 ) -> Result<Vec<adb::AppPackage>, adb::TransportError> {
     if !valid_serial(&serial) {
         return Err(adb::TransportError::Parse(format!(
@@ -182,7 +183,25 @@ pub fn list_packages(
         .as_ref()
         .ok_or(adb::TransportError::AdbNotFound)?;
     let transport = adb::ShellTransport::new(path);
-    adb::list_packages(&transport, &serial, filter)
+    adb::list_packages(&transport, &serial, filter, userId.unwrap_or(0))
+}
+
+/// Enumerate Android users on a device so the renderer can offer an
+/// explicit `--user` target for package workflows.
+#[tauri::command]
+pub fn list_users(serial: String) -> Result<Vec<adb::AndroidUser>, adb::TransportError> {
+    if !valid_serial(&serial) {
+        return Err(adb::TransportError::Parse(format!(
+            "invalid device serial {serial:?}"
+        )));
+    }
+    let resolution = adb::locate_adb();
+    let path = resolution
+        .path
+        .as_ref()
+        .ok_or(adb::TransportError::AdbNotFound)?;
+    let transport = adb::ShellTransport::new(path);
+    adb::list_users(&transport, &serial)
 }
 
 /// Synthesise an ADB action without running it. Pure: this is the

@@ -19,9 +19,9 @@ use commands::{
     apply_action, backup_package, connect_wireless, explain_failure, extract_apk, fastboot_getvar,
     get_device_info, heartbeat, install_apk, journal_list, journal_undo, launch_scrcpy,
     list_devices, list_fastboot_devices, list_network_connections, list_packages, list_packs,
-    list_permissions, list_processes, list_remote_files, list_wireless_services, locate_fastboot,
-    locate_scrcpy, pair_wireless, plan_action, pull_file, push_file, scrcpy_session_status,
-    set_permission, shell_run, stop_scrcpy, take_screenshot,
+    list_permissions, list_processes, list_remote_files, list_users, list_wireless_services,
+    locate_fastboot, locate_scrcpy, pair_wireless, plan_action, pull_file, push_file,
+    scrcpy_session_status, set_permission, shell_run, stop_scrcpy, take_screenshot,
 };
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -41,6 +41,7 @@ pub fn run() {
             pair_wireless,
             connect_wireless,
             list_packages,
+            list_users,
             list_packs,
             plan_action,
             apply_action,

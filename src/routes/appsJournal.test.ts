@@ -15,6 +15,7 @@ function entry(
           serial: "device-1",
           package: "com.example.app",
           kind,
+          user_id: 0,
         },
         args: ["pm", kind, "com.example.app"],
         description: `${kind} com.example.app`,

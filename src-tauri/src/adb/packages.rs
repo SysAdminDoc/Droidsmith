@@ -56,14 +56,28 @@ pub enum PackageFilter {
     Disabled,
 }
 
-/// Enumerate packages on `serial`, applying `filter` after the union.
+/// Enumerate packages on `serial` for Android user `user_id`, applying
+/// `filter` after the union. Passing the explicit `--user` keeps the
+/// listed set consistent with the user that destructive actions target.
 pub fn list_packages(
     t: &dyn AdbTransport,
     serial: &str,
     filter: PackageFilter,
+    user_id: u32,
 ) -> Result<Vec<AppPackage>, TransportError> {
-    let enabled_raw = t.shell(serial, &["pm", "list", "packages", "-e", "-f", "-U", "-i"])?;
-    let disabled_raw = t.shell(serial, &["pm", "list", "packages", "-d", "-f", "-U", "-i"])?;
+    let user = user_id.to_string();
+    let enabled_raw = t.shell(
+        serial,
+        &[
+            "pm", "list", "packages", "--user", &user, "-e", "-f", "-U", "-i",
+        ],
+    )?;
+    let disabled_raw = t.shell(
+        serial,
+        &[
+            "pm", "list", "packages", "--user", &user, "-d", "-f", "-U", "-i",
+        ],
+    )?;
 
     let mut packages = parse_pm_list(&enabled_raw, true);
     for entry in parse_pm_list(&disabled_raw, false) {
@@ -234,16 +248,20 @@ package:/system/app/FacebookStub/FacebookStub.apk=com.facebook.appmanager uid:10
         let mock = MockTransport::new();
         mock.expect_shell(
             "abc",
-            &["pm", "list", "packages", "-e", "-f", "-U", "-i"],
+            &[
+                "pm", "list", "packages", "--user", "0", "-e", "-f", "-U", "-i",
+            ],
             Ok(ENABLED_FIXTURE.to_string()),
         );
         mock.expect_shell(
             "abc",
-            &["pm", "list", "packages", "-d", "-f", "-U", "-i"],
+            &[
+                "pm", "list", "packages", "--user", "0", "-d", "-f", "-U", "-i",
+            ],
             Ok(DISABLED_FIXTURE.to_string()),
         );
 
-        let v = list_packages(&mock, "abc", PackageFilter::All).unwrap();
+        let v = list_packages(&mock, "abc", PackageFilter::All, 0).unwrap();
         assert_eq!(v.len(), 4);
         let enabled: Vec<_> = v.iter().filter(|p| p.enabled).collect();
         assert_eq!(enabled.len(), 3);
@@ -254,15 +272,19 @@ package:/system/app/FacebookStub/FacebookStub.apk=com.facebook.appmanager uid:10
         let mock = MockTransport::new();
         mock.expect_shell(
             "abc",
-            &["pm", "list", "packages", "-e", "-f", "-U", "-i"],
+            &[
+                "pm", "list", "packages", "--user", "0", "-e", "-f", "-U", "-i",
+            ],
             Ok(ENABLED_FIXTURE.to_string()),
         );
         mock.expect_shell(
             "abc",
-            &["pm", "list", "packages", "-d", "-f", "-U", "-i"],
+            &[
+                "pm", "list", "packages", "--user", "0", "-d", "-f", "-U", "-i",
+            ],
             Ok(DISABLED_FIXTURE.to_string()),
         );
-        let v = list_packages(&mock, "abc", PackageFilter::User).unwrap();
+        let v = list_packages(&mock, "abc", PackageFilter::User, 0).unwrap();
         assert_eq!(v.len(), 1);
         assert_eq!(v[0].package, "com.example.foo");
     }
@@ -272,15 +294,19 @@ package:/system/app/FacebookStub/FacebookStub.apk=com.facebook.appmanager uid:10
         let mock = MockTransport::new();
         mock.expect_shell(
             "abc",
-            &["pm", "list", "packages", "-e", "-f", "-U", "-i"],
+            &[
+                "pm", "list", "packages", "--user", "0", "-e", "-f", "-U", "-i",
+            ],
             Ok(ENABLED_FIXTURE.to_string()),
         );
         mock.expect_shell(
             "abc",
-            &["pm", "list", "packages", "-d", "-f", "-U", "-i"],
+            &[
+                "pm", "list", "packages", "--user", "0", "-d", "-f", "-U", "-i",
+            ],
             Ok(DISABLED_FIXTURE.to_string()),
         );
-        let v = list_packages(&mock, "abc", PackageFilter::Disabled).unwrap();
+        let v = list_packages(&mock, "abc", PackageFilter::Disabled, 0).unwrap();
         assert_eq!(v.len(), 1);
         assert_eq!(v[0].package, "com.facebook.appmanager");
     }

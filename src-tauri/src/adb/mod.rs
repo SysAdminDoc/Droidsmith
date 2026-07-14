@@ -30,6 +30,7 @@ pub mod packages;
 pub mod parsers;
 pub mod resolver;
 pub mod transport;
+pub mod users;
 pub mod wireless;
 
 // Public re-exports for cross-module consumers (`commands`, tests).
@@ -40,6 +41,7 @@ pub use device_info::{get_device_info, DeviceInfo};
 pub use packages::{list_packages, AppPackage, PackageFilter};
 pub use resolver::{locate_adb, AdbResolution};
 pub use transport::{AdbTransport, ShellTransport, TransportError};
+pub use users::{list_users, AndroidUser};
 pub use wireless::{
     connect as connect_wireless, list_mdns_services, pair as pair_wireless, WirelessAdbService,
     WirelessCommandResult, WirelessConnectRequest, WirelessPairRequest,

@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 // Local Rust dependency gate: runs `cargo audit --deny warnings` against the
 // Tauri crate so any new vulnerability, unmaintained, or unsound advisory fails
 // locally. Narrowly-documented, unfixable transitive exceptions live in
@@ -6,19 +5,18 @@
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { exit, stderr, stdout } from "node:process";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const srcTauri = join(root, "src-tauri");
 
-const version = spawnSync("cargo", ["audit", "--version"], {
-  encoding: "utf8",
-});
+const version = spawnSync("cargo", ["audit", "--version"], { encoding: "utf8" });
 if (version.status !== 0) {
-  console.error(
+  stderr.write(
     "cargo-audit is not installed. Install the gate with:\n" +
-      "  cargo install cargo-audit --locked",
+      "  cargo install cargo-audit --locked\n",
   );
-  process.exit(1);
+  exit(1);
 }
 
 const result = spawnSync("cargo", ["audit", "--deny", "warnings"], {
@@ -27,11 +25,11 @@ const result = spawnSync("cargo", ["audit", "--deny", "warnings"], {
 });
 
 if (result.status !== 0) {
-  console.error(
+  stderr.write(
     "\nRust dependency gate failed. Fix the advisory, upgrade the crate, or " +
-      "add a narrowly-documented exception to src-tauri/.cargo/audit.toml.",
+      "add a narrowly-documented exception to src-tauri/.cargo/audit.toml.\n",
   );
-  process.exit(result.status ?? 1);
+  exit(result.status ?? 1);
 }
 
-console.log("Rust dependency gate passed (cargo audit --deny warnings).");
+stdout.write("Rust dependency gate passed (cargo audit --deny warnings).\n");

@@ -10,8 +10,12 @@ import { fileURLToPath } from "node:url";
 
 import { chromium } from "playwright";
 
-const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const uiSmokePort = env.DROIDSMITH_UI_SMOKE_PORT ?? String(await findOpenPort());
+const repoRoot = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "..",
+);
+const uiSmokePort =
+  env.DROIDSMITH_UI_SMOKE_PORT ?? String(await findOpenPort());
 const baseUrl = `http://127.0.0.1:${uiSmokePort}`;
 const screenshotDir = path.join(repoRoot, "test-results", "rendered-routes");
 
@@ -36,7 +40,9 @@ try {
 }
 
 async function runDesktopFlow(browser) {
-  const page = await browser.newPage({ viewport: { width: 1366, height: 900 } });
+  const page = await browser.newPage({
+    viewport: { width: 1366, height: 900 },
+  });
   const errors = collectConsoleErrors(page);
   await installTauriMock(page);
   await page.goto(baseUrl, { waitUntil: "networkidle" });
@@ -127,7 +133,8 @@ function assertNoConsoleErrors(errors, label) {
 
 async function assertFocusedLabel(page, label) {
   await page.waitForFunction(
-    (expected) => document.activeElement?.getAttribute("aria-label") === expected,
+    (expected) =>
+      document.activeElement?.getAttribute("aria-label") === expected,
     label,
   );
   const activeLabel = await page.evaluate(() => {
@@ -154,7 +161,9 @@ async function assertTabMovesFocus(page, label) {
 
 async function assertNoHorizontalOverflow(page, label) {
   const offenders = await page
-    .locator("button, select, input, label, h1, h2, h3, h4, p, [role='option'], [role='radio']")
+    .locator(
+      "button, select, input, label, h1, h2, h3, h4, p, [role='option'], [role='radio']",
+    )
     .evaluateAll((elements) =>
       elements.flatMap((element) => {
         if (!(element instanceof HTMLElement)) return [];
@@ -162,7 +171,8 @@ async function assertNoHorizontalOverflow(page, label) {
         const rect = element.getBoundingClientRect();
         if (rect.width < 1 || rect.height < 1) return [];
         const style = getComputedStyle(element);
-        if (style.display === "none" || style.visibility === "hidden") return [];
+        if (style.display === "none" || style.visibility === "hidden")
+          return [];
         if (element.scrollWidth <= element.clientWidth + 2) return [];
         const text = (element.textContent ?? "").trim().replace(/\s+/g, " ");
         return [`${element.tagName.toLowerCase()}: ${text.slice(0, 120)}`];
@@ -247,6 +257,12 @@ async function installTauriMock(page) {
         if (cmd === "list_packages") {
           return filterPackages(packages, args.filter ?? "all");
         }
+        if (cmd === "list_users") {
+          return [
+            { id: 0, name: "Owner", running: true, current: true },
+            { id: 10, name: "Work profile", running: true, current: false },
+          ];
+        }
         if (cmd === "journal_list") {
           return [
             {
@@ -258,7 +274,13 @@ async function installTauriMock(page) {
                     package: "com.example.disabled",
                     kind: "disable",
                   },
-                  args: ["pm", "disable-user", "--user", "0", "com.example.disabled"],
+                  args: [
+                    "pm",
+                    "disable-user",
+                    "--user",
+                    "0",
+                    "com.example.disabled",
+                  ],
                   description: "Disable com.example.disabled",
                 },
                 stdout: "Package com.example.disabled new state: disabled-user",
@@ -323,7 +345,8 @@ async function installTauriMock(page) {
                 {
                   id: "com.android.settings",
                   removal: "expert",
-                  description: "System settings is intentionally not preselected.",
+                  description:
+                    "System settings is intentionally not preselected.",
                   depends_on: [],
                   needed_by: ["device settings"],
                   labels: ["system"],

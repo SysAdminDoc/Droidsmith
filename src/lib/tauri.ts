@@ -149,6 +149,15 @@ export type ActionRequest = {
   serial: string;
   package: string;
   kind: ActionKind;
+  /** Android user id the action targets (`pm --user`). Defaults to 0. */
+  user_id: number;
+};
+
+export type AndroidUser = {
+  id: number;
+  name: string;
+  running: boolean;
+  current: boolean;
 };
 
 export type PlannedAction = {
@@ -243,8 +252,13 @@ export async function callGetDeviceInfo(serial: string): Promise<DeviceInfo> {
 export async function callListPackages(
   serial: string,
   filter: PackageFilter,
+  userId = 0,
 ): Promise<AppPackage[]> {
-  return invoke<AppPackage[]>("list_packages", { serial, filter });
+  return invoke<AppPackage[]>("list_packages", { serial, filter, userId });
+}
+
+export async function callListUsers(serial: string): Promise<AndroidUser[]> {
+  return invoke<AndroidUser[]>("list_users", { serial });
 }
 
 export async function callPlanAction(

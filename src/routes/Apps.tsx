@@ -10,10 +10,12 @@ import {
   callListDevices,
   callListPackages,
   callListPermissions,
+  callListUsers,
   callPlanAction,
   callSetPermission,
   inTauri,
   type ActionKind,
+  type AndroidUser,
   type AppPackage,
   type Device,
   type JournalEntry,
@@ -91,6 +93,8 @@ export default function AppsRoute() {
     kind: "loading",
   });
   const [selectedSerial, setSelectedSerial] = useState<string | null>(null);
+  const [users, setUsers] = useState<AndroidUser[]>([]);
+  const [selectedUser, setSelectedUser] = useState<number>(0);
   const [filter, setFilter] = useState<PackageFilter>("all");
   const [pkgState, setPkgState] = useState<PackagesState>({ kind: "idle" });
   const [actionState, setActionState] = useState<ActionState>({ kind: "idle" });
@@ -125,11 +129,34 @@ export default function AppsRoute() {
     }
   }, []);
 
+  const loadUsers = useCallback(async () => {
+    if (!selectedSerial) {
+      setUsers([]);
+      return;
+    }
+    try {
+      const found = await callListUsers(selectedSerial);
+      setUsers(found);
+      // Default the target to the foreground user, falling back to the
+      // owner (0). Never silently keep a stale selection from device A.
+      const foreground = found.find((u) => u.current) ?? found[0];
+      setSelectedUser(foreground ? foreground.id : 0);
+    } catch {
+      // Users are an enhancement; on failure fall back to owner-only.
+      setUsers([]);
+      setSelectedUser(0);
+    }
+  }, [selectedSerial]);
+
   const loadPackages = useCallback(async () => {
     if (!selectedSerial) return;
     setPkgState({ kind: "loading" });
     try {
-      const packages = await callListPackages(selectedSerial, filter);
+      const packages = await callListPackages(
+        selectedSerial,
+        filter,
+        selectedUser,
+      );
       setPkgState({ kind: "ok", packages });
     } catch (e) {
       setPkgState({
@@ -137,7 +164,7 @@ export default function AppsRoute() {
         message: e instanceof Error ? e.message : String(e),
       });
     }
-  }, [selectedSerial, filter]);
+  }, [selectedSerial, filter, selectedUser]);
 
   const loadJournal = useCallback(async () => {
     if (!selectedSerial) {
@@ -161,13 +188,17 @@ export default function AppsRoute() {
   }, [loadDevices]);
 
   useEffect(() => {
+    void loadUsers();
+  }, [loadUsers]);
+
+  useEffect(() => {
     if (selectedSerial) {
       void loadPackages();
       void loadJournal();
     } else {
       setJournalState({ kind: "idle" });
     }
-  }, [selectedSerial, filter, loadPackages, loadJournal]);
+  }, [selectedSerial, filter, selectedUser, loadPackages, loadJournal]);
 
   const startAction = useCallback(
     async (pkg: string, kind: ActionKind) => {
@@ -177,6 +208,7 @@ export default function AppsRoute() {
           serial: selectedSerial,
           package: pkg,
           kind,
+          user_id: selectedUser,
         });
         setActionState({ kind: "confirming", plan });
       } catch (e) {
@@ -186,7 +218,7 @@ export default function AppsRoute() {
         });
       }
     },
-    [selectedSerial],
+    [selectedSerial, selectedUser],
   );
 
   const startBackup = useCallback(
@@ -385,6 +417,24 @@ export default function AppsRoute() {
                   setSearch("");
                 }}
               />
+              {users.length > 1 && (
+                <label className="flex items-center gap-2 text-sm text-slate-300">
+                  <span>{t("apps.userLabel")}</span>
+                  <select
+                    value={selectedUser}
+                    onChange={(e) => setSelectedUser(Number(e.target.value))}
+                    aria-label={t("apps.userLabel")}
+                    className="rounded-md border border-slate-700 bg-slate-900 px-2 py-1 font-mono text-slate-100"
+                  >
+                    {users.map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {u.id} · {u.name}
+                        {u.current ? ` (${t("apps.userCurrent")})` : ""}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
               <div className="flex-1" />
               <FieldInput
                 type="text"
@@ -1213,5 +1263,3 @@ function PackagesSkeleton() {
     </Card>
   );
 }
-
-
