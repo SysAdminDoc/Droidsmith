@@ -499,16 +499,38 @@ fn parse_df_free(stdout: &str) -> Option<u64> {
     None
 }
 
-fn run_adb_simple(
-    adb_path: &std::path::Path,
+/// Typed result of one captured subprocess execution. Unlike the old
+/// stdout-only helper, this keeps both streams plus the exit disposition
+/// so callers such as `fastboot getvar` (which prints successful values
+/// to stderr) can read the right stream without a blind retry.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProcessOutput {
+    pub stdout: String,
+    pub stderr: String,
+    /// Process exit code, or `None` when killed by signal.
+    pub code: Option<i32>,
+    /// True when the child was killed because it exceeded the timeout.
+    pub timed_out: bool,
+}
+
+impl ProcessOutput {
+    fn success(&self) -> bool {
+        !self.timed_out && self.code == Some(0)
+    }
+}
+
+/// Run a subprocess once, capturing stdout, stderr, exit code, and
+/// timeout state in a single execution.
+fn run_captured(
+    program: &std::path::Path,
     args: &[&str],
     timeout: std::time::Duration,
-) -> Result<String, CommandError> {
+) -> Result<ProcessOutput, CommandError> {
     use std::io::Read as IoRead;
     use std::process::{Command, Stdio};
     use std::time::Instant;
 
-    let mut child = Command::new(adb_path)
+    let mut child = Command::new(program)
         .args(args)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
@@ -516,7 +538,7 @@ fn run_adb_simple(
         .spawn()
         .map_err(|e| CommandError {
             code: "spawn_failed",
-            message: format!("failed to run adb: {e}"),
+            message: format!("failed to run {}: {e}", program.display()),
         })?;
 
     let mut stdout_pipe = child.stdout.take().unwrap();
@@ -534,6 +556,7 @@ fn run_adb_simple(
     });
 
     let start = Instant::now();
+    let mut timed_out = false;
     let exit_status = loop {
         match child.try_wait() {
             Ok(Some(status)) => break Some(status),
@@ -541,6 +564,7 @@ fn run_adb_simple(
                 if start.elapsed() > timeout {
                     let _ = child.kill();
                     let _ = child.wait();
+                    timed_out = true;
                     break None;
                 }
                 std::thread::sleep(std::time::Duration::from_millis(50));
@@ -551,23 +575,40 @@ fn run_adb_simple(
 
     let stdout_bytes = stdout_reader.join().unwrap_or_default();
     let stderr_bytes = stderr_reader.join().unwrap_or_default();
-    let stdout = String::from_utf8_lossy(&stdout_bytes).into_owned();
-    let stderr = String::from_utf8_lossy(&stderr_bytes).into_owned();
+    Ok(ProcessOutput {
+        stdout: String::from_utf8_lossy(&stdout_bytes).into_owned(),
+        stderr: String::from_utf8_lossy(&stderr_bytes).into_owned(),
+        code: exit_status.and_then(|s| s.code()),
+        timed_out,
+    })
+}
 
-    match exit_status {
-        None => Err(CommandError {
+/// Backwards-compatible helper for callers that only care about stdout
+/// on success (push/pull/df/ls/fastboot devices). Failures and timeouts
+/// still surface stderr in the error message.
+fn run_adb_simple(
+    adb_path: &std::path::Path,
+    args: &[&str],
+    timeout: std::time::Duration,
+) -> Result<String, CommandError> {
+    let out = run_captured(adb_path, args, timeout)?;
+    if out.timed_out {
+        return Err(CommandError {
             code: "adb_timeout",
             message: format!("adb timed out after {timeout:?}"),
-        }),
-        Some(status) if status.success() => Ok(stdout),
-        Some(status) => Err(CommandError {
+        });
+    }
+    if out.success() {
+        Ok(out.stdout)
+    } else {
+        Err(CommandError {
             code: "adb_exit",
             message: format!(
                 "adb exited with code {}: {}",
-                status.code().unwrap_or(-1),
-                stderr
+                out.code.unwrap_or(-1),
+                out.stderr
             ),
-        }),
+        })
     }
 }
 
@@ -603,21 +644,71 @@ pub fn fastboot_getvar(serial: String, key: String) -> Result<String, CommandErr
     })?;
 
     let timeout = std::time::Duration::from_secs(10);
-    let stdout = run_adb_simple(&fastboot_path, &["-s", &serial, "getvar", &key], timeout)
-        .or_else(|_| {
-            // fastboot getvar outputs to stderr — retry capturing stderr
-            // via the same timeout-guarded helper
-            let stderr_attempt =
-                run_adb_simple(&fastboot_path, &["-s", &serial, "getvar", &key], timeout);
-            match stderr_attempt {
-                Ok(output) => Ok(output),
-                Err(_) => Err(CommandError {
-                    code: "fastboot_timeout",
-                    message: format!("fastboot getvar {key:?} timed out"),
-                }),
+    let out = run_captured(&fastboot_path, &["-s", &serial, "getvar", &key], timeout)?;
+    parse_fastboot_getvar(&key, &out)
+}
+
+/// Extract a `fastboot getvar <key>` value from a captured execution.
+///
+/// fastboot writes the value to **stderr** in the shape `key: value`
+/// (stdout stays empty on success), so a single execution suffices — no
+/// blind retry. Failures preserve both streams; timeouts are explicit.
+fn parse_fastboot_getvar(key: &str, out: &ProcessOutput) -> Result<String, CommandError> {
+    if out.timed_out {
+        return Err(CommandError {
+            code: "fastboot_timeout",
+            message: format!("fastboot getvar {key:?} timed out"),
+        });
+    }
+
+    // The value line can arrive on either stream depending on the
+    // fastboot build; check stderr first (the common case) then stdout.
+    if let Some(value) = getvar_value(key, &out.stderr).or_else(|| getvar_value(key, &out.stdout)) {
+        return Ok(value);
+    }
+
+    if !out.success() {
+        return Err(CommandError {
+            code: "fastboot_exit",
+            message: format!(
+                "fastboot getvar {key:?} failed (code {}): {}",
+                out.code.unwrap_or(-1),
+                // Prefer stderr, fall back to stdout, so the operator sees
+                // whatever diagnostic the tool emitted.
+                first_nonempty(&out.stderr, &out.stdout)
+            ),
+        });
+    }
+
+    Err(CommandError {
+        code: "fastboot_no_value",
+        message: format!("fastboot getvar {key:?} returned no value"),
+    })
+}
+
+/// Scan `text` for a `key: value` line and return the trimmed value.
+/// Ignores fastboot's trailing `finished. total time: ...` line and the
+/// `getvar:<key> FAILED` error shape.
+fn getvar_value(key: &str, text: &str) -> Option<String> {
+    let prefix = format!("{key}:");
+    for line in text.lines() {
+        let trimmed = line.trim();
+        if let Some(rest) = trimmed.strip_prefix(&prefix) {
+            let value = rest.trim();
+            if !value.is_empty() {
+                return Some(value.to_string());
             }
-        })?;
-    Ok(stdout)
+        }
+    }
+    None
+}
+
+fn first_nonempty<'a>(a: &'a str, b: &'a str) -> &'a str {
+    if a.trim().is_empty() {
+        b
+    } else {
+        a
+    }
 }
 
 /// Get network connections from the device using `ss -tunp`.
@@ -973,7 +1064,63 @@ fn iso_now() -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::validate_backup_target;
+    use super::{parse_fastboot_getvar, validate_backup_target, ProcessOutput};
+
+    fn fake(stdout: &str, stderr: &str, code: Option<i32>, timed_out: bool) -> ProcessOutput {
+        ProcessOutput {
+            stdout: stdout.to_string(),
+            stderr: stderr.to_string(),
+            code,
+            timed_out,
+        }
+    }
+
+    #[test]
+    fn fastboot_getvar_reads_value_from_stderr() {
+        // Real fastboot prints the value to stderr and exits 0 with empty
+        // stdout — the exact case the old stdout-only path dropped.
+        let out = fake(
+            "",
+            "version-bootloader: SLIDER-1.2\nfinished. total time: 0.001s\n",
+            Some(0),
+            false,
+        );
+        let value = parse_fastboot_getvar("version-bootloader", &out).unwrap();
+        assert_eq!(value, "SLIDER-1.2");
+    }
+
+    #[test]
+    fn fastboot_getvar_reads_value_from_stdout_fallback() {
+        let out = fake("product: oriole\n", "", Some(0), false);
+        assert_eq!(parse_fastboot_getvar("product", &out).unwrap(), "oriole");
+    }
+
+    #[test]
+    fn fastboot_getvar_surfaces_error_with_both_streams() {
+        let out = fake(
+            "",
+            "getvar:bogus FAILED (remote: 'unknown variable')\n",
+            Some(1),
+            false,
+        );
+        let err = parse_fastboot_getvar("bogus", &out).unwrap_err();
+        assert_eq!(err.code, "fastboot_exit");
+        assert!(err.message.contains("unknown variable"));
+    }
+
+    #[test]
+    fn fastboot_getvar_reports_timeout() {
+        let out = fake("", "", None, true);
+        let err = parse_fastboot_getvar("version", &out).unwrap_err();
+        assert_eq!(err.code, "fastboot_timeout");
+    }
+
+    #[test]
+    fn fastboot_getvar_no_value_on_clean_but_empty() {
+        let out = fake("", "finished. total time: 0.000s\n", Some(0), false);
+        let err = parse_fastboot_getvar("version", &out).unwrap_err();
+        assert_eq!(err.code, "fastboot_no_value");
+    }
 
     #[test]
     fn backup_target_rejects_empty_and_relative_paths() {
