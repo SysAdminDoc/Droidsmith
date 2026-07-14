@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
+import { Channel, invoke } from "@tauri-apps/api/core";
 
 // Domain types — kept aligned with src-tauri/src/adb + src-tauri/src/commands.
 
@@ -101,6 +101,53 @@ export type ListDevicesResult = {
   adb_path: string | null;
   devices: Device[];
 };
+
+export type OperationEventKind =
+  | "started"
+  | "output"
+  | "progress"
+  | "reconnecting"
+  | "finished"
+  | "cancelled";
+
+export type OperationEvent = {
+  operation_id: string;
+  kind: OperationEventKind;
+  stream?: "stdout" | "stderr";
+  chunk?: string;
+  message?: string;
+  elapsed_ms?: number;
+  attempt?: number;
+};
+
+export type OperationOptions = {
+  operationId?: string;
+  onEvent?: (event: OperationEvent) => void;
+};
+
+let operationCounter = 0;
+
+export function newOperationId(prefix: string): string {
+  operationCounter += 1;
+  const safePrefix = prefix.toLowerCase().replace(/[^a-z0-9_.-]/g, "-");
+  return `${safePrefix}-${Date.now().toString(36)}-${operationCounter.toString(36)}`;
+}
+
+function invokeOperation<T>(
+  command: string,
+  args: Record<string, unknown>,
+  prefix: string,
+  options?: OperationOptions,
+): Promise<T> {
+  const operationId = options?.operationId ?? newOperationId(prefix);
+  const channel = new Channel<OperationEvent>();
+  channel.onmessage = (event) => options?.onEvent?.(event);
+  return invoke<T>(command, {
+    ...args,
+    operation_id: operationId,
+    on_event: channel,
+  });
+}
 
 export type WirelessServiceKind = "pairing" | "connect" | "other";
 
@@ -445,12 +492,14 @@ export async function callBackupPackage(
   target: DeviceTarget,
   pkg: string,
   localPath: string,
+  options?: OperationOptions,
 ): Promise<BackupPackageResult> {
-  return invoke<BackupPackageResult>("backup_package", {
-    target,
-    package: pkg,
-    local_path: localPath,
-  });
+  return invokeOperation<BackupPackageResult>(
+    "backup_package",
+    { target, package: pkg, local_path: localPath },
+    "backup",
+    options,
+  );
 }
 
 export async function callListRemoteFiles(
@@ -467,24 +516,28 @@ export async function callPushFile(
   target: DeviceTarget,
   localPath: string,
   remotePath: string,
+  options?: OperationOptions,
 ): Promise<string> {
-  return invoke<string>("push_file", {
-    target,
-    local_path: localPath,
-    remote_path: remotePath,
-  });
+  return invokeOperation<string>(
+    "push_file",
+    { target, local_path: localPath, remote_path: remotePath },
+    "push",
+    options,
+  );
 }
 
 export async function callPullFile(
   target: DeviceTarget,
   remotePath: string,
   localPath: string,
+  options?: OperationOptions,
 ): Promise<string> {
-  return invoke<string>("pull_file", {
-    target,
-    remote_path: remotePath,
-    local_path: localPath,
-  });
+  return invokeOperation<string>(
+    "pull_file",
+    { target, remote_path: remotePath, local_path: localPath },
+    "pull",
+    options,
+  );
 }
 
 export type PermissionInfo = {
@@ -589,8 +642,52 @@ export async function callStopScrcpy(
 export async function callShellRun(
   target: DeviceTarget,
   argv: string[],
+  options?: OperationOptions,
 ): Promise<string> {
-  return invoke<string>("shell_run", { target, argv });
+  return invokeOperation<string>(
+    "shell_run",
+    { target, argv },
+    "shell",
+    options,
+  );
+}
+
+export async function callStreamLogcat(
+  target: DeviceTarget,
+  options?: OperationOptions,
+): Promise<void> {
+  return invokeOperation<void>("stream_logcat", { target }, "logcat", options);
+}
+
+export async function callCancelOperation(
+  operationId: string,
+): Promise<boolean> {
+  // A stop click can race the backend's validation/registration window. Retry
+  // briefly so an immediate cancel or route unmount cannot orphan the child.
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    try {
+      if (
+        await invoke<boolean>("cancel_operation", {
+          operation_id: operationId,
+        })
+      )
+        return true;
+    } catch {
+      return false;
+    }
+    await new Promise((resolve) => globalThis.setTimeout(resolve, 40));
+  }
+  return false;
+}
+
+export async function callSaveLogcatExport(
+  localPath: string,
+  contents: string,
+): Promise<string> {
+  return invoke<string>("save_logcat_export", {
+    local_path: localPath,
+    contents,
+  });
 }
 
 export type ShellActionPlan = {
@@ -618,20 +715,28 @@ export async function callApplyDeviceControl(
 export async function callInstallApk(
   target: DeviceTarget,
   apkPath: string,
+  options?: OperationOptions,
 ): Promise<string> {
-  return invoke<string>("install_apk", { target, apk_path: apkPath });
+  return invokeOperation<string>(
+    "install_apk",
+    { target, apk_path: apkPath },
+    "install",
+    options,
+  );
 }
 
 export async function callExtractApk(
   target: DeviceTarget,
   remotePath: string,
   localPath: string,
+  options?: OperationOptions,
 ): Promise<string> {
-  return invoke<string>("extract_apk", {
-    target,
-    remote_path: remotePath,
-    local_path: localPath,
-  });
+  return invokeOperation<string>(
+    "extract_apk",
+    { target, remote_path: remotePath, local_path: localPath },
+    "extract",
+    options,
+  );
 }
 
 export type FastbootDevice = {

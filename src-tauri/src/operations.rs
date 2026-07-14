@@ -1,0 +1,553 @@
+//! Cancellable background subprocess execution for long-running ADB work.
+//!
+//! Tauri commands call this module from `spawn_blocking`, keeping the webview
+//! thread responsive. Every operation is registered before its child starts;
+//! `cancel` flips the shared flag and the runner kills and reaps the child.
+
+use std::collections::HashMap;
+use std::io::Read;
+use std::path::Path;
+use std::process::{Command, Stdio};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex, OnceLock};
+use std::time::{Duration, Instant};
+
+use serde::Serialize;
+use tauri::ipc::Channel;
+
+const CAPTURE_LIMIT_BYTES: usize = 1024 * 1024;
+const POLL_INTERVAL: Duration = Duration::from_millis(40);
+const PROGRESS_INTERVAL: Duration = Duration::from_millis(500);
+
+#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum OperationEventKind {
+    Started,
+    Output,
+    Progress,
+    Reconnecting,
+    Finished,
+    Cancelled,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct OperationEvent {
+    pub operation_id: String,
+    pub kind: OperationEventKind,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stream: Option<&'static str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub chunk: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub message: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub elapsed_ms: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub attempt: Option<u32>,
+}
+
+impl OperationEvent {
+    fn status(operation_id: &str, kind: OperationEventKind, message: impl Into<String>) -> Self {
+        Self {
+            operation_id: operation_id.to_string(),
+            kind,
+            stream: None,
+            chunk: None,
+            message: Some(message.into()),
+            elapsed_ms: None,
+            attempt: None,
+        }
+    }
+}
+
+pub type EventSink = Arc<dyn Fn(OperationEvent) + Send + Sync>;
+
+pub fn channel_sink(channel: Channel<OperationEvent>) -> EventSink {
+    Arc::new(move |event| {
+        let _ = channel.send(event);
+    })
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProcessOutput {
+    pub stdout: String,
+    pub stderr: String,
+    pub code: Option<i32>,
+    pub timed_out: bool,
+    pub cancelled: bool,
+}
+
+impl ProcessOutput {
+    pub fn success(&self) -> bool {
+        !self.timed_out && !self.cancelled && self.code == Some(0)
+    }
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum OperationError {
+    #[error("invalid operation id {0:?}")]
+    InvalidId(String),
+    #[error("operation {0:?} is already running")]
+    DuplicateId(String),
+    #[error("failed to spawn {program}: {source}")]
+    Spawn {
+        program: String,
+        #[source]
+        source: std::io::Error,
+    },
+    #[error("failed while waiting for child process: {0}")]
+    Wait(#[source] std::io::Error),
+    #[error("operation was cancelled")]
+    Cancelled,
+    #[error("operation timed out after {0:?}")]
+    Timeout(Duration),
+}
+
+fn registry() -> &'static Mutex<HashMap<String, Arc<AtomicBool>>> {
+    static REGISTRY: OnceLock<Mutex<HashMap<String, Arc<AtomicBool>>>> = OnceLock::new();
+    REGISTRY.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+struct Registration {
+    operation_id: String,
+    cancelled: Arc<AtomicBool>,
+}
+
+impl Registration {
+    fn new(operation_id: &str) -> Result<Self, OperationError> {
+        if !valid_operation_id(operation_id) {
+            return Err(OperationError::InvalidId(operation_id.to_string()));
+        }
+        let cancelled = Arc::new(AtomicBool::new(false));
+        let mut operations = registry().lock().unwrap_or_else(|e| e.into_inner());
+        if operations.contains_key(operation_id) {
+            return Err(OperationError::DuplicateId(operation_id.to_string()));
+        }
+        operations.insert(operation_id.to_string(), Arc::clone(&cancelled));
+        Ok(Self {
+            operation_id: operation_id.to_string(),
+            cancelled,
+        })
+    }
+}
+
+impl Drop for Registration {
+    fn drop(&mut self) {
+        registry()
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(&self.operation_id);
+    }
+}
+
+fn valid_operation_id(value: &str) -> bool {
+    (8..=128).contains(&value.len())
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.'))
+}
+
+pub fn cancel(operation_id: &str) -> bool {
+    let operations = registry().lock().unwrap_or_else(|e| e.into_inner());
+    let Some(flag) = operations.get(operation_id) else {
+        return false;
+    };
+    flag.store(true, Ordering::Release);
+    true
+}
+
+pub fn run_process(
+    program: &Path,
+    args: &[String],
+    timeout: Duration,
+    operation_id: &str,
+    label: &str,
+    sink: EventSink,
+) -> Result<ProcessOutput, OperationError> {
+    let registration = Registration::new(operation_id)?;
+    sink(OperationEvent::status(
+        operation_id,
+        OperationEventKind::Started,
+        label,
+    ));
+    let result = execute_child(
+        program,
+        args,
+        timeout,
+        operation_id,
+        &registration.cancelled,
+        &sink,
+        true,
+    );
+    match &result {
+        Ok(output) => {
+            sink(OperationEvent::status(
+                operation_id,
+                OperationEventKind::Finished,
+                if output.success() {
+                    "Operation completed"
+                } else {
+                    "Operation exited with an error"
+                },
+            ));
+        }
+        Err(OperationError::Cancelled) => sink(OperationEvent::status(
+            operation_id,
+            OperationEventKind::Cancelled,
+            "Operation cancelled",
+        )),
+        Err(_) => {}
+    }
+    result
+}
+
+/// Run one long-lived Logcat process, reconnecting after unexpected exits until
+/// the renderer cancels the operation. Output is delivered only through the
+/// channel; each child capture is bounded so a long session cannot grow Rust
+/// memory without limit.
+pub fn stream_logcat(
+    adb_path: &Path,
+    args: &[String],
+    operation_id: &str,
+    sink: EventSink,
+) -> Result<(), OperationError> {
+    let registration = Registration::new(operation_id)?;
+    sink(OperationEvent::status(
+        operation_id,
+        OperationEventKind::Started,
+        "Logcat stream started",
+    ));
+    let mut attempt = 1_u32;
+
+    loop {
+        if registration.cancelled.load(Ordering::Acquire) {
+            sink(OperationEvent::status(
+                operation_id,
+                OperationEventKind::Cancelled,
+                "Logcat stream stopped",
+            ));
+            return Ok(());
+        }
+
+        let result = execute_child(
+            adb_path,
+            args,
+            Duration::from_secs(24 * 60 * 60),
+            operation_id,
+            &registration.cancelled,
+            &sink,
+            false,
+        );
+        if matches!(result, Err(OperationError::Cancelled)) {
+            sink(OperationEvent::status(
+                operation_id,
+                OperationEventKind::Cancelled,
+                "Logcat stream stopped",
+            ));
+            return Ok(());
+        }
+        if let Err(error @ (OperationError::Spawn { .. } | OperationError::Wait(_))) = result {
+            if attempt >= 5 {
+                return Err(error);
+            }
+        }
+
+        attempt = attempt.saturating_add(1);
+        sink(OperationEvent {
+            operation_id: operation_id.to_string(),
+            kind: OperationEventKind::Reconnecting,
+            stream: None,
+            chunk: None,
+            message: Some("Logcat disconnected; reconnecting".to_string()),
+            elapsed_ms: None,
+            attempt: Some(attempt),
+        });
+        for _ in 0..15 {
+            if registration.cancelled.load(Ordering::Acquire) {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(50));
+        }
+    }
+}
+
+fn execute_child(
+    program: &Path,
+    args: &[String],
+    timeout: Duration,
+    operation_id: &str,
+    cancelled: &Arc<AtomicBool>,
+    sink: &EventSink,
+    capture_output: bool,
+) -> Result<ProcessOutput, OperationError> {
+    let mut child = Command::new(program)
+        .args(args)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|source| OperationError::Spawn {
+            program: program.display().to_string(),
+            source,
+        })?;
+
+    let stdout = child.stdout.take().expect("piped stdout must exist");
+    let stderr = child.stderr.take().expect("piped stderr must exist");
+    let stdout_reader = read_stream(
+        stdout,
+        operation_id.to_string(),
+        "stdout",
+        Arc::clone(sink),
+        capture_output,
+    );
+    let stderr_reader = read_stream(
+        stderr,
+        operation_id.to_string(),
+        "stderr",
+        Arc::clone(sink),
+        capture_output,
+    );
+
+    let started = Instant::now();
+    let mut last_progress = started;
+    let mut termination = None;
+    while termination.is_none() {
+        if cancelled.load(Ordering::Acquire) {
+            let _ = child.kill();
+            let _ = child.wait();
+            termination = Some((None, false, true));
+            continue;
+        }
+        if started.elapsed() >= timeout {
+            let _ = child.kill();
+            let _ = child.wait();
+            termination = Some((None, true, false));
+            continue;
+        }
+        match child.try_wait() {
+            Ok(Some(status)) => termination = Some((status.code(), false, false)),
+            Ok(None) => {
+                if last_progress.elapsed() >= PROGRESS_INTERVAL {
+                    sink(OperationEvent {
+                        operation_id: operation_id.to_string(),
+                        kind: OperationEventKind::Progress,
+                        stream: None,
+                        chunk: None,
+                        message: Some("Operation still running".to_string()),
+                        elapsed_ms: Some(saturating_millis(started.elapsed())),
+                        attempt: None,
+                    });
+                    last_progress = Instant::now();
+                }
+                std::thread::sleep(POLL_INTERVAL);
+            }
+            Err(error) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                let _ = stdout_reader.join();
+                let _ = stderr_reader.join();
+                return Err(OperationError::Wait(error));
+            }
+        }
+    }
+
+    let stdout = String::from_utf8_lossy(&stdout_reader.join().unwrap_or_default()).into_owned();
+    let stderr = String::from_utf8_lossy(&stderr_reader.join().unwrap_or_default()).into_owned();
+    let (code, timed_out, was_cancelled) = termination.expect("termination is assigned");
+    if was_cancelled {
+        return Err(OperationError::Cancelled);
+    }
+    if timed_out {
+        return Err(OperationError::Timeout(timeout));
+    }
+    Ok(ProcessOutput {
+        stdout,
+        stderr,
+        code,
+        timed_out: false,
+        cancelled: false,
+    })
+}
+
+fn read_stream<R: Read + Send + 'static>(
+    mut reader: R,
+    operation_id: String,
+    stream: &'static str,
+    sink: EventSink,
+    capture_output: bool,
+) -> std::thread::JoinHandle<Vec<u8>> {
+    std::thread::spawn(move || {
+        let mut captured = Vec::with_capacity(4096);
+        let mut utf8_pending = Vec::with_capacity(4);
+        let mut buffer = [0_u8; 4096];
+        loop {
+            match reader.read(&mut buffer) {
+                Ok(0) | Err(_) => {
+                    let final_text = decode_utf8_incremental(&mut utf8_pending, &[], true);
+                    if !final_text.is_empty() {
+                        sink(OperationEvent {
+                            operation_id: operation_id.clone(),
+                            kind: OperationEventKind::Output,
+                            stream: Some(stream),
+                            chunk: Some(final_text),
+                            message: None,
+                            elapsed_ms: None,
+                            attempt: None,
+                        });
+                    }
+                    break;
+                }
+                Ok(count) => {
+                    if capture_output {
+                        append_bounded(&mut captured, &buffer[..count]);
+                    }
+                    let text = decode_utf8_incremental(&mut utf8_pending, &buffer[..count], false);
+                    if !text.is_empty() {
+                        sink(OperationEvent {
+                            operation_id: operation_id.clone(),
+                            kind: OperationEventKind::Output,
+                            stream: Some(stream),
+                            chunk: Some(text),
+                            message: None,
+                            elapsed_ms: None,
+                            attempt: None,
+                        });
+                    }
+                }
+            }
+        }
+        captured
+    })
+}
+
+fn decode_utf8_incremental(pending: &mut Vec<u8>, chunk: &[u8], eof: bool) -> String {
+    pending.extend_from_slice(chunk);
+    let mut output = String::new();
+    loop {
+        match std::str::from_utf8(pending) {
+            Ok(text) => {
+                output.push_str(text);
+                pending.clear();
+                break;
+            }
+            Err(error) => {
+                let valid = error.valid_up_to();
+                if valid > 0 {
+                    output.push_str(
+                        std::str::from_utf8(&pending[..valid])
+                            .expect("valid_up_to prefix is valid UTF-8"),
+                    );
+                    pending.drain(..valid);
+                }
+                match error.error_len() {
+                    Some(length) => {
+                        output.push('\u{fffd}');
+                        pending.drain(..length.min(pending.len()));
+                    }
+                    None if eof => {
+                        output.push_str(&String::from_utf8_lossy(pending));
+                        pending.clear();
+                        break;
+                    }
+                    None => break,
+                }
+            }
+        }
+    }
+    output
+}
+
+fn append_bounded(target: &mut Vec<u8>, chunk: &[u8]) {
+    if chunk.len() >= CAPTURE_LIMIT_BYTES {
+        target.clear();
+        target.extend_from_slice(&chunk[chunk.len() - CAPTURE_LIMIT_BYTES..]);
+        return;
+    }
+    let overflow = target
+        .len()
+        .saturating_add(chunk.len())
+        .saturating_sub(CAPTURE_LIMIT_BYTES);
+    if overflow > 0 {
+        target.drain(..overflow);
+    }
+    target.extend_from_slice(chunk);
+}
+
+fn saturating_millis(duration: Duration) -> u64 {
+    u64::try_from(duration.as_millis()).unwrap_or(u64::MAX)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn no_events() -> EventSink {
+        Arc::new(|_| {})
+    }
+
+    #[test]
+    fn ids_are_bounded_and_shell_safe() {
+        assert!(valid_operation_id("pull-12345678"));
+        assert!(!valid_operation_id("short"));
+        assert!(!valid_operation_id("operation/with/path"));
+        assert!(!valid_operation_id(&"x".repeat(129)));
+    }
+
+    #[test]
+    fn capture_retains_only_the_bounded_tail() {
+        let mut captured = vec![b'a'; CAPTURE_LIMIT_BYTES - 2];
+        append_bounded(&mut captured, b"wxyz");
+        assert_eq!(captured.len(), CAPTURE_LIMIT_BYTES);
+        assert_eq!(&captured[captured.len() - 4..], b"wxyz");
+    }
+
+    #[test]
+    fn utf8_chunks_preserve_codepoints_split_at_read_boundaries() {
+        let text = "Привет 📱";
+        let bytes = text.as_bytes();
+        let split = bytes.len() - 2;
+        let mut pending = Vec::new();
+        let first = decode_utf8_incremental(&mut pending, &bytes[..split], false);
+        let second = decode_utf8_incremental(&mut pending, &bytes[split..], false);
+        assert_eq!(format!("{first}{second}"), text);
+        assert!(pending.is_empty());
+    }
+
+    #[test]
+    fn cancellation_kills_and_reaps_the_child() {
+        #[cfg(windows)]
+        let (program, args) = (
+            Path::new("powershell.exe"),
+            vec![
+                "-NoProfile".to_string(),
+                "-Command".to_string(),
+                "Start-Sleep -Seconds 10".to_string(),
+            ],
+        );
+        #[cfg(not(windows))]
+        let (program, args) = (Path::new("sleep"), vec!["10".to_string()]);
+
+        let id = "cancel-kill-test";
+        let thread = std::thread::spawn(move || {
+            run_process(
+                program,
+                &args,
+                Duration::from_secs(20),
+                id,
+                "test",
+                no_events(),
+            )
+        });
+        let deadline = Instant::now() + Duration::from_secs(2);
+        while !cancel(id) && Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        let started = Instant::now();
+        assert!(matches!(
+            thread.join().unwrap(),
+            Err(OperationError::Cancelled)
+        ));
+        assert!(started.elapsed() < Duration::from_secs(2));
+        assert!(!cancel(id));
+    }
+}

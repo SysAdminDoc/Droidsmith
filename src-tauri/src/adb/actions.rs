@@ -726,7 +726,7 @@ pub fn valid_shell_argv(argv: &[String]) -> bool {
 ///
 ///   `Failure [DELETE_FAILED_INTERNAL_ERROR]`
 ///   `Error: ...`
-fn pm_failure_marker(stdout: &str) -> Option<&str> {
+pub(crate) fn pm_failure_marker(stdout: &str) -> Option<&str> {
     for line in stdout.lines() {
         let trimmed = line.trim();
         if trimmed.starts_with("Failure") || trimmed.starts_with("Error:") {

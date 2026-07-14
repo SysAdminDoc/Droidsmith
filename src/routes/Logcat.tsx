@@ -1,13 +1,18 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { save } from "@tauri-apps/plugin-dialog";
 
 import {
+  callCancelOperation,
   callListDevices,
-  callShellRun,
+  callSaveLogcatExport,
+  callStreamLogcat,
   deviceTarget,
   inTauri,
+  newOperationId,
   type DeviceTarget,
   type ListDevicesResult,
+  type OperationEvent,
 } from "../lib/tauri";
 
 import {
@@ -34,6 +39,7 @@ type LogLine = {
 };
 
 const LEVELS = ["V", "D", "I", "W", "E", "F"] as const;
+const MAX_LOG_LINES = 2_000;
 
 export default function LogcatRoute() {
   const { t } = useTranslation();
@@ -49,19 +55,13 @@ export default function LogcatRoute() {
   const [tagFilter, setTagFilter] = useState("");
   const [levelFilter, setLevelFilter] = useState<string>("V");
   const [textFilter, setTextFilter] = useState("");
-  const [fetchError, setFetchError] = useState(false);
-  const tailRef = useRef(false);
-  const targetRef = useRef(selectedTarget);
-  const tagFilterRef = useRef(tagFilter);
-  const timerRef = useRef<number | null>(null);
+  const [streamError, setStreamError] = useState<string | null>(null);
+  const [reconnecting, setReconnecting] = useState(false);
+  const [exportMessage, setExportMessage] = useState<string | null>(null);
+  const operationRef = useRef<string | null>(null);
+  const partialLineRef = useRef("");
+  const generationRef = useRef(0);
   const outputRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    targetRef.current = selectedTarget;
-  }, [selectedTarget]);
-  useEffect(() => {
-    tagFilterRef.current = tagFilter;
-  }, [tagFilter]);
 
   const loadDevices = useCallback(async () => {
     if (!inTauri()) {
@@ -90,57 +90,84 @@ export default function LogcatRoute() {
     void loadDevices();
   }, [loadDevices]);
 
-  const fetchLogcat = useCallback(async () => {
-    const target = targetRef.current;
-    if (!target || !tailRef.current) return;
-
-    try {
-      const argv = ["logcat", "-v", "brief", "-d", "-t", "200"];
-      const currentTag = tagFilterRef.current.trim();
-      if (currentTag) {
-        argv.push("-s", currentTag);
-      }
-      const output = await callShellRun(target, argv);
-      const parsed = output
-        .split("\n")
-        .filter((l) => l.trim())
-        .map(parseLogcatLine);
-      setLines(parsed);
-      setFetchError(false);
-    } catch {
-      setFetchError(true);
-    }
-
-    if (tailRef.current) {
-      timerRef.current = window.setTimeout(() => void fetchLogcat(), 2000);
-    }
-  }, []);
-
   const startTailing = useCallback(() => {
-    tailRef.current = true;
+    if (!selectedTarget || operationRef.current) return;
+    const operationId = newOperationId("logcat");
+    const generation = generationRef.current + 1;
+    generationRef.current = generation;
+    operationRef.current = operationId;
+    partialLineRef.current = "";
     setTailing(true);
     setPaused(false);
-    setFetchError(false);
-    void fetchLogcat();
-  }, [fetchLogcat]);
+    setStreamError(null);
+    setReconnecting(false);
+    setExportMessage(null);
+
+    const onEvent = (event: OperationEvent) => {
+      if (
+        generationRef.current !== generation ||
+        operationRef.current !== operationId
+      )
+        return;
+      if (event.kind === "output" && event.stream === "stdout") {
+        appendLogcatChunk(event.chunk ?? "", partialLineRef, setLines);
+        setReconnecting(false);
+        return;
+      }
+      if (event.kind === "reconnecting") {
+        flushPartialLogcatLine(partialLineRef, setLines);
+        appendBoundedLines(setLines, [
+          parseLogcatLine(
+            `--- ${event.message ?? "Logcat disconnected; reconnecting"} (attempt ${event.attempt ?? "?"}) ---`,
+          ),
+        ]);
+        setReconnecting(true);
+      }
+    };
+
+    void callStreamLogcat(selectedTarget, {
+      operationId,
+      onEvent,
+    })
+      .catch((error) => {
+        if (
+          generationRef.current === generation &&
+          operationRef.current === operationId
+        ) {
+          setStreamError(
+            error instanceof Error ? error.message : String(error),
+          );
+        }
+      })
+      .finally(() => {
+        if (
+          generationRef.current === generation &&
+          operationRef.current === operationId
+        ) {
+          flushPartialLogcatLine(partialLineRef, setLines);
+          operationRef.current = null;
+          setTailing(false);
+          setReconnecting(false);
+        }
+      });
+  }, [selectedTarget]);
 
   const stopTailing = useCallback(() => {
-    tailRef.current = false;
-    if (timerRef.current !== null) {
-      window.clearTimeout(timerRef.current);
-      timerRef.current = null;
-    }
+    const operationId = operationRef.current;
+    operationRef.current = null;
+    generationRef.current += 1;
+    flushPartialLogcatLine(partialLineRef, setLines);
     setTailing(false);
-    setFetchError(false);
+    setReconnecting(false);
+    if (operationId) void cancelWithRegistrationRetry(operationId);
   }, []);
 
   useEffect(() => {
     return () => {
-      tailRef.current = false;
-      if (timerRef.current !== null) {
-        window.clearTimeout(timerRef.current);
-        timerRef.current = null;
-      }
+      const operationId = operationRef.current;
+      operationRef.current = null;
+      generationRef.current += 1;
+      if (operationId) void cancelWithRegistrationRetry(operationId);
     };
   }, []);
 
@@ -154,10 +181,40 @@ export default function LogcatRoute() {
   const filteredLines = lines.filter((l) => {
     const li = LEVELS.indexOf(l.level as (typeof LEVELS)[number]);
     if (li >= 0 && levelIndex >= 0 && li < levelIndex) return false;
+    if (
+      tagFilter &&
+      l.tag &&
+      !l.tag.toLowerCase().includes(tagFilter.trim().toLowerCase())
+    )
+      return false;
     if (textFilter && !l.raw.toLowerCase().includes(textFilter.toLowerCase()))
       return false;
     return true;
   });
+
+  const exportLog = useCallback(async () => {
+    if (lines.length === 0) return;
+    setExportMessage(null);
+    try {
+      const localPath = await save({
+        title: t("logcat.exportTitle"),
+        defaultPath: `droidsmith-logcat-${Date.now()}.log`,
+        filters: [{ name: "Logcat", extensions: ["log", "txt"] }],
+      });
+      if (!localPath) return;
+      const savedPath = await callSaveLogcatExport(
+        localPath,
+        `${lines.map((line) => line.raw).join("\n")}\n`,
+      );
+      setExportMessage(t("logcat.exportSaved", { path: savedPath }));
+    } catch (error) {
+      setExportMessage(
+        t("logcat.exportFailed", {
+          message: error instanceof Error ? error.message : String(error),
+        }),
+      );
+    }
+  }, [lines, t]);
 
   const authorizedDevices =
     devicesState.kind === "ok"
@@ -179,11 +236,14 @@ export default function LogcatRoute() {
                 <code className="font-mono">{selectedTarget.serial}</code>
               </Badge>
             )}
-            {tailing && !fetchError && (
+            {tailing && !streamError && !reconnecting && (
               <Badge tone="success">{t("logcat.tailing")}</Badge>
             )}
-            {tailing && fetchError && (
-              <Badge tone="danger">{t("logcat.fetchFailed")}</Badge>
+            {tailing && reconnecting && (
+              <Badge tone="warning">{t("logcat.reconnecting")}</Badge>
+            )}
+            {streamError && (
+              <Badge tone="danger">{t("logcat.streamFailed")}</Badge>
             )}
             <Badge tone="neutral">
               {t("logcat.lineCount", { count: filteredLines.length })}
@@ -315,12 +375,33 @@ export default function LogcatRoute() {
                   type="button"
                   variant="ghost"
                   size="sm"
-                  onClick={() => setLines([])}
+                  onClick={() => {
+                    partialLineRef.current = "";
+                    setLines([]);
+                  }}
                 >
                   {t("logcat.clear")}
                 </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => void exportLog()}
+                  disabled={lines.length === 0}
+                >
+                  {t("logcat.export")}
+                </Button>
               </div>
             </div>
+
+            {streamError && (
+              <StatePanel title={t("logcat.streamFailed")} tone="danger">
+                <p>{streamError}</p>
+              </StatePanel>
+            )}
+            {exportMessage && (
+              <p className="text-xs text-anvil-300">{exportMessage}</p>
+            )}
 
             <Card className="overflow-hidden p-0">
               <div
@@ -350,6 +431,39 @@ export default function LogcatRoute() {
       </section>
     </>
   );
+}
+
+type PartialLineRef = { current: string };
+type LineSetter = (update: (previous: LogLine[]) => LogLine[]) => void;
+
+function appendLogcatChunk(
+  chunk: string,
+  partialRef: PartialLineRef,
+  setLines: LineSetter,
+) {
+  const combined = `${partialRef.current}${chunk}`.replace(/\r\n?/g, "\n");
+  const rows = combined.split("\n");
+  partialRef.current = rows.pop() ?? "";
+  const parsed = rows.filter((row) => row.trim()).map(parseLogcatLine);
+  appendBoundedLines(setLines, parsed);
+}
+
+function flushPartialLogcatLine(
+  partialRef: PartialLineRef,
+  setLines: LineSetter,
+) {
+  const pending = partialRef.current.trimEnd();
+  partialRef.current = "";
+  if (pending) appendBoundedLines(setLines, [parseLogcatLine(pending)]);
+}
+
+function appendBoundedLines(setLines: LineSetter, incoming: LogLine[]) {
+  if (incoming.length === 0) return;
+  setLines((previous) => [...previous, ...incoming].slice(-MAX_LOG_LINES));
+}
+
+async function cancelWithRegistrationRetry(operationId: string) {
+  await callCancelOperation(operationId);
 }
 
 function parseLogcatLine(raw: string): LogLine {

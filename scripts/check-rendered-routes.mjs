@@ -69,6 +69,22 @@ async function runDesktopFlow(browser) {
   });
   await page.getByRole("button", { name: "Cancel", exact: true }).click();
 
+  await page.getByRole("button", { name: /Logcat/ }).click();
+  await page.getByRole("heading", { name: "Logcat", exact: true }).waitFor();
+  await page.getByRole("button", { name: "Start tail" }).click();
+  await page.getByText(/I\/QA\(\s*123\): first part complete/).waitFor();
+  await page
+    .getByText(/Logcat disconnected; reconnecting \(attempt 2\)/)
+    .waitFor();
+  await page.getByText(/W\/QA\(\s*123\): after reconnect/).waitFor();
+  await assertNoHorizontalOverflow(page, "desktop Logcat stream");
+  await page.screenshot({
+    path: path.join(screenshotDir, "desktop-logcat-stream.png"),
+    fullPage: false,
+  });
+  await page.getByRole("button", { name: "Stop", exact: true }).click();
+  await page.getByRole("button", { name: "Start tail" }).waitFor();
+
   await page.getByRole("button", { name: /Apps/ }).click();
   await page.getByText("com.example.app").waitFor();
   await page.getByText("com.android.settings").waitFor();
@@ -209,6 +225,10 @@ async function assertNoHorizontalOverflow(page, label) {
 
 async function installTauriMock(page) {
   await page.addInitScript(() => {
+    const callbacks = new Map();
+    const channelIndexes = new Map();
+    const pendingOperations = new Map();
+    let nextCallbackId = 1;
     const device = {
       serial: "QA123",
       state: "device",
@@ -376,8 +396,70 @@ async function installTauriMock(page) {
           };
         }
         if (cmd === "shell_run") {
-          if (args.argv[0] === "getprop") return "Pixel QA\n";
+          if (args.argv[0] === "getprop") {
+            emitChannel(args.on_event, {
+              operation_id: args.operation_id,
+              kind: "started",
+              message: "Running ADB shell command",
+            });
+            emitChannel(args.on_event, {
+              operation_id: args.operation_id,
+              kind: "output",
+              stream: "stdout",
+              chunk: "Pixel QA\n",
+            });
+            return "Pixel QA\n";
+          }
           throw new Error("Mock shell_run only allows read-only commands");
+        }
+        if (cmd === "stream_logcat") {
+          emitChannel(args.on_event, {
+            operation_id: args.operation_id,
+            kind: "started",
+            message: "Logcat stream started",
+          });
+          emitChannel(args.on_event, {
+            operation_id: args.operation_id,
+            kind: "output",
+            stream: "stdout",
+            chunk: "I/QA(  123): first part",
+          });
+          emitChannel(args.on_event, {
+            operation_id: args.operation_id,
+            kind: "output",
+            stream: "stdout",
+            chunk: " complete\n",
+          });
+          emitChannel(args.on_event, {
+            operation_id: args.operation_id,
+            kind: "reconnecting",
+            message: "Logcat disconnected; reconnecting",
+            attempt: 2,
+          });
+          emitChannel(args.on_event, {
+            operation_id: args.operation_id,
+            kind: "output",
+            stream: "stdout",
+            chunk: "W/QA(  123): after reconnect\n",
+          });
+          return new Promise((resolve) => {
+            pendingOperations.set(args.operation_id, {
+              resolve,
+              channel: args.on_event,
+            });
+          });
+        }
+        if (cmd === "cancel_operation") {
+          const pending = pendingOperations.get(args.operation_id);
+          if (!pending) return false;
+          pendingOperations.delete(args.operation_id);
+          emitChannel(pending.channel, {
+            operation_id: args.operation_id,
+            kind: "cancelled",
+            message: "Operation cancelled",
+          });
+          pending.resolve();
+          return true;
         }
         if (cmd === "apply_action") {
           const request = args.plan.request;
@@ -492,15 +574,30 @@ async function installTauriMock(page) {
         if (cmd === "list_permissions") return [];
         throw new Error(`Unhandled mocked command: ${cmd}`);
       },
-      transformCallback() {
-        return 1;
+      transformCallback(callback) {
+        const id = nextCallbackId++;
+        callbacks.set(id, callback);
+        return id;
       },
-      unregisterCallback() {},
-      runCallback() {},
+      unregisterCallback(id) {
+        callbacks.delete(id);
+      },
+      runCallback(id, data) {
+        callbacks.get(id)?.(data);
+      },
       convertFileSrc(filePath) {
         return filePath;
       },
     };
+
+    function emitChannel(channel, message) {
+      const id = channel?.id;
+      const callback = callbacks.get(id);
+      if (!callback) return;
+      const index = channelIndexes.get(id) ?? 0;
+      channelIndexes.set(id, index + 1);
+      callback({ index, message });
+    }
 
     function filterPackages(items, filter) {
       if (filter === "user") return items.filter((item) => !item.system);

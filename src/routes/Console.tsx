@@ -5,13 +5,16 @@ import { useFocusTrap } from "../lib/useFocusTrap";
 
 import {
   callApplyAction,
+  callCancelOperation,
   callListDevices,
   callPlanShellAction,
   callShellRun,
   deviceTarget,
   inTauri,
+  newOperationId,
   type DeviceTarget,
   type ListDevicesResult,
+  type OperationEvent,
   type PlannedAction,
 } from "../lib/tauri";
 
@@ -49,6 +52,8 @@ export default function ConsoleRoute() {
   );
   const [command, setCommand] = useState("");
   const [running, setRunning] = useState(false);
+  const [operationStatus, setOperationStatus] = useState<string | null>(null);
+  const [liveOutput, setLiveOutput] = useState("");
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
   const [pendingAction, setPendingAction] = useState<PendingShellAction | null>(
@@ -56,6 +61,8 @@ export default function ConsoleRoute() {
   );
   const outputRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const activeOperationRef = useRef<string | null>(null);
+  const commandGenerationRef = useRef(0);
   const reviewTrapRef = useFocusTrap<HTMLDivElement>(pendingAction !== null);
 
   useEffect(() => {
@@ -95,6 +102,15 @@ export default function ConsoleRoute() {
   }, [loadDevices]);
 
   useEffect(() => {
+    return () => {
+      commandGenerationRef.current += 1;
+      const operationId = activeOperationRef.current;
+      activeOperationRef.current = null;
+      if (operationId) void callCancelOperation(operationId);
+    };
+  }, []);
+
+  useEffect(() => {
     if (outputRef.current) {
       outputRef.current.scrollTop = outputRef.current.scrollHeight;
     }
@@ -105,7 +121,11 @@ export default function ConsoleRoute() {
     if (!trimmed || !selectedTarget || running) return;
 
     setRunning(true);
+    setOperationStatus(null);
+    setLiveOutput("");
     setHistoryIndex(-1);
+    const generation = commandGenerationRef.current + 1;
+    commandGenerationRef.current = generation;
 
     const argv = trimmed.split(/\s+/);
 
@@ -123,7 +143,34 @@ export default function ConsoleRoute() {
         setCommand("");
         return;
       }
-      const output = await callShellRun(selectedTarget, argv);
+      const operationId = newOperationId("console");
+      activeOperationRef.current = operationId;
+      setOperationStatus(t("console.starting"));
+      const output = await callShellRun(selectedTarget, argv, {
+        operationId,
+        onEvent: (event: OperationEvent) => {
+          if (
+            activeOperationRef.current !== operationId ||
+            commandGenerationRef.current !== generation
+          )
+            return;
+          if (event.kind === "output" && event.chunk) {
+            setLiveOutput((previous) =>
+              `${previous}${event.chunk}`.slice(-64 * 1024),
+            );
+          } else if (event.kind === "progress") {
+            setOperationStatus(
+              t("console.runningFor", {
+                seconds: Math.max(
+                  1,
+                  Math.round((event.elapsed_ms ?? 0) / 1000),
+                ),
+              }),
+            );
+          }
+        },
+      });
+      if (commandGenerationRef.current !== generation) return;
       setCommand("");
       setHistory((prev) => [
         ...prev,
@@ -136,6 +183,7 @@ export default function ConsoleRoute() {
         },
       ]);
     } catch (e) {
+      if (commandGenerationRef.current !== generation) return;
       setHistory((prev) => [
         ...prev,
         {
@@ -147,10 +195,22 @@ export default function ConsoleRoute() {
         },
       ]);
     } finally {
-      setRunning(false);
-      inputRef.current?.focus();
+      if (commandGenerationRef.current === generation) {
+        activeOperationRef.current = null;
+        setRunning(false);
+        setOperationStatus(null);
+        setLiveOutput("");
+        inputRef.current?.focus();
+      }
     }
-  }, [command, selectedTarget, running]);
+  }, [command, selectedTarget, running, t]);
+
+  const cancelRunning = useCallback(async () => {
+    const operationId = activeOperationRef.current;
+    if (!operationId) return;
+    setOperationStatus(t("console.cancelling"));
+    await callCancelOperation(operationId);
+  }, [t]);
 
   const confirmPendingAction = useCallback(async () => {
     if (!pendingAction || running) return;
@@ -350,6 +410,10 @@ export default function ConsoleRoute() {
                       return;
                     // Scrollback and recall history belong to the previous
                     // device's shell — reset them on switch.
+                    commandGenerationRef.current += 1;
+                    const operationId = activeOperationRef.current;
+                    activeOperationRef.current = null;
+                    if (operationId) void callCancelOperation(operationId);
                     setSelectedTarget(deviceTarget(d));
                     setHistory([]);
                     setHistoryIndex(-1);
@@ -388,8 +452,27 @@ export default function ConsoleRoute() {
                 </div>
               ))}
               {running && (
-                <div className="flex items-center gap-2 text-anvil-500">
-                  <span className="animate-pulse">{t("console.running")}</span>
+                <div className="text-anvil-500">
+                  <div className="flex items-center gap-2">
+                    <span className="animate-pulse">
+                      {operationStatus ?? t("console.running")}
+                    </span>
+                    {activeOperationRef.current && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="danger"
+                        onClick={() => void cancelRunning()}
+                      >
+                        {t("common.cancel")}
+                      </Button>
+                    )}
+                  </div>
+                  {liveOutput && (
+                    <pre className="mt-1 whitespace-pre-wrap text-anvil-400">
+                      {liveOutput}
+                    </pre>
+                  )}
                 </div>
               )}
             </div>

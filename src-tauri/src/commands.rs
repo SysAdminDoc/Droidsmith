@@ -23,6 +23,7 @@ use crate::adb::parsers::{
 use crate::adb::transport::AdbTransport;
 use crate::adb::{self, actions};
 use crate::journal::{self, Journal, JournalEntry};
+use crate::operations::{self, OperationEvent};
 use crate::quirks::{self, DeviceContext, Quirk};
 
 #[derive(Serialize)]
@@ -272,6 +273,58 @@ impl From<std::io::Error> for CommandError {
     }
 }
 
+impl From<operations::OperationError> for CommandError {
+    fn from(error: operations::OperationError) -> Self {
+        let code = match &error {
+            operations::OperationError::InvalidId(_) => "invalid_operation_id",
+            operations::OperationError::DuplicateId(_) => "operation_already_running",
+            operations::OperationError::Spawn { .. } => "spawn_failed",
+            operations::OperationError::Wait(_) => "process_wait_failed",
+            operations::OperationError::Cancelled => "operation_cancelled",
+            operations::OperationError::Timeout(_) => "operation_timeout",
+        };
+        Self {
+            code,
+            message: error.to_string(),
+        }
+    }
+}
+
+async fn spawn_blocking_operation<T, F>(operation: F) -> Result<T, CommandError>
+where
+    T: Send + 'static,
+    F: FnOnce() -> Result<T, CommandError> + Send + 'static,
+{
+    tauri::async_runtime::spawn_blocking(operation)
+        .await
+        .map_err(|error| CommandError {
+            code: "operation_join_failed",
+            message: format!("background operation task failed: {error}"),
+        })?
+}
+
+fn completed_adb_output(
+    output: operations::ProcessOutput,
+    program_name: &str,
+) -> Result<String, CommandError> {
+    if output.success() {
+        Ok(output.stdout)
+    } else {
+        Err(CommandError {
+            code: "adb_exit",
+            message: format!(
+                "{program_name} exited with code {}: {}",
+                output.code.unwrap_or(-1),
+                if output.stderr.trim().is_empty() {
+                    output.stdout.trim()
+                } else {
+                    output.stderr.trim()
+                }
+            ),
+        })
+    }
+}
+
 fn journal_dir(app: &tauri::AppHandle) -> Result<PathBuf, CommandError> {
     let base = app.path().app_data_dir().map_err(|e| CommandError {
         code: "no_app_data_dir",
@@ -486,9 +539,16 @@ pub fn get_device_info(target: adb::DeviceTarget) -> Result<adb::DeviceInfo, Com
     Ok(adb::get_device_info(&transport, &target)?)
 }
 
-/// Run a one-shot shell command on a device and return its output.
+/// Run a one-shot read-only shell command outside the webview thread and
+/// stream progress/output through a Tauri channel. Mutations continue to use
+/// the reviewed audited executor.
 #[tauri::command]
-pub fn shell_run(target: adb::DeviceTarget, argv: Vec<String>) -> Result<String, CommandError> {
+pub async fn shell_run(
+    target: adb::DeviceTarget,
+    argv: Vec<String>,
+    operation_id: String,
+    on_event: tauri::ipc::Channel<OperationEvent>,
+) -> Result<String, CommandError> {
     if !actions::valid_shell_argv(&argv) {
         return Err(CommandError {
             code: "invalid_shell_argv",
@@ -502,9 +562,85 @@ pub fn shell_run(target: adb::DeviceTarget, argv: Vec<String>) -> Result<String,
         });
     }
     let transport = validated_transport(&target)?;
-    let refs: Vec<&str> = argv.iter().map(String::as_str).collect();
-    let stdout = transport.shell_target(&target, &refs)?;
-    Ok(stdout)
+    let adb_path = transport.adb_path.clone();
+    let mut args = target.adb_selector();
+    args.push("shell".to_string());
+    args.extend(argv);
+    let sink = operations::channel_sink(on_event);
+    spawn_blocking_operation(move || {
+        let output = operations::run_process(
+            &adb_path,
+            &args,
+            std::time::Duration::from_secs(300),
+            &operation_id,
+            "Running ADB shell command",
+            sink,
+        )?;
+        completed_adb_output(output, "adb shell")
+    })
+    .await
+}
+
+/// Cancel a registered background operation. The runner observes this flag,
+/// kills and reaps its child, and then emits a terminal cancellation event.
+#[tauri::command]
+pub fn cancel_operation(operation_id: String) -> bool {
+    operations::cancel(&operation_id)
+}
+
+/// Start one incremental Logcat process. Unexpected exits are retried by the
+/// backend and surfaced as reconnect markers; the call completes only after
+/// cancellation or an unrecoverable spawn/wait failure.
+#[tauri::command]
+pub async fn stream_logcat(
+    target: adb::DeviceTarget,
+    operation_id: String,
+    on_event: tauri::ipc::Channel<OperationEvent>,
+) -> Result<(), CommandError> {
+    let transport = validated_transport(&target)?;
+    let adb_path = transport.adb_path.clone();
+    let mut args = target.adb_selector();
+    args.extend([
+        "shell".to_string(),
+        "logcat".to_string(),
+        "-v".to_string(),
+        "brief".to_string(),
+    ]);
+    let sink = operations::channel_sink(on_event);
+    spawn_blocking_operation(move || {
+        operations::stream_logcat(&adb_path, &args, &operation_id, sink)?;
+        Ok(())
+    })
+    .await
+}
+
+/// Persist the renderer's bounded Logcat buffer to a native-dialog-selected
+/// absolute path. The size limit keeps the IPC and host write bounded.
+#[tauri::command]
+pub async fn save_logcat_export(
+    local_path: String,
+    contents: String,
+) -> Result<String, CommandError> {
+    const MAX_LOGCAT_EXPORT_BYTES: usize = 4 * 1024 * 1024;
+    if contents.len() > MAX_LOGCAT_EXPORT_BYTES {
+        return Err(CommandError {
+            code: "logcat_export_too_large",
+            message: format!("Logcat export exceeds the {MAX_LOGCAT_EXPORT_BYTES}-byte limit"),
+        });
+    }
+    let path = validate_local_path(&local_path)?;
+    if !path.parent().is_some_and(std::path::Path::is_dir) {
+        return Err(CommandError {
+            code: "invalid_path",
+            message: "Logcat export parent directory does not exist".to_string(),
+        });
+    }
+    let display_path = path.display().to_string();
+    spawn_blocking_operation(move || {
+        std::fs::write(&path, contents.as_bytes())?;
+        Ok(display_path)
+    })
+    .await
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -682,10 +818,12 @@ pub fn list_remote_files(
 
 /// Push a local file to the device.
 #[tauri::command]
-pub fn push_file(
+pub async fn push_file(
     target: adb::DeviceTarget,
     local_path: String,
     remote_path: String,
+    operation_id: String,
+    on_event: tauri::ipc::Channel<OperationEvent>,
 ) -> Result<String, CommandError> {
     let transport = validated_transport(&target)?;
     let validated_path = validate_local_path(&local_path)?;
@@ -694,17 +832,30 @@ pub fn push_file(
     let timeout = std::time::Duration::from_secs(120);
     let mut args = target.adb_selector();
     args.extend(["push".to_string(), local_arg, remote]);
-    let refs: Vec<&str> = args.iter().map(String::as_str).collect();
-    let output = run_adb_simple(&transport.adb_path, &refs, timeout)?;
-    Ok(output)
+    let adb_path = transport.adb_path.clone();
+    let sink = operations::channel_sink(on_event);
+    spawn_blocking_operation(move || {
+        let output = operations::run_process(
+            &adb_path,
+            &args,
+            timeout,
+            &operation_id,
+            "Pushing file to device",
+            sink,
+        )?;
+        completed_adb_output(output, "adb push")
+    })
+    .await
 }
 
 /// Pull a remote file from the device.
 #[tauri::command]
-pub fn pull_file(
+pub async fn pull_file(
     target: adb::DeviceTarget,
     remote_path: String,
     local_path: String,
+    operation_id: String,
+    on_event: tauri::ipc::Channel<OperationEvent>,
 ) -> Result<String, CommandError> {
     let transport = validated_transport(&target)?;
     let validated_path = validate_local_path(&local_path)?;
@@ -713,9 +864,20 @@ pub fn pull_file(
     let timeout = std::time::Duration::from_secs(120);
     let mut args = target.adb_selector();
     args.extend(["pull".to_string(), remote, local_arg]);
-    let refs: Vec<&str> = args.iter().map(String::as_str).collect();
-    let output = run_adb_simple(&transport.adb_path, &refs, timeout)?;
-    Ok(output)
+    let adb_path = transport.adb_path.clone();
+    let sink = operations::channel_sink(on_event);
+    spawn_blocking_operation(move || {
+        let output = operations::run_process(
+            &adb_path,
+            &args,
+            timeout,
+            &operation_id,
+            "Pulling file from device",
+            sink,
+        )?;
+        completed_adb_output(output, "adb pull")
+    })
+    .await
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -1018,10 +1180,12 @@ fn validate_backup_target(local_path: &str) -> Result<PathBuf, CommandError> {
 /// Backup a package's data using `adb backup`. The user must confirm
 /// on the device screen. Returns the adb output and local artifact metadata.
 #[tauri::command]
-pub fn backup_package(
+pub async fn backup_package(
     target: adb::DeviceTarget,
     package: String,
     local_path: String,
+    operation_id: String,
+    on_event: tauri::ipc::Channel<OperationEvent>,
 ) -> Result<BackupPackageResult, CommandError> {
     let transport = validated_transport(&target)?;
     validate_package_arg(&package)?;
@@ -1036,20 +1200,31 @@ pub fn backup_package(
         "-apk".to_string(),
         package,
     ]);
-    let refs: Vec<&str> = args.iter().map(String::as_str).collect();
-    let output = run_adb_simple(&transport.adb_path, &refs, timeout)?;
-    let size_bytes = std::fs::metadata(&output_target)
-        .ok()
-        .map(|metadata| metadata.len());
-    let (empty, header_only) = classify_backup_size(size_bytes);
-
-    Ok(BackupPackageResult {
-        local_path: output_target.display().to_string(),
-        stdout: output,
-        size_bytes,
-        empty,
-        header_only,
+    let adb_path = transport.adb_path.clone();
+    let sink = operations::channel_sink(on_event);
+    spawn_blocking_operation(move || {
+        let output = operations::run_process(
+            &adb_path,
+            &args,
+            timeout,
+            &operation_id,
+            "Backing up package",
+            sink,
+        )?;
+        let stdout = completed_adb_output(output, "adb backup")?;
+        let size_bytes = std::fs::metadata(&output_target)
+            .ok()
+            .map(|metadata| metadata.len());
+        let (empty, header_only) = classify_backup_size(size_bytes);
+        Ok(BackupPackageResult {
+            local_path: output_target.display().to_string(),
+            stdout,
+            size_bytes,
+            empty,
+            header_only,
+        })
     })
+    .await
 }
 
 /// A `.ab` archive of an app that targets SDK 31+ (Android 12) contains
@@ -1275,27 +1450,69 @@ pub fn stop_scrcpy(session_id: u64) -> Result<crate::scrcpy::ScrcpySession, Comm
 /// Install an APK file on a device. The `apk_path` is a local filesystem
 /// path to the `.apk` file. Uses `adb install -r` for replace-on-conflict.
 #[tauri::command]
-pub fn install_apk(target: adb::DeviceTarget, apk_path: String) -> Result<String, CommandError> {
+pub async fn install_apk(
+    target: adb::DeviceTarget,
+    apk_path: String,
+    operation_id: String,
+    on_event: tauri::ipc::Channel<OperationEvent>,
+) -> Result<String, CommandError> {
     let transport = validated_transport(&target)?;
     let validated_path = validate_local_path(&apk_path)?;
     let apk_arg = validated_path.display().to_string();
-    let stdout = actions::install_apk(&transport.adb_path, &target, &apk_arg)?;
-    Ok(stdout)
+    let mut args = target.adb_selector();
+    args.extend(["install".to_string(), "-r".to_string(), apk_arg]);
+    let adb_path = transport.adb_path.clone();
+    let sink = operations::channel_sink(on_event);
+    spawn_blocking_operation(move || {
+        let output = operations::run_process(
+            &adb_path,
+            &args,
+            std::time::Duration::from_secs(300),
+            &operation_id,
+            "Installing APK",
+            sink,
+        )?;
+        let stdout = completed_adb_output(output, "adb install")?;
+        if let Some(error) = actions::pm_failure_marker(&stdout) {
+            return Err(CommandError {
+                code: "adb_exit",
+                message: error.to_string(),
+            });
+        }
+        Ok(stdout)
+    })
+    .await
 }
 
 /// Pull an APK from the device to a local path.
 #[tauri::command]
-pub fn extract_apk(
+pub async fn extract_apk(
     target: adb::DeviceTarget,
     remote_path: String,
     local_path: String,
+    operation_id: String,
+    on_event: tauri::ipc::Channel<OperationEvent>,
 ) -> Result<String, CommandError> {
     let transport = validated_transport(&target)?;
     let validated_path = validate_local_path(&local_path)?;
     let remote = validate_remote_path(&remote_path)?;
     let local_arg = validated_path.display().to_string();
-    let stdout = actions::extract_apk(&transport.adb_path, &target, &remote, &local_arg)?;
-    Ok(stdout)
+    let mut args = target.adb_selector();
+    args.extend(["pull".to_string(), remote, local_arg]);
+    let adb_path = transport.adb_path.clone();
+    let sink = operations::channel_sink(on_event);
+    spawn_blocking_operation(move || {
+        let output = operations::run_process(
+            &adb_path,
+            &args,
+            std::time::Duration::from_secs(120),
+            &operation_id,
+            "Extracting APK",
+            sink,
+        )?;
+        completed_adb_output(output, "adb pull")
+    })
+    .await
 }
 
 /// List all debloat packs from the app's `packs/` resource directory.

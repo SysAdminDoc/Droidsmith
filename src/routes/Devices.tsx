@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { save } from "@tauri-apps/plugin-dialog";
 import { useTranslation } from "react-i18next";
 
 import {
   callApplyDeviceControl,
+  callCancelOperation,
   callGetDeviceInfo,
   callListDevices,
   callListNetworkConnections,
@@ -13,12 +14,14 @@ import {
   callTakeScreenshot,
   deviceTarget,
   inTauri,
+  newOperationId,
   summarizeState,
   type Device,
   type DeviceInfo,
   type DeviceTarget,
   type ListDevicesResult,
   type NetworkConnection,
+  type OperationEvent,
   type ProcessInfo,
   type RemoteFileEntry,
   type RemoteListing,
@@ -1107,6 +1110,18 @@ function FileManager({ target }: { target: DeviceTarget }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pullMsg, setPullMsg] = useState<string | null>(null);
+  const [pullOperationId, setPullOperationId] = useState<string | null>(null);
+  const pullOperationRef = useRef<string | null>(null);
+  const pullGenerationRef = useRef(0);
+
+  useEffect(() => {
+    return () => {
+      pullGenerationRef.current += 1;
+      const operationId = pullOperationRef.current;
+      pullOperationRef.current = null;
+      if (operationId) void callCancelOperation(operationId);
+    };
+  }, [target.serial, target.transport_id, target.connection_generation]);
 
   const browse = useCallback(
     async (path: string) => {
@@ -1134,6 +1149,8 @@ function FileManager({ target }: { target: DeviceTarget }) {
 
   const pullRemote = useCallback(
     async (entry: RemoteFileEntry) => {
+      let operationId: string | null = null;
+      let generation: number | null = null;
       try {
         // Destination is chosen through the native save dialog so the
         // renderer never dictates an arbitrary host path.
@@ -1150,7 +1167,35 @@ function FileManager({ target }: { target: DeviceTarget }) {
           currentPath === "/"
             ? `/${entry.name}`
             : `${currentPath}/${entry.name}`;
-        await callPullFile(target, remoteFull, localPath);
+        operationId = newOperationId("pull");
+        generation = pullGenerationRef.current + 1;
+        pullGenerationRef.current = generation;
+        pullOperationRef.current = operationId;
+        setPullOperationId(operationId);
+        await callPullFile(target, remoteFull, localPath, {
+          operationId,
+          onEvent: (event: OperationEvent) => {
+            if (
+              pullOperationRef.current !== operationId ||
+              pullGenerationRef.current !== generation
+            )
+              return;
+            if (event.kind === "progress") {
+              setPullMsg(
+                t("devices.controls.pullProgress", {
+                  name: entry.name,
+                  seconds: Math.max(
+                    1,
+                    Math.round((event.elapsed_ms ?? 0) / 1000),
+                  ),
+                }),
+              );
+            }
+          },
+        });
+        if (pullGenerationRef.current !== generation) return;
+        pullOperationRef.current = null;
+        setPullOperationId(null);
         setPullMsg(
           t("devices.controls.savedName", {
             name: entry.name,
@@ -1158,6 +1203,14 @@ function FileManager({ target }: { target: DeviceTarget }) {
           }),
         );
       } catch (e) {
+        if (
+          operationId &&
+          (pullGenerationRef.current !== generation ||
+            pullOperationRef.current !== operationId)
+        )
+          return;
+        pullOperationRef.current = null;
+        setPullOperationId(null);
         setPullMsg(
           t("devices.controls.failed", {
             message: e instanceof Error ? e.message : String(e),
@@ -1167,6 +1220,13 @@ function FileManager({ target }: { target: DeviceTarget }) {
     },
     [target, currentPath, t],
   );
+
+  const cancelPull = useCallback(async () => {
+    const operationId = pullOperationRef.current;
+    if (!operationId) return;
+    setPullMsg(t("devices.controls.pullCancelling"));
+    await callCancelOperation(operationId);
+  }, [t]);
 
   return (
     <Card className="overflow-hidden p-0">
@@ -1299,8 +1359,18 @@ function FileManager({ target }: { target: DeviceTarget }) {
             ))}
           </div>
           {pullMsg && (
-            <div className="border-t border-white/10 px-4 py-2">
+            <div className="flex items-center justify-between gap-3 border-t border-white/10 px-4 py-2">
               <p className="text-xs text-anvil-300">{pullMsg}</p>
+              {pullOperationId && (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="danger"
+                  onClick={() => void cancelPull()}
+                >
+                  {t("common.cancel")}
+                </Button>
+              )}
             </div>
           )}
         </>

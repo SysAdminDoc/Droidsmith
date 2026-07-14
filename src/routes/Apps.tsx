@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { save } from "@tauri-apps/plugin-dialog";
 import { useTranslation } from "react-i18next";
 
 import {
   callApplyAction,
   callBackupPackage,
+  callCancelOperation,
   callJournalList,
   callJournalUndo,
   callListDevices,
@@ -15,6 +16,7 @@ import {
   callSetPermission,
   deviceTarget,
   inTauri,
+  newOperationId,
   type ActionKind,
   type AndroidUser,
   type AppPackage,
@@ -23,6 +25,7 @@ import {
   type JournalEntry,
   type ListDevicesResult,
   type PackageFilter,
+  type OperationEvent,
   type PermissionInfo,
   type PlannedAction,
 } from "../lib/tauri";
@@ -80,6 +83,8 @@ type BackupNotice = {
   output?: string;
   sizeBytes?: number | null;
   showLimitations?: boolean;
+  operationId?: string;
+  progress?: string;
 };
 
 const FILTERS: { value: PackageFilter; labelKey: string }[] = [
@@ -113,6 +118,8 @@ export default function AppsRoute() {
   const [search, setSearch] = useState("");
   const [inspectedPkg, setInspectedPkg] = useState<string | null>(null);
   const [backupNotice, setBackupNotice] = useState<BackupNotice | null>(null);
+  const activeBackupRef = useRef<string | null>(null);
+  const backupGenerationRef = useRef(0);
 
   const authorizedDevices =
     devicesState.kind === "ok"
@@ -216,6 +223,15 @@ export default function AppsRoute() {
   }, [loadDevices]);
 
   useEffect(() => {
+    return () => {
+      backupGenerationRef.current += 1;
+      const operationId = activeBackupRef.current;
+      activeBackupRef.current = null;
+      if (operationId) void callCancelOperation(operationId);
+    };
+  }, []);
+
+  useEffect(() => {
     void loadUsers();
   }, [loadUsers]);
 
@@ -257,6 +273,8 @@ export default function AppsRoute() {
   const startBackup = useCallback(
     async (pkg: string) => {
       if (!selectedDevice || !usersReady) return;
+      let startedOperationId: string | null = null;
+      let startedGeneration: number | null = null;
       setBackupNotice({
         title: t("apps.backupChooseDestination"),
         message: t("apps.backupLimitations"),
@@ -284,11 +302,63 @@ export default function AppsRoute() {
           path: localPath,
         });
 
+        const operationId = newOperationId("backup");
+        const generation = backupGenerationRef.current + 1;
+        startedOperationId = operationId;
+        startedGeneration = generation;
+        backupGenerationRef.current = generation;
+        activeBackupRef.current = operationId;
+        setBackupNotice((previous) =>
+          previous
+            ? {
+                ...previous,
+                operationId,
+                progress: t("apps.backupStarting"),
+              }
+            : previous,
+        );
+
         const result = await callBackupPackage(
           deviceTarget(selectedDevice),
           pkg,
           localPath,
+          {
+            operationId,
+            onEvent: (event: OperationEvent) => {
+              if (
+                activeBackupRef.current !== operationId ||
+                backupGenerationRef.current !== generation
+              )
+                return;
+              setBackupNotice((previous) => {
+                if (!previous || previous.operationId !== operationId)
+                  return previous;
+                if (event.kind === "progress") {
+                  return {
+                    ...previous,
+                    progress: t("apps.backupProgress", {
+                      seconds: Math.max(
+                        1,
+                        Math.round((event.elapsed_ms ?? 0) / 1000),
+                      ),
+                    }),
+                  };
+                }
+                if (event.kind === "output" && event.chunk) {
+                  return {
+                    ...previous,
+                    output: `${previous.output ?? ""}${event.chunk}`.slice(
+                      -64 * 1024,
+                    ),
+                  };
+                }
+                return previous;
+              });
+            },
+          },
         );
+        if (backupGenerationRef.current !== generation) return;
+        activeBackupRef.current = null;
         const displayState = backupDisplayState(result);
         const titleByState: Record<typeof displayState, string> = {
           empty: t("apps.backupEmptyTitle"),
@@ -310,6 +380,13 @@ export default function AppsRoute() {
           showLimitations: true,
         });
       } catch (e) {
+        if (
+          startedOperationId &&
+          (backupGenerationRef.current !== startedGeneration ||
+            activeBackupRef.current !== startedOperationId)
+        )
+          return;
+        activeBackupRef.current = null;
         setBackupNotice({
           title: t("apps.backupFailedTitle"),
           message: t("apps.backupFailed", {
@@ -321,6 +398,15 @@ export default function AppsRoute() {
     },
     [selectedDevice, t, usersReady],
   );
+
+  const cancelBackup = useCallback(async () => {
+    const operationId = activeBackupRef.current;
+    if (!operationId) return;
+    setBackupNotice((previous) =>
+      previous ? { ...previous, progress: t("apps.backupCancelling") } : null,
+    );
+    await callCancelOperation(operationId);
+  }, [t]);
 
   const confirmAction = useCallback(async () => {
     if (actionState.kind !== "confirming") return;
@@ -439,6 +525,10 @@ export default function AppsRoute() {
             selected={selectedTransportId}
             selectedSerial={selectedSerial}
             onSelect={(device) => {
+              backupGenerationRef.current += 1;
+              const operationId = activeBackupRef.current;
+              activeBackupRef.current = null;
+              if (operationId) void callCancelOperation(operationId);
               setSelectedSerial(device.serial);
               setSelectedTransportId(device.transport_id);
             }}
@@ -532,6 +622,7 @@ export default function AppsRoute() {
           <BackupStatePanel
             notice={backupNotice}
             onDismiss={() => setBackupNotice(null)}
+            onCancel={() => void cancelBackup()}
           />
         )}
 
@@ -549,9 +640,11 @@ export default function AppsRoute() {
 function BackupStatePanel({
   notice,
   onDismiss,
+  onCancel,
 }: {
   notice: BackupNotice;
   onDismiss: () => void;
+  onCancel: () => void;
 }) {
   const { t } = useTranslation();
   const formattedSize =
@@ -564,12 +657,23 @@ function BackupStatePanel({
       title={notice.title}
       tone={notice.tone}
       actions={
-        <Button type="button" size="sm" variant="ghost" onClick={onDismiss}>
-          {t("common.dismiss")}
-        </Button>
+        notice.operationId ? (
+          <Button type="button" size="sm" variant="danger" onClick={onCancel}>
+            {t("common.cancel")}
+          </Button>
+        ) : (
+          <Button type="button" size="sm" variant="ghost" onClick={onDismiss}>
+            {t("common.dismiss")}
+          </Button>
+        )
       }
     >
       <p>{notice.message}</p>
+      {notice.progress && (
+        <p className="mt-2 text-xs font-medium text-circuit-200">
+          {notice.progress}
+        </p>
+      )}
       {notice.showLimitations && (
         <p className="mt-2 text-xs leading-5 text-anvil-400">
           {t("apps.backupLimitations")}

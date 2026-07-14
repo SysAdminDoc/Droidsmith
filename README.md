@@ -16,7 +16,8 @@ Functional early desktop build. The Tauri shell builds and runs; shipped routes
 cover device readiness, wireless ADB pairing/connect, package inventory and
 actions, package backups, audited permission/device-control mutations, reviewed
 shell mutations, journal undo, debloat queue recovery, scrcpy launch and session
-supervision, read-only shell/logcat/file utilities, and fastboot inspection.
+supervision, cancellable background shell/backup/file operations, incremental
+Logcat streaming and export, and fastboot inspection.
 
 Current blockers are tracked separately in [Roadmap_Blocked.md](Roadmap_Blocked.md):
 signed release pipeline, bundled platform-tools wiring, UAD-NG redistribution,
@@ -120,9 +121,10 @@ npm run release:smoke
 
 `npm run ui:smoke` starts Vite with mocked Tauri IPC and checks sidebar
 navigation, command palette focus, Apps action overlays, Debloat queue results,
-and mobile/narrow overflow. `npm run release:smoke` builds the frontend and
-Tauri bundle, checks bundled resource metadata, validates third-party notices,
-and fails if expected local installer artifacts are missing.
+incremental Logcat reconnect/cancel behavior, and mobile/narrow overflow.
+`npm run release:smoke` builds the frontend and Tauri bundle, checks bundled
+resource metadata, validates third-party notices, and fails if expected local
+installer artifacts are missing.
 
 ## Translation contributions
 

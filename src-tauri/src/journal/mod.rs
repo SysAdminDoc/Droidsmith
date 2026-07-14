@@ -278,7 +278,7 @@ impl Journal {
             ));
         }
         if current.outcome == JournalOutcome::Succeeded {
-            return Ok(self.entry(id)?);
+            return self.entry(id);
         }
         if current.outcome != JournalOutcome::Pending {
             return Err(invalid_transition(id, current.outcome));
@@ -298,7 +298,7 @@ impl Journal {
     ) -> std::io::Result<&JournalEntry> {
         let current = self.entry(id)?.clone();
         if current.outcome == JournalOutcome::Failed {
-            return Ok(self.entry(id)?);
+            return self.entry(id);
         }
         if current.outcome != JournalOutcome::Pending {
             return Err(invalid_transition(id, current.outcome));
@@ -530,10 +530,7 @@ fn repair_partial_tail(path: &Path) -> std::io::Result<()> {
 
 #[cfg(test)]
 fn injected(point: &str) -> std::io::Error {
-    std::io::Error::new(
-        std::io::ErrorKind::Other,
-        format!("injected journal {point} failure"),
-    )
+    std::io::Error::other(format!("injected journal {point} failure"))
 }
 
 /// Build a filename-safe variant of a device serial. Wireless serials
