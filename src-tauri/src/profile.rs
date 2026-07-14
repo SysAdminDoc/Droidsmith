@@ -25,7 +25,10 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::adb::actions::{ActionKind, ActionRequest};
+use crate::adb::{
+    actions::{ActionKind, ActionRequest},
+    DeviceTarget,
+};
 
 pub const PROFILE_SCHEMA_VERSION: &str = "1";
 
@@ -141,12 +144,13 @@ pub fn lint(p: &Profile) -> Vec<String> {
 /// Lift a profile into a sequence of `ActionRequest`s targeting one
 /// device. The serial is bound at run-time; profiles are
 /// serial-agnostic by design.
-pub fn requests_for(profile: &Profile, serial: &str) -> Vec<ActionRequest> {
+pub fn requests_for(profile: &Profile, target: &DeviceTarget) -> Vec<ActionRequest> {
     profile
         .actions
         .iter()
         .map(|a| ActionRequest {
-            serial: serial.to_string(),
+            serial: target.serial.clone(),
+            target: target.clone(),
             package: a.package.clone(),
             kind: a.kind,
             user_id: a.user,
@@ -240,9 +244,19 @@ actions:
     #[test]
     fn requests_for_attaches_serial() {
         let p: Profile = serde_yaml_ng::from_str(GOOD).unwrap();
-        let rs = requests_for(&p, "abc-123");
+        let target = DeviceTarget {
+            serial: "abc-123".into(),
+            transport_id: Some(4),
+            connection_generation: 5,
+            model: None,
+            product: None,
+            device: None,
+            build_fingerprint: Some("build/test".into()),
+        };
+        let rs = requests_for(&p, &target);
         assert_eq!(rs.len(), 2);
         assert_eq!(rs[0].serial, "abc-123");
+        assert_eq!(rs[0].target, target);
         assert_eq!(rs[0].kind, ActionKind::Disable);
         assert_eq!(rs[1].kind, ActionKind::Enable);
     }

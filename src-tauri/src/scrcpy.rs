@@ -6,9 +6,12 @@ use std::sync::{Mutex, OnceLock};
 
 use serde::{Deserialize, Serialize};
 
+use crate::adb::DeviceTarget;
+
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
 pub struct LaunchScrcpyRequest {
     pub serial: String,
+    pub target: DeviceTarget,
     pub max_size: Option<u32>,
     pub bit_rate: Option<String>,
     pub no_audio: bool,
@@ -208,10 +211,20 @@ pub fn build_args(request: &LaunchScrcpyRequest) -> Result<Vec<String>, String> 
 #[cfg(test)]
 mod tests {
     use super::{build_args, LaunchScrcpyRequest};
+    use crate::adb::DeviceTarget;
 
     fn request() -> LaunchScrcpyRequest {
         LaunchScrcpyRequest {
             serial: "DEVICE123".to_string(),
+            target: DeviceTarget {
+                serial: "DEVICE123".into(),
+                transport_id: Some(1),
+                connection_generation: 2,
+                model: None,
+                product: None,
+                device: None,
+                build_fingerprint: Some("build/test".into()),
+            },
             max_size: Some(1280),
             bit_rate: Some("12M".to_string()),
             no_audio: true,

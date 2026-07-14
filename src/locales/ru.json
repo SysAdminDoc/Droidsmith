@@ -258,6 +258,7 @@
     "searchLabel": "Фильтр пакетов по имени",
     "userLabel": "Пользователь",
     "userCurrent": "текущий",
+    "userDiscoveryFailed": "Не удалось определить пользователя Android",
     "installedPackages": "Установленные пакеты",
     "installedPackagesBody": "Действия показывают предпросмотр перед применением. Disable и enable обратимы через журнал.",
     "disable": "Disable",

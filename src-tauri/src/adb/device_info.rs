@@ -5,6 +5,7 @@
 
 use serde::Serialize;
 
+use crate::adb::device::DeviceTarget;
 use crate::adb::transport::{AdbTransport, TransportError};
 
 #[derive(Debug, Clone, Serialize)]
@@ -38,17 +39,17 @@ pub struct StorageInfo {
 
 pub fn get_device_info(
     transport: &dyn AdbTransport,
-    serial: &str,
+    target: &DeviceTarget,
 ) -> Result<DeviceInfo, TransportError> {
-    let props = fetch_properties(transport, serial)?;
+    let props = fetch_properties(transport, target)?;
     let battery = parse_battery(
         &transport
-            .shell(serial, &["dumpsys", "battery"])
+            .shell_target(target, &["dumpsys", "battery"])
             .unwrap_or_default(),
     );
     let storage = parse_df(
         &transport
-            .shell(serial, &["df", "/data"])
+            .shell_target(target, &["df", "/data"])
             .unwrap_or_default(),
     );
     let wifi_ip = get_prop(&props, "dhcp.wlan0.ipaddress")
@@ -56,7 +57,7 @@ pub fn get_device_info(
         .filter(|ip| !ip.is_empty());
 
     Ok(DeviceInfo {
-        serial: serial.to_string(),
+        serial: target.serial.clone(),
         model: get_prop(&props, "ro.product.model"),
         manufacturer: get_prop(&props, "ro.product.manufacturer"),
         android_version: get_prop(&props, "ro.build.version.release"),
@@ -72,9 +73,9 @@ pub fn get_device_info(
 
 fn fetch_properties(
     transport: &dyn AdbTransport,
-    serial: &str,
+    target: &DeviceTarget,
 ) -> Result<Vec<(String, String)>, TransportError> {
-    let stdout = transport.shell(serial, &["getprop"])?;
+    let stdout = transport.shell_target(target, &["getprop"])?;
     Ok(parse_getprop(&stdout))
 }
 

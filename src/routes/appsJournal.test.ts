@@ -13,6 +13,15 @@ function entry(
       plan: {
         request: {
           serial: "device-1",
+          target: {
+            serial: "device-1",
+            transport_id: 1,
+            connection_generation: 2,
+            model: null,
+            product: null,
+            device: null,
+            build_fingerprint: "build/test",
+          },
           package: "com.example.app",
           kind,
           user_id: 0,

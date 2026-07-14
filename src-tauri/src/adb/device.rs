@@ -1,6 +1,10 @@
 //! Device value types returned from the [`crate::adb::transport`] layer.
 
-use serde::Serialize;
+use std::collections::{HashMap, HashSet};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Mutex, OnceLock};
+
+use serde::{Deserialize, Serialize};
 
 /// A single connected device, as seen by `adb devices -l`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -16,12 +20,120 @@ pub struct Device {
     pub product: Option<String>,
     /// Optional `device:` field — the kernel device codename.
     pub device: Option<String>,
+    /// Build fingerprint captured while this connection target is prepared.
+    pub build_fingerprint: Option<String>,
     /// Optional `transport_id:`. Stable for the life of the adb-server
     /// session.
     pub transport_id: Option<u32>,
+    /// Process-local generation assigned when this exact ADB transport
+    /// first appears. A disconnect observed by Droidsmith retires the
+    /// generation, so a later reconnect cannot reuse a stale UI target.
+    pub connection_generation: u64,
     /// True if the device serial parses as a `host:port` (wireless)
     /// rather than a hardware serial.
     pub wireless: bool,
+}
+
+/// Immutable device identity captured by the renderer before an operation.
+///
+/// The serial remains useful for display/journal partitioning, but execution
+/// prefers `transport_id` and verifies this generation plus the advertised
+/// metadata immediately before talking to the device.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DeviceTarget {
+    pub serial: String,
+    pub transport_id: Option<u32>,
+    pub connection_generation: u64,
+    pub model: Option<String>,
+    pub product: Option<String>,
+    pub device: Option<String>,
+    pub build_fingerprint: Option<String>,
+}
+
+impl Device {
+    pub fn target(&self) -> DeviceTarget {
+        DeviceTarget {
+            serial: self.serial.clone(),
+            transport_id: self.transport_id,
+            connection_generation: self.connection_generation,
+            model: self.model.clone(),
+            product: self.product.clone(),
+            device: self.device.clone(),
+            build_fingerprint: self.build_fingerprint.clone(),
+        }
+    }
+}
+
+impl DeviceTarget {
+    /// Global ADB selector arguments. Transport ids disambiguate duplicate
+    /// hardware serials; old ADB builds without an id fall back to `-s` only
+    /// after validation has proved the serial is unique.
+    pub fn adb_selector(&self) -> Vec<String> {
+        match self.transport_id {
+            Some(id) => vec!["-t".to_string(), id.to_string()],
+            None => vec!["-s".to_string(), self.serial.clone()],
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+struct DeviceKey {
+    serial: String,
+    transport_id: Option<u32>,
+    model: Option<String>,
+    product: Option<String>,
+    device: Option<String>,
+    build_fingerprint: Option<String>,
+}
+
+impl From<&Device> for DeviceKey {
+    fn from(value: &Device) -> Self {
+        Self {
+            serial: value.serial.clone(),
+            transport_id: value.transport_id,
+            model: value.model.clone(),
+            product: value.product.clone(),
+            device: value.device.clone(),
+            build_fingerprint: value.build_fingerprint.clone(),
+        }
+    }
+}
+
+fn generations() -> &'static Mutex<HashMap<DeviceKey, u64>> {
+    static GENERATIONS: OnceLock<Mutex<HashMap<DeviceKey, u64>>> = OnceLock::new();
+    GENERATIONS.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+fn next_generation() -> u64 {
+    static NEXT: AtomicU64 = AtomicU64::new(1);
+    NEXT.fetch_add(1, Ordering::Relaxed)
+}
+
+/// Attach process-local connection generations and retire identities that are
+/// absent from the latest complete `adb devices -l` snapshot.
+pub fn observe_connection_generations(devices: &mut [Device]) {
+    let keys: HashSet<DeviceKey> = devices
+        .iter()
+        .filter(|device| device.transport_id.is_none())
+        .map(DeviceKey::from)
+        .collect();
+    let Ok(mut known) = generations().lock() else {
+        // Poisoning must fail closed: generation zero is never executable.
+        return;
+    };
+    known.retain(|key, _| keys.contains(key));
+    for device in devices {
+        if let Some(transport_id) = device.transport_id {
+            // ADB allocates this id per live transport. Offset by one so a
+            // valid transport id of zero can never collide with the invalid
+            // generation sentinel.
+            device.connection_generation = u64::from(transport_id) + 1;
+            continue;
+        }
+        let key = DeviceKey::from(&*device);
+        let generation = *known.entry(key).or_insert_with(next_generation);
+        device.connection_generation = generation;
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]

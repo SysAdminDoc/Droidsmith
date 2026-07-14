@@ -8,6 +8,7 @@ import {
   callListPacks,
   callListUsers,
   callPlanAction,
+  deviceTarget,
   inTauri,
   type ActionKind,
   type AndroidUser,
@@ -86,10 +87,28 @@ export default function DebloatRoute() {
   });
   const [packsState, setPacksState] = useState<PacksState>({ kind: "loading" });
   const [selectedSerial, setSelectedSerial] = useState<string | null>(null);
+  const [selectedTransportId, setSelectedTransportId] = useState<number | null>(
+    null,
+  );
   const [users, setUsers] = useState<AndroidUser[]>([]);
+  const [usersReady, setUsersReady] = useState(false);
+  const [userError, setUserError] = useState<string | null>(null);
   const [selectedUser, setSelectedUser] = useState<number>(0);
   const [wizard, setWizard] = useState<WizardStep>({ step: "pick_pack" });
   const cancelRequestedRef = useRef(false);
+
+  const authorizedDevices =
+    devicesState.kind === "ok"
+      ? devicesState.value.devices.filter(
+          (d) => typeof d.state === "string" && d.state === "device",
+        )
+      : [];
+  const selectedDevice =
+    authorizedDevices.find((device) =>
+      selectedTransportId != null
+        ? device.transport_id === selectedTransportId
+        : device.serial === selectedSerial,
+    ) ?? null;
 
   const loadDevices = useCallback(async () => {
     if (!inTauri()) {
@@ -105,6 +124,7 @@ export default function DebloatRoute() {
       );
       if (authorized.length === 1) {
         setSelectedSerial((prev) => prev ?? authorized[0]!.serial);
+        setSelectedTransportId((prev) => prev ?? authorized[0]!.transport_id);
       }
     } catch (e) {
       setDevicesState({
@@ -133,20 +153,27 @@ export default function DebloatRoute() {
   }, []);
 
   const loadUsers = useCallback(async () => {
-    if (!selectedSerial) {
+    if (!selectedDevice) {
       setUsers([]);
+      setUsersReady(false);
+      setUserError(null);
       return;
     }
+    setUsersReady(false);
+    setUserError(null);
     try {
-      const found = await callListUsers(selectedSerial);
+      const found = await callListUsers(deviceTarget(selectedDevice));
       setUsers(found);
       const foreground = found.find((u) => u.current) ?? found[0];
-      setSelectedUser(foreground ? foreground.id : 0);
-    } catch {
+      if (!foreground)
+        throw new Error("Android user discovery returned no users");
+      setSelectedUser(foreground.id);
+      setUsersReady(true);
+    } catch (e) {
       setUsers([]);
-      setSelectedUser(0);
+      setUserError(e instanceof Error ? e.message : String(e));
     }
-  }, [selectedSerial]);
+  }, [selectedDevice]);
 
   useEffect(() => {
     void loadDevices();
@@ -178,11 +205,18 @@ export default function DebloatRoute() {
   }, []);
 
   const readPackageSnapshot = useCallback(
-    async (serial: string, packageId: string): Promise<PackageSnapshot> => {
-      const packages = await callListPackages(serial, "all", selectedUser);
+    async (packageId: string): Promise<PackageSnapshot> => {
+      if (!selectedDevice || !usersReady) {
+        throw new Error("Android user discovery has not completed");
+      }
+      const packages = await callListPackages(
+        deviceTarget(selectedDevice),
+        "all",
+        selectedUser,
+      );
       return snapshotPackage(packages, packageId);
     },
-    [selectedUser],
+    [selectedDevice, selectedUser, usersReady],
   );
 
   const verificationMessage = useCallback(
@@ -195,7 +229,7 @@ export default function DebloatRoute() {
 
   const runQueue = useCallback(
     async (pack: Pack, rows: DebloatQueueRow[]) => {
-      if (!selectedSerial) return;
+      if (!selectedDevice || !usersReady) return;
       cancelRequestedRef.current = false;
       let queue = rows;
 
@@ -235,20 +269,21 @@ export default function DebloatRoute() {
         let error: string | null = null;
 
         try {
-          before = await readPackageSnapshot(selectedSerial, row.entry.id);
+          before = await readPackageSnapshot(row.entry.id);
           const plan = await callPlanAction({
-            serial: selectedSerial,
+            serial: selectedDevice.serial,
+            target: deviceTarget(selectedDevice),
             package: row.entry.id,
             kind: DEBLOAT_ACTION_KIND,
             user_id: selectedUser,
           });
           journal = await callApplyAction(plan);
-          after = await readPackageSnapshot(selectedSerial, row.entry.id);
+          after = await readPackageSnapshot(row.entry.id);
           error = verificationMessage(verifyDisabled(after));
         } catch (e) {
           error = e instanceof Error ? e.message : String(e);
           try {
-            after = await readPackageSnapshot(selectedSerial, row.entry.id);
+            after = await readPackageSnapshot(row.entry.id);
           } catch {
             // Preserve the original apply error; missing after-state is visible as null.
           }
@@ -280,16 +315,23 @@ export default function DebloatRoute() {
 
       setWizard({ step: "done", pack, queue, cancelled });
     },
-    [readPackageSnapshot, selectedSerial, selectedUser, t, verificationMessage],
+    [
+      readPackageSnapshot,
+      selectedDevice,
+      selectedUser,
+      t,
+      usersReady,
+      verificationMessage,
+    ],
   );
 
   const applyPack = useCallback(async () => {
-    if (wizard.step !== "preview" || !selectedSerial) return;
+    if (wizard.step !== "preview" || !selectedDevice || !usersReady) return;
     const queue = makeQueueRows(
       wizard.pack.packages.filter((p) => wizard.selected.has(p.id)),
     );
     await runQueue(wizard.pack, queue);
-  }, [runQueue, selectedSerial, wizard]);
+  }, [runQueue, selectedDevice, usersReady, wizard]);
 
   const cancelAfterCurrent = useCallback(() => {
     cancelRequestedRef.current = true;
@@ -299,7 +341,7 @@ export default function DebloatRoute() {
   }, []);
 
   const retryFailed = useCallback(async () => {
-    if (wizard.step !== "done" || !selectedSerial) return;
+    if (wizard.step !== "done" || !selectedDevice || !usersReady) return;
     const queue = wizard.queue.map((row) =>
       row.status === "failed"
         ? {
@@ -313,14 +355,7 @@ export default function DebloatRoute() {
         : row,
     );
     await runQueue(wizard.pack, queue);
-  }, [runQueue, selectedSerial, wizard]);
-
-  const authorizedDevices =
-    devicesState.kind === "ok"
-      ? devicesState.value.devices.filter(
-          (d) => typeof d.state === "string" && d.state === "device",
-        )
-      : [];
+  }, [runQueue, selectedDevice, usersReady, wizard]);
 
   return (
     <>
@@ -360,12 +395,22 @@ export default function DebloatRoute() {
         {authorizedDevices.length > 1 && (
           <DevicePicker
             devices={authorizedDevices}
-            selected={selectedSerial}
-            onSelect={setSelectedSerial}
+            selected={selectedTransportId}
+            selectedSerial={selectedSerial}
+            onSelect={(device) => {
+              setSelectedSerial(device.serial);
+              setSelectedTransportId(device.transport_id);
+            }}
           />
         )}
 
-        {selectedSerial && users.length > 1 && (
+        {selectedSerial && userError && (
+          <StatePanel title={t("apps.userDiscoveryFailed")} tone="danger">
+            <p>{userError}</p>
+          </StatePanel>
+        )}
+
+        {selectedSerial && usersReady && users.length > 1 && (
           <label className="flex items-center gap-2 text-sm text-slate-300">
             <span>{t("apps.userLabel")}</span>
             <select
@@ -384,7 +429,7 @@ export default function DebloatRoute() {
           </label>
         )}
 
-        {selectedSerial && wizard.step === "pick_pack" && (
+        {selectedSerial && usersReady && wizard.step === "pick_pack" && (
           <PackPicker
             state={packsState}
             onSelect={selectPack}
@@ -392,7 +437,7 @@ export default function DebloatRoute() {
           />
         )}
 
-        {wizard.step === "preview" && (
+        {usersReady && wizard.step === "preview" && (
           <PackPreview
             pack={wizard.pack}
             selected={wizard.selected}
@@ -402,7 +447,7 @@ export default function DebloatRoute() {
           />
         )}
 
-        {wizard.step === "applying" && (
+        {usersReady && wizard.step === "applying" && (
           <QueueApplyProgress
             pack={wizard.pack}
             queue={wizard.queue}
@@ -412,7 +457,7 @@ export default function DebloatRoute() {
           />
         )}
 
-        {wizard.step === "done" && (
+        {usersReady && wizard.step === "done" && (
           <QueueApplyResult
             pack={wizard.pack}
             queue={wizard.queue}
@@ -429,11 +474,13 @@ export default function DebloatRoute() {
 function DevicePicker({
   devices,
   selected,
+  selectedSerial,
   onSelect,
 }: {
   devices: Device[];
-  selected: string | null;
-  onSelect: (serial: string) => void;
+  selected: number | null;
+  selectedSerial: string | null;
+  onSelect: (device: Device) => void;
 }) {
   const { t } = useTranslation();
 
@@ -445,11 +492,19 @@ function DevicePicker({
       <div className="mt-3 flex flex-wrap gap-2">
         {devices.map((d) => (
           <Button
-            key={d.serial}
+            key={`${d.transport_id ?? d.serial}:${d.connection_generation}`}
             type="button"
-            variant={d.serial === selected ? "primary" : "secondary"}
+            variant={
+              (
+                d.transport_id != null
+                  ? d.transport_id === selected
+                  : d.serial === selectedSerial
+              )
+                ? "primary"
+                : "secondary"
+            }
             size="sm"
-            onClick={() => onSelect(d.serial)}
+            onClick={() => onSelect(d)}
           >
             {d.model ?? d.serial}
           </Button>

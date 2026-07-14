@@ -18,7 +18,9 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
-use crate::adb::device::{looks_wireless, Device, DeviceState};
+use crate::adb::device::{
+    looks_wireless, observe_connection_generations, valid_serial, Device, DeviceState, DeviceTarget,
+};
 
 /// Default timeout for non-streaming `adb` calls. Two seconds is enough
 /// for `devices`, `shell`, and most metadata reads; longer-running flows
@@ -53,6 +55,13 @@ pub trait AdbTransport: Send + Sync {
     /// Run `adb -s <serial> shell <args>` and return stdout. Trailing
     /// newline is preserved; callers strip if they want a one-liner.
     fn shell(&self, serial: &str, args: &[&str]) -> Result<String, TransportError>;
+
+    /// Run a device shell through a previously validated immutable target.
+    /// Test transports can continue matching by serial; the production
+    /// transport overrides this to use `adb -t` when available.
+    fn shell_target(&self, target: &DeviceTarget, args: &[&str]) -> Result<String, TransportError> {
+        self.shell(&target.serial, args)
+    }
 }
 
 // ---- ShellTransport -----------------------------------------------------
@@ -90,6 +99,19 @@ impl ShellTransport {
     pub fn adb(&self, args: &[&str]) -> Result<String, TransportError> {
         self.run(args)
     }
+
+    /// Run a non-shell command (`push`, `pull`, `install`, ...) through a
+    /// validated target selector.
+    pub fn adb_target(
+        &self,
+        target: &DeviceTarget,
+        args: &[&str],
+    ) -> Result<String, TransportError> {
+        let selector = target.adb_selector();
+        let mut full: Vec<&str> = selector.iter().map(String::as_str).collect();
+        full.extend_from_slice(args);
+        self.run(&full)
+    }
 }
 
 impl AdbTransport for ShellTransport {
@@ -106,6 +128,91 @@ impl AdbTransport for ShellTransport {
         full.extend_from_slice(args);
         self.run(&full)
     }
+
+    fn shell_target(&self, target: &DeviceTarget, args: &[&str]) -> Result<String, TransportError> {
+        let selector = target.adb_selector();
+        let mut full: Vec<&str> = selector.iter().map(String::as_str).collect();
+        full.push("shell");
+        full.extend_from_slice(args);
+        self.run(&full)
+    }
+}
+
+/// Re-resolve a captured target immediately before an operation. This is the
+/// central fail-closed guard against duplicate serials, reconnects, stale UI
+/// state, and non-actionable ADB states.
+pub fn validate_device_target(
+    transport: &dyn AdbTransport,
+    target: &DeviceTarget,
+) -> Result<Device, TransportError> {
+    if !valid_serial(&target.serial) || target.connection_generation == 0 {
+        return Err(TransportError::Parse(
+            "device target is missing a valid serial or connection generation".to_string(),
+        ));
+    }
+    if target
+        .build_fingerprint
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .is_none()
+    {
+        return Err(TransportError::Parse(
+            "device target is missing a verified build fingerprint".to_string(),
+        ));
+    }
+
+    let mut devices = transport.list_devices()?;
+    observe_connection_generations(&mut devices);
+    let mut matches: Vec<Device> = match target.transport_id {
+        Some(id) => devices
+            .into_iter()
+            .filter(|device| device.transport_id == Some(id))
+            .collect(),
+        None => devices
+            .into_iter()
+            .filter(|device| device.serial == target.serial)
+            .collect(),
+    };
+    if matches.len() != 1 {
+        return Err(TransportError::Parse(format!(
+            "device target is missing or ambiguous (serial {:?}, transport {:?})",
+            target.serial, target.transport_id
+        )));
+    }
+    let mut actual = matches.remove(0);
+    if actual.build_fingerprint.is_none() {
+        let probe = actual.target();
+        let fingerprint = transport
+            .shell_target(&probe, &["getprop", "ro.build.fingerprint"])?
+            .trim()
+            .to_string();
+        if fingerprint.is_empty() {
+            return Err(TransportError::Parse(
+                "device did not report a build fingerprint".to_string(),
+            ));
+        }
+        actual.build_fingerprint = Some(fingerprint);
+    }
+    if actual.serial != target.serial
+        || actual.connection_generation != target.connection_generation
+        || actual.model != target.model
+        || actual.product != target.product
+        || actual.device != target.device
+        || actual.build_fingerprint != target.build_fingerprint
+    {
+        return Err(TransportError::Parse(format!(
+            "device target changed; refresh the device list before continuing (serial {:?})",
+            target.serial
+        )));
+    }
+    if !actual.state.is_actionable() {
+        return Err(TransportError::Parse(format!(
+            "device target {:?} is not authorized/actionable ({:?})",
+            target.serial, actual.state
+        )));
+    }
+    Ok(actual)
 }
 
 // ---- Parsing ------------------------------------------------------------
@@ -184,7 +291,9 @@ pub fn parse_devices_long(stdout: &str) -> Result<Vec<Device>, TransportError> {
             model: None,
             product: None,
             device: None,
+            build_fingerprint: None,
             transport_id: None,
+            connection_generation: 0,
         };
 
         for tok in rest_tokens {
@@ -379,6 +488,20 @@ mod mock {
 mod tests {
     use super::*;
 
+    fn device(serial: &str, transport_id: Option<u32>, build: &str) -> Device {
+        Device {
+            serial: serial.into(),
+            state: DeviceState::Device,
+            model: Some("Pixel".into()),
+            product: Some("panther".into()),
+            device: Some("panther".into()),
+            build_fingerprint: Some(build.into()),
+            transport_id,
+            connection_generation: 0,
+            wireless: false,
+        }
+    }
+
     #[test]
     fn parse_devices_long_real_output() {
         let s = "\
@@ -444,7 +567,9 @@ emulator-5554          device transport_id:1
             model: Some("Pixel".into()),
             product: None,
             device: None,
+            build_fingerprint: Some("build/test".into()),
             transport_id: Some(1),
+            connection_generation: 0,
             wireless: false,
         }]);
         let devs = mock.list_devices().unwrap();
@@ -478,5 +603,58 @@ emulator-5554          device transport_id:1
             mock.shell("nope", &["x"]),
             Err(TransportError::Parse(_))
         ));
+    }
+
+    #[test]
+    fn transport_id_disambiguates_duplicate_serials() {
+        let mock = MockTransport::new().with_devices(vec![
+            device("duplicate", Some(4), "build/a"),
+            device("duplicate", Some(9), "build/b"),
+        ]);
+        let target = DeviceTarget {
+            serial: "duplicate".into(),
+            transport_id: Some(9),
+            connection_generation: 10,
+            model: Some("Pixel".into()),
+            product: Some("panther".into()),
+            device: Some("panther".into()),
+            build_fingerprint: Some("build/b".into()),
+        };
+        let validated = validate_device_target(&mock, &target).unwrap();
+        assert_eq!(validated.transport_id, Some(9));
+        assert_eq!(target.adb_selector(), vec!["-t", "9"]);
+    }
+
+    #[test]
+    fn serial_fallback_rejects_ambiguous_targets() {
+        let mock = MockTransport::new().with_devices(vec![
+            device("duplicate", None, "build/a"),
+            device("duplicate", None, "build/a"),
+        ]);
+        let target = DeviceTarget {
+            serial: "duplicate".into(),
+            transport_id: None,
+            connection_generation: 1,
+            model: Some("Pixel".into()),
+            product: Some("panther".into()),
+            device: Some("panther".into()),
+            build_fingerprint: Some("build/a".into()),
+        };
+        assert!(validate_device_target(&mock, &target).is_err());
+    }
+
+    #[test]
+    fn target_revalidation_rejects_build_or_generation_changes() {
+        let mock = MockTransport::new().with_devices(vec![device("abc", Some(2), "build/new")]);
+        let target = DeviceTarget {
+            serial: "abc".into(),
+            transport_id: Some(2),
+            connection_generation: 2,
+            model: Some("Pixel".into()),
+            product: Some("panther".into()),
+            device: Some("panther".into()),
+            build_fingerprint: Some("build/old".into()),
+        };
+        assert!(validate_device_target(&mock, &target).is_err());
     }
 }

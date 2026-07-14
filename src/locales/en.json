@@ -258,6 +258,7 @@
     "searchLabel": "Filter packages by name",
     "userLabel": "User",
     "userCurrent": "current",
+    "userDiscoveryFailed": "Android user discovery failed",
     "installedPackages": "Installed packages",
     "installedPackagesBody": "Actions preview before applying. Disable and enable are reversible via the journal.",
     "disable": "Disable",

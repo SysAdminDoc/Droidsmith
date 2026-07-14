@@ -105,7 +105,18 @@ pub fn list_devices() -> Result<ListDevicesResult, adb::TransportError> {
 
     use adb::AdbTransport;
     let transport = adb::ShellTransport::new(path);
-    let devices = transport.list_devices()?;
+    let mut devices = transport.list_devices()?;
+    adb::observe_connection_generations(&mut devices);
+    for device in devices
+        .iter_mut()
+        .filter(|device| device.state.is_actionable())
+    {
+        device.build_fingerprint = transport
+            .shell_target(&device.target(), &["getprop", "ro.build.fingerprint"])
+            .map(|value| value.trim().to_string())
+            .ok()
+            .filter(|value| !value.is_empty());
+    }
     Ok(ListDevicesResult {
         adb_resolved: true,
         adb_path: Some(path.clone()),
@@ -168,40 +179,32 @@ pub fn connect_wireless(
 
 #[tauri::command]
 pub fn list_packages(
-    serial: String,
+    target: adb::DeviceTarget,
     filter: adb::PackageFilter,
-    #[allow(non_snake_case)] userId: Option<u32>,
+    #[allow(non_snake_case)] userId: u32,
 ) -> Result<Vec<adb::AppPackage>, adb::TransportError> {
-    if !valid_serial(&serial) {
-        return Err(adb::TransportError::Parse(format!(
-            "invalid device serial {serial:?}"
-        )));
-    }
     let resolution = adb::locate_adb();
     let path = resolution
         .path
         .as_ref()
         .ok_or(adb::TransportError::AdbNotFound)?;
     let transport = adb::ShellTransport::new(path);
-    adb::list_packages(&transport, &serial, filter, userId.unwrap_or(0))
+    adb::validate_device_target(&transport, &target)?;
+    adb::list_packages(&transport, &target, filter, userId)
 }
 
 /// Enumerate Android users on a device so the renderer can offer an
 /// explicit `--user` target for package workflows.
 #[tauri::command]
-pub fn list_users(serial: String) -> Result<Vec<adb::AndroidUser>, adb::TransportError> {
-    if !valid_serial(&serial) {
-        return Err(adb::TransportError::Parse(format!(
-            "invalid device serial {serial:?}"
-        )));
-    }
+pub fn list_users(target: adb::DeviceTarget) -> Result<Vec<adb::AndroidUser>, adb::TransportError> {
     let resolution = adb::locate_adb();
     let path = resolution
         .path
         .as_ref()
         .ok_or(adb::TransportError::AdbNotFound)?;
     let transport = adb::ShellTransport::new(path);
-    adb::list_users(&transport, &serial)
+    adb::validate_device_target(&transport, &target)?;
+    adb::list_users(&transport, &target)
 }
 
 /// Synthesise an ADB action without running it. Pure: this is the
@@ -266,6 +269,18 @@ fn validate_serial_arg(serial: &str) -> Result<(), CommandError> {
             message: format!("invalid device serial {serial:?}"),
         })
     }
+}
+
+fn validated_transport(target: &adb::DeviceTarget) -> Result<adb::ShellTransport, CommandError> {
+    validate_serial_arg(&target.serial)?;
+    let resolution = adb::locate_adb();
+    let path = resolution
+        .path
+        .as_ref()
+        .ok_or(adb::TransportError::AdbNotFound)?;
+    let transport = adb::ShellTransport::new(path);
+    adb::validate_device_target(&transport, target)?;
+    Ok(transport)
 }
 
 fn validate_package_arg(package: &str) -> Result<(), CommandError> {
@@ -386,28 +401,26 @@ pub fn journal_list(
 #[tauri::command]
 pub fn journal_undo(
     app: tauri::AppHandle,
-    serial: String,
+    target: adb::DeviceTarget,
     entry_id: u64,
 ) -> Result<JournalEntry, CommandError> {
+    let serial = target.serial.clone();
     validate_serial_arg(&serial)?;
-    let resolution = adb::locate_adb();
-    let path = resolution
-        .path
-        .as_ref()
-        .ok_or(adb::TransportError::AdbNotFound)?;
-    let transport = adb::ShellTransport::new(path);
+    let transport = validated_transport(&target)?;
 
     // Hold the per-device lock across the reversibility check, the inverse
     // ADB call, and the undo record so two undos of the same entry cannot
     // both pass the check and double-apply.
     let dir = journal_dir(&app)?;
     let entry = journal::with_journal(&dir, &serial, |journal| {
-        let undo_request = journal::undo_request_for(journal, entry_id).ok_or(CommandError {
+        let mut undo_request = journal::undo_request_for(journal, entry_id).ok_or(CommandError {
             code: "not_reversible",
             message: format!(
                 "journal entry {entry_id} either doesn't exist, is already undone, or its action kind cannot be reversed"
             ),
         })?;
+
+        undo_request.target = target.clone();
 
         let plan = actions::plan(undo_request);
         let applied = actions::apply(&transport, plan, &iso_now())?;
@@ -417,50 +430,32 @@ pub fn journal_undo(
 }
 
 #[tauri::command]
-pub fn get_device_info(serial: String) -> Result<adb::DeviceInfo, CommandError> {
-    validate_serial_arg(&serial)?;
-    let resolution = adb::locate_adb();
-    let path = resolution
-        .path
-        .as_ref()
-        .ok_or(adb::TransportError::AdbNotFound)?;
-    let transport = adb::ShellTransport::new(path);
-    Ok(adb::get_device_info(&transport, &serial)?)
+pub fn get_device_info(target: adb::DeviceTarget) -> Result<adb::DeviceInfo, CommandError> {
+    let transport = validated_transport(&target)?;
+    Ok(adb::get_device_info(&transport, &target)?)
 }
 
 /// Run a one-shot shell command on a device and return its output.
 #[tauri::command]
-pub fn shell_run(serial: String, argv: Vec<String>) -> Result<String, CommandError> {
-    validate_serial_arg(&serial)?;
-    let resolution = adb::locate_adb();
-    let path = resolution
-        .path
-        .as_ref()
-        .ok_or(adb::TransportError::AdbNotFound)?;
-    let transport = adb::ShellTransport::new(path);
+pub fn shell_run(target: adb::DeviceTarget, argv: Vec<String>) -> Result<String, CommandError> {
+    let transport = validated_transport(&target)?;
     let refs: Vec<&str> = argv.iter().map(String::as_str).collect();
-    let stdout = transport.shell(&serial, &refs)?;
+    let stdout = transport.shell_target(&target, &refs)?;
     Ok(stdout)
 }
 
 /// List files in a remote directory on the device.
 #[tauri::command]
 pub fn list_remote_files(
-    serial: String,
+    target: adb::DeviceTarget,
     remote_path: String,
 ) -> Result<RemoteListing, CommandError> {
-    validate_serial_arg(&serial)?;
     let remote = validate_remote_path(&remote_path)?;
-    let resolution = adb::locate_adb();
-    let path = resolution
-        .path
-        .as_ref()
-        .ok_or(adb::TransportError::AdbNotFound)?;
-    let transport = adb::ShellTransport::new(path);
-    let stdout = transport.shell(&serial, &["ls", "-la", &remote])?;
+    let transport = validated_transport(&target)?;
+    let stdout = transport.shell_target(&target, &["ls", "-la", &remote])?;
     let entries = parse_ls_output(&stdout);
     let free_space = transport
-        .shell(&serial, &["df", "-k", &remote])
+        .shell_target(&target, &["df", "-k", &remote])
         .ok()
         .and_then(|s| parse_df_free(&s));
     Ok(RemoteListing {
@@ -473,52 +468,38 @@ pub fn list_remote_files(
 /// Push a local file to the device.
 #[tauri::command]
 pub fn push_file(
-    serial: String,
+    target: adb::DeviceTarget,
     local_path: String,
     remote_path: String,
 ) -> Result<String, CommandError> {
-    validate_serial_arg(&serial)?;
+    let transport = validated_transport(&target)?;
     let validated_path = validate_local_path(&local_path)?;
     let remote = validate_remote_path(&remote_path)?;
-    let resolution = adb::locate_adb();
-    let adb_path = resolution
-        .path
-        .as_ref()
-        .ok_or(adb::TransportError::AdbNotFound)?;
-
     let local_arg = validated_path.display().to_string();
     let timeout = std::time::Duration::from_secs(120);
-    let output = run_adb_simple(
-        std::path::Path::new(adb_path),
-        &["-s", &serial, "push", &local_arg, &remote],
-        timeout,
-    )?;
+    let mut args = target.adb_selector();
+    args.extend(["push".to_string(), local_arg, remote]);
+    let refs: Vec<&str> = args.iter().map(String::as_str).collect();
+    let output = run_adb_simple(&transport.adb_path, &refs, timeout)?;
     Ok(output)
 }
 
 /// Pull a remote file from the device.
 #[tauri::command]
 pub fn pull_file(
-    serial: String,
+    target: adb::DeviceTarget,
     remote_path: String,
     local_path: String,
 ) -> Result<String, CommandError> {
-    validate_serial_arg(&serial)?;
+    let transport = validated_transport(&target)?;
     let validated_path = validate_local_path(&local_path)?;
     let remote = validate_remote_path(&remote_path)?;
-    let resolution = adb::locate_adb();
-    let adb_path = resolution
-        .path
-        .as_ref()
-        .ok_or(adb::TransportError::AdbNotFound)?;
-
     let local_arg = validated_path.display().to_string();
     let timeout = std::time::Duration::from_secs(120);
-    let output = run_adb_simple(
-        std::path::Path::new(adb_path),
-        &["-s", &serial, "pull", &remote, &local_arg],
-        timeout,
-    )?;
+    let mut args = target.adb_selector();
+    args.extend(["pull".to_string(), remote, local_arg]);
+    let refs: Vec<&str> = args.iter().map(String::as_str).collect();
+    let output = run_adb_simple(&transport.adb_path, &refs, timeout)?;
     Ok(output)
 }
 
@@ -753,17 +734,13 @@ fn first_nonempty<'a>(a: &'a str, b: &'a str) -> &'a str {
 
 /// Get network connections from the device using `ss -tunp`.
 #[tauri::command]
-pub fn list_network_connections(serial: String) -> Result<Vec<NetworkConnection>, CommandError> {
-    validate_serial_arg(&serial)?;
-    let resolution = adb::locate_adb();
-    let path = resolution
-        .path
-        .as_ref()
-        .ok_or(adb::TransportError::AdbNotFound)?;
-    let transport = adb::ShellTransport::new(path);
+pub fn list_network_connections(
+    target: adb::DeviceTarget,
+) -> Result<Vec<NetworkConnection>, CommandError> {
+    let transport = validated_transport(&target)?;
     let stdout = transport
-        .shell(&serial, &["ss", "-tunp"])
-        .or_else(|_| transport.shell(&serial, &["netstat", "-tunp"]))?;
+        .shell_target(&target, &["ss", "-tunp"])
+        .or_else(|_| transport.shell_target(&target, &["netstat", "-tunp"]))?;
     Ok(parse_ss_output(&stdout))
 }
 
@@ -827,33 +804,32 @@ fn validate_backup_target(local_path: &str) -> Result<PathBuf, CommandError> {
 /// on the device screen. Returns the adb output and local artifact metadata.
 #[tauri::command]
 pub fn backup_package(
-    serial: String,
+    target: adb::DeviceTarget,
     package: String,
     local_path: String,
 ) -> Result<BackupPackageResult, CommandError> {
-    validate_serial_arg(&serial)?;
+    let transport = validated_transport(&target)?;
     validate_package_arg(&package)?;
-    let target = validate_backup_target(&local_path)?;
-    let resolution = adb::locate_adb();
-    let adb_path = resolution
-        .path
-        .as_ref()
-        .ok_or(adb::TransportError::AdbNotFound)?;
-
+    let output_target = validate_backup_target(&local_path)?;
     let timeout = std::time::Duration::from_secs(300);
-    let target_arg = target.display().to_string();
-    let output = run_adb_simple(
-        std::path::Path::new(adb_path),
-        &["-s", &serial, "backup", "-f", &target_arg, "-apk", &package],
-        timeout,
-    )?;
-    let size_bytes = std::fs::metadata(&target)
+    let target_arg = output_target.display().to_string();
+    let mut args = target.adb_selector();
+    args.extend([
+        "backup".to_string(),
+        "-f".to_string(),
+        target_arg,
+        "-apk".to_string(),
+        package,
+    ]);
+    let refs: Vec<&str> = args.iter().map(String::as_str).collect();
+    let output = run_adb_simple(&transport.adb_path, &refs, timeout)?;
+    let size_bytes = std::fs::metadata(&output_target)
         .ok()
         .map(|metadata| metadata.len());
     let (empty, header_only) = classify_backup_size(size_bytes);
 
     Ok(BackupPackageResult {
-        local_path: target.display().to_string(),
+        local_path: output_target.display().to_string(),
         stdout: output,
         size_bytes,
         empty,
@@ -880,30 +856,24 @@ fn classify_backup_size(size_bytes: Option<u64>) -> (bool, bool) {
 /// List runtime permissions for a package.
 #[tauri::command]
 pub fn list_permissions(
-    serial: String,
+    target: adb::DeviceTarget,
     package: String,
 ) -> Result<Vec<PermissionInfo>, CommandError> {
-    validate_serial_arg(&serial)?;
+    let transport = validated_transport(&target)?;
     validate_package_arg(&package)?;
-    let resolution = adb::locate_adb();
-    let path = resolution
-        .path
-        .as_ref()
-        .ok_or(adb::TransportError::AdbNotFound)?;
-    let transport = adb::ShellTransport::new(path);
-    let stdout = transport.shell(&serial, &["dumpsys", "package", &package])?;
+    let stdout = transport.shell_target(&target, &["dumpsys", "package", &package])?;
     Ok(parse_permissions(&stdout))
 }
 
 /// Grant or revoke a runtime permission.
 #[tauri::command]
 pub fn set_permission(
-    serial: String,
+    target: adb::DeviceTarget,
     package: String,
     permission: String,
     grant: bool,
 ) -> Result<String, CommandError> {
-    validate_serial_arg(&serial)?;
+    let transport = validated_transport(&target)?;
     validate_package_arg(&package)?;
     if permission.is_empty()
         || !permission
@@ -915,14 +885,8 @@ pub fn set_permission(
             message: format!("invalid permission identifier {permission:?}"),
         });
     }
-    let resolution = adb::locate_adb();
-    let path = resolution
-        .path
-        .as_ref()
-        .ok_or(adb::TransportError::AdbNotFound)?;
-    let transport = adb::ShellTransport::new(path);
     let action = if grant { "grant" } else { "revoke" };
-    let stdout = transport.shell(&serial, &["pm", action, &package, &permission])?;
+    let stdout = transport.shell_target(&target, &["pm", action, &package, &permission])?;
     Ok(stdout)
 }
 
@@ -969,39 +933,29 @@ fn parse_permissions(stdout: &str) -> Vec<PermissionInfo> {
 /// Get process list from a device. Uses `ps -A -o PID,USER,VSZ,RSS,%CPU,NAME`
 /// for a structured snapshot.
 #[tauri::command]
-pub fn list_processes(serial: String) -> Result<Vec<ProcessInfo>, CommandError> {
-    validate_serial_arg(&serial)?;
-    let resolution = adb::locate_adb();
-    let path = resolution
-        .path
-        .as_ref()
-        .ok_or(adb::TransportError::AdbNotFound)?;
-    let transport = adb::ShellTransport::new(path);
-    let stdout = transport.shell(&serial, &["ps", "-A", "-o", "PID,USER,VSZ,RSS,NAME"])?;
+pub fn list_processes(target: adb::DeviceTarget) -> Result<Vec<ProcessInfo>, CommandError> {
+    let transport = validated_transport(&target)?;
+    let stdout = transport.shell_target(&target, &["ps", "-A", "-o", "PID,USER,VSZ,RSS,NAME"])?;
     Ok(parse_ps_output(&stdout))
 }
 
 /// Take a screenshot on the device and pull it to a local path.
 #[tauri::command]
-pub fn take_screenshot(serial: String, local_path: String) -> Result<String, CommandError> {
-    validate_serial_arg(&serial)?;
+pub fn take_screenshot(
+    target: adb::DeviceTarget,
+    local_path: String,
+) -> Result<String, CommandError> {
+    let transport = validated_transport(&target)?;
     let validated_path = validate_local_path(&local_path)?;
-    let resolution = adb::locate_adb();
-    let path = resolution
-        .path
-        .as_ref()
-        .ok_or(adb::TransportError::AdbNotFound)?;
-    let transport = adb::ShellTransport::new(path);
-
     // Unique device-side temp so concurrent captures (multiple devices or
     // rapid clicks) never clobber each other's PNG mid-pull.
     let remote = unique_screenshot_remote();
     let local_arg = validated_path.display().to_string();
-    transport.shell(&serial, &["screencap", "-p", &remote])?;
-    let pulled = actions::extract_apk(std::path::Path::new(path), &serial, &remote, &local_arg);
+    transport.shell_target(&target, &["screencap", "-p", &remote])?;
+    let pulled = actions::extract_apk(&transport.adb_path, &target, &remote, &local_arg);
     // Always remove the device temp, even when the pull failed, so a
     // partial capture never leaks onto /sdcard.
-    let _ = transport.shell(&serial, &["rm", "-f", &remote]);
+    let _ = transport.shell_target(&target, &["rm", "-f", &remote]);
     pulled?;
     Ok(local_arg)
 }
@@ -1033,6 +987,24 @@ pub fn launch_scrcpy(
     request: crate::scrcpy::LaunchScrcpyRequest,
 ) -> Result<crate::scrcpy::ScrcpySession, CommandError> {
     validate_serial_arg(&request.serial)?;
+    if request.target.serial != request.serial {
+        return Err(CommandError {
+            code: "target_mismatch",
+            message: "scrcpy target does not match the requested serial".to_string(),
+        });
+    }
+    let transport = validated_transport(&request.target)?;
+    let duplicate_count = transport
+        .list_devices()?
+        .into_iter()
+        .filter(|device| device.serial == request.serial)
+        .count();
+    if duplicate_count != 1 {
+        return Err(CommandError {
+            code: "ambiguous_serial",
+            message: "scrcpy cannot safely select a duplicate device serial".to_string(),
+        });
+    }
     let scrcpy_path = which::which("scrcpy").map_err(|_| CommandError {
         code: "scrcpy_not_found",
         message: "scrcpy binary not found on PATH".to_string(),
@@ -1064,36 +1036,26 @@ pub fn stop_scrcpy(session_id: u64) -> Result<crate::scrcpy::ScrcpySession, Comm
 /// Install an APK file on a device. The `apk_path` is a local filesystem
 /// path to the `.apk` file. Uses `adb install -r` for replace-on-conflict.
 #[tauri::command]
-pub fn install_apk(serial: String, apk_path: String) -> Result<String, CommandError> {
-    validate_serial_arg(&serial)?;
+pub fn install_apk(target: adb::DeviceTarget, apk_path: String) -> Result<String, CommandError> {
+    let transport = validated_transport(&target)?;
     let validated_path = validate_local_path(&apk_path)?;
-    let resolution = adb::locate_adb();
-    let path = resolution
-        .path
-        .as_ref()
-        .ok_or(adb::TransportError::AdbNotFound)?;
     let apk_arg = validated_path.display().to_string();
-    let stdout = actions::install_apk(std::path::Path::new(path), &serial, &apk_arg)?;
+    let stdout = actions::install_apk(&transport.adb_path, &target, &apk_arg)?;
     Ok(stdout)
 }
 
 /// Pull an APK from the device to a local path.
 #[tauri::command]
 pub fn extract_apk(
-    serial: String,
+    target: adb::DeviceTarget,
     remote_path: String,
     local_path: String,
 ) -> Result<String, CommandError> {
-    validate_serial_arg(&serial)?;
+    let transport = validated_transport(&target)?;
     let validated_path = validate_local_path(&local_path)?;
     let remote = validate_remote_path(&remote_path)?;
-    let resolution = adb::locate_adb();
-    let path = resolution
-        .path
-        .as_ref()
-        .ok_or(adb::TransportError::AdbNotFound)?;
     let local_arg = validated_path.display().to_string();
-    let stdout = actions::extract_apk(std::path::Path::new(path), &serial, &remote, &local_arg)?;
+    let stdout = actions::extract_apk(&transport.adb_path, &target, &remote, &local_arg)?;
     Ok(stdout)
 }
 

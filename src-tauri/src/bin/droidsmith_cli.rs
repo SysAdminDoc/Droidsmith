@@ -19,7 +19,9 @@
 use std::path::PathBuf;
 use std::process::ExitCode;
 
-use droidsmith_lib::adb::{self, actions, device::valid_serial, AdbTransport, ShellTransport};
+use droidsmith_lib::adb::{
+    self, actions, device::valid_serial, AdbTransport, DeviceTarget, ShellTransport,
+};
 use droidsmith_lib::profile;
 
 fn main() -> ExitCode {
@@ -170,16 +172,45 @@ fn cmd_run(argv: &[String]) -> ExitCode {
     println!("Target device: {}", args.serial);
     println!("Actions: {} step(s)", profile.actions.len());
 
-    let requests = profile::requests_for(&profile, &args.serial);
+    let transport = if args.apply {
+        let Some(transport) = resolve_or_fail() else {
+            return ExitCode::from(3);
+        };
+        Some(transport)
+    } else {
+        None
+    };
+    let target = match &transport {
+        Some(transport) => match target_for_serial(transport, &args.serial) {
+            Ok(target) => target,
+            Err(error) => {
+                eprintln!("[droidsmith-cli] {error}");
+                return ExitCode::from(1);
+            }
+        },
+        None => DeviceTarget {
+            serial: args.serial.clone(),
+            transport_id: None,
+            // Dry runs never execute this target; a non-zero value keeps the
+            // plan schema complete without pretending a live transport was
+            // verified.
+            connection_generation: 1,
+            model: None,
+            product: None,
+            device: None,
+            build_fingerprint: Some("dry-run-unverified".to_string()),
+        },
+    };
+    let requests = profile::requests_for(&profile, &target);
 
     // Always render plans for the dry-run-or-apply preview.
     let plans: Vec<_> = requests.into_iter().map(actions::plan).collect();
     for (i, plan) in plans.iter().enumerate() {
         println!(
-            "  [{:>2}] {}  →  adb -s {} shell {}",
+            "  [{:>2}] {}  →  adb {} shell {}",
             i + 1,
             plan.description,
-            plan.request.serial,
+            plan.request.target.adb_selector().join(" "),
             plan.args.join(" ")
         );
     }
@@ -195,21 +226,19 @@ fn cmd_run(argv: &[String]) -> ExitCode {
         return ExitCode::SUCCESS;
     }
 
-    let Some(transport) = resolve_or_fail() else {
-        return ExitCode::from(3);
-    };
-    let manufacturer = match transport.shell(&args.serial, &["getprop", "ro.product.manufacturer"])
-    {
-        Ok(value) => Some(value.trim().to_string()),
-        Err(e) if profile.device.require_manufacturer.trim().is_empty() => {
-            eprintln!("[droidsmith-cli] warning: could not read device manufacturer: {e}");
-            None
-        }
-        Err(e) => {
-            eprintln!("[droidsmith-cli] could not verify required device manufacturer: {e}");
-            return ExitCode::from(1);
-        }
-    };
+    let transport = transport.expect("apply mode resolves a transport before planning");
+    let manufacturer =
+        match transport.shell_target(&target, &["getprop", "ro.product.manufacturer"]) {
+            Ok(value) => Some(value.trim().to_string()),
+            Err(e) if profile.device.require_manufacturer.trim().is_empty() => {
+                eprintln!("[droidsmith-cli] warning: could not read device manufacturer: {e}");
+                None
+            }
+            Err(e) => {
+                eprintln!("[droidsmith-cli] could not verify required device manufacturer: {e}");
+                return ExitCode::from(1);
+            }
+        };
     let manufacturer_issues = profile::manufacturer_match_issues(&profile, manufacturer.as_deref());
     if !manufacturer_issues.is_empty() {
         for issue in manufacturer_issues {
@@ -237,6 +266,39 @@ fn cmd_run(argv: &[String]) -> ExitCode {
         println!("\nAll actions applied successfully.");
         ExitCode::SUCCESS
     }
+}
+
+fn target_for_serial(transport: &ShellTransport, serial: &str) -> Result<DeviceTarget, String> {
+    let mut devices = transport
+        .list_devices()
+        .map_err(|error| format!("could not refresh devices: {error}"))?;
+    adb::observe_connection_generations(&mut devices);
+    let mut matches = devices
+        .into_iter()
+        .filter(|device| device.serial == serial)
+        .collect::<Vec<_>>();
+    if matches.len() != 1 {
+        return Err(format!(
+            "device serial {serial:?} is missing or ambiguous; reconnect it and run `devices` again"
+        ));
+    }
+    let mut device = matches.remove(0);
+    if !device.state.is_actionable() {
+        return Err(format!(
+            "device serial {serial:?} is not actionable ({:?})",
+            device.state
+        ));
+    }
+    let fingerprint = transport
+        .shell_target(&device.target(), &["getprop", "ro.build.fingerprint"])
+        .map_err(|error| format!("could not identify the device build: {error}"))?
+        .trim()
+        .to_string();
+    if fingerprint.is_empty() {
+        return Err("device did not report a build fingerprint".to_string());
+    }
+    device.build_fingerprint = Some(fingerprint);
+    Ok(device.target())
 }
 
 fn iso_now() -> String {

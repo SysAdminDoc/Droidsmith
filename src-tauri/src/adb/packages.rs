@@ -14,6 +14,7 @@
 //! then union them with `enabled: bool`. Labels and icons (F-NEW-09)
 //! land later — for now the UI shows package names.
 
+use crate::adb::device::DeviceTarget;
 use crate::adb::transport::{AdbTransport, TransportError};
 use serde::{Deserialize, Serialize};
 
@@ -61,19 +62,19 @@ pub enum PackageFilter {
 /// listed set consistent with the user that destructive actions target.
 pub fn list_packages(
     t: &dyn AdbTransport,
-    serial: &str,
+    target: &DeviceTarget,
     filter: PackageFilter,
     user_id: u32,
 ) -> Result<Vec<AppPackage>, TransportError> {
     let user = user_id.to_string();
-    let enabled_raw = t.shell(
-        serial,
+    let enabled_raw = t.shell_target(
+        target,
         &[
             "pm", "list", "packages", "--user", &user, "-e", "-f", "-U", "-i",
         ],
     )?;
-    let disabled_raw = t.shell(
-        serial,
+    let disabled_raw = t.shell_target(
+        target,
         &[
             "pm", "list", "packages", "--user", &user, "-d", "-f", "-U", "-i",
         ],
@@ -193,6 +194,18 @@ mod tests {
     use super::*;
     use crate::adb::transport::MockTransport;
 
+    fn target() -> DeviceTarget {
+        DeviceTarget {
+            serial: "abc".into(),
+            transport_id: Some(1),
+            connection_generation: 2,
+            model: None,
+            product: None,
+            device: None,
+            build_fingerprint: Some("build/test".into()),
+        }
+    }
+
     const ENABLED_FIXTURE: &str = "\
 package:/system/priv-app/Chrome/Chrome.apk=com.android.chrome uid:10042 installer=com.android.vending
 package:/data/app/~~aa==/com.example.foo-bb==/base.apk=com.example.foo uid:10412 installer=null
@@ -261,7 +274,7 @@ package:/system/app/FacebookStub/FacebookStub.apk=com.facebook.appmanager uid:10
             Ok(DISABLED_FIXTURE.to_string()),
         );
 
-        let v = list_packages(&mock, "abc", PackageFilter::All, 0).unwrap();
+        let v = list_packages(&mock, &target(), PackageFilter::All, 0).unwrap();
         assert_eq!(v.len(), 4);
         let enabled: Vec<_> = v.iter().filter(|p| p.enabled).collect();
         assert_eq!(enabled.len(), 3);
@@ -284,7 +297,7 @@ package:/system/app/FacebookStub/FacebookStub.apk=com.facebook.appmanager uid:10
             ],
             Ok(DISABLED_FIXTURE.to_string()),
         );
-        let v = list_packages(&mock, "abc", PackageFilter::User, 0).unwrap();
+        let v = list_packages(&mock, &target(), PackageFilter::User, 0).unwrap();
         assert_eq!(v.len(), 1);
         assert_eq!(v[0].package, "com.example.foo");
     }
@@ -306,7 +319,7 @@ package:/system/app/FacebookStub/FacebookStub.apk=com.facebook.appmanager uid:10
             ],
             Ok(DISABLED_FIXTURE.to_string()),
         );
-        let v = list_packages(&mock, "abc", PackageFilter::Disabled, 0).unwrap();
+        let v = list_packages(&mock, &target(), PackageFilter::Disabled, 0).unwrap();
         assert_eq!(v.len(), 1);
         assert_eq!(v[0].package, "com.facebook.appmanager");
     }

@@ -4,7 +4,9 @@ import { useTranslation } from "react-i18next";
 import {
   callListDevices,
   callShellRun,
+  deviceTarget,
   inTauri,
+  type DeviceTarget,
   type ListDevicesResult,
 } from "../lib/tauri";
 
@@ -31,7 +33,9 @@ export default function ConsoleRoute() {
   const [devicesState, setDevicesState] = useState<DevicesState>({
     kind: "loading",
   });
-  const [selectedSerial, setSelectedSerial] = useState<string | null>(null);
+  const [selectedTarget, setSelectedTarget] = useState<DeviceTarget | null>(
+    null,
+  );
   const [command, setCommand] = useState("");
   const [running, setRunning] = useState(false);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
@@ -52,7 +56,7 @@ export default function ConsoleRoute() {
         (d) => typeof d.state === "string" && d.state === "device",
       );
       if (authorized.length === 1) {
-        setSelectedSerial((prev) => prev ?? authorized[0]!.serial);
+        setSelectedTarget((prev) => prev ?? deviceTarget(authorized[0]!));
       }
     } catch (e) {
       setDevicesState({
@@ -74,7 +78,7 @@ export default function ConsoleRoute() {
 
   const runCommand = useCallback(async () => {
     const trimmed = command.trim();
-    if (!trimmed || !selectedSerial || running) return;
+    if (!trimmed || !selectedTarget || running) return;
 
     setRunning(true);
     setCommand("");
@@ -83,7 +87,7 @@ export default function ConsoleRoute() {
     const argv = trimmed.split(/\s+/);
 
     try {
-      const output = await callShellRun(selectedSerial, argv);
+      const output = await callShellRun(selectedTarget, argv);
       setHistory((prev) => [
         ...prev,
         {
@@ -109,7 +113,7 @@ export default function ConsoleRoute() {
       setRunning(false);
       inputRef.current?.focus();
     }
-  }, [command, selectedSerial, running]);
+  }, [command, selectedTarget, running]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -154,9 +158,9 @@ export default function ConsoleRoute() {
         description={t("console.description")}
         meta={
           <div className="flex flex-wrap items-center gap-2">
-            {selectedSerial && (
+            {selectedTarget && (
               <Badge tone="info">
-                <code className="font-mono">{selectedSerial}</code>
+                <code className="font-mono">{selectedTarget.serial}</code>
               </Badge>
             )}
             <Badge tone="neutral">
@@ -199,17 +203,26 @@ export default function ConsoleRoute() {
             <div className="mt-3 flex flex-wrap gap-2">
               {authorizedDevices.map((d) => (
                 <Button
-                  key={d.serial}
+                  key={`${d.transport_id ?? d.serial}:${d.connection_generation}`}
                   type="button"
                   variant={
-                    d.serial === selectedSerial ? "primary" : "secondary"
+                    d.transport_id === selectedTarget?.transport_id &&
+                    d.connection_generation ===
+                      selectedTarget?.connection_generation
+                      ? "primary"
+                      : "secondary"
                   }
                   size="sm"
                   onClick={() => {
-                    if (d.serial === selectedSerial) return;
+                    if (
+                      d.transport_id === selectedTarget?.transport_id &&
+                      d.connection_generation ===
+                        selectedTarget?.connection_generation
+                    )
+                      return;
                     // Scrollback and recall history belong to the previous
                     // device's shell — reset them on switch.
-                    setSelectedSerial(d.serial);
+                    setSelectedTarget(deviceTarget(d));
                     setHistory([]);
                     setHistoryIndex(-1);
                   }}
@@ -221,7 +234,7 @@ export default function ConsoleRoute() {
           </Card>
         )}
 
-        {selectedSerial && (
+        {selectedTarget && (
           <Card className="overflow-hidden p-0">
             <div
               ref={outputRef}

@@ -4,7 +4,9 @@ import { useTranslation } from "react-i18next";
 import {
   callListDevices,
   callShellRun,
+  deviceTarget,
   inTauri,
+  type DeviceTarget,
   type ListDevicesResult,
 } from "../lib/tauri";
 
@@ -38,7 +40,9 @@ export default function LogcatRoute() {
   const [devicesState, setDevicesState] = useState<DevicesState>({
     kind: "loading",
   });
-  const [selectedSerial, setSelectedSerial] = useState<string | null>(null);
+  const [selectedTarget, setSelectedTarget] = useState<DeviceTarget | null>(
+    null,
+  );
   const [lines, setLines] = useState<LogLine[]>([]);
   const [tailing, setTailing] = useState(false);
   const [paused, setPaused] = useState(false);
@@ -47,14 +51,14 @@ export default function LogcatRoute() {
   const [textFilter, setTextFilter] = useState("");
   const [fetchError, setFetchError] = useState(false);
   const tailRef = useRef(false);
-  const serialRef = useRef(selectedSerial);
+  const targetRef = useRef(selectedTarget);
   const tagFilterRef = useRef(tagFilter);
   const timerRef = useRef<number | null>(null);
   const outputRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    serialRef.current = selectedSerial;
-  }, [selectedSerial]);
+    targetRef.current = selectedTarget;
+  }, [selectedTarget]);
   useEffect(() => {
     tagFilterRef.current = tagFilter;
   }, [tagFilter]);
@@ -72,7 +76,7 @@ export default function LogcatRoute() {
         (d) => typeof d.state === "string" && d.state === "device",
       );
       if (authorized.length === 1) {
-        setSelectedSerial((prev) => prev ?? authorized[0]!.serial);
+        setSelectedTarget((prev) => prev ?? deviceTarget(authorized[0]!));
       }
     } catch (e) {
       setDevicesState({
@@ -87,8 +91,8 @@ export default function LogcatRoute() {
   }, [loadDevices]);
 
   const fetchLogcat = useCallback(async () => {
-    const serial = serialRef.current;
-    if (!serial || !tailRef.current) return;
+    const target = targetRef.current;
+    if (!target || !tailRef.current) return;
 
     try {
       const argv = ["logcat", "-v", "brief", "-d", "-t", "200"];
@@ -96,7 +100,7 @@ export default function LogcatRoute() {
       if (currentTag) {
         argv.push("-s", currentTag);
       }
-      const output = await callShellRun(serial, argv);
+      const output = await callShellRun(target, argv);
       const parsed = output
         .split("\n")
         .filter((l) => l.trim())
@@ -170,9 +174,9 @@ export default function LogcatRoute() {
         description={t("logcat.description")}
         meta={
           <div className="flex flex-wrap items-center gap-2">
-            {selectedSerial && (
+            {selectedTarget && (
               <Badge tone="info">
-                <code className="font-mono">{selectedSerial}</code>
+                <code className="font-mono">{selectedTarget.serial}</code>
               </Badge>
             )}
             {tailing && !fetchError && (
@@ -209,14 +213,18 @@ export default function LogcatRoute() {
             <div className="mt-3 flex flex-wrap gap-2">
               {authorizedDevices.map((d) => (
                 <Button
-                  key={d.serial}
+                  key={`${d.transport_id ?? d.serial}:${d.connection_generation}`}
                   type="button"
                   variant={
-                    d.serial === selectedSerial ? "primary" : "secondary"
+                    d.transport_id === selectedTarget?.transport_id &&
+                    d.connection_generation ===
+                      selectedTarget?.connection_generation
+                      ? "primary"
+                      : "secondary"
                   }
                   size="sm"
                   onClick={() => {
-                    setSelectedSerial(d.serial);
+                    setSelectedTarget(deviceTarget(d));
                     stopTailing();
                     setLines([]);
                   }}
@@ -228,7 +236,7 @@ export default function LogcatRoute() {
           </Card>
         )}
 
-        {selectedSerial && (
+        {selectedTarget && (
           <>
             <div className="flex flex-wrap items-end gap-3">
               <label className="grid gap-1.5">

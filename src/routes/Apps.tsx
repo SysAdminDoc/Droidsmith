@@ -13,11 +13,13 @@ import {
   callListUsers,
   callPlanAction,
   callSetPermission,
+  deviceTarget,
   inTauri,
   type ActionKind,
   type AndroidUser,
   type AppPackage,
   type Device,
+  type DeviceTarget,
   type JournalEntry,
   type ListDevicesResult,
   type PackageFilter,
@@ -94,7 +96,12 @@ export default function AppsRoute() {
     kind: "loading",
   });
   const [selectedSerial, setSelectedSerial] = useState<string | null>(null);
+  const [selectedTransportId, setSelectedTransportId] = useState<number | null>(
+    null,
+  );
   const [users, setUsers] = useState<AndroidUser[]>([]);
+  const [usersReady, setUsersReady] = useState(false);
+  const [userError, setUserError] = useState<string | null>(null);
   const [selectedUser, setSelectedUser] = useState<number>(0);
   const [filter, setFilter] = useState<PackageFilter>("all");
   const [pkgState, setPkgState] = useState<PackagesState>({ kind: "idle" });
@@ -106,6 +113,19 @@ export default function AppsRoute() {
   const [search, setSearch] = useState("");
   const [inspectedPkg, setInspectedPkg] = useState<string | null>(null);
   const [backupNotice, setBackupNotice] = useState<BackupNotice | null>(null);
+
+  const authorizedDevices =
+    devicesState.kind === "ok"
+      ? devicesState.value.devices.filter(
+          (d) => typeof d.state === "string" && d.state === "device",
+        )
+      : [];
+  const selectedDevice =
+    authorizedDevices.find((device) =>
+      selectedTransportId != null
+        ? device.transport_id === selectedTransportId
+        : device.serial === selectedSerial,
+    ) ?? null;
 
   const loadDevices = useCallback(async () => {
     if (!inTauri()) {
@@ -121,6 +141,7 @@ export default function AppsRoute() {
       );
       if (authorized.length === 1) {
         setSelectedSerial((prev) => prev ?? authorized[0]!.serial);
+        setSelectedTransportId((prev) => prev ?? authorized[0]!.transport_id);
       }
     } catch (e) {
       setDevicesState({
@@ -131,30 +152,36 @@ export default function AppsRoute() {
   }, []);
 
   const loadUsers = useCallback(async () => {
-    if (!selectedSerial) {
+    if (!selectedDevice) {
       setUsers([]);
+      setUsersReady(false);
+      setUserError(null);
       return;
     }
+    setUsersReady(false);
+    setUserError(null);
     try {
-      const found = await callListUsers(selectedSerial);
+      const found = await callListUsers(deviceTarget(selectedDevice));
       setUsers(found);
-      // Default the target to the foreground user, falling back to the
-      // owner (0). Never silently keep a stale selection from device A.
+      // Never silently keep a stale selection from device A. The backend
+      // rejects empty or ambiguous discovery instead of fabricating user 0.
       const foreground = found.find((u) => u.current) ?? found[0];
-      setSelectedUser(foreground ? foreground.id : 0);
-    } catch {
-      // Users are an enhancement; on failure fall back to owner-only.
+      if (!foreground)
+        throw new Error("Android user discovery returned no users");
+      setSelectedUser(foreground.id);
+      setUsersReady(true);
+    } catch (e) {
       setUsers([]);
-      setSelectedUser(0);
+      setUserError(e instanceof Error ? e.message : String(e));
     }
-  }, [selectedSerial]);
+  }, [selectedDevice]);
 
   const loadPackages = useCallback(async () => {
-    if (!selectedSerial) return;
+    if (!selectedDevice || !usersReady) return;
     setPkgState({ kind: "loading" });
     try {
       const packages = await callListPackages(
-        selectedSerial,
+        deviceTarget(selectedDevice),
         filter,
         selectedUser,
       );
@@ -165,7 +192,7 @@ export default function AppsRoute() {
         message: e instanceof Error ? e.message : String(e),
       });
     }
-  }, [selectedSerial, filter, selectedUser]);
+  }, [selectedDevice, filter, selectedUser, usersReady]);
 
   const loadJournal = useCallback(async () => {
     if (!selectedSerial) {
@@ -193,20 +220,25 @@ export default function AppsRoute() {
   }, [loadUsers]);
 
   useEffect(() => {
-    if (selectedSerial) {
+    if (selectedSerial && usersReady) {
       void loadPackages();
-      void loadJournal();
     } else {
-      setJournalState({ kind: "idle" });
+      setPkgState({ kind: "idle" });
     }
-  }, [selectedSerial, filter, selectedUser, loadPackages, loadJournal]);
+  }, [selectedSerial, usersReady, filter, selectedUser, loadPackages]);
+
+  useEffect(() => {
+    if (selectedSerial) void loadJournal();
+    else setJournalState({ kind: "idle" });
+  }, [selectedSerial, loadJournal]);
 
   const startAction = useCallback(
     async (pkg: string, kind: ActionKind) => {
-      if (!selectedSerial) return;
+      if (!selectedDevice || !usersReady) return;
       try {
         const plan = await callPlanAction({
-          serial: selectedSerial,
+          serial: selectedDevice.serial,
+          target: deviceTarget(selectedDevice),
           package: pkg,
           kind,
           user_id: selectedUser,
@@ -219,12 +251,12 @@ export default function AppsRoute() {
         });
       }
     },
-    [selectedSerial, selectedUser],
+    [selectedDevice, selectedUser, usersReady],
   );
 
   const startBackup = useCallback(
     async (pkg: string) => {
-      if (!selectedSerial) return;
+      if (!selectedDevice || !usersReady) return;
       setBackupNotice({
         title: t("apps.backupChooseDestination"),
         message: t("apps.backupLimitations"),
@@ -252,7 +284,11 @@ export default function AppsRoute() {
           path: localPath,
         });
 
-        const result = await callBackupPackage(selectedSerial, pkg, localPath);
+        const result = await callBackupPackage(
+          deviceTarget(selectedDevice),
+          pkg,
+          localPath,
+        );
         const displayState = backupDisplayState(result);
         const titleByState: Record<typeof displayState, string> = {
           empty: t("apps.backupEmptyTitle"),
@@ -283,7 +319,7 @@ export default function AppsRoute() {
         });
       }
     },
-    [selectedSerial, t],
+    [selectedDevice, t, usersReady],
   );
 
   const confirmAction = useCallback(async () => {
@@ -308,10 +344,10 @@ export default function AppsRoute() {
 
   const undoJournalEntry = useCallback(
     async (entry: JournalEntry) => {
-      if (!selectedSerial) return;
+      if (!selectedDevice || !usersReady) return;
       setUndoingEntryId(entry.id);
       try {
-        await callJournalUndo(selectedSerial, entry.id);
+        await callJournalUndo(deviceTarget(selectedDevice), entry.id);
         setActionState({
           kind: "success",
           message: t("apps.journalUndoCompleted", {
@@ -328,15 +364,8 @@ export default function AppsRoute() {
         setUndoingEntryId(null);
       }
     },
-    [loadJournal, loadPackages, selectedSerial, t],
+    [loadJournal, loadPackages, selectedDevice, t, usersReady],
   );
-
-  const authorizedDevices =
-    devicesState.kind === "ok"
-      ? devicesState.value.devices.filter(
-          (d) => typeof d.state === "string" && d.state === "device",
-        )
-      : [];
 
   const filteredPackages =
     pkgState.kind === "ok"
@@ -407,13 +436,22 @@ export default function AppsRoute() {
         {authorizedDevices.length > 1 && (
           <DevicePicker
             devices={authorizedDevices}
-            selected={selectedSerial}
-            onSelect={setSelectedSerial}
+            selected={selectedTransportId}
+            selectedSerial={selectedSerial}
+            onSelect={(device) => {
+              setSelectedSerial(device.serial);
+              setSelectedTransportId(device.transport_id);
+            }}
           />
         )}
 
         {selectedSerial && (
           <>
+            {userError && (
+              <StatePanel title={t("apps.userDiscoveryFailed")} tone="danger">
+                <p>{userError}</p>
+              </StatePanel>
+            )}
             <div className="flex flex-wrap items-center gap-3">
               <FilterChips
                 active={filter}
@@ -481,9 +519,9 @@ export default function AppsRoute() {
           </>
         )}
 
-        {inspectedPkg && selectedSerial && (
+        {inspectedPkg && selectedDevice && usersReady && (
           <PermissionsPanel
-            serial={selectedSerial}
+            target={deviceTarget(selectedDevice)}
             pkg={inspectedPkg}
             onClose={() => setInspectedPkg(null)}
           />
@@ -577,11 +615,13 @@ function BackupStatePanel({
 function DevicePicker({
   devices,
   selected,
+  selectedSerial,
   onSelect,
 }: {
   devices: Device[];
-  selected: string | null;
-  onSelect: (serial: string) => void;
+  selected: number | null;
+  selectedSerial: string | null;
+  onSelect: (device: Device) => void;
 }) {
   const { t } = useTranslation();
 
@@ -593,11 +633,19 @@ function DevicePicker({
       <div className="mt-3 flex flex-wrap gap-2">
         {devices.map((d) => (
           <Button
-            key={d.serial}
+            key={`${d.transport_id ?? d.serial}:${d.connection_generation}`}
             type="button"
-            variant={d.serial === selected ? "primary" : "secondary"}
+            variant={
+              (
+                d.transport_id != null
+                  ? d.transport_id === selected
+                  : d.serial === selectedSerial
+              )
+                ? "primary"
+                : "secondary"
+            }
             size="sm"
-            onClick={() => onSelect(d.serial)}
+            onClick={() => onSelect(d)}
           >
             {d.model ?? d.serial}
           </Button>
@@ -1144,11 +1192,11 @@ function ActionOverlay({
 }
 
 function PermissionsPanel({
-  serial,
+  target,
   pkg,
   onClose,
 }: {
-  serial: string;
+  target: DeviceTarget;
   pkg: string;
   onClose: () => void;
 }) {
@@ -1162,7 +1210,7 @@ function PermissionsPanel({
     setLoading(true);
     setPermError(null);
     try {
-      const result = await callListPermissions(serial, pkg);
+      const result = await callListPermissions(target, pkg);
       setPerms(result);
     } catch (e) {
       setPerms([]);
@@ -1170,7 +1218,7 @@ function PermissionsPanel({
     } finally {
       setLoading(false);
     }
-  }, [serial, pkg]);
+  }, [target, pkg]);
 
   useEffect(() => {
     void load();
@@ -1181,7 +1229,7 @@ function PermissionsPanel({
       setToggling(permission);
       setPermError(null);
       try {
-        await callSetPermission(serial, pkg, permission, grant);
+        await callSetPermission(target, pkg, permission, grant);
         setPerms((prev) =>
           prev.map((p) =>
             p.permission === permission ? { ...p, granted: grant } : p,
@@ -1201,7 +1249,7 @@ function PermissionsPanel({
         setToggling(null);
       }
     },
-    [serial, pkg, load, t],
+    [target, pkg, load, t],
   );
 
   return (

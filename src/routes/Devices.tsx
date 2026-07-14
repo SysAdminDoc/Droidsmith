@@ -11,9 +11,12 @@ import {
   callPullFile,
   callShellRun,
   callTakeScreenshot,
+  deviceTarget,
   inTauri,
   summarizeState,
+  type Device,
   type DeviceInfo,
+  type DeviceTarget,
   type ListDevicesResult,
   type NetworkConnection,
   type ProcessInfo,
@@ -43,9 +46,9 @@ type State =
 
 type DetailState =
   | { kind: "idle" }
-  | { kind: "loading"; serial: string }
-  | { kind: "ok"; info: DeviceInfo }
-  | { kind: "error"; serial: string; message: string };
+  | { kind: "loading"; target: DeviceTarget }
+  | { kind: "ok"; info: DeviceInfo; target: DeviceTarget }
+  | { kind: "error"; target: DeviceTarget; message: string };
 
 export default function DevicesRoute() {
   const { t } = useTranslation();
@@ -69,15 +72,16 @@ export default function DevicesRoute() {
     }
   }, []);
 
-  const selectDevice = useCallback(async (serial: string) => {
-    setDetail({ kind: "loading", serial });
+  const selectDevice = useCallback(async (device: Device) => {
+    const target = deviceTarget(device);
+    setDetail({ kind: "loading", target });
     try {
-      const info = await callGetDeviceInfo(serial);
-      setDetail({ kind: "ok", info });
+      const info = await callGetDeviceInfo(target);
+      setDetail({ kind: "ok", info, target });
     } catch (e) {
       setDetail({
         kind: "error",
-        serial,
+        target,
         message: e instanceof Error ? e.message : String(e),
       });
     }
@@ -197,12 +201,12 @@ export default function DevicesRoute() {
             devices={state.value.devices}
             selectedSerial={
               detail.kind === "ok"
-                ? detail.info.serial
+                ? detail.target.transport_id
                 : detail.kind === "loading"
-                  ? detail.serial
+                  ? detail.target.transport_id
                   : undefined
             }
-            onSelect={(serial) => void selectDevice(serial)}
+            onSelect={(device) => void selectDevice(device)}
           />
         )}
 
@@ -242,7 +246,18 @@ export default function DevicesRoute() {
         <section className="mt-4 max-w-6xl space-y-4" aria-live="polite">
           <DeviceDetail
             state={detail}
-            onRetry={(serial) => void selectDevice(serial)}
+            onRetry={(target) => {
+              const device =
+                state.kind === "ok"
+                  ? state.value.devices.find(
+                      (candidate) =>
+                        candidate.transport_id === target.transport_id &&
+                        candidate.connection_generation ===
+                          target.connection_generation,
+                    )
+                  : undefined;
+              if (device) void selectDevice(device);
+            }}
           />
           {detail.kind === "ok" && (
             // Key by serial so every sub-panel's internal state (process
@@ -250,8 +265,8 @@ export default function DevicesRoute() {
             // messages) resets on device switch instead of showing device
             // A's data while device B is selected.
             <DeviceControls
-              key={detail.info.serial}
-              serial={detail.info.serial}
+              key={`${detail.target.transport_id ?? detail.target.serial}:${detail.target.connection_generation}`}
+              target={detail.target}
             />
           )}
         </section>
@@ -307,8 +322,8 @@ function DeviceTable({
   onSelect,
 }: {
   devices: ListDevicesResult["devices"];
-  selectedSerial?: string;
-  onSelect: (serial: string) => void;
+  selectedSerial?: number | null;
+  onSelect: (device: Device) => void;
 }) {
   const { t } = useTranslation();
 
@@ -341,19 +356,19 @@ function DeviceTable({
             {devices.map((device) => {
               const isDevice =
                 typeof device.state === "string" && device.state === "device";
-              const isSelected = device.serial === selectedSerial;
+              const isSelected = device.transport_id === selectedSerial;
               return (
                 <tr
-                  key={device.serial}
+                  key={`${device.transport_id ?? device.serial}:${device.connection_generation}`}
                   role={isDevice ? "button" : undefined}
                   tabIndex={isDevice ? 0 : undefined}
-                  onClick={isDevice ? () => onSelect(device.serial) : undefined}
+                  onClick={isDevice ? () => onSelect(device) : undefined}
                   onKeyDown={
                     isDevice
                       ? (e) => {
                           if (e.key === "Enter" || e.key === " ") {
                             e.preventDefault();
-                            onSelect(device.serial);
+                            onSelect(device);
                           }
                         }
                       : undefined
@@ -420,7 +435,7 @@ function DeviceDetail({
   onRetry,
 }: {
   state: DetailState;
-  onRetry: (serial: string) => void;
+  onRetry: (target: DeviceTarget) => void;
 }) {
   const { t } = useTranslation();
 
@@ -433,7 +448,7 @@ function DeviceDetail({
           {t("devices.loadingDeviceInfo")}
         </h3>
         <p className="mt-1 text-xs text-anvil-400">
-          {t("devices.queryingSerial", { serial: state.serial })}
+          {t("devices.queryingSerial", { serial: state.target.serial })}
         </p>
         <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {Array.from({ length: 6 }).map((_, i) => (
@@ -455,7 +470,7 @@ function DeviceDetail({
         actions={
           <Button
             type="button"
-            onClick={() => onRetry(state.serial)}
+            onClick={() => onRetry(state.target)}
             variant="danger"
             size="sm"
           >
@@ -629,8 +644,9 @@ const REMOTE_BUTTONS: { id: string; labelKey: string; keycode: number }[] = [
   { id: "Menu", labelKey: "devices.controls.remoteMenu", keycode: 82 },
 ];
 
-function DeviceControls({ serial }: { serial: string }) {
+function DeviceControls({ target }: { target: DeviceTarget }) {
   const { t } = useTranslation();
+  const serial = target.serial;
   const [lastKey, setLastKey] = useState<string | null>(null);
   const [screenshotMsg, setScreenshotMsg] = useState<string | null>(null);
   const [density, setDensity] = useState("");
@@ -639,13 +655,13 @@ function DeviceControls({ serial }: { serial: string }) {
   const sendKey = useCallback(
     async (keycode: number, label: string) => {
       try {
-        await callShellRun(serial, ["input", "keyevent", String(keycode)]);
+        await callShellRun(target, ["input", "keyevent", String(keycode)]);
         setLastKey(label);
       } catch {
         setLastKey(t("devices.controls.keyFailed", { label }));
       }
     },
-    [serial, t],
+    [target, t],
   );
 
   const takeScreenshot = useCallback(async () => {
@@ -662,7 +678,7 @@ function DeviceControls({ serial }: { serial: string }) {
         return;
       }
       setScreenshotMsg(t("devices.controls.capturing"));
-      await callTakeScreenshot(serial, localPath);
+      await callTakeScreenshot(target, localPath);
       setScreenshotMsg(t("devices.controls.savedTo", { path: localPath }));
     } catch (e) {
       setScreenshotMsg(
@@ -671,12 +687,12 @@ function DeviceControls({ serial }: { serial: string }) {
         }),
       );
     }
-  }, [serial, t]);
+  }, [serial, target, t]);
 
   const applyDensity = useCallback(async () => {
     if (!density.trim()) return;
     try {
-      await callShellRun(serial, ["wm", "density", density.trim()]);
+      await callShellRun(target, ["wm", "density", density.trim()]);
       setDisplayMsg(
         t("devices.controls.densitySet", { value: density.trim() }),
       );
@@ -687,11 +703,11 @@ function DeviceControls({ serial }: { serial: string }) {
         }),
       );
     }
-  }, [serial, density, t]);
+  }, [target, density, t]);
 
   const resetDensity = useCallback(async () => {
     try {
-      await callShellRun(serial, ["wm", "density", "reset"]);
+      await callShellRun(target, ["wm", "density", "reset"]);
       setDisplayMsg(t("devices.controls.densityReset"));
     } catch (e) {
       setDisplayMsg(
@@ -700,12 +716,12 @@ function DeviceControls({ serial }: { serial: string }) {
         }),
       );
     }
-  }, [serial, t]);
+  }, [target, t]);
 
   const toggleForceDark = useCallback(
     async (enable: boolean) => {
       try {
-        await callShellRun(serial, [
+        await callShellRun(target, [
           "settings",
           "put",
           "secure",
@@ -725,7 +741,7 @@ function DeviceControls({ serial }: { serial: string }) {
         );
       }
     },
-    [serial, t],
+    [target, t],
   );
 
   return (
@@ -844,9 +860,9 @@ function DeviceControls({ serial }: { serial: string }) {
           </Card>
         </div>
       </div>
-      <ProcessManager serial={serial} />
-      <FileManager serial={serial} />
-      <NetworkInspector serial={serial} />
+      <ProcessManager target={target} />
+      <FileManager target={target} />
+      <NetworkInspector target={target} />
     </div>
   );
 }
@@ -907,7 +923,7 @@ function RemoteGlyph({ label }: { label: string }) {
   );
 }
 
-function ProcessManager({ serial }: { serial: string }) {
+function ProcessManager({ target }: { target: DeviceTarget }) {
   const { t } = useTranslation();
   const [processes, setProcesses] = useState<ProcessInfo[]>([]);
   const [loading, setLoading] = useState(false);
@@ -919,7 +935,7 @@ function ProcessManager({ serial }: { serial: string }) {
     setLoading(true);
     setError(null);
     try {
-      const procs = await callListProcesses(serial);
+      const procs = await callListProcesses(target);
       setProcesses(procs);
     } catch (e) {
       setProcesses([]);
@@ -927,7 +943,7 @@ function ProcessManager({ serial }: { serial: string }) {
     } finally {
       setLoading(false);
     }
-  }, [serial]);
+  }, [target]);
 
   const filtered = processes
     .filter((p) =>
@@ -1080,7 +1096,7 @@ function formatBytes(bytes: number | null): string {
   return `${bytes} B`;
 }
 
-function FileManager({ serial }: { serial: string }) {
+function FileManager({ target }: { target: DeviceTarget }) {
   const { t } = useTranslation();
   const [listing, setListing] = useState<RemoteListing | null>(null);
   const [currentPath, setCurrentPath] = useState("/sdcard");
@@ -1094,7 +1110,7 @@ function FileManager({ serial }: { serial: string }) {
       setPullMsg(null);
       setError(null);
       try {
-        const result = await callListRemoteFiles(serial, path);
+        const result = await callListRemoteFiles(target, path);
         setListing(result);
         setCurrentPath(path);
       } catch (e) {
@@ -1104,7 +1120,7 @@ function FileManager({ serial }: { serial: string }) {
         setLoading(false);
       }
     },
-    [serial],
+    [target],
   );
 
   const navigateUp = useCallback(() => {
@@ -1130,7 +1146,7 @@ function FileManager({ serial }: { serial: string }) {
           currentPath === "/"
             ? `/${entry.name}`
             : `${currentPath}/${entry.name}`;
-        await callPullFile(serial, remoteFull, localPath);
+        await callPullFile(target, remoteFull, localPath);
         setPullMsg(
           t("devices.controls.savedName", {
             name: entry.name,
@@ -1145,7 +1161,7 @@ function FileManager({ serial }: { serial: string }) {
         );
       }
     },
-    [serial, currentPath, t],
+    [target, currentPath, t],
   );
 
   return (
@@ -1317,7 +1333,7 @@ function FileGlyph({ directory }: { directory: boolean }) {
   );
 }
 
-function NetworkInspector({ serial }: { serial: string }) {
+function NetworkInspector({ target }: { target: DeviceTarget }) {
   const { t } = useTranslation();
   const [connections, setConnections] = useState<NetworkConnection[]>([]);
   const [loading, setLoading] = useState(false);
@@ -1328,7 +1344,7 @@ function NetworkInspector({ serial }: { serial: string }) {
     setLoading(true);
     setError(null);
     try {
-      const conns = await callListNetworkConnections(serial);
+      const conns = await callListNetworkConnections(target);
       setConnections(conns);
     } catch (e) {
       setConnections([]);
@@ -1336,7 +1352,7 @@ function NetworkInspector({ serial }: { serial: string }) {
     } finally {
       setLoading(false);
     }
-  }, [serial]);
+  }, [target]);
 
   const filtered = connections.filter((c) =>
     search

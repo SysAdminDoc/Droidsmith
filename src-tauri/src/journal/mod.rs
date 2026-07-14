@@ -242,6 +242,7 @@ pub fn undo_request_for(journal: &Journal, entry_id: u64) -> Option<ActionReques
     let kind = entry.applied.plan.request.kind.inverse()?;
     Some(ActionRequest {
         serial: entry.applied.plan.request.serial.clone(),
+        target: entry.applied.plan.request.target.clone(),
         package: entry.applied.plan.request.package.clone(),
         kind,
         // Undo must target the exact same Android user the original
@@ -259,6 +260,18 @@ mod tests {
 
     static TMP_COUNTER: Mutex<u32> = Mutex::new(0);
 
+    fn target(serial: &str) -> crate::adb::DeviceTarget {
+        crate::adb::DeviceTarget {
+            serial: serial.into(),
+            transport_id: Some(1),
+            connection_generation: 2,
+            model: None,
+            product: None,
+            device: None,
+            build_fingerprint: Some("build/test".into()),
+        }
+    }
+
     fn fresh_tmp_dir(name: &str) -> PathBuf {
         let mut c = TMP_COUNTER.lock().unwrap();
         *c += 1;
@@ -271,6 +284,7 @@ mod tests {
         AppliedAction {
             plan: plan(ActionRequest {
                 serial: serial.into(),
+                target: target(serial),
                 package: pkg.into(),
                 kind,
                 user_id: 0,
@@ -398,6 +412,7 @@ mod tests {
         let path = dir.join("abc.jsonl");
         let good: PlannedAction = plan(ActionRequest {
             serial: "abc".into(),
+            target: target("abc"),
             package: "com.foo".into(),
             kind: ActionKind::Disable,
             user_id: 0,

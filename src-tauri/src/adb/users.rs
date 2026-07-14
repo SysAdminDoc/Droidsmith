@@ -4,9 +4,10 @@
 //! Sources:
 //! - `pm list users` → the full user set with names and running state.
 //! - `am get-current-user` → the foreground user id (Android 10+). On
-//!   older platforms this command is missing; callers fall back to the
-//!   `pm list users` "(current)" hint or user 0.
+//!   older platforms this command is missing; callers use the unambiguous
+//!   `pm list users` "(current)" hint and otherwise fail closed.
 
+use crate::adb::device::DeviceTarget;
 use crate::adb::transport::{AdbTransport, TransportError};
 use serde::{Deserialize, Serialize};
 
@@ -24,34 +25,46 @@ pub struct AndroidUser {
 }
 
 /// Enumerate users on `serial` and mark the foreground one.
-pub fn list_users(t: &dyn AdbTransport, serial: &str) -> Result<Vec<AndroidUser>, TransportError> {
-    let raw = t.shell(serial, &["pm", "list", "users"])?;
+pub fn list_users(
+    t: &dyn AdbTransport,
+    target: &DeviceTarget,
+) -> Result<Vec<AndroidUser>, TransportError> {
+    let raw = t.shell_target(target, &["pm", "list", "users"])?;
     let mut users = parse_pm_list_users(&raw);
+
+    if users.is_empty() {
+        return Err(TransportError::Parse(format!(
+            "Android user discovery returned no parseable users for {:?}",
+            target.serial
+        )));
+    }
 
     // `am get-current-user` is the authoritative foreground user on
     // Android 10+. If it fails or is empty (older platforms), keep the
     // "(current)" hint parsed from `pm list users`.
-    if let Ok(current_raw) = t.shell(serial, &["am", "get-current-user"]) {
+    if let Ok(current_raw) = t.shell_target(target, &["am", "get-current-user"]) {
         if let Some(current) = current_raw
             .trim()
             .lines()
             .next()
             .and_then(|l| l.trim().parse::<u32>().ok())
         {
+            if !users.iter().any(|user| user.id == current) {
+                return Err(TransportError::Parse(format!(
+                    "foreground Android user {current} is absent from pm list users"
+                )));
+            }
             for u in &mut users {
                 u.current = u.id == current;
             }
         }
     }
 
-    // Guarantee at least the owner so the UI always has a target.
-    if users.is_empty() {
-        users.push(AndroidUser {
-            id: 0,
-            name: "Owner".to_string(),
-            running: true,
-            current: true,
-        });
+    let current_count = users.iter().filter(|user| user.current).count();
+    if current_count != 1 {
+        return Err(TransportError::Parse(format!(
+            "Android user discovery is ambiguous: expected one foreground user, found {current_count}"
+        )));
     }
     Ok(users)
 }
@@ -117,6 +130,18 @@ Users:
         UserInfo{10:Work profile:1030} running
 ";
 
+    fn target() -> DeviceTarget {
+        DeviceTarget {
+            serial: "abc".into(),
+            transport_id: Some(1),
+            connection_generation: 2,
+            model: None,
+            product: None,
+            device: None,
+            build_fingerprint: Some("build/test".into()),
+        }
+    }
+
     #[test]
     fn parses_multiple_users() {
         let users = parse_pm_list_users(USERS_FIXTURE);
@@ -146,18 +171,17 @@ Users:
         let mock = MockTransport::new();
         mock.expect_shell("abc", &["pm", "list", "users"], Ok(USERS_FIXTURE.into()));
         mock.expect_shell("abc", &["am", "get-current-user"], Ok("10\n".into()));
-        let users = list_users(&mock, "abc").unwrap();
+        let users = list_users(&mock, &target()).unwrap();
         assert!(!users[0].current, "user 0 is not foreground");
         assert!(users[1].current, "user 10 is foreground");
     }
 
     #[test]
-    fn list_users_defaults_to_owner_when_empty() {
+    fn list_users_fails_closed_when_discovery_is_empty() {
         let mock = MockTransport::new();
         mock.expect_shell("abc", &["pm", "list", "users"], Ok(String::new()));
         mock.expect_shell("abc", &["am", "get-current-user"], Ok(String::new()));
-        let users = list_users(&mock, "abc").unwrap();
-        assert_eq!(users.len(), 1);
-        assert_eq!(users[0].id, 0);
+        let error = list_users(&mock, &target()).unwrap_err();
+        assert!(error.to_string().contains("returned no parseable users"));
     }
 }

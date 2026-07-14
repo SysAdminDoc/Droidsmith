@@ -44,9 +44,43 @@ export type Device = {
   model: string | null;
   product: string | null;
   device: string | null;
+  build_fingerprint: string | null;
   transport_id: number | null;
+  connection_generation: number;
   wireless: boolean;
 };
+
+export type DeviceTarget = Pick<
+  Device,
+  | "serial"
+  | "transport_id"
+  | "connection_generation"
+  | "model"
+  | "product"
+  | "device"
+  | "build_fingerprint"
+>;
+
+export function deviceTarget(device: Device): DeviceTarget {
+  const {
+    serial,
+    transport_id,
+    connection_generation,
+    model,
+    product,
+    device: codename,
+    build_fingerprint,
+  } = device;
+  return {
+    serial,
+    transport_id,
+    connection_generation,
+    model,
+    product,
+    device: codename,
+    build_fingerprint,
+  };
+}
 
 // Rust's untagged enum sometimes shows up as either the bare variant
 // name (for unit variants) or { Other: "raw" } for tuple variants.
@@ -147,6 +181,7 @@ export type ActionKind =
 
 export type ActionRequest = {
   serial: string;
+  target: DeviceTarget;
   package: string;
   kind: ActionKind;
   /** Android user id the action targets (`pm --user`). Defaults to 0. */
@@ -245,20 +280,24 @@ export async function callConnectWireless(
   return invoke<WirelessCommandResult>("connect_wireless", { request });
 }
 
-export async function callGetDeviceInfo(serial: string): Promise<DeviceInfo> {
-  return invoke<DeviceInfo>("get_device_info", { serial });
+export async function callGetDeviceInfo(
+  target: DeviceTarget,
+): Promise<DeviceInfo> {
+  return invoke<DeviceInfo>("get_device_info", { target });
 }
 
 export async function callListPackages(
-  serial: string,
+  target: DeviceTarget,
   filter: PackageFilter,
   userId = 0,
 ): Promise<AppPackage[]> {
-  return invoke<AppPackage[]>("list_packages", { serial, filter, userId });
+  return invoke<AppPackage[]>("list_packages", { target, filter, userId });
 }
 
-export async function callListUsers(serial: string): Promise<AndroidUser[]> {
-  return invoke<AndroidUser[]>("list_users", { serial });
+export async function callListUsers(
+  target: DeviceTarget,
+): Promise<AndroidUser[]> {
+  return invoke<AndroidUser[]>("list_users", { target });
 }
 
 export async function callPlanAction(
@@ -278,10 +317,10 @@ export async function callJournalList(serial: string): Promise<JournalEntry[]> {
 }
 
 export async function callJournalUndo(
-  serial: string,
+  target: DeviceTarget,
   entryId: number,
 ): Promise<JournalEntry> {
-  return invoke<JournalEntry>("journal_undo", { serial, entry_id: entryId });
+  return invoke<JournalEntry>("journal_undo", { target, entry_id: entryId });
 }
 
 export type RemoteFileEntry = {
@@ -308,9 +347,9 @@ export type NetworkConnection = {
 };
 
 export async function callListNetworkConnections(
-  serial: string,
+  target: DeviceTarget,
 ): Promise<NetworkConnection[]> {
-  return invoke<NetworkConnection[]>("list_network_connections", { serial });
+  return invoke<NetworkConnection[]>("list_network_connections", { target });
 }
 
 export type BackupPackageResult = {
@@ -323,46 +362,46 @@ export type BackupPackageResult = {
 };
 
 export async function callBackupPackage(
-  serial: string,
+  target: DeviceTarget,
   pkg: string,
   localPath: string,
 ): Promise<BackupPackageResult> {
   return invoke<BackupPackageResult>("backup_package", {
-    serial,
+    target,
     package: pkg,
     local_path: localPath,
   });
 }
 
 export async function callListRemoteFiles(
-  serial: string,
+  target: DeviceTarget,
   remotePath: string,
 ): Promise<RemoteListing> {
   return invoke<RemoteListing>("list_remote_files", {
-    serial,
+    target,
     remote_path: remotePath,
   });
 }
 
 export async function callPushFile(
-  serial: string,
+  target: DeviceTarget,
   localPath: string,
   remotePath: string,
 ): Promise<string> {
   return invoke<string>("push_file", {
-    serial,
+    target,
     local_path: localPath,
     remote_path: remotePath,
   });
 }
 
 export async function callPullFile(
-  serial: string,
+  target: DeviceTarget,
   remotePath: string,
   localPath: string,
 ): Promise<string> {
   return invoke<string>("pull_file", {
-    serial,
+    target,
     remote_path: remotePath,
     local_path: localPath,
   });
@@ -374,20 +413,20 @@ export type PermissionInfo = {
 };
 
 export async function callListPermissions(
-  serial: string,
+  target: DeviceTarget,
   pkg: string,
 ): Promise<PermissionInfo[]> {
-  return invoke<PermissionInfo[]>("list_permissions", { serial, package: pkg });
+  return invoke<PermissionInfo[]>("list_permissions", { target, package: pkg });
 }
 
 export async function callSetPermission(
-  serial: string,
+  target: DeviceTarget,
   pkg: string,
   permission: string,
   grant: boolean,
 ): Promise<string> {
   return invoke<string>("set_permission", {
-    serial,
+    target,
     package: pkg,
     permission,
     grant,
@@ -404,16 +443,16 @@ export type ProcessInfo = {
 };
 
 export async function callListProcesses(
-  serial: string,
+  target: DeviceTarget,
 ): Promise<ProcessInfo[]> {
-  return invoke<ProcessInfo[]>("list_processes", { serial });
+  return invoke<ProcessInfo[]>("list_processes", { target });
 }
 
 export async function callTakeScreenshot(
-  serial: string,
+  target: DeviceTarget,
   localPath: string,
 ): Promise<string> {
-  return invoke<string>("take_screenshot", { serial, local_path: localPath });
+  return invoke<string>("take_screenshot", { target, local_path: localPath });
 }
 
 export async function callLocateScrcpy(): Promise<string | null> {
@@ -422,6 +461,7 @@ export async function callLocateScrcpy(): Promise<string | null> {
 
 export type LaunchScrcpyOptions = {
   serial: string;
+  target: DeviceTarget;
   max_size?: number | null;
   bit_rate?: string | null;
   no_audio: boolean;
@@ -465,26 +505,26 @@ export async function callStopScrcpy(
 }
 
 export async function callShellRun(
-  serial: string,
+  target: DeviceTarget,
   argv: string[],
 ): Promise<string> {
-  return invoke<string>("shell_run", { serial, argv });
+  return invoke<string>("shell_run", { target, argv });
 }
 
 export async function callInstallApk(
-  serial: string,
+  target: DeviceTarget,
   apkPath: string,
 ): Promise<string> {
-  return invoke<string>("install_apk", { serial, apk_path: apkPath });
+  return invoke<string>("install_apk", { target, apk_path: apkPath });
 }
 
 export async function callExtractApk(
-  serial: string,
+  target: DeviceTarget,
   remotePath: string,
   localPath: string,
 ): Promise<string> {
   return invoke<string>("extract_apk", {
-    serial,
+    target,
     remote_path: remotePath,
     local_path: localPath,
   });

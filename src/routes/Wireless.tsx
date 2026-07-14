@@ -683,7 +683,6 @@ function QrMetric({
   );
 }
 
-
 function serviceKindTone(
   kind: WirelessAdbService["kind"],
 ): "neutral" | "info" | "success" | "warning" | "danger" {

@@ -14,8 +14,8 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::adb::device::valid_serial;
-use crate::adb::transport::{AdbTransport, TransportError};
+use crate::adb::device::{valid_serial, DeviceTarget};
+use crate::adb::transport::{validate_device_target, AdbTransport, TransportError};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -39,22 +39,29 @@ pub enum ActionKind {
 /// built-in staging.
 pub fn install_apk(
     adb_path: &std::path::Path,
-    serial: &str,
+    target: &DeviceTarget,
     apk_path: &str,
 ) -> Result<String, TransportError> {
     use std::io::Read as IoRead;
     use std::process::{Command, Stdio};
     use std::time::Instant;
 
-    if !crate::adb::device::valid_serial(serial) {
+    if !crate::adb::device::valid_serial(&target.serial) || target.connection_generation == 0 {
         return Err(TransportError::Parse(format!(
-            "invalid device serial {serial:?}"
+            "invalid device target for serial {:?}",
+            target.serial
         )));
     }
 
     let timeout = std::time::Duration::from_secs(300);
+    let mut args = target.adb_selector();
+    args.extend([
+        "install".to_string(),
+        "-r".to_string(),
+        apk_path.to_string(),
+    ]);
     let mut child = Command::new(adb_path)
-        .args(["-s", serial, "install", "-r", apk_path])
+        .args(&args)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -125,7 +132,7 @@ pub fn install_apk(
 /// Pull an APK from a device using `adb pull`.
 pub fn extract_apk(
     adb_path: &std::path::Path,
-    serial: &str,
+    target: &DeviceTarget,
     remote_path: &str,
     local_path: &str,
 ) -> Result<String, TransportError> {
@@ -133,15 +140,22 @@ pub fn extract_apk(
     use std::process::{Command, Stdio};
     use std::time::Instant;
 
-    if !crate::adb::device::valid_serial(serial) {
+    if !crate::adb::device::valid_serial(&target.serial) || target.connection_generation == 0 {
         return Err(TransportError::Parse(format!(
-            "invalid device serial {serial:?}"
+            "invalid device target for serial {:?}",
+            target.serial
         )));
     }
 
     let timeout = std::time::Duration::from_secs(120);
+    let mut args = target.adb_selector();
+    args.extend([
+        "pull".to_string(),
+        remote_path.to_string(),
+        local_path.to_string(),
+    ]);
     let mut child = Command::new(adb_path)
-        .args(["-s", serial, "pull", remote_path, local_path])
+        .args(&args)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -228,6 +242,11 @@ impl ActionKind {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ActionRequest {
     pub serial: String,
+    /// Immutable live target captured from `list_devices`. Legacy journal
+    /// rows deserialize to an invalid default and must be rebound by the
+    /// explicit undo request before execution.
+    #[serde(default)]
+    pub target: DeviceTarget,
     pub package: String,
     pub kind: ActionKind,
     /// Android user id the action targets (`pm --user`). Defaults to `0`
@@ -347,8 +366,16 @@ pub fn apply(
     now_iso: &str,
 ) -> Result<AppliedAction, TransportError> {
     validate_plan(&plan)?;
+    validate_device_target(transport, &plan.request.target)?;
+    let users = crate::adb::users::list_users(transport, &plan.request.target)?;
+    if !users.iter().any(|user| user.id == plan.request.user_id) {
+        return Err(TransportError::Parse(format!(
+            "Android user {} is no longer available on the selected device",
+            plan.request.user_id
+        )));
+    }
     let argv: Vec<&str> = plan.args.iter().map(String::as_str).collect();
-    let stdout = transport.shell(&plan.request.serial, &argv)?;
+    let stdout = transport.shell_target(&plan.request.target, &argv)?;
     // `pm disable-user --user 0 com.foo` prints "Package com.foo new
     // state: disabled" on success and "Failure [...]" on failure. We
     // surface the raw text and let UI / journal layers decide.
@@ -375,6 +402,13 @@ pub fn validate_plan(plan: &PlannedAction) -> Result<(), TransportError> {
             "invalid device serial {:?}",
             plan.request.serial
         )));
+    }
+    if plan.request.target.serial != plan.request.serial
+        || plan.request.target.connection_generation == 0
+    {
+        return Err(TransportError::Parse(
+            "action plan is missing the validated device target".to_string(),
+        ));
     }
     if !crate::adb::packages::valid_package_name(&plan.request.package) {
         return Err(TransportError::Parse(format!(
@@ -410,12 +444,48 @@ fn pm_failure_marker(stdout: &str) -> Option<&str> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::adb::transport::MockTransport;
+    use crate::adb::{device::DeviceState, transport::MockTransport, Device};
+
+    fn target(serial: &str) -> DeviceTarget {
+        DeviceTarget {
+            serial: serial.into(),
+            transport_id: Some(1),
+            connection_generation: 2,
+            model: None,
+            product: None,
+            device: None,
+            build_fingerprint: Some("build/test".into()),
+        }
+    }
+
+    fn device(serial: &str) -> Device {
+        Device {
+            serial: serial.into(),
+            state: DeviceState::Device,
+            model: None,
+            product: None,
+            device: None,
+            build_fingerprint: Some("build/test".into()),
+            transport_id: Some(1),
+            connection_generation: 0,
+            wireless: false,
+        }
+    }
+
+    fn expect_owner(mock: &MockTransport) {
+        mock.expect_shell(
+            "abc",
+            &["pm", "list", "users"],
+            Ok("Users:\n  UserInfo{0:Owner:c13} running (current)\n".into()),
+        );
+        mock.expect_shell("abc", &["am", "get-current-user"], Ok("0\n".into()));
+    }
 
     #[test]
     fn plan_disable_emits_pm_disable_user() {
         let r = ActionRequest {
             serial: "abc".into(),
+            target: target("abc"),
             package: "com.facebook.appmanager".into(),
             kind: ActionKind::Disable,
             user_id: 0,
@@ -438,6 +508,7 @@ mod tests {
     fn plan_enable_emits_pm_enable() {
         let p = plan(ActionRequest {
             serial: "abc".into(),
+            target: target("abc"),
             package: "com.x".into(),
             kind: ActionKind::Enable,
             user_id: 0,
@@ -449,6 +520,7 @@ mod tests {
     fn plan_uninstall_user_emits_pm_uninstall() {
         let p = plan(ActionRequest {
             serial: "abc".into(),
+            target: target("abc"),
             package: "com.x".into(),
             kind: ActionKind::UninstallForUser,
             user_id: 0,
@@ -470,6 +542,7 @@ mod tests {
         ] {
             let p = plan(ActionRequest {
                 serial: "abc".into(),
+                target: target("abc"),
                 package: "com.x".into(),
                 kind,
                 user_id: 10,
@@ -487,6 +560,7 @@ mod tests {
     fn plan_flags_suspicious_package_id_but_still_emits_args() {
         let p = plan(ActionRequest {
             serial: "abc".into(),
+            target: target("abc"),
             package: ".dotleading".into(),
             kind: ActionKind::Disable,
             user_id: 0,
@@ -509,14 +583,16 @@ mod tests {
 
     #[test]
     fn apply_records_stdout_and_timestamp() {
-        let mock = MockTransport::new();
+        let mock = MockTransport::new().with_devices(vec![device("abc")]);
         mock.expect_shell(
             "abc",
             &["pm", "disable-user", "--user", "0", "com.x"],
             Ok("Package com.x new state: disabled\n".into()),
         );
+        expect_owner(&mock);
         let p = plan(ActionRequest {
             serial: "abc".into(),
+            target: target("abc"),
             package: "com.x".into(),
             kind: ActionKind::Disable,
             user_id: 0,
@@ -528,14 +604,16 @@ mod tests {
 
     #[test]
     fn apply_surfaces_pm_failure_marker() {
-        let mock = MockTransport::new();
+        let mock = MockTransport::new().with_devices(vec![device("abc")]);
         mock.expect_shell(
             "abc",
             &["pm", "uninstall", "--user", "0", "com.x"],
             Ok("Failure [DELETE_FAILED_INTERNAL_ERROR]\n".into()),
         );
+        expect_owner(&mock);
         let p = plan(ActionRequest {
             serial: "abc".into(),
+            target: target("abc"),
             package: "com.x".into(),
             kind: ActionKind::UninstallForUser,
             user_id: 0,
@@ -555,6 +633,7 @@ mod tests {
         let mock = MockTransport::new();
         let mut p = plan(ActionRequest {
             serial: "abc".into(),
+            target: target("abc"),
             package: "com.x".into(),
             kind: ActionKind::Disable,
             user_id: 0,
@@ -569,6 +648,7 @@ mod tests {
         let mock = MockTransport::new();
         let p = plan(ActionRequest {
             serial: "abc".into(),
+            target: target("abc"),
             package: ".dotleading".into(),
             kind: ActionKind::Disable,
             user_id: 0,
@@ -582,12 +662,33 @@ mod tests {
         let mock = MockTransport::new();
         let p = plan(ActionRequest {
             serial: "../journal".into(),
+            target: target("../journal"),
             package: "com.x".into(),
             kind: ActionKind::Disable,
             user_id: 0,
         });
         let err = apply(&mock, p, "2026-05-25T12:00:00Z").unwrap_err();
         assert!(matches!(err, TransportError::Parse(_)));
+    }
+
+    #[test]
+    fn apply_refuses_a_user_that_disappeared_after_planning() {
+        let mock = MockTransport::new().with_devices(vec![device("abc")]);
+        mock.expect_shell(
+            "abc",
+            &["pm", "list", "users"],
+            Ok("Users:\n  UserInfo{10:Work:1030} running (current)\n".into()),
+        );
+        mock.expect_shell("abc", &["am", "get-current-user"], Ok("10\n".into()));
+        let p = plan(ActionRequest {
+            serial: "abc".into(),
+            target: target("abc"),
+            package: "com.x".into(),
+            kind: ActionKind::Disable,
+            user_id: 0,
+        });
+        let err = apply(&mock, p, "2026-05-25T12:00:00Z").unwrap_err();
+        assert!(err.to_string().contains("user 0 is no longer available"));
     }
 
     #[test]

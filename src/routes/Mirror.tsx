@@ -7,7 +7,9 @@ import {
   callLocateScrcpy,
   callScrcpySessionStatus,
   callStopScrcpy,
+  deviceTarget,
   inTauri,
+  type DeviceTarget,
   type ListDevicesResult,
   type ScrcpySession,
 } from "../lib/tauri";
@@ -63,7 +65,9 @@ export default function MirrorRoute() {
   const [scrcpyState, setScrcpyState] = useState<ScrcpyState>({
     kind: "checking",
   });
-  const [selectedSerial, setSelectedSerial] = useState<string | null>(null);
+  const [selectedTarget, setSelectedTarget] = useState<DeviceTarget | null>(
+    null,
+  );
   const [session, setSession] = useState<SessionState>({ kind: "idle" });
   const [preset, setPreset] = useState<MirrorPreset>(DEFAULT_MIRROR_PRESET);
   const [presetMessage, setPresetMessage] = useState<string | null>(null);
@@ -81,7 +85,7 @@ export default function MirrorRoute() {
         (d) => typeof d.state === "string" && d.state === "device",
       );
       if (authorized.length === 1) {
-        setSelectedSerial((prev) => prev ?? authorized[0]!.serial);
+        setSelectedTarget((prev) => prev ?? deviceTarget(authorized[0]!));
       }
     } catch (e) {
       setDevicesState({
@@ -112,7 +116,7 @@ export default function MirrorRoute() {
   }, [loadDevices, checkScrcpy]);
 
   useEffect(() => {
-    if (!selectedSerial) return;
+    if (!selectedTarget) return;
     setPresetMessage(null);
     // A mirror session belongs to a specific device — reset tracking when
     // the target changes so the UI doesn't show device A's running session
@@ -120,12 +124,14 @@ export default function MirrorRoute() {
     // window keeps running independently.
     setSession({ kind: "idle" });
     try {
-      const raw = window.localStorage.getItem(presetStorageKey(selectedSerial));
+      const raw = window.localStorage.getItem(
+        presetStorageKey(selectedTarget.serial),
+      );
       setPreset(raw ? normalizePreset(JSON.parse(raw)) : DEFAULT_MIRROR_PRESET);
     } catch {
       setPreset(DEFAULT_MIRROR_PRESET);
     }
-  }, [selectedSerial]);
+  }, [selectedTarget]);
 
   const runningSessionId =
     session.kind === "running" ? session.session.id : null;
@@ -158,28 +164,31 @@ export default function MirrorRoute() {
   }, [runningSessionId]);
 
   const savePreset = useCallback(() => {
-    if (!selectedSerial) return;
+    if (!selectedTarget) return;
     window.localStorage.setItem(
-      presetStorageKey(selectedSerial),
+      presetStorageKey(selectedTarget.serial),
       JSON.stringify(preset),
     );
-    setPresetMessage(t("mirror.presetSaved", { serial: selectedSerial }));
-  }, [preset, selectedSerial, t]);
+    setPresetMessage(
+      t("mirror.presetSaved", { serial: selectedTarget.serial }),
+    );
+  }, [preset, selectedTarget, t]);
 
   const resetPreset = useCallback(() => {
     setPreset(DEFAULT_MIRROR_PRESET);
-    if (selectedSerial) {
-      window.localStorage.removeItem(presetStorageKey(selectedSerial));
+    if (selectedTarget) {
+      window.localStorage.removeItem(presetStorageKey(selectedTarget.serial));
     }
     setPresetMessage(t("mirror.presetReset"));
-  }, [selectedSerial, t]);
+  }, [selectedTarget, t]);
 
   const launchMirror = useCallback(async () => {
-    if (!selectedSerial || scrcpyState.kind !== "found") return;
+    if (!selectedTarget || scrcpyState.kind !== "found") return;
     setSession({ kind: "launching" });
     try {
       const next = await callLaunchScrcpy({
-        serial: selectedSerial,
+        serial: selectedTarget.serial,
+        target: selectedTarget,
         max_size: parsePositiveInt(preset.maxSize),
         bit_rate: preset.bitRate.trim() || null,
         no_audio: preset.noAudio,
@@ -199,7 +208,7 @@ export default function MirrorRoute() {
         message: e instanceof Error ? e.message : String(e),
       });
     }
-  }, [selectedSerial, scrcpyState, preset]);
+  }, [selectedTarget, scrcpyState, preset]);
 
   const stopMirror = useCallback(async () => {
     if (session.kind !== "running") return;
@@ -238,9 +247,9 @@ export default function MirrorRoute() {
             {scrcpyState.kind === "checking" && (
               <Badge tone="info">{t("common.checking")}</Badge>
             )}
-            {selectedSerial && (
+            {selectedTarget && (
               <Badge tone="info">
-                <code className="font-mono">{selectedSerial}</code>
+                <code className="font-mono">{selectedTarget.serial}</code>
               </Badge>
             )}
           </div>
@@ -291,13 +300,17 @@ export default function MirrorRoute() {
                 <div className="mt-3 flex flex-wrap gap-2">
                   {authorizedDevices.map((d) => (
                     <Button
-                      key={d.serial}
+                      key={`${d.transport_id ?? d.serial}:${d.connection_generation}`}
                       type="button"
                       variant={
-                        d.serial === selectedSerial ? "primary" : "secondary"
+                        d.transport_id === selectedTarget?.transport_id &&
+                        d.connection_generation ===
+                          selectedTarget?.connection_generation
+                          ? "primary"
+                          : "secondary"
                       }
                       size="sm"
-                      onClick={() => setSelectedSerial(d.serial)}
+                      onClick={() => setSelectedTarget(deviceTarget(d))}
                     >
                       {d.model ?? d.serial}
                     </Button>
@@ -306,7 +319,7 @@ export default function MirrorRoute() {
               </Card>
             )}
 
-            {selectedSerial && (
+            {selectedTarget && (
               <Card className="p-5">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div>
