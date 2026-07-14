@@ -148,6 +148,15 @@ struct RawJournalRecord {
     failure: Option<String>,
 }
 
+#[derive(Debug, Clone)]
+struct RawInstallRecord {
+    serial: String,
+    operation_id: String,
+    outcome: String,
+    occurred_at: String,
+    failure: Option<String>,
+}
+
 pub fn build_preview(
     app_data_dir: &Path,
     crash_log_dir: &Path,
@@ -155,11 +164,13 @@ pub fn build_preview(
 ) -> std::io::Result<SupportPreview> {
     let journal_records = read_journal_records(&app_data_dir.join("journal"))?;
     let host_records = read_host_records(&app_data_dir.join("host-operations.jsonl"))?;
+    let install_records = read_install_records(&app_data_dir.join("install-operations.jsonl"))?;
     let mut serials = input
         .devices
         .iter()
         .map(|device| device.serial.clone())
         .chain(journal_records.iter().map(|record| record.serial.clone()))
+        .chain(install_records.iter().map(|record| record.serial.clone()))
         .collect::<BTreeSet<_>>();
     serials.retain(|serial| !serial.is_empty());
     let aliases = serials
@@ -213,6 +224,20 @@ pub fn build_preview(
                 .as_deref()
                 .map(|failure| sanitize_text(failure, &aliases)),
         })
+        .chain(install_records.into_iter().map(|record| {
+            SupportFailure {
+                source: "install_operation",
+                device_id: aliases.get(&record.serial).cloned(),
+                operation_id: sanitize_text(&record.operation_id, &aliases),
+                operation: "install_package".to_string(),
+                outcome: record.outcome,
+                occurred_at: record.occurred_at,
+                failure: record
+                    .failure
+                    .as_deref()
+                    .map(|failure| sanitize_text(failure, &aliases)),
+            }
+        }))
         .chain(host_records.into_iter().map(|mut record| {
             record.operation_id = sanitize_text(&record.operation_id, &aliases);
             record.operation = sanitize_text(&record.operation, &aliases);
@@ -409,6 +434,38 @@ fn read_host_records(path: &Path) -> std::io::Result<Vec<SupportFailure>> {
                     .unwrap_or_default()
                     .to_string(),
                 failure: value["failure"].as_str().map(str::to_string),
+            },
+        );
+    }
+    Ok(latest.into_values().collect())
+}
+
+fn read_install_records(path: &Path) -> std::io::Result<Vec<RawInstallRecord>> {
+    let mut latest = HashMap::<String, RawInstallRecord>::new();
+    for value in read_json_lines(path, MAX_JSONL_BYTES)? {
+        let Some(operation_id) = value.get("operation_id").and_then(Value::as_str) else {
+            continue;
+        };
+        let outcome = value["outcome"].as_str().unwrap_or("unknown");
+        if !is_failure_outcome(outcome) {
+            latest.remove(operation_id);
+            continue;
+        }
+        latest.insert(
+            operation_id.to_string(),
+            RawInstallRecord {
+                serial: value["device_serial"]
+                    .as_str()
+                    .unwrap_or_default()
+                    .to_string(),
+                operation_id: operation_id.to_string(),
+                outcome: outcome.to_string(),
+                occurred_at: value["completed_at"]
+                    .as_str()
+                    .or_else(|| value["started_at"].as_str())
+                    .unwrap_or_default()
+                    .to_string(),
+                failure: value["failure_summary"].as_str().map(str::to_string),
             },
         );
     }
@@ -720,6 +777,12 @@ mod tests {
         )
         .unwrap();
         fs::write(
+            app.join("install-operations.jsonl"),
+            r#"{"operation_id":"install-1","device_serial":"ZY224JQ9","outcome":"failed","started_at":"2026-07-14T18:01:30Z","failure_summary":"INSTALL_FAILED_MISSING_SPLIT for device ZY224JQ9"}
+"#,
+        )
+        .unwrap();
+        fs::write(
             logs.join("crash.log"),
             "panic for device ZY224JQ9 pairing_code=123456 password supersecret at C:\\Users\\Alice\\repo [fe80::1]:5555\n",
         )
@@ -738,6 +801,7 @@ mod tests {
             assert!(!preview.content.contains(secret), "leaked {secret}");
         }
         assert!(preview.content.contains("device-01"));
+        assert!(preview.content.contains("install_operation"));
         assert!(preview.content.contains("\"local_only\": true"));
         assert!(preview.content.contains("\"uploads_performed\": false"));
         fs::remove_dir_all(root).unwrap();

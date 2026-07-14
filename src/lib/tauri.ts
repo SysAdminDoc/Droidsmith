@@ -830,15 +830,46 @@ export async function callApplyDeviceControl(
 export async function callInstallApk(
   target: DeviceTarget,
   apkPath: string,
+  installOptions: InstallOptions = {},
   options?: OperationOptions,
-): Promise<string> {
-  return invokeOperation<string>(
+): Promise<InstallPackageResult> {
+  return invokeOperation<InstallPackageResult>(
     "install_apk",
-    { target, apk_path: apkPath },
+    { target, apk_path: apkPath, options: installOptions },
     "install",
     options,
   );
 }
+
+export type InstallSourceKind = "apk" | "apks" | "xapk" | "apkm";
+
+export type InstallOptions = {
+  allow_downgrade?: boolean;
+  bypass_low_target_sdk_block?: boolean;
+  override_confirmed?: boolean;
+};
+
+export type SuggestedInstallOverride =
+  | "allow_downgrade"
+  | "bypass_low_target_sdk_block";
+
+export type InstallFailure = {
+  code: string;
+  cause: string;
+  remedy: string;
+  suggested_override: SuggestedInstallOverride | null;
+  raw_output: string;
+};
+
+export type InstallPackageResult = {
+  succeeded: boolean;
+  source_kind: InstallSourceKind;
+  file_count: number;
+  total_bytes: number;
+  output: string;
+  failure: InstallFailure | null;
+  audit_id: string;
+};
 
 export async function callExtractApk(
   target: DeviceTarget,

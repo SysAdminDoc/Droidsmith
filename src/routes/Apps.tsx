@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { save } from "@tauri-apps/plugin-dialog";
+import { open, save } from "@tauri-apps/plugin-dialog";
 import { useTranslation } from "react-i18next";
 
 import {
   callApplyAction,
   callBackupPackage,
   callCancelOperation,
+  callInstallApk,
   callJournalList,
   callJournalUndo,
   callListPackages,
@@ -21,6 +22,8 @@ import {
   type Device,
   type DeviceTarget,
   type JournalEntry,
+  type InstallOptions,
+  type InstallPackageResult,
   type PackageFilter,
   type OperationEvent,
   type PermissionInfo,
@@ -79,6 +82,23 @@ type BackupNotice = {
   progress?: string;
 };
 
+type InstallState =
+  | { kind: "idle" }
+  | { kind: "choosing" }
+  | {
+      kind: "running";
+      operationId: string;
+      progress: string;
+      output: string;
+    }
+  | { kind: "result"; localPath: string; result: InstallPackageResult }
+  | { kind: "error"; message: string }
+  | {
+      kind: "confirming_override";
+      localPath: string;
+      result: InstallPackageResult;
+    };
+
 const FILTERS: { value: PackageFilter; labelKey: string }[] = [
   { value: "all", labelKey: "apps.filterAll" },
   { value: "user", labelKey: "apps.filterUser" },
@@ -108,8 +128,13 @@ export default function AppsRoute() {
   const [search, setSearch] = useState("");
   const [inspectedPkg, setInspectedPkg] = useState<string | null>(null);
   const [backupNotice, setBackupNotice] = useState<BackupNotice | null>(null);
+  const [installState, setInstallState] = useState<InstallState>({
+    kind: "idle",
+  });
   const activeBackupRef = useRef<string | null>(null);
   const backupGenerationRef = useRef(0);
+  const activeInstallRef = useRef<string | null>(null);
+  const installGenerationRef = useRef(0);
 
   const selectedDevice =
     authorizedDevices.find((device) =>
@@ -196,22 +221,31 @@ export default function AppsRoute() {
           ? authorizedDevices[0]!
           : null;
     backupGenerationRef.current += 1;
+    installGenerationRef.current += 1;
     const operationId = activeBackupRef.current;
+    const installOperationId = activeInstallRef.current;
     activeBackupRef.current = null;
+    activeInstallRef.current = null;
     if (operationId) void callCancelOperation(operationId);
+    if (installOperationId) void callCancelOperation(installOperationId);
     setSelectedSerial(next?.serial ?? null);
     setSelectedTransportId(next?.transport_id ?? null);
     setActionState({ kind: "idle" });
     setInspectedPkg(null);
     setBackupNotice(null);
+    setInstallState({ kind: "idle" });
   }, [authorizedDevices, selectedSerial, selectedTransportId]);
 
   useEffect(() => {
     return () => {
       backupGenerationRef.current += 1;
+      installGenerationRef.current += 1;
       const operationId = activeBackupRef.current;
+      const installOperationId = activeInstallRef.current;
       activeBackupRef.current = null;
+      activeInstallRef.current = null;
       if (operationId) void callCancelOperation(operationId);
+      if (installOperationId) void callCancelOperation(installOperationId);
     };
   }, []);
 
@@ -392,6 +426,130 @@ export default function AppsRoute() {
     await callCancelOperation(operationId);
   }, [t]);
 
+  const runInstall = useCallback(
+    async (localPath: string, installOptions: InstallOptions) => {
+      if (!selectedDevice) return;
+      const operationId = newOperationId("install");
+      const generation = installGenerationRef.current + 1;
+      installGenerationRef.current = generation;
+      activeInstallRef.current = operationId;
+      setInstallState({
+        kind: "running",
+        operationId,
+        progress: t("apps.installStarting"),
+        output: "",
+      });
+      try {
+        const result = await callInstallApk(
+          deviceTarget(selectedDevice),
+          localPath,
+          installOptions,
+          {
+            operationId,
+            onEvent: (event: OperationEvent) => {
+              if (
+                activeInstallRef.current !== operationId ||
+                installGenerationRef.current !== generation
+              )
+                return;
+              setInstallState((previous) => {
+                if (
+                  previous.kind !== "running" ||
+                  previous.operationId !== operationId
+                )
+                  return previous;
+                if (event.kind === "output" && event.chunk) {
+                  return {
+                    ...previous,
+                    output: `${previous.output}${event.chunk}`.slice(
+                      -64 * 1024,
+                    ),
+                  };
+                }
+                if (event.kind === "progress" && event.message) {
+                  return { ...previous, progress: event.message };
+                }
+                return previous;
+              });
+            },
+          },
+        );
+        if (installGenerationRef.current !== generation) return;
+        activeInstallRef.current = null;
+        setInstallState({ kind: "result", localPath, result });
+        if (result.succeeded) await loadPackages();
+      } catch (error) {
+        if (
+          activeInstallRef.current !== operationId ||
+          installGenerationRef.current !== generation
+        )
+          return;
+        activeInstallRef.current = null;
+        setInstallState({
+          kind: "error",
+          message: installErrorMessage(error),
+        });
+      }
+    },
+    [loadPackages, selectedDevice, t],
+  );
+
+  const startInstall = useCallback(async () => {
+    if (!selectedDevice) return;
+    setInstallState({ kind: "choosing" });
+    try {
+      const selected = await open({
+        title: t("apps.installChoosePackage"),
+        multiple: false,
+        directory: false,
+        filters: [
+          {
+            name: t("apps.installFileFilter"),
+            extensions: ["apk", "apks", "xapk", "apkm"],
+          },
+        ],
+      });
+      if (typeof selected !== "string") {
+        setInstallState({ kind: "idle" });
+        return;
+      }
+      await runInstall(selected, {});
+    } catch (error) {
+      setInstallState({
+        kind: "error",
+        message: installErrorMessage(error),
+      });
+    }
+  }, [runInstall, selectedDevice, t]);
+
+  const cancelInstall = useCallback(async () => {
+    const operationId = activeInstallRef.current;
+    if (!operationId) return;
+    setInstallState((previous) =>
+      previous.kind === "running"
+        ? { ...previous, progress: t("apps.installCancelling") }
+        : previous,
+    );
+    await callCancelOperation(operationId);
+  }, [t]);
+
+  const confirmInstallOverride = useCallback(async () => {
+    if (
+      installState.kind !== "confirming_override" ||
+      !installState.result.failure?.suggested_override
+    )
+      return;
+    const installOptions: InstallOptions = {
+      override_confirmed: true,
+      allow_downgrade:
+        installState.result.failure.suggested_override === "allow_downgrade",
+      bypass_low_target_sdk_block:
+        installState.result.failure.suggested_override ===
+        "bypass_low_target_sdk_block",
+    };
+    await runInstall(installState.localPath, installOptions);
+  }, [installState, runInstall]);
+
   const confirmAction = useCallback(async () => {
     if (actionState.kind !== "confirming") return;
     const { plan } = actionState;
@@ -453,17 +611,30 @@ export default function AppsRoute() {
         milestone="R-020"
         description={t("apps.description")}
         actions={
-          selectedSerial ? (
-            <Button
-              type="button"
-              onClick={() => void loadPackages()}
-              disabled={pkgState.kind === "loading"}
-              variant="primary"
-            >
-              {pkgState.kind === "loading"
-                ? t("apps.loading")
-                : t("apps.refreshPackages")}
-            </Button>
+          selectedDevice ? (
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                onClick={() => void startInstall()}
+                disabled={
+                  installState.kind === "choosing" ||
+                  installState.kind === "running"
+                }
+                variant="primary"
+              >
+                {t("apps.installPackage")}
+              </Button>
+              <Button
+                type="button"
+                onClick={() => void loadPackages()}
+                disabled={pkgState.kind === "loading"}
+                variant="ghost"
+              >
+                {pkgState.kind === "loading"
+                  ? t("apps.loading")
+                  : t("apps.refreshPackages")}
+              </Button>
+            </div>
           ) : undefined
         }
         meta={
@@ -510,14 +681,20 @@ export default function AppsRoute() {
             selectedSerial={selectedSerial}
             onSelect={(device) => {
               backupGenerationRef.current += 1;
+              installGenerationRef.current += 1;
               const operationId = activeBackupRef.current;
+              const installOperationId = activeInstallRef.current;
               activeBackupRef.current = null;
+              activeInstallRef.current = null;
               if (operationId) void callCancelOperation(operationId);
+              if (installOperationId)
+                void callCancelOperation(installOperationId);
               setSelectedSerial(device.serial);
               setSelectedTransportId(device.transport_id);
               setActionState({ kind: "idle" });
               setInspectedPkg(null);
               setBackupNotice(null);
+              setInstallState({ kind: "idle" });
             }}
           />
         )}
@@ -613,6 +790,37 @@ export default function AppsRoute() {
           />
         )}
 
+        <InstallStatePanel
+          state={installState}
+          onCancel={() => void cancelInstall()}
+          onDismiss={() => setInstallState({ kind: "idle" })}
+          onReviewOverride={() =>
+            setInstallState((previous) =>
+              previous.kind === "result"
+                ? {
+                    kind: "confirming_override",
+                    localPath: previous.localPath,
+                    result: previous.result,
+                  }
+                : previous,
+            )
+          }
+        />
+
+        {installState.kind === "confirming_override" && (
+          <InstallOverrideDialog
+            result={installState.result}
+            onCancel={() =>
+              setInstallState({
+                kind: "result",
+                localPath: installState.localPath,
+                result: installState.result,
+              })
+            }
+            onConfirm={() => void confirmInstallOverride()}
+          />
+        )}
+
         <ActionOverlay
           state={actionState}
           onConfirm={() => void confirmAction()}
@@ -621,6 +829,188 @@ export default function AppsRoute() {
         />
       </section>
     </>
+  );
+}
+
+function InstallStatePanel({
+  state,
+  onCancel,
+  onDismiss,
+  onReviewOverride,
+}: {
+  state: InstallState;
+  onCancel: () => void;
+  onDismiss: () => void;
+  onReviewOverride: () => void;
+}) {
+  const { t } = useTranslation();
+  if (
+    state.kind === "idle" ||
+    state.kind === "choosing" ||
+    state.kind === "confirming_override"
+  )
+    return null;
+  if (state.kind === "running") {
+    return (
+      <StatePanel
+        title={t("apps.installRunning")}
+        tone="info"
+        actions={
+          <Button type="button" size="sm" variant="danger" onClick={onCancel}>
+            {t("common.cancel")}
+          </Button>
+        }
+      >
+        <p>{state.progress}</p>
+        {state.output.trim() && (
+          <pre className="mt-3 max-h-40 overflow-auto rounded-md border border-white/10 bg-black/30 p-3 font-mono text-xs leading-5 text-anvil-200">
+            {state.output.trim()}
+          </pre>
+        )}
+      </StatePanel>
+    );
+  }
+  if (state.kind === "error") {
+    return (
+      <StatePanel
+        title={t("apps.installFailed")}
+        tone="danger"
+        actions={
+          <Button type="button" size="sm" variant="ghost" onClick={onDismiss}>
+            {t("common.dismiss")}
+          </Button>
+        }
+      >
+        <p>{state.message}</p>
+      </StatePanel>
+    );
+  }
+
+  const { result } = state;
+  const failure = result.failure;
+  return (
+    <StatePanel
+      title={
+        result.succeeded ? t("apps.installSucceeded") : t("apps.installFailed")
+      }
+      tone={result.succeeded ? "success" : "danger"}
+      actions={
+        <div className="flex flex-wrap gap-2">
+          {failure?.suggested_override && (
+            <Button
+              type="button"
+              size="sm"
+              variant="danger"
+              onClick={onReviewOverride}
+            >
+              {t("apps.installReviewOverride")}
+            </Button>
+          )}
+          <Button type="button" size="sm" variant="ghost" onClick={onDismiss}>
+            {t("common.dismiss")}
+          </Button>
+        </div>
+      }
+    >
+      <p>
+        {result.succeeded
+          ? t("apps.installSucceededBody", {
+              count: result.file_count,
+              size: formatBackupSize(result.total_bytes),
+            })
+          : failure?.cause}
+      </p>
+      {!result.succeeded && failure && (
+        <>
+          <dl className="mt-3 grid gap-2 text-xs sm:grid-cols-[7rem_minmax(0,1fr)]">
+            <dt className="font-medium text-anvil-400">
+              {t("apps.installCode")}
+            </dt>
+            <dd className="break-words font-mono text-anvil-100">
+              {failure.code}
+            </dd>
+            <dt className="font-medium text-anvil-400">
+              {t("apps.installRemedy")}
+            </dt>
+            <dd className="text-anvil-100">{failure.remedy}</dd>
+          </dl>
+          <p className="mt-3 text-xs text-anvil-400">
+            {t("apps.installNoAutomaticOverride")}
+          </p>
+          <pre className="mt-3 max-h-48 overflow-auto whitespace-pre-wrap rounded-md border border-white/10 bg-black/30 p-3 font-mono text-xs leading-5 text-anvil-200">
+            {failure.raw_output}
+          </pre>
+        </>
+      )}
+      <p className="mt-3 text-xs text-anvil-500">
+        {t("apps.installAudit", { id: result.audit_id })}
+      </p>
+    </StatePanel>
+  );
+}
+
+function InstallOverrideDialog({
+  result,
+  onCancel,
+  onConfirm,
+}: {
+  result: InstallPackageResult;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  const { t } = useTranslation();
+  const trapRef = useFocusTrap<HTMLDivElement>();
+  const override = result.failure?.suggested_override;
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onCancel();
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [onCancel]);
+  if (!override || !result.failure) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm">
+      <div
+        ref={trapRef}
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="install-override-title"
+        aria-describedby="install-override-description"
+        tabIndex={-1}
+        className="w-full max-w-xl rounded-lg border border-red-300/20 bg-anvil-950 p-5 shadow-2xl outline-none"
+      >
+        <h3
+          id="install-override-title"
+          className="text-lg font-semibold text-anvil-50"
+        >
+          {t("apps.installOverrideTitle")}
+        </h3>
+        <p
+          id="install-override-description"
+          className="mt-2 text-sm leading-6 text-anvil-300"
+        >
+          {override === "allow_downgrade"
+            ? t("apps.installDowngradeWarning")
+            : t("apps.installLowTargetWarning")}
+        </p>
+        <div className="mt-4 rounded-md border border-red-300/20 bg-red-300/10 p-3 text-sm text-red-100">
+          <p>{result.failure.cause}</p>
+          <p className="mt-2">{result.failure.remedy}</p>
+        </div>
+        <p className="mt-3 text-xs leading-5 text-anvil-400">
+          {t("apps.installOverrideAudit")}
+        </p>
+        <div className="mt-5 flex justify-end gap-2">
+          <Button type="button" variant="ghost" onClick={onCancel}>
+            {t("common.cancel")}
+          </Button>
+          <Button type="button" variant="danger" onClick={onConfirm}>
+            {t("apps.installConfirmOverride")}
+          </Button>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -702,6 +1092,18 @@ function BackupStatePanel({
       )}
     </StatePanel>
   );
+}
+
+function installErrorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    "message" in error &&
+    typeof error.message === "string"
+  )
+    return error.message;
+  return String(error);
 }
 
 function DevicePicker({

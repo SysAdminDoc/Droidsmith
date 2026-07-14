@@ -25,6 +25,7 @@ use crate::adb::parsers::{
 };
 use crate::adb::transport::AdbTransport;
 use crate::adb::{self, actions};
+use crate::install;
 use crate::journal::{self, Journal, JournalEntry};
 use crate::operations::{self, OperationEvent};
 use crate::quirks::{self, DeviceContext, Quirk};
@@ -767,6 +768,23 @@ impl From<operations::OperationError> for CommandError {
     }
 }
 
+impl From<install::InstallError> for CommandError {
+    fn from(error: install::InstallError) -> Self {
+        match error {
+            install::InstallError::InvalidSource(message) => Self {
+                code: "invalid_install_source",
+                message,
+            },
+            install::InstallError::Archive(error) => Self {
+                code: "invalid_install_archive",
+                message: error.to_string(),
+            },
+            install::InstallError::Io(error) => Self::from(error),
+            install::InstallError::Operation(error) => Self::from(error),
+        }
+    }
+}
+
 async fn spawn_blocking_operation<T, F>(operation: F) -> Result<T, CommandError>
 where
     T: Send + 'static,
@@ -837,7 +855,10 @@ fn execute_journaled(
         })
         .map_err(|error| match error {
             journal::ExecuteError::Journal(error) => CommandError::from(error),
-            journal::ExecuteError::Operation(error) => CommandError::from(error),
+            journal::ExecuteError::Operation(error) => CommandError {
+                code: "package_action_failed",
+                message: actions::package_action_failure_message(&error.to_string()),
+            },
         })?;
     Ok(ApplyActionResult {
         stdout: entry.applied.display_stdout.clone(),
@@ -1924,39 +1945,35 @@ pub fn stop_scrcpy(session_id: u64) -> Result<crate::scrcpy::ScrcpySession, Comm
     })
 }
 
-/// Install an APK file on a device. The `apk_path` is a local filesystem
-/// path to the `.apk` file. Uses `adb install -r` for replace-on-conflict.
+/// Install an APK or split-package archive on a device. Single APKs retain the
+/// direct `adb install -r` path; APKS/XAPK/APKM archives are committed through
+/// an atomic PackageInstaller session.
 #[tauri::command]
 pub async fn install_apk(
+    app: tauri::AppHandle,
     target: adb::DeviceTarget,
     apk_path: String,
+    options: install::InstallOptions,
     operation_id: String,
     on_event: tauri::ipc::Channel<OperationEvent>,
-) -> Result<String, CommandError> {
+) -> Result<install::InstallPackageResult, CommandError> {
     let transport = validated_transport(&target)?;
     let validated_path = validate_local_path(&apk_path)?;
-    let apk_arg = validated_path.display().to_string();
-    let mut args = target.adb_selector();
-    args.extend(["install".to_string(), "-r".to_string(), apk_arg]);
-    let adb_path = transport.adb_path.clone();
+    let app_data_dir = app.path().app_data_dir().map_err(|error| CommandError {
+        code: "no_app_data_dir",
+        message: error.to_string(),
+    })?;
     let sink = operations::channel_sink(on_event);
     spawn_blocking_operation(move || {
-        let output = operations::run_process(
-            &adb_path,
-            &args,
-            std::time::Duration::from_secs(300),
+        Ok(install::install_package(
+            &transport,
+            &target,
+            &validated_path,
+            &app_data_dir,
             &operation_id,
-            "Installing APK",
+            options,
             sink,
-        )?;
-        let stdout = completed_adb_output(output, "adb install")?;
-        if let Some(error) = actions::pm_failure_marker(&stdout) {
-            return Err(CommandError {
-                code: "adb_exit",
-                message: error.to_string(),
-            });
-        }
-        Ok(stdout)
+        )?)
     })
     .await
 }

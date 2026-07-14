@@ -143,6 +143,22 @@ async function runDesktopFlow(browser) {
   await page.getByText("com.example.app").waitFor({ state: "hidden" });
   await page.evaluate(() => window.__DROIDSMITH_MOCK_HOTPLUG__(true));
   await page.getByText("com.example.app").waitFor();
+  await page.getByRole("button", { name: "Install package" }).click();
+  await page
+    .getByText("INSTALL_FAILED_VERSION_DOWNGRADE", { exact: true })
+    .waitFor();
+  await page.getByRole("button", { name: "Review guarded override" }).click();
+  await page
+    .getByRole("alertdialog", { name: "Confirm an unsafe install override" })
+    .waitFor();
+  await page.getByText(/retries with -d/).waitFor();
+  await assertTabMovesFocus(page, "Apps install override review");
+  await page.screenshot({
+    path: path.join(screenshotDir, "desktop-apps-install-override.png"),
+    fullPage: false,
+  });
+  await page.getByRole("button", { name: "Install with override" }).click();
+  await page.getByText("Package installed", { exact: true }).waitFor();
   await assertNoHorizontalOverflow(page, "desktop Apps table");
   await page.screenshot({
     path: path.join(screenshotDir, "desktop-apps-table.png"),
@@ -349,6 +365,7 @@ async function installTauriMock(page) {
       },
     ];
     let journalId = 20;
+    let installAttempts = 0;
     const qaPackAssessment = {
       status: "compatible",
       override_required: false,
@@ -383,6 +400,9 @@ async function installTauriMock(page) {
       async invoke(cmd, args = {}) {
         if (cmd === "plugin:dialog|save") {
           return "C:/Users/QA/Desktop/droidsmith-support.json";
+        }
+        if (cmd === "plugin:dialog|open") {
+          return "C:/Users/QA/Downloads/sample.apks";
         }
         if (cmd === "heartbeat") {
           return {
@@ -535,6 +555,54 @@ async function installTauriMock(page) {
         }
         if (cmd === "list_packages") {
           return filterPackages(packages, args.filter ?? "all");
+        }
+        if (cmd === "install_apk") {
+          installAttempts += 1;
+          emitChannel(args.on_event, {
+            operation_id: args.operation_id,
+            kind: "progress",
+            message:
+              installAttempts === 1
+                ? "Creating an atomic Android install session"
+                : "Committing the complete package set",
+          });
+          if (installAttempts === 1) {
+            return {
+              succeeded: false,
+              source_kind: "apks",
+              file_count: 3,
+              total_bytes: 24576,
+              output: "",
+              failure: {
+                code: "INSTALL_FAILED_VERSION_DOWNGRADE",
+                cause:
+                  "The selected package has a lower version code than the installed app.",
+                remedy: "Use a newer build or review the downgrade override.",
+                suggested_override: "allow_downgrade",
+                raw_output:
+                  "Failure [INSTALL_FAILED_VERSION_DOWNGRADE: Downgrade detected]",
+              },
+              audit_id: args.operation_id,
+            };
+          }
+          if (
+            !args.options?.override_confirmed ||
+            !args.options?.allow_downgrade ||
+            args.options?.bypass_low_target_sdk_block
+          ) {
+            throw new Error(
+              "Install retry did not carry the exact confirmed downgrade override",
+            );
+          }
+          return {
+            succeeded: true,
+            source_kind: "apks",
+            file_count: 3,
+            total_bytes: 24576,
+            output: "Success",
+            failure: null,
+            audit_id: args.operation_id,
+          };
         }
         if (cmd === "list_users") {
           return [

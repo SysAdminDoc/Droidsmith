@@ -131,6 +131,88 @@ pub(crate) fn register_cancellable(
     })
 }
 
+/// A cancellable multi-stage operation whose later command arguments depend on
+/// earlier output (for example, Android package-install session IDs).
+/// Registration lives for the full workflow, so a single Cancel action covers
+/// archive preparation and every subprocess stage.
+pub(crate) struct RegisteredOperation {
+    operation_id: String,
+    sink: EventSink,
+    cancellation: CancellationGuard,
+    started: Instant,
+}
+
+impl RegisteredOperation {
+    pub(crate) fn new(
+        operation_id: &str,
+        label: &str,
+        sink: EventSink,
+    ) -> Result<Self, OperationError> {
+        let cancellation = register_cancellable(operation_id)?;
+        sink(OperationEvent::status(
+            operation_id,
+            OperationEventKind::Started,
+            label,
+        ));
+        Ok(Self {
+            operation_id: operation_id.to_string(),
+            sink,
+            cancellation,
+            started: Instant::now(),
+        })
+    }
+
+    pub(crate) fn is_cancelled(&self) -> bool {
+        self.cancellation.is_cancelled()
+    }
+
+    pub(crate) fn run_stage(
+        &mut self,
+        program: &Path,
+        args: &[String],
+        timeout: Duration,
+        label: &str,
+    ) -> Result<ProcessOutput, OperationError> {
+        if self.is_cancelled() {
+            return Err(OperationError::Cancelled);
+        }
+        (self.sink)(OperationEvent {
+            operation_id: self.operation_id.clone(),
+            kind: OperationEventKind::Progress,
+            stream: None,
+            chunk: None,
+            message: Some(label.to_string()),
+            elapsed_ms: Some(saturating_millis(self.started.elapsed())),
+            attempt: None,
+        });
+        execute_child(
+            program,
+            args,
+            timeout,
+            &self.operation_id,
+            &self.cancellation.registration.cancelled,
+            &self.sink,
+            true,
+        )
+    }
+
+    pub(crate) fn finish(&self, message: &str) {
+        (self.sink)(OperationEvent::status(
+            &self.operation_id,
+            OperationEventKind::Finished,
+            message,
+        ));
+    }
+
+    pub(crate) fn cancelled(&self, message: &str) {
+        (self.sink)(OperationEvent::status(
+            &self.operation_id,
+            OperationEventKind::Cancelled,
+            message,
+        ));
+    }
+}
+
 impl Registration {
     fn new(operation_id: &str) -> Result<Self, OperationError> {
         if !valid_operation_id(operation_id) {

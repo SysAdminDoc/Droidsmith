@@ -736,6 +736,64 @@ pub(crate) fn pm_failure_marker(stdout: &str) -> Option<&str> {
     None
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PackageActionFailure {
+    pub code: &'static str,
+    pub cause: &'static str,
+    pub remedy: &'static str,
+}
+
+/// Turn common `pm`/OEM policy failures into a specific next action while
+/// retaining the original ADB text. Unknown errors deliberately return None so
+/// callers do not invent a remedy.
+pub fn classify_package_action_failure(raw: &str) -> Option<PackageActionFailure> {
+    let normalized = raw.to_ascii_uppercase();
+    if normalized.contains("DELETE_FAILED_DEVICE_POLICY_MANAGER")
+        || normalized.contains("DEVICE POLICY MANAGER")
+    {
+        Some(PackageActionFailure {
+            code: "DEVICE_POLICY_BLOCK",
+            cause: "A device-owner, profile-owner, or work policy protects this package.",
+            remedy: "Remove the governing policy or use its management console; Droidsmith will not bypass device policy.",
+        })
+    } else if normalized.contains("SECURITYEXCEPTION")
+        || normalized.contains("NOT ALLOWED TO DISABLE")
+        || normalized.contains("CANNOT DISABLE A PROTECTED PACKAGE")
+        || normalized.contains("PERMISSION DENIAL")
+    {
+        Some(PackageActionFailure {
+            code: "ANDROID_SECURITY_BLOCK",
+            cause: "Android or the OEM security layer denied this package action.",
+            remedy: "Check USB debugging security settings, the active Android user, and OEM restrictions; do not retry blindly.",
+        })
+    } else if normalized.contains("UNKNOWN PACKAGE") || normalized.contains("PACKAGE_NOT_FOUND") {
+        Some(PackageActionFailure {
+            code: "PACKAGE_NOT_FOUND",
+            cause: "The package is no longer present for the requested operation.",
+            remedy:
+                "Refresh the package list and confirm the selected Android user before retrying.",
+        })
+    } else if normalized.contains("NOT INSTALLED FOR") {
+        Some(PackageActionFailure {
+            code: "PACKAGE_NOT_INSTALLED_FOR_USER",
+            cause: "The package is not installed for the selected Android user.",
+            remedy: "Switch to a user where the package is installed or refresh the current user's package list.",
+        })
+    } else {
+        None
+    }
+}
+
+pub fn package_action_failure_message(raw: &str) -> String {
+    let Some(advice) = classify_package_action_failure(raw) else {
+        return raw.to_string();
+    };
+    format!(
+        "{}: {} Remedy: {} Raw ADB: {}",
+        advice.code, advice.cause, advice.remedy, raw
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1157,5 +1215,22 @@ mod tests {
     fn pm_failure_marker_recognises_error_prefix() {
         assert!(pm_failure_marker("Error: package not found").is_some());
         assert!(pm_failure_marker("nothing wrong here").is_none());
+    }
+
+    #[test]
+    fn package_action_failures_map_to_human_remediation() {
+        let policy =
+            classify_package_action_failure("Failure [DELETE_FAILED_DEVICE_POLICY_MANAGER]")
+                .unwrap();
+        assert_eq!(policy.code, "DEVICE_POLICY_BLOCK");
+        let security = classify_package_action_failure(
+            "java.lang.SecurityException: not allowed to disable this package",
+        )
+        .unwrap();
+        assert_eq!(security.code, "ANDROID_SECURITY_BLOCK");
+        let message = package_action_failure_message("Error: Unknown package: com.example");
+        assert!(message.contains("PACKAGE_NOT_FOUND"));
+        assert!(message.contains("Raw ADB:"));
+        assert!(classify_package_action_failure("vendor status 9").is_none());
     }
 }

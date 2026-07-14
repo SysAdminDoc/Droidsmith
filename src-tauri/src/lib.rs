@@ -5,6 +5,7 @@ pub mod adb;
 mod commands;
 mod diagnostics;
 mod fs_util;
+mod install;
 pub mod journal;
 mod operations;
 /// `packs` is `pub` so the `droidsmith-pack-lint` binary (which links
