@@ -86,7 +86,13 @@ export default function ConsoleRoute() {
       const output = await callShellRun(selectedSerial, argv);
       setHistory((prev) => [
         ...prev,
-        { command: trimmed, output, error: false, timestamp: Date.now(), id: nextEntryId++ },
+        {
+          command: trimmed,
+          output,
+          error: false,
+          timestamp: Date.now(),
+          id: nextEntryId++,
+        },
       ]);
     } catch (e) {
       setHistory((prev) => [
@@ -199,7 +205,14 @@ export default function ConsoleRoute() {
                     d.serial === selectedSerial ? "primary" : "secondary"
                   }
                   size="sm"
-                  onClick={() => setSelectedSerial(d.serial)}
+                  onClick={() => {
+                    if (d.serial === selectedSerial) return;
+                    // Scrollback and recall history belong to the previous
+                    // device's shell — reset them on switch.
+                    setSelectedSerial(d.serial);
+                    setHistory([]);
+                    setHistoryIndex(-1);
+                  }}
                 >
                   {d.model ?? d.serial}
                 </Button>

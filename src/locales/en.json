@@ -114,6 +114,7 @@
     "battery": "Battery",
     "storageData": "Storage (/data)",
     "loadingDevices": "Loading devices",
+    "mustAuthorize": "Device must be authorized before it can be selected",
     "revokeAuthorizations": "Revoke existing authorizations:",
     "reconnectUsb": "Reconnect the USB cable and wait a few seconds.",
     "fileTransferMode": "Ensure USB mode is set to File Transfer / MTP; some devices block debugging in charge-only mode.",

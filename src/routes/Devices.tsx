@@ -358,11 +358,7 @@ function DeviceTable({
                         }
                       : undefined
                   }
-                  title={
-                    !isDevice
-                      ? "Device must be authorized before it can be selected"
-                      : undefined
-                  }
+                  title={!isDevice ? t("devices.mustAuthorize") : undefined}
                   className={[
                     "transition",
                     isDevice
@@ -1425,7 +1421,10 @@ function NetworkInspector({ serial }: { serial: string }) {
             </thead>
             <tbody className="divide-y divide-white/5">
               {filtered.slice(0, 100).map((c, i) => (
-                <tr key={i} className="hover:bg-white/[0.03]">
+                <tr
+                  key={`${c.protocol}-${c.local_addr}-${c.remote_addr}-${i}`}
+                  className="hover:bg-white/[0.03]"
+                >
                   <td className="px-3 py-1.5 font-mono text-anvil-300">
                     {c.protocol}
                   </td>
