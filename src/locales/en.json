@@ -283,6 +283,8 @@
     "desktopRequiredBody": "Debloat operations run inside the Tauri runtime.",
     "noAuthorizedBody": "Connect a device and accept the USB debugging prompt.",
     "loadPacksFailed": "Could not load packs",
+    "packErrorsTitle": "{{count}} pack file(s) failed to load",
+    "packErrorsBody": "These bundled pack files were skipped. Fix or remove them; healthy packs below still work.",
     "noPacksTitle": "No debloat packs available",
     "noPacksBodyPrefix": "Drop",
     "noPacksBodyMiddle": "pack files into the",

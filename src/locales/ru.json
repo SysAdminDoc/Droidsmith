@@ -283,6 +283,8 @@
     "desktopRequiredBody": "Операции очистки выполняются внутри среды Tauri.",
     "noAuthorizedBody": "Подключите устройство и примите USB debugging prompt.",
     "loadPacksFailed": "Не удалось загрузить packs",
+    "packErrorsTitle": "Не удалось загрузить файлов packs: {{count}}",
+    "packErrorsBody": "Эти встроенные файлы packs пропущены. Исправьте или удалите их; рабочие packs ниже по-прежнему доступны.",
     "noPacksTitle": "Debloat packs недоступны",
     "noPacksBodyPrefix": "Поместите",
     "noPacksBodyMiddle": "pack-файлы в каталог",

@@ -16,6 +16,7 @@ import {
   type ListDevicesResult,
   type Pack,
   type PackEntry,
+  type PackLoadError,
   type RemovalLevel,
 } from "../lib/tauri";
 
@@ -46,7 +47,7 @@ type DevicesState =
 
 type PacksState =
   | { kind: "loading" }
-  | { kind: "ok"; packs: Pack[] }
+  | { kind: "ok"; packs: Pack[]; errors: PackLoadError[] }
   | { kind: "error"; message: string };
 
 type DebloatQueueRow = {
@@ -117,8 +118,12 @@ export default function DebloatRoute() {
     if (!inTauri()) return;
     setPacksState({ kind: "loading" });
     try {
-      const packs = await callListPacks();
-      setPacksState({ kind: "ok", packs });
+      const listing = await callListPacks();
+      setPacksState({
+        kind: "ok",
+        packs: listing.packs,
+        errors: listing.errors,
+      });
     } catch (e) {
       setPacksState({
         kind: "error",
@@ -454,6 +459,31 @@ function DevicePicker({
   );
 }
 
+/// Surfaces bundled packs that failed to load so a packaging defect is
+/// visible (with a copyable message) instead of silently vanishing from
+/// the list. Healthy packs still render alongside.
+function PackErrors({ errors }: { errors: PackLoadError[] }) {
+  const { t } = useTranslation();
+  if (errors.length === 0) return null;
+  return (
+    <StatePanel
+      title={t("debloat.packErrorsTitle", { count: errors.length })}
+      tone="warning"
+    >
+      <p className="text-xs text-anvil-300">{t("debloat.packErrorsBody")}</p>
+      <ul className="mt-2 space-y-2">
+        {errors.map((err) => (
+          <li key={err.file}>
+            <pre className="select-text whitespace-pre-wrap rounded-md border border-white/10 bg-white/[0.04] p-2 font-mono text-xs text-anvil-200">
+              {`${err.file} [${err.code}]\n${err.message}`}
+            </pre>
+          </li>
+        ))}
+      </ul>
+    </StatePanel>
+  );
+}
+
 function PackPicker({
   state,
   onSelect,
@@ -499,18 +529,22 @@ function PackPicker({
 
   if (state.packs.length === 0) {
     return (
-      <StatePanel title={t("debloat.noPacksTitle")} tone="info">
-        <p>
-          {t("debloat.noPacksBodyPrefix")} <code>.yaml</code>{" "}
-          {t("debloat.noPacksBodyMiddle")} <code>packs/</code>{" "}
-          {t("debloat.noPacksBodySuffix")} <code>packs/_example.yaml</code>.
-        </p>
-      </StatePanel>
+      <>
+        <PackErrors errors={state.errors} />
+        <StatePanel title={t("debloat.noPacksTitle")} tone="info">
+          <p>
+            {t("debloat.noPacksBodyPrefix")} <code>.yaml</code>{" "}
+            {t("debloat.noPacksBodyMiddle")} <code>packs/</code>{" "}
+            {t("debloat.noPacksBodySuffix")} <code>packs/_example.yaml</code>.
+          </p>
+        </StatePanel>
+      </>
     );
   }
 
   return (
     <Card className="p-5">
+      <PackErrors errors={state.errors} />
       <h3 className="text-sm font-semibold text-anvil-50">
         {t("debloat.choosePack")}
       </h3>

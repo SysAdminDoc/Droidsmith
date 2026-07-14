@@ -1062,9 +1062,45 @@ pub fn extract_apk(
 }
 
 /// List all debloat packs from the app's `packs/` resource directory.
-/// Returns packs that parse and lint cleanly; silently skips broken files.
+/// A bundled pack file that failed to load, with a stable code and a
+/// human-readable message the UI can show and the user can copy.
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct PackLoadError {
+    /// File name (not full path — no host paths leak to the renderer).
+    pub file: String,
+    /// Stable code: `pack_read`, `pack_parse`, or `pack_validate`.
+    pub code: &'static str,
+    pub message: String,
+}
+
+/// Result of enumerating bundled packs: the healthy packs plus per-file
+/// errors for any that failed. A broken file no longer disappears
+/// silently — it surfaces as an error the user can act on.
+#[derive(Debug, Clone, Serialize)]
+pub struct PackListing {
+    pub packs: Vec<crate::packs::Pack>,
+    pub errors: Vec<PackLoadError>,
+}
+
+fn pack_error_to_load_error(file: String, err: &crate::packs::PackError) -> PackLoadError {
+    use crate::packs::PackError;
+    let code = match err {
+        PackError::Read { .. } => "pack_read",
+        PackError::Parse { .. } => "pack_parse",
+        PackError::Validate { .. } => "pack_validate",
+    };
+    PackLoadError {
+        file,
+        code,
+        message: err.to_string(),
+    }
+}
+
+/// Returns packs that parse and lint cleanly, plus a per-file error for
+/// each broken file so a packaging defect is visible instead of looking
+/// like an empty pack list.
 #[tauri::command]
-pub fn list_packs(app: tauri::AppHandle) -> Result<Vec<crate::packs::Pack>, CommandError> {
+pub fn list_packs(app: tauri::AppHandle) -> Result<PackListing, CommandError> {
     let resource_dir = app.path().resource_dir().map_err(|e| CommandError {
         code: "no_resource_dir",
         message: e.to_string(),
@@ -1072,15 +1108,19 @@ pub fn list_packs(app: tauri::AppHandle) -> Result<Vec<crate::packs::Pack>, Comm
     let packs_dir = resource_dir.join("packs");
 
     if !packs_dir.is_dir() {
-        return Ok(Vec::new());
+        return Ok(PackListing {
+            packs: Vec::new(),
+            errors: Vec::new(),
+        });
     }
 
-    let mut packs = Vec::new();
     let entries = std::fs::read_dir(&packs_dir).map_err(|e| CommandError {
         code: "io_error",
         message: format!("could not read packs directory: {e}"),
     })?;
 
+    let mut packs = Vec::new();
+    let mut errors = Vec::new();
     for entry in entries {
         let Ok(entry) = entry else { continue };
         let path = entry.path();
@@ -1088,14 +1128,20 @@ pub fn list_packs(app: tauri::AppHandle) -> Result<Vec<crate::packs::Pack>, Comm
             .extension()
             .is_some_and(|ext| ext == "yaml" || ext == "yml")
         {
-            if let Ok(pack) = crate::packs::load(&path) {
-                packs.push(pack);
+            let file = path
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_default();
+            match crate::packs::load(&path) {
+                Ok(pack) => packs.push(pack),
+                Err(err) => errors.push(pack_error_to_load_error(file, &err)),
             }
         }
     }
 
     packs.sort_by(|a, b| a.name.cmp(&b.name));
-    Ok(packs)
+    errors.sort_by(|a, b| a.file.cmp(&b.file));
+    Ok(PackListing { packs, errors })
 }
 
 fn iso_now() -> String {
@@ -1105,9 +1151,37 @@ fn iso_now() -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        classify_backup_size, parse_fastboot_getvar, unique_screenshot_remote,
-        validate_backup_target, validate_local_path, ProcessOutput,
+        classify_backup_size, pack_error_to_load_error, parse_fastboot_getvar,
+        unique_screenshot_remote, validate_backup_target, validate_local_path, ProcessOutput,
     };
+
+    #[test]
+    fn broken_pack_maps_to_stable_error_code() {
+        let dir = std::env::temp_dir().join("droidsmith-pack-err-test");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+
+        // Invalid YAML → parse error.
+        let bad_parse = dir.join("broken.yaml");
+        std::fs::write(&bad_parse, "name: [unterminated\n").unwrap();
+        let err = crate::packs::load(&bad_parse).unwrap_err();
+        let mapped = pack_error_to_load_error("broken.yaml".to_string(), &err);
+        assert_eq!(mapped.code, "pack_parse");
+        assert_eq!(mapped.file, "broken.yaml");
+        assert!(!mapped.message.is_empty());
+
+        // Well-formed YAML (all required fields present) that fails lint
+        // on an empty name → validate error.
+        let bad_validate = dir.join("empty.yaml");
+        std::fs::write(
+            &bad_validate,
+            "name: \"\"\nversion: \"1\"\ndescription: \"x\"\npackages:\n  - id: com.x\n    removal: recommended\n    description: y\n",
+        )
+        .unwrap();
+        let err = crate::packs::load(&bad_validate).unwrap_err();
+        let mapped = pack_error_to_load_error("empty.yaml".to_string(), &err);
+        assert_eq!(mapped.code, "pack_validate");
+    }
 
     #[test]
     fn backup_size_classification() {

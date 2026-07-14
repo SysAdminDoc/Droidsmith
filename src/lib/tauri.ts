@@ -512,6 +512,17 @@ export async function callFastbootGetvar(
   return invoke<string>("fastboot_getvar", { serial, key });
 }
 
-export async function callListPacks(): Promise<Pack[]> {
-  return invoke<Pack[]>("list_packs");
+export type PackLoadError = {
+  file: string;
+  code: string;
+  message: string;
+};
+
+export type PackListing = {
+  packs: Pack[];
+  errors: PackLoadError[];
+};
+
+export async function callListPacks(): Promise<PackListing> {
+  return invoke<PackListing>("list_packs");
 }

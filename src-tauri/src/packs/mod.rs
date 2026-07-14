@@ -253,6 +253,31 @@ packages:
     labels: ["productivity"]
 "#;
 
+    /// Bundle contract: every pack shipped in the repo's `packs/`
+    /// directory must load and lint cleanly. A corrupt or invalid bundled
+    /// pack fails this test rather than silently disappearing at runtime.
+    #[test]
+    fn all_bundled_packs_load_cleanly() {
+        let packs_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../packs");
+        if !packs_dir.is_dir() {
+            return; // repo layout without bundled packs (e.g. vendored crate)
+        }
+        let mut checked = 0;
+        for entry in std::fs::read_dir(&packs_dir).unwrap() {
+            let path = entry.unwrap().path();
+            if path
+                .extension()
+                .is_some_and(|ext| ext == "yaml" || ext == "yml")
+            {
+                load(&path).unwrap_or_else(|e| {
+                    panic!("bundled pack {} failed the contract: {e}", path.display())
+                });
+                checked += 1;
+            }
+        }
+        assert!(checked > 0, "expected at least one bundled pack");
+    }
+
     #[test]
     fn parses_a_well_formed_pack() {
         let p: Pack = serde_yaml_ng::from_str(GOOD).unwrap();

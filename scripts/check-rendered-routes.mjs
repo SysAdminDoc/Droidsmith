@@ -314,47 +314,52 @@ async function installTauriMock(page) {
           };
         }
         if (cmd === "list_packs") {
-          return [
-            {
-              name: "QA Debloat Pack",
-              version: "1.0.0",
-              description: "Synthetic pack used by rendered route smoke tests.",
-              targets: {
-                manufacturer: ["Google"],
-                rom: ["Pixel"],
-                android_min: 13,
-                android_max: null,
+          return {
+            errors: [],
+            packs: [
+              {
+                name: "QA Debloat Pack",
+                version: "1.0.0",
+                description:
+                  "Synthetic pack used by rendered route smoke tests.",
+                targets: {
+                  manufacturer: ["Google"],
+                  rom: ["Pixel"],
+                  android_min: 13,
+                  android_max: null,
+                },
+                packages: [
+                  {
+                    id: "com.example.app",
+                    removal: "recommended",
+                    description: "Safe QA package.",
+                    depends_on: [],
+                    needed_by: [],
+                    labels: ["qa"],
+                  },
+                  {
+                    id: "com.example.fail",
+                    removal: "recommended",
+                    description:
+                      "Package that simulates an OEM policy failure.",
+                    depends_on: [],
+                    needed_by: [],
+                    labels: ["qa", "failure"],
+                  },
+                  {
+                    id: "com.android.settings",
+                    removal: "expert",
+                    description:
+                      "System settings is intentionally not preselected.",
+                    depends_on: [],
+                    needed_by: ["device settings"],
+                    labels: ["system"],
+                  },
+                ],
+                attribution: null,
               },
-              packages: [
-                {
-                  id: "com.example.app",
-                  removal: "recommended",
-                  description: "Safe QA package.",
-                  depends_on: [],
-                  needed_by: [],
-                  labels: ["qa"],
-                },
-                {
-                  id: "com.example.fail",
-                  removal: "recommended",
-                  description: "Package that simulates an OEM policy failure.",
-                  depends_on: [],
-                  needed_by: [],
-                  labels: ["qa", "failure"],
-                },
-                {
-                  id: "com.android.settings",
-                  removal: "expert",
-                  description:
-                    "System settings is intentionally not preselected.",
-                  depends_on: [],
-                  needed_by: ["device settings"],
-                  labels: ["system"],
-                },
-              ],
-              attribution: null,
-            },
-          ];
+            ],
+          };
         }
         if (cmd === "locate_scrcpy" || cmd === "locate_fastboot") return null;
         if (cmd === "list_fastboot_devices") return [];
