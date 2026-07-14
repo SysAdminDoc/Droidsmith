@@ -1,0 +1,36 @@
+# cargo-audit configuration for Droidsmith.
+#
+# The local dependency gate (`npm run security:audit:rust`) runs
+# `cargo audit --deny warnings`, so any NEW vulnerability, unmaintained, or
+# unsound advisory fails the build. The advisories ignored below are all
+# unfixable transitive dependencies we do not pull directly:
+#
+#   * The gtk-rs GTK3 bindings and glib are dragged in by Tauri's Linux webview
+#     backend (tauri -> wry -> webkit2gtk). They are not on the Windows/macOS
+#     runtime surface and cannot be dropped until upstream Tauri migrates off
+#     GTK3.
+#   * proc-macro-error is a compile-time-only helper used by upstream macros.
+#   * The unic-* crates are Unicode data tables pulled transitively by the
+#     webview/url stack.
+#
+# Re-audit and prune this list whenever the Tauri major version is bumped.
+[advisories]
+ignore = [
+  "RUSTSEC-2024-0370", # proc-macro-error unmaintained (build-time transitive)
+  "RUSTSEC-2024-0411", # gdkwayland-sys unmaintained (Tauri Linux GTK3 stack)
+  "RUSTSEC-2024-0412", # gdk unmaintained (Tauri Linux GTK3 stack)
+  "RUSTSEC-2024-0413", # atk unmaintained (Tauri Linux GTK3 stack)
+  "RUSTSEC-2024-0414", # gdkx11-sys unmaintained (Tauri Linux GTK3 stack)
+  "RUSTSEC-2024-0415", # gtk unmaintained (Tauri Linux GTK3 stack)
+  "RUSTSEC-2024-0416", # atk-sys unmaintained (Tauri Linux GTK3 stack)
+  "RUSTSEC-2024-0417", # gdkx11 unmaintained (Tauri Linux GTK3 stack)
+  "RUSTSEC-2024-0418", # gdk-sys unmaintained (Tauri Linux GTK3 stack)
+  "RUSTSEC-2024-0419", # gtk3-macros unmaintained (Tauri Linux GTK3 stack)
+  "RUSTSEC-2024-0420", # gtk-sys unmaintained (Tauri Linux GTK3 stack)
+  "RUSTSEC-2024-0429", # glib unsound VariantStrIter (Tauri Linux GTK3 stack)
+  "RUSTSEC-2025-0075", # unic-char-range unmaintained (webview/url transitive)
+  "RUSTSEC-2025-0080", # unic-common unmaintained (webview/url transitive)
+  "RUSTSEC-2025-0081", # unic-char-property unmaintained (webview/url transitive)
+  "RUSTSEC-2025-0098", # unic-ucd-version unmaintained (webview/url transitive)
+  "RUSTSEC-2025-0100", # unic-ucd-ident unmaintained (webview/url transitive)
+]

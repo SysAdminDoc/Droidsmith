@@ -75,7 +75,7 @@ pub enum ProfileError {
     Parse {
         path: std::path::PathBuf,
         #[source]
-        source: serde_yml::Error,
+        source: serde_yaml_ng::Error,
     },
     #[error("profile {path} failed validation: {reasons}")]
     Validate {
@@ -92,7 +92,7 @@ pub fn load(path: &std::path::Path) -> Result<Profile, ProfileError> {
                 source,
             }
         })?;
-    let profile: Profile = serde_yml::from_str(&text).map_err(|source| ProfileError::Parse {
+    let profile: Profile = serde_yaml_ng::from_str(&text).map_err(|source| ProfileError::Parse {
         path: path.to_path_buf(),
         source,
     })?;
@@ -200,7 +200,7 @@ actions:
 
     #[test]
     fn parses_and_lints_clean() {
-        let p: Profile = serde_yml::from_str(GOOD).unwrap();
+        let p: Profile = serde_yaml_ng::from_str(GOOD).unwrap();
         assert_eq!(p.actions.len(), 2);
         assert!(lint(&p).is_empty());
     }
@@ -208,7 +208,7 @@ actions:
     #[test]
     fn refuses_unsupported_version() {
         let bad = GOOD.replace("version: \"1\"", "version: \"2\"");
-        let p: Profile = serde_yml::from_str(&bad).unwrap();
+        let p: Profile = serde_yaml_ng::from_str(&bad).unwrap();
         let issues = lint(&p);
         assert!(issues
             .iter()
@@ -225,14 +225,14 @@ actions:
   - kind: disable
     package: ".bad"
 "#;
-        let p: Profile = serde_yml::from_str(bad).unwrap();
+        let p: Profile = serde_yaml_ng::from_str(bad).unwrap();
         let issues = lint(&p);
         assert!(issues.iter().any(|i| i.contains("invalid package id")));
     }
 
     #[test]
     fn requests_for_attaches_serial() {
-        let p: Profile = serde_yml::from_str(GOOD).unwrap();
+        let p: Profile = serde_yaml_ng::from_str(GOOD).unwrap();
         let rs = requests_for(&p, "abc-123");
         assert_eq!(rs.len(), 2);
         assert_eq!(rs[0].serial, "abc-123");
@@ -242,7 +242,7 @@ actions:
 
     #[test]
     fn device_match_checks_serial_prefix_and_manufacturer() {
-        let p: Profile = serde_yml::from_str(
+        let p: Profile = serde_yaml_ng::from_str(
             r#"
 name: "x"
 version: "1"

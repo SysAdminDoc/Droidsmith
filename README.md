@@ -109,9 +109,13 @@ npm run format:check
 npm run lint
 npm run typecheck
 npm test
+npm run security:audit
 npm run ui:smoke
 npm run release:smoke
 ```
+
+`npm run security:audit` runs `npm audit` plus the Rust dependency gate
+(`cargo audit --deny warnings`, which requires `cargo install cargo-audit`).
 
 `npm run ui:smoke` starts Vite with mocked Tauri IPC and checks sidebar
 navigation, command palette focus, Apps action overlays, Debloat queue results,

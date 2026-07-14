@@ -132,7 +132,7 @@ pub enum PackError {
     Parse {
         path: PathBuf,
         #[source]
-        source: serde_yml::Error,
+        source: serde_yaml_ng::Error,
     },
     #[error("pack {path} failed validation: {reasons}")]
     Validate { path: PathBuf, reasons: String },
@@ -145,7 +145,7 @@ pub fn load(path: &Path) -> Result<Pack, PackError> {
             source,
         }
     })?;
-    let pack: Pack = serde_yml::from_str(&text).map_err(|source| PackError::Parse {
+    let pack: Pack = serde_yaml_ng::from_str(&text).map_err(|source| PackError::Parse {
         path: path.to_path_buf(),
         source,
     })?;
@@ -255,7 +255,7 @@ packages:
 
     #[test]
     fn parses_a_well_formed_pack() {
-        let p: Pack = serde_yml::from_str(GOOD).unwrap();
+        let p: Pack = serde_yaml_ng::from_str(GOOD).unwrap();
         assert_eq!(p.version, "1");
         assert_eq!(p.packages.len(), 2);
         assert_eq!(p.packages[0].removal, RemovalLevel::Recommended);
@@ -266,7 +266,7 @@ packages:
     #[test]
     fn rejects_unsupported_version() {
         let bad = GOOD.replace("version: \"1\"", "version: \"2\"");
-        let p: Pack = serde_yml::from_str(&bad).unwrap();
+        let p: Pack = serde_yaml_ng::from_str(&bad).unwrap();
         let issues = lint(&p);
         assert!(issues
             .iter()
@@ -281,7 +281,7 @@ packages:
     removal: expert
     description: "duplicate row"
 "#;
-        let p: Pack = serde_yml::from_str(&bad).unwrap();
+        let p: Pack = serde_yaml_ng::from_str(&bad).unwrap();
         let issues = lint(&p);
         assert!(issues.iter().any(|i| i.contains("duplicate id")));
     }
@@ -297,7 +297,7 @@ packages:
     removal: recommended
     description: "leading dot"
 "#;
-        let p: Pack = serde_yml::from_str(bad).unwrap();
+        let p: Pack = serde_yaml_ng::from_str(bad).unwrap();
         let issues = lint(&p);
         assert!(issues
             .iter()
@@ -315,7 +315,7 @@ packages:
     removal: recommended
     description: ""
 "#;
-        let p: Pack = serde_yml::from_str(bad).unwrap();
+        let p: Pack = serde_yaml_ng::from_str(bad).unwrap();
         let issues = lint(&p);
         assert!(issues.iter().any(|i| i.contains("description is empty")));
     }
@@ -334,7 +334,7 @@ packages:
     removal: recommended
     description: "ok"
 "#;
-        let p: Pack = serde_yml::from_str(bad).unwrap();
+        let p: Pack = serde_yaml_ng::from_str(bad).unwrap();
         let issues = lint(&p);
         assert!(issues.iter().any(|i| i.contains("android_min")));
     }

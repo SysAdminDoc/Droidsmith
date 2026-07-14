@@ -135,7 +135,7 @@ pub enum QuirkError {
     Parse {
         path: PathBuf,
         #[source]
-        source: serde_yml::Error,
+        source: serde_yaml_ng::Error,
     },
     #[error("quirk file {path:?} failed validation: {reasons}")]
     Validate { path: PathBuf, reasons: String },
@@ -149,7 +149,7 @@ pub fn load_file(path: &Path) -> Result<Vec<Quirk>, QuirkError> {
                 source,
             }
         })?;
-    let file: QuirkFile = serde_yml::from_str(&text).map_err(|source| QuirkError::Parse {
+    let file: QuirkFile = serde_yaml_ng::from_str(&text).map_err(|source| QuirkError::Parse {
         path: path.to_path_buf(),
         source,
     })?;
@@ -481,7 +481,7 @@ quirks:
       suggest_kind: uninstall_for_user
       rationale: "pm uninstall --user 0 works where pm disable doesn't"
 "#;
-        let document: QuirkDocument = serde_yml::from_str(yaml).unwrap();
+        let document: QuirkDocument = serde_yaml_ng::from_str(yaml).unwrap();
         assert!(lint_document(&document).is_empty());
         assert_eq!(document.version, "1");
         assert_eq!(document.quirks.len(), 1);
