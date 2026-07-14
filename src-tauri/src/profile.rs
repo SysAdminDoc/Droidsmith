@@ -130,6 +130,20 @@ pub fn lint(p: &Profile) -> Vec<String> {
         issues.push("profile has no actions".to_string());
     }
     for (i, action) in p.actions.iter().enumerate() {
+        if !matches!(
+            action.kind,
+            ActionKind::Disable
+                | ActionKind::Enable
+                | ActionKind::UninstallForUser
+                | ActionKind::ClearData
+                | ActionKind::ForceStop
+        ) {
+            issues.push(format!(
+                "action #{}: {:?} is not supported by profile schema v1",
+                i + 1,
+                action.kind
+            ));
+        }
         if !crate::adb::packages::valid_package_name(&action.package) {
             issues.push(format!(
                 "action #{}: invalid package id {:?}",
@@ -155,6 +169,10 @@ pub fn requests_for(profile: &Profile, target: &DeviceTarget) -> Vec<ActionReque
             kind: a.kind,
             user_id: a.user,
             pack_context: None,
+            context: crate::adb::actions::ActionContext {
+                confirmation_source: crate::adb::actions::ConfirmationSource::CliApply,
+                ..Default::default()
+            },
         })
         .collect()
 }
@@ -240,6 +258,15 @@ actions:
         let p: Profile = serde_yaml_ng::from_str(bad).unwrap();
         let issues = lint(&p);
         assert!(issues.iter().any(|i| i.contains("invalid package id")));
+    }
+
+    #[test]
+    fn rejects_operation_kinds_outside_profile_v1() {
+        let profile: Profile =
+            serde_yaml_ng::from_str(&GOOD.replace("kind: disable", "kind: shell")).unwrap();
+        assert!(lint(&profile)
+            .iter()
+            .any(|issue| issue.contains("not supported by profile schema v1")));
     }
 
     #[test]

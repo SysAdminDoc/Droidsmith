@@ -177,7 +177,27 @@ export type ActionKind =
   | "enable"
   | "uninstall_for_user"
   | "clear_data"
-  | "force_stop";
+  | "force_stop"
+  | "grant_permission"
+  | "revoke_permission"
+  | "shell";
+
+export type ConfirmationSource =
+  | "unspecified"
+  | "internal"
+  | "apps_preview"
+  | "debloat_preview"
+  | "permission_toggle"
+  | "console_review"
+  | "device_control"
+  | "cli_apply"
+  | "journal_undo";
+
+export type ActionContext = {
+  confirmation_source: ConfirmationSource;
+  permission: string | null;
+  shell_argv: string[];
+};
 
 export type ActionRequest = {
   serial: string;
@@ -187,6 +207,7 @@ export type ActionRequest = {
   /** Android user id the action targets (`pm --user`). Defaults to 0. */
   user_id: number;
   pack_context?: PackActionContext | null;
+  context?: ActionContext;
 };
 
 export type PackActionContext = {
@@ -209,12 +230,21 @@ export type PlannedAction = {
   request: ActionRequest;
   args: string[];
   description: string;
+  incident_id: string;
+  before_state: string;
 };
 
 export type AppliedAction = {
   plan: PlannedAction;
   stdout: string;
+  before_state: string;
+  after_state: string;
   applied_at: string;
+};
+
+export type ApplyActionResult = {
+  entry: JournalEntry;
+  stdout: string;
 };
 
 export type JournalEntry = {
@@ -358,8 +388,8 @@ export async function callPlanAction(
 
 export async function callApplyAction(
   plan: PlannedAction,
-): Promise<JournalEntry> {
-  return invoke<JournalEntry>("apply_action", { plan });
+): Promise<ApplyActionResult> {
+  return invoke<ApplyActionResult>("apply_action", { plan });
 }
 
 export async function callJournalList(serial: string): Promise<JournalEntry[]> {
@@ -474,12 +504,14 @@ export async function callSetPermission(
   pkg: string,
   permission: string,
   grant: boolean,
-): Promise<string> {
-  return invoke<string>("set_permission", {
+  userId: number,
+): Promise<ApplyActionResult> {
+  return invoke<ApplyActionResult>("set_permission", {
     target,
     package: pkg,
     permission,
     grant,
+    userId,
   });
 }
 
@@ -559,6 +591,28 @@ export async function callShellRun(
   argv: string[],
 ): Promise<string> {
   return invoke<string>("shell_run", { target, argv });
+}
+
+export type ShellActionPlan = {
+  mutating: boolean;
+  dangerous: boolean;
+  plan: PlannedAction | null;
+};
+
+export async function callPlanShellAction(
+  target: DeviceTarget,
+  argv: string[],
+): Promise<ShellActionPlan> {
+  return invoke<ShellActionPlan>("plan_shell_action", {
+    request: { target, argv },
+  });
+}
+
+export async function callApplyDeviceControl(
+  target: DeviceTarget,
+  argv: string[],
+): Promise<ApplyActionResult> {
+  return invoke<ApplyActionResult>("apply_device_control", { target, argv });
 }
 
 export async function callInstallApk(

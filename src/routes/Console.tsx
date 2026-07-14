@@ -1,13 +1,18 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { useFocusTrap } from "../lib/useFocusTrap";
+
 import {
+  callApplyAction,
   callListDevices,
+  callPlanShellAction,
   callShellRun,
   deviceTarget,
   inTauri,
   type DeviceTarget,
   type ListDevicesResult,
+  type PlannedAction,
 } from "../lib/tauri";
 
 import { Badge, Button, Card, PaneHeader, StatePanel } from "./common";
@@ -26,6 +31,12 @@ type HistoryEntry = {
   id: number;
 };
 
+type PendingShellAction = {
+  command: string;
+  plan: PlannedAction;
+  dangerous: boolean;
+};
+
 let nextEntryId = 1;
 
 export default function ConsoleRoute() {
@@ -40,8 +51,21 @@ export default function ConsoleRoute() {
   const [running, setRunning] = useState(false);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
+  const [pendingAction, setPendingAction] = useState<PendingShellAction | null>(
+    null,
+  );
   const outputRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const reviewTrapRef = useFocusTrap<HTMLDivElement>(pendingAction !== null);
+
+  useEffect(() => {
+    if (!pendingAction) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setPendingAction(null);
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [pendingAction]);
 
   const loadDevices = useCallback(async () => {
     if (!inTauri()) {
@@ -81,13 +105,26 @@ export default function ConsoleRoute() {
     if (!trimmed || !selectedTarget || running) return;
 
     setRunning(true);
-    setCommand("");
     setHistoryIndex(-1);
 
     const argv = trimmed.split(/\s+/);
 
     try {
+      const assessment = await callPlanShellAction(selectedTarget, argv);
+      if (assessment.mutating) {
+        if (!assessment.plan) {
+          throw new Error("Audited shell planner returned no mutation plan");
+        }
+        setPendingAction({
+          command: trimmed,
+          plan: assessment.plan,
+          dangerous: assessment.dangerous,
+        });
+        setCommand("");
+        return;
+      }
       const output = await callShellRun(selectedTarget, argv);
+      setCommand("");
       setHistory((prev) => [
         ...prev,
         {
@@ -114,6 +151,40 @@ export default function ConsoleRoute() {
       inputRef.current?.focus();
     }
   }, [command, selectedTarget, running]);
+
+  const confirmPendingAction = useCallback(async () => {
+    if (!pendingAction || running) return;
+    const pending = pendingAction;
+    setPendingAction(null);
+    setRunning(true);
+    try {
+      const result = await callApplyAction(pending.plan);
+      setHistory((previous) => [
+        ...previous,
+        {
+          command: pending.command,
+          output: result.stdout,
+          error: false,
+          timestamp: Date.now(),
+          id: nextEntryId++,
+        },
+      ]);
+    } catch (error) {
+      setHistory((previous) => [
+        ...previous,
+        {
+          command: pending.command,
+          output: error instanceof Error ? error.message : String(error),
+          error: true,
+          timestamp: Date.now(),
+          id: nextEntryId++,
+        },
+      ]);
+    } finally {
+      setRunning(false);
+      inputRef.current?.focus();
+    }
+  }, [pendingAction, running]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -152,6 +223,63 @@ export default function ConsoleRoute() {
 
   return (
     <>
+      {pendingAction && (
+        <div
+          ref={reviewTrapRef}
+          tabIndex={-1}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 outline-none backdrop-blur-sm"
+          role="alertdialog"
+          aria-modal="true"
+          aria-labelledby="console-review-title"
+          aria-describedby="console-review-description"
+        >
+          <Card className="w-full max-w-xl p-6">
+            <div className="flex items-center gap-2">
+              <Badge tone={pendingAction.dangerous ? "danger" : "warning"}>
+                {pendingAction.dangerous
+                  ? t("console.dangerousMutation")
+                  : t("console.mutation")}
+              </Badge>
+              <code className="font-mono text-xs text-anvil-500">
+                {pendingAction.plan.incident_id}
+              </code>
+            </div>
+            <h2
+              id="console-review-title"
+              className="mt-4 text-lg font-semibold text-anvil-50"
+            >
+              {t("console.reviewMutation")}
+            </h2>
+            <p
+              id="console-review-description"
+              className="mt-2 text-sm leading-6 text-anvil-300"
+            >
+              {t("console.reviewMutationBody")}
+            </p>
+            <pre className="mt-4 max-h-48 overflow-auto whitespace-pre-wrap break-all rounded-md border border-white/10 bg-black/30 p-3 font-mono text-xs text-anvil-100">
+              {pendingAction.plan.args.join(" ")}
+            </pre>
+            <div className="mt-5 flex justify-end gap-2">
+              <Button
+                type="button"
+                onClick={() => {
+                  setPendingAction(null);
+                  inputRef.current?.focus();
+                }}
+              >
+                {t("common.cancel")}
+              </Button>
+              <Button
+                type="button"
+                variant="danger"
+                onClick={() => void confirmPendingAction()}
+              >
+                {t("console.runReviewedMutation")}
+              </Button>
+            </div>
+          </Card>
+        </div>
+      )}
       <PaneHeader
         title={t("console.title")}
         milestone="R-050"

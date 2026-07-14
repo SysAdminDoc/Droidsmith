@@ -12,6 +12,8 @@
 //! lets the CLI (`droidsmith-cli`) do `--dry-run` by stopping after
 //! [`plan`].
 
+use std::sync::atomic::{AtomicU64, Ordering};
+
 use serde::{Deserialize, Serialize};
 
 use crate::adb::device::{valid_serial, DeviceTarget};
@@ -32,6 +34,38 @@ pub enum ActionKind {
     ClearData,
     /// `am force-stop <pkg>` — non-destructive; included for symmetry.
     ForceStop,
+    /// `pm grant --user <id> <pkg> <permission>`.
+    GrantPermission,
+    /// `pm revoke --user <id> <pkg> <permission>`.
+    RevokePermission,
+    /// A reviewed arbitrary shell mutation. Read-only shell commands use the
+    /// separate `shell_run` path and never enter the mutation journal.
+    Shell,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ConfirmationSource {
+    #[default]
+    Unspecified,
+    Internal,
+    AppsPreview,
+    DebloatPreview,
+    PermissionToggle,
+    ConsoleReview,
+    DeviceControl,
+    CliApply,
+    JournalUndo,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ActionContext {
+    #[serde(default)]
+    pub confirmation_source: ConfirmationSource,
+    #[serde(default)]
+    pub permission: Option<String>,
+    #[serde(default)]
+    pub shell_argv: Vec<String>,
 }
 
 /// Install an APK on a device using `adb install`. The APK path is a
@@ -227,14 +261,19 @@ impl ActionKind {
     /// this to disable the "Undo" button on irreversible rows.
     #[allow(dead_code)]
     pub fn is_reversible(self) -> bool {
-        matches!(self, Self::Disable | Self::Enable)
+        matches!(
+            self,
+            Self::Disable | Self::Enable | Self::GrantPermission | Self::RevokePermission
+        )
     }
 
     pub fn inverse(self) -> Option<ActionKind> {
         match self {
             Self::Disable => Some(Self::Enable),
             Self::Enable => Some(Self::Disable),
-            Self::UninstallForUser | Self::ClearData | Self::ForceStop => None,
+            Self::GrantPermission => Some(Self::RevokePermission),
+            Self::RevokePermission => Some(Self::GrantPermission),
+            Self::UninstallForUser | Self::ClearData | Self::ForceStop | Self::Shell => None,
         }
     }
 }
@@ -258,6 +297,9 @@ pub struct ActionRequest {
     /// persisted in the journal, including any explicit compatibility override.
     #[serde(default)]
     pub pack_context: Option<PackActionContext>,
+    /// Operation-specific canonical data and the UI/CLI confirmation source.
+    #[serde(default)]
+    pub context: ActionContext,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -278,6 +320,12 @@ pub struct PlannedAction {
     pub request: ActionRequest,
     pub args: Vec<String>,
     pub description: String,
+    /// Stable identifier carried by the write-ahead intent and terminal row.
+    #[serde(default)]
+    pub incident_id: String,
+    /// Snapshot captured immediately before the durable write-ahead intent.
+    #[serde(default)]
+    pub before_state: String,
 }
 
 /// Applied action — the journal record. `stdout`/`stderr` are kept so
@@ -286,12 +334,26 @@ pub struct PlannedAction {
 pub struct AppliedAction {
     pub plan: PlannedAction,
     pub stdout: String,
+    /// Raw output is returned to the initiating view but never serialized or
+    /// persisted. `stdout` above is the bounded/redacted audit copy.
+    #[serde(skip)]
+    pub display_stdout: String,
+    #[serde(default)]
+    pub before_state: String,
+    #[serde(default)]
+    pub after_state: String,
     /// ISO-8601 UTC timestamp.
     pub applied_at: String,
 }
 
-pub fn plan(request: ActionRequest) -> PlannedAction {
-    if !crate::adb::packages::valid_package_name(&request.package) {
+pub fn plan(mut request: ActionRequest) -> PlannedAction {
+    if request.context.confirmation_source == ConfirmationSource::Unspecified {
+        request.context.confirmation_source = ConfirmationSource::Internal;
+    }
+    let incident_id = next_incident_id();
+    if request.kind != ActionKind::Shell
+        && !crate::adb::packages::valid_package_name(&request.package)
+    {
         // We still return a plan but with a "looks suspicious"
         // description so the confirmation UI can flag it.
         let args = synth_args(&request);
@@ -303,6 +365,8 @@ pub fn plan(request: ActionRequest) -> PlannedAction {
             ),
             args,
             request,
+            incident_id,
+            before_state: String::new(),
         };
     }
     let args = synth_args(&request);
@@ -311,7 +375,21 @@ pub fn plan(request: ActionRequest) -> PlannedAction {
         request,
         args,
         description,
+        incident_id,
+        before_state: String::new(),
     }
+}
+
+fn next_incident_id() -> String {
+    static NEXT: AtomicU64 = AtomicU64::new(1);
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |duration| duration.as_nanos());
+    format!(
+        "op-{nanos:x}-{:x}-{}",
+        std::process::id(),
+        NEXT.fetch_add(1, Ordering::Relaxed)
+    )
 }
 
 fn synth_args(r: &ActionRequest) -> Vec<String> {
@@ -357,6 +435,19 @@ fn synth_args(r: &ActionRequest) -> Vec<String> {
             user,
             r.package.clone(),
         ],
+        ActionKind::GrantPermission | ActionKind::RevokePermission => vec![
+            "pm".into(),
+            if r.kind == ActionKind::GrantPermission {
+                "grant".into()
+            } else {
+                "revoke".into()
+            },
+            "--user".into(),
+            user,
+            r.package.clone(),
+            r.context.permission.clone().unwrap_or_default(),
+        ],
+        ActionKind::Shell => r.context.shell_argv.clone(),
     }
 }
 
@@ -371,6 +462,20 @@ fn describe(r: &ActionRequest) -> String {
         ),
         ActionKind::ClearData => format!("Clear data and cache for {} (user {u})", r.package),
         ActionKind::ForceStop => format!("Force-stop {} (user {u})", r.package),
+        ActionKind::GrantPermission => format!(
+            "Grant {} to {} for user {u}",
+            r.context.permission.as_deref().unwrap_or("<missing>"),
+            r.package
+        ),
+        ActionKind::RevokePermission => format!(
+            "Revoke {} from {} for user {u}",
+            r.context.permission.as_deref().unwrap_or("<missing>"),
+            r.package
+        ),
+        ActionKind::Shell => format!(
+            "Run reviewed shell mutation: {}",
+            r.context.shell_argv.join(" ")
+        ),
     }
 }
 
@@ -382,12 +487,24 @@ pub fn apply(
     validate_plan(&plan)?;
     validate_device_target(transport, &plan.request.target)?;
     let users = crate::adb::users::list_users(transport, &plan.request.target)?;
-    if !users.iter().any(|user| user.id == plan.request.user_id) {
+    let selected_user = users.iter().find(|user| user.id == plan.request.user_id);
+    if selected_user.is_none() {
         return Err(TransportError::Parse(format!(
             "Android user {} is no longer available on the selected device",
             plan.request.user_id
         )));
     }
+    if plan.request.kind == ActionKind::Shell && !selected_user.is_some_and(|user| user.current) {
+        return Err(TransportError::Parse(format!(
+            "Android user {} is no longer the current user for this shell mutation",
+            plan.request.user_id
+        )));
+    }
+    let before_state = if plan.before_state.is_empty() {
+        capture_state(transport, &plan.request)
+    } else {
+        plan.before_state.clone()
+    };
     let argv: Vec<&str> = plan.args.iter().map(String::as_str).collect();
     let stdout = transport.shell_target(&plan.request.target, &argv)?;
     // `pm disable-user --user 0 com.foo` prints "Package com.foo new
@@ -399,11 +516,109 @@ pub fn apply(
             stderr: err.to_string(),
         });
     }
+    let after_state = capture_state(transport, &plan.request);
+    let audit_stdout = redact_journal_text(&plan.request, &stdout);
     Ok(AppliedAction {
         plan,
-        stdout,
+        stdout: audit_stdout,
+        display_stdout: stdout,
+        before_state,
+        after_state,
         applied_at: now_iso.to_string(),
     })
+}
+
+pub fn capture_state(transport: &dyn AdbTransport, request: &ActionRequest) -> String {
+    match request.kind {
+        ActionKind::Disable
+        | ActionKind::Enable
+        | ActionKind::UninstallForUser
+        | ActionKind::ClearData
+        | ActionKind::ForceStop => {
+            package_state(transport, request).unwrap_or_else(|_| "unknown".to_string())
+        }
+        ActionKind::GrantPermission | ActionKind::RevokePermission => transport
+            .shell_target(&request.target, &["dumpsys", "package", &request.package])
+            .map(|output| permission_state(&output, request.context.permission.as_deref()))
+            .unwrap_or_else(|_| "unknown".to_string()),
+        ActionKind::Shell
+            if request
+                .context
+                .shell_argv
+                .starts_with(&["wm".into(), "density".into()]) =>
+        {
+            transport
+                .shell_target(&request.target, &["wm", "density"])
+                .map(|output| output.trim().to_string())
+                .unwrap_or_else(|_| "unknown".to_string())
+        }
+        ActionKind::Shell => "not_captured".to_string(),
+    }
+}
+
+fn package_state(
+    transport: &dyn AdbTransport,
+    request: &ActionRequest,
+) -> Result<String, TransportError> {
+    let user = request.user_id.to_string();
+    let disabled = transport.shell_target(
+        &request.target,
+        &[
+            "pm",
+            "list",
+            "packages",
+            "--user",
+            &user,
+            "-d",
+            &request.package,
+        ],
+    )?;
+    if disabled
+        .lines()
+        .any(|line| line.trim() == format!("package:{}", request.package))
+    {
+        return Ok("installed_disabled".to_string());
+    }
+    let installed = transport.shell_target(
+        &request.target,
+        &["pm", "list", "packages", "--user", &user, &request.package],
+    )?;
+    Ok(
+        if installed
+            .lines()
+            .any(|line| line.trim() == format!("package:{}", request.package))
+        {
+            "installed_enabled".to_string()
+        } else {
+            "not_installed".to_string()
+        },
+    )
+}
+
+fn permission_state(output: &str, permission: Option<&str>) -> String {
+    let Some(permission) = permission else {
+        return "unknown".to_string();
+    };
+    output
+        .lines()
+        .map(str::trim)
+        .find(|line| line.starts_with(permission) && line.contains("granted="))
+        .map(|line| {
+            if line.contains("granted=true") {
+                "granted".to_string()
+            } else {
+                "revoked".to_string()
+            }
+        })
+        .unwrap_or_else(|| "unknown".to_string())
+}
+
+pub fn redact_journal_text(request: &ActionRequest, output: &str) -> String {
+    if request.kind == ActionKind::Shell {
+        return format!("[shell output redacted; {} byte(s)]", output.len());
+    }
+    let redacted = output.replace(&request.serial, "[device]");
+    redacted.chars().take(8_192).collect()
 }
 
 /// Validate an IPC/CLI-supplied plan before execution. Plans cross a
@@ -424,11 +639,57 @@ pub fn validate_plan(plan: &PlannedAction) -> Result<(), TransportError> {
             "action plan is missing the validated device target".to_string(),
         ));
     }
-    if !crate::adb::packages::valid_package_name(&plan.request.package) {
+    if plan.incident_id.is_empty() || !plan.incident_id.starts_with("op-") {
+        return Err(TransportError::Parse(
+            "action plan is missing its incident id".to_string(),
+        ));
+    }
+    if plan.request.context.confirmation_source == ConfirmationSource::Unspecified {
+        return Err(TransportError::Parse(
+            "action plan is missing its confirmation source".to_string(),
+        ));
+    }
+    if plan.request.kind != ActionKind::Shell
+        && !crate::adb::packages::valid_package_name(&plan.request.package)
+    {
         return Err(TransportError::Parse(format!(
             "invalid package id {:?}",
             plan.request.package
         )));
+    }
+
+    match plan.request.kind {
+        ActionKind::GrantPermission | ActionKind::RevokePermission => {
+            let permission = plan
+                .request
+                .context
+                .permission
+                .as_deref()
+                .unwrap_or_default();
+            if !valid_permission(permission) || !plan.request.context.shell_argv.is_empty() {
+                return Err(TransportError::Parse(
+                    "permission action has invalid canonical context".to_string(),
+                ));
+            }
+        }
+        ActionKind::Shell => {
+            if !plan.request.package.is_empty()
+                || plan.request.context.permission.is_some()
+                || !valid_shell_argv(&plan.request.context.shell_argv)
+            {
+                return Err(TransportError::Parse(
+                    "shell action has invalid canonical context".to_string(),
+                ));
+            }
+        }
+        _ if plan.request.context.permission.is_some()
+            || !plan.request.context.shell_argv.is_empty() =>
+        {
+            return Err(TransportError::Parse(
+                "package action has unexpected canonical context".to_string(),
+            ));
+        }
+        _ => {}
     }
 
     let expected = synth_args(&plan.request);
@@ -438,6 +699,26 @@ pub fn validate_plan(plan: &PlannedAction) -> Result<(), TransportError> {
         ));
     }
     Ok(())
+}
+
+pub fn valid_permission(permission: &str) -> bool {
+    !permission.is_empty()
+        && permission.len() <= 256
+        && permission
+            .chars()
+            .all(|character| character.is_ascii_alphanumeric() || matches!(character, '.' | '_'))
+}
+
+pub fn valid_shell_argv(argv: &[String]) -> bool {
+    !argv.is_empty()
+        && argv.len() <= 128
+        && argv.iter().map(String::len).sum::<usize>() <= 16_384
+        && argv.iter().all(|argument| {
+            !argument.is_empty()
+                && !argument.contains('\0')
+                && !argument.contains('\n')
+                && !argument.contains('\r')
+        })
 }
 
 /// `pm` exits 0 even when the package action fails — the failure shows
@@ -504,6 +785,7 @@ mod tests {
             kind: ActionKind::Disable,
             user_id: 0,
             pack_context: None,
+            context: ActionContext::default(),
         };
         let p = plan(r);
         assert_eq!(
@@ -528,6 +810,7 @@ mod tests {
             kind: ActionKind::Enable,
             user_id: 0,
             pack_context: None,
+            context: ActionContext::default(),
         });
         assert_eq!(p.args, vec!["pm", "enable", "--user", "0", "com.x"]);
     }
@@ -541,6 +824,7 @@ mod tests {
             kind: ActionKind::UninstallForUser,
             user_id: 0,
             pack_context: None,
+            context: ActionContext::default(),
         });
         assert_eq!(p.args, vec!["pm", "uninstall", "--user", "0", "com.x"]);
     }
@@ -564,6 +848,7 @@ mod tests {
                 kind,
                 user_id: 10,
                 pack_context: None,
+                context: ActionContext::default(),
             });
             let mut expected: Vec<String> = head.into_iter().map(String::from).collect();
             expected.push("--user".into());
@@ -583,6 +868,7 @@ mod tests {
             kind: ActionKind::Disable,
             user_id: 0,
             pack_context: None,
+            context: ActionContext::default(),
         });
         assert!(p.description.starts_with("[suspicious package id"));
         // Args still synthesised — the caller decides whether to
@@ -598,6 +884,151 @@ mod tests {
         assert!(ActionKind::Enable.is_reversible());
         assert!(!ActionKind::UninstallForUser.is_reversible());
         assert!(ActionKind::UninstallForUser.inverse().is_none());
+        assert_eq!(
+            ActionKind::GrantPermission.inverse(),
+            Some(ActionKind::RevokePermission)
+        );
+        assert!(ActionKind::GrantPermission.is_reversible());
+    }
+
+    #[test]
+    fn permission_and_shell_plans_are_canonical() {
+        let permission = plan(ActionRequest {
+            serial: "abc".into(),
+            target: target("abc"),
+            package: "com.x".into(),
+            kind: ActionKind::GrantPermission,
+            user_id: 10,
+            pack_context: None,
+            context: ActionContext {
+                confirmation_source: ConfirmationSource::PermissionToggle,
+                permission: Some("android.permission.CAMERA".into()),
+                shell_argv: Vec::new(),
+            },
+        });
+        assert_eq!(
+            permission.args,
+            vec![
+                "pm",
+                "grant",
+                "--user",
+                "10",
+                "com.x",
+                "android.permission.CAMERA"
+            ]
+        );
+        assert!(validate_plan(&permission).is_ok());
+
+        let shell = plan(ActionRequest {
+            serial: "abc".into(),
+            target: target("abc"),
+            package: String::new(),
+            kind: ActionKind::Shell,
+            user_id: 0,
+            pack_context: None,
+            context: ActionContext {
+                confirmation_source: ConfirmationSource::ConsoleReview,
+                permission: None,
+                shell_argv: vec![
+                    "settings".into(),
+                    "put".into(),
+                    "global".into(),
+                    "x".into(),
+                    "1".into(),
+                ],
+            },
+        });
+        assert_eq!(shell.args, shell.request.context.shell_argv);
+        assert!(validate_plan(&shell).is_ok());
+        assert!(redact_journal_text(&shell.request, "secret device output").contains("redacted"));
+    }
+
+    #[test]
+    fn permission_apply_captures_before_and_after_state() {
+        let mock = MockTransport::new().with_devices(vec![device("abc")]);
+        expect_owner(&mock);
+        mock.expect_shell(
+            "abc",
+            &["dumpsys", "package", "com.x"],
+            Ok("android.permission.CAMERA: granted=false\n".into()),
+        );
+        mock.expect_shell(
+            "abc",
+            &[
+                "pm",
+                "grant",
+                "--user",
+                "0",
+                "com.x",
+                "android.permission.CAMERA",
+            ],
+            Ok(String::new()),
+        );
+        mock.expect_shell(
+            "abc",
+            &["dumpsys", "package", "com.x"],
+            Ok("android.permission.CAMERA: granted=true\n".into()),
+        );
+        let applied = apply(
+            &mock,
+            plan(ActionRequest {
+                serial: "abc".into(),
+                target: target("abc"),
+                package: "com.x".into(),
+                kind: ActionKind::GrantPermission,
+                user_id: 0,
+                pack_context: None,
+                context: ActionContext {
+                    confirmation_source: ConfirmationSource::PermissionToggle,
+                    permission: Some("android.permission.CAMERA".into()),
+                    shell_argv: Vec::new(),
+                },
+            }),
+            "2026-07-14T12:00:00Z",
+        )
+        .unwrap();
+        assert_eq!(applied.before_state, "revoked");
+        assert_eq!(applied.after_state, "granted");
+    }
+
+    #[test]
+    fn shell_apply_returns_raw_output_but_redacts_audit_copy() {
+        let mock = MockTransport::new().with_devices(vec![device("abc")]);
+        expect_owner(&mock);
+        mock.expect_shell(
+            "abc",
+            &["settings", "put", "global", "qa", "secret"],
+            Ok("secret output from abc".into()),
+        );
+        let applied = apply(
+            &mock,
+            plan(ActionRequest {
+                serial: "abc".into(),
+                target: target("abc"),
+                package: String::new(),
+                kind: ActionKind::Shell,
+                user_id: 0,
+                pack_context: None,
+                context: ActionContext {
+                    confirmation_source: ConfirmationSource::ConsoleReview,
+                    permission: None,
+                    shell_argv: vec![
+                        "settings".into(),
+                        "put".into(),
+                        "global".into(),
+                        "qa".into(),
+                        "secret".into(),
+                    ],
+                },
+            }),
+            "2026-07-14T12:00:00Z",
+        )
+        .unwrap();
+        assert_eq!(applied.display_stdout, "secret output from abc");
+        assert!(applied.stdout.contains("redacted"));
+        assert!(!applied.stdout.contains("secret output"));
+        assert_eq!(applied.before_state, "not_captured");
+        assert_eq!(applied.after_state, "not_captured");
     }
 
     #[test]
@@ -616,6 +1047,7 @@ mod tests {
             kind: ActionKind::Disable,
             user_id: 0,
             pack_context: None,
+            context: ActionContext::default(),
         });
         let applied = apply(&mock, p, "2026-05-25T12:00:00Z").unwrap();
         assert_eq!(applied.applied_at, "2026-05-25T12:00:00Z");
@@ -638,6 +1070,7 @@ mod tests {
             kind: ActionKind::UninstallForUser,
             user_id: 0,
             pack_context: None,
+            context: ActionContext::default(),
         });
         let err = apply(&mock, p, "2026-05-25T12:00:00Z").unwrap_err();
         match err {
@@ -659,6 +1092,7 @@ mod tests {
             kind: ActionKind::Disable,
             user_id: 0,
             pack_context: None,
+            context: ActionContext::default(),
         });
         p.args = vec!["pm".into(), "clear".into(), "com.x".into()];
         let err = apply(&mock, p, "2026-05-25T12:00:00Z").unwrap_err();
@@ -675,6 +1109,7 @@ mod tests {
             kind: ActionKind::Disable,
             user_id: 0,
             pack_context: None,
+            context: ActionContext::default(),
         });
         let err = apply(&mock, p, "2026-05-25T12:00:00Z").unwrap_err();
         assert!(matches!(err, TransportError::Parse(_)));
@@ -690,6 +1125,7 @@ mod tests {
             kind: ActionKind::Disable,
             user_id: 0,
             pack_context: None,
+            context: ActionContext::default(),
         });
         let err = apply(&mock, p, "2026-05-25T12:00:00Z").unwrap_err();
         assert!(matches!(err, TransportError::Parse(_)));
@@ -711,6 +1147,7 @@ mod tests {
             kind: ActionKind::Disable,
             user_id: 0,
             pack_context: None,
+            context: ActionContext::default(),
         });
         let err = apply(&mock, p, "2026-05-25T12:00:00Z").unwrap_err();
         assert!(err.to_string().contains("user 0 is no longer available"));

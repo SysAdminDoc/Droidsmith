@@ -344,12 +344,17 @@
     "journalIrreversible": "Без безопасной отмены",
     "journalNoUndo": "Нет отмены",
     "journalNoOutput": "(нет вывода)",
+    "journalAuditMeta": "{{incident}} · {{source}}",
+    "journalStateChange": "Состояние: {{before}} → {{after}}",
     "actionKind": {
       "disable": "Disable",
       "enable": "Enable",
       "uninstall_for_user": "Uninstall for user",
       "clear_data": "Clear data",
-      "force_stop": "Force stop"
+      "force_stop": "Force stop",
+      "grant_permission": "Выдать разрешение",
+      "revoke_permission": "Отозвать разрешение",
+      "shell": "Проверенная shell-мутация"
     }
   },
   "debloat": {
@@ -493,7 +498,7 @@
   },
   "console": {
     "title": "Консоль",
-    "description": "Выполняйте ADB shell команды с историей вывода и повтором команд.",
+    "description": "Выполняйте read-only ADB shell команды напрямую; проверяйте и журналируйте каждую мутацию до запуска.",
     "clearHistory": "Очистить историю",
     "placeholder": "getprop ro.product.model",
     "run": "Выполнить",
@@ -504,7 +509,12 @@
     "noAuthorizedBody": "Подключите и авторизуйте устройство, чтобы использовать консоль.",
     "noOutput": "(нет вывода)",
     "running": "Выполнение...",
-    "commandLabel": "Команда ADB shell"
+    "commandLabel": "Команда ADB shell",
+    "mutation": "Мутация",
+    "dangerousMutation": "Опасная мутация",
+    "reviewMutation": "Проверка shell-мутации",
+    "reviewMutationBody": "Эта команда может изменить состояние устройства. Проверьте точные аргументы и целевое устройство; намерение, результат и отредактированный вывод будут записаны в журнал устройства.",
+    "runReviewedMutation": "Запустить и записать"
   },
   "logcat": {
     "title": "Logcat",
@@ -639,6 +649,7 @@
     "select": "Выбрать",
     "noAction": "Нет действия",
     "close": "Закрыть",
+    "cancel": "Отмена",
     "deviceCount_one": "{{count}} устройство",
     "deviceCount_other": "{{count}} устройств",
     "packageCount_one": "{{count}} пакет",

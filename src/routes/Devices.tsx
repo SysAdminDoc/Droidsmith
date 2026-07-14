@@ -3,13 +3,13 @@ import { save } from "@tauri-apps/plugin-dialog";
 import { useTranslation } from "react-i18next";
 
 import {
+  callApplyDeviceControl,
   callGetDeviceInfo,
   callListDevices,
   callListNetworkConnections,
   callListProcesses,
   callListRemoteFiles,
   callPullFile,
-  callShellRun,
   callTakeScreenshot,
   deviceTarget,
   inTauri,
@@ -655,7 +655,11 @@ function DeviceControls({ target }: { target: DeviceTarget }) {
   const sendKey = useCallback(
     async (keycode: number, label: string) => {
       try {
-        await callShellRun(target, ["input", "keyevent", String(keycode)]);
+        await callApplyDeviceControl(target, [
+          "input",
+          "keyevent",
+          String(keycode),
+        ]);
         setLastKey(label);
       } catch {
         setLastKey(t("devices.controls.keyFailed", { label }));
@@ -692,7 +696,7 @@ function DeviceControls({ target }: { target: DeviceTarget }) {
   const applyDensity = useCallback(async () => {
     if (!density.trim()) return;
     try {
-      await callShellRun(target, ["wm", "density", density.trim()]);
+      await callApplyDeviceControl(target, ["wm", "density", density.trim()]);
       setDisplayMsg(
         t("devices.controls.densitySet", { value: density.trim() }),
       );
@@ -707,7 +711,7 @@ function DeviceControls({ target }: { target: DeviceTarget }) {
 
   const resetDensity = useCallback(async () => {
     try {
-      await callShellRun(target, ["wm", "density", "reset"]);
+      await callApplyDeviceControl(target, ["wm", "density", "reset"]);
       setDisplayMsg(t("devices.controls.densityReset"));
     } catch (e) {
       setDisplayMsg(
@@ -721,7 +725,7 @@ function DeviceControls({ target }: { target: DeviceTarget }) {
   const toggleForceDark = useCallback(
     async (enable: boolean) => {
       try {
-        await callShellRun(target, [
+        await callApplyDeviceControl(target, [
           "settings",
           "put",
           "secure",

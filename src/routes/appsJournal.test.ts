@@ -7,6 +7,15 @@ function entry(
   kind: ActionKind,
   overrides: Partial<Pick<JournalEntry, "undone_by" | "undoes">> = {},
 ): JournalEntry {
+  const permissionStates =
+    kind === "grant_permission"
+      ? { before_state: "revoked", after_state: "granted" }
+      : kind === "revoke_permission"
+        ? { before_state: "granted", after_state: "revoked" }
+        : {
+            before_state: "installed_enabled",
+            after_state: "installed_disabled",
+          };
   return {
     id: 1,
     applied: {
@@ -28,8 +37,11 @@ function entry(
         },
         args: ["pm", kind, "com.example.app"],
         description: `${kind} com.example.app`,
+        incident_id: "op-test-1",
+        before_state: "installed_enabled",
       },
       stdout: "ok",
+      ...permissionStates,
       applied_at: "2026-06-28T12:00:00Z",
     },
     undone_by: null,
@@ -44,6 +56,20 @@ describe("journalEntryStatus", () => {
   it("enables undo for original disable and enable entries", () => {
     expect(journalEntryStatus(entry("disable"))).toBe("undoable");
     expect(journalEntryStatus(entry("enable"))).toBe("undoable");
+    expect(journalEntryStatus(entry("grant_permission"))).toBe("undoable");
+    expect(journalEntryStatus(entry("revoke_permission"))).toBe("undoable");
+  });
+
+  it("does not undo a permission no-op with an unknown prior state", () => {
+    expect(
+      journalEntryStatus({
+        ...entry("grant_permission"),
+        applied: {
+          ...entry("grant_permission").applied,
+          before_state: "unknown",
+        },
+      }),
+    ).toBe("irreversible");
   });
 
   it("marks already-undone entries and undo records as non-actionable", () => {

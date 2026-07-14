@@ -523,6 +523,7 @@ export default function AppsRoute() {
           <PermissionsPanel
             target={deviceTarget(selectedDevice)}
             pkg={inspectedPkg}
+            userId={selectedUser}
             onClose={() => setInspectedPkg(null)}
           />
         )}
@@ -975,11 +976,32 @@ function JournalPanel({
                         <p className="mt-2 max-w-xs text-xs leading-5 text-anvil-400">
                           {entry.applied.plan.description}
                         </p>
+                        <p className="mt-1 font-mono text-[10px] text-anvil-500">
+                          {t("apps.journalAuditMeta", {
+                            incident:
+                              entry.applied.plan.incident_id || "legacy",
+                            source:
+                              request.context?.confirmation_source ?? "legacy",
+                          })}
+                        </p>
+                        {(entry.applied.before_state ||
+                          entry.applied.after_state) && (
+                          <p className="mt-1 text-[10px] text-anvil-500">
+                            {t("apps.journalStateChange", {
+                              before:
+                                entry.applied.before_state ||
+                                t("debloat.stateUnknown"),
+                              after:
+                                entry.applied.after_state ||
+                                t("debloat.stateUnknown"),
+                            })}
+                          </p>
+                        )}
                       </div>
                     </TableCell>
                     <TableCell>
                       <code className="block min-w-[16rem] font-mono text-xs text-anvil-100">
-                        {request.package}
+                        {request.package || entry.applied.plan.description}
                       </code>
                     </TableCell>
                     <TableCell>
@@ -1216,10 +1238,12 @@ function ActionOverlay({
 function PermissionsPanel({
   target,
   pkg,
+  userId,
   onClose,
 }: {
   target: DeviceTarget;
   pkg: string;
+  userId: number;
   onClose: () => void;
 }) {
   const { t } = useTranslation();
@@ -1251,7 +1275,7 @@ function PermissionsPanel({
       setToggling(permission);
       setPermError(null);
       try {
-        await callSetPermission(target, pkg, permission, grant);
+        await callSetPermission(target, pkg, permission, grant, userId);
         setPerms((prev) =>
           prev.map((p) =>
             p.permission === permission ? { ...p, granted: grant } : p,
@@ -1271,7 +1295,7 @@ function PermissionsPanel({
         setToggling(null);
       }
     },
-    [target, pkg, load, t],
+    [target, pkg, userId, load, t],
   );
 
   return (

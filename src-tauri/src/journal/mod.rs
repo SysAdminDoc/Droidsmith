@@ -246,8 +246,15 @@ impl Journal {
         let entry = JournalEntry {
             id,
             applied: AppliedAction {
+                before_state: if plan.before_state.is_empty() {
+                    "unknown".to_string()
+                } else {
+                    plan.before_state.clone()
+                },
+                after_state: "not_applied".to_string(),
                 plan,
                 stdout: String::new(),
+                display_stdout: String::new(),
                 applied_at: started_at.to_string(),
             },
             undone_by: None,
@@ -316,13 +323,16 @@ impl Journal {
         let id = self
             .begin(plan.clone(), started_at, undoes)
             .map_err(ExecuteError::Journal)?;
+        let request = plan.request.clone();
         match run(plan) {
             Ok(applied) => self
                 .succeed(id, applied)
                 .cloned()
                 .map_err(ExecuteError::Journal),
             Err(error) => {
-                self.fail(id, error.to_string(), &crate::time::iso_utc_now())
+                let failure =
+                    crate::adb::actions::redact_journal_text(&request, &error.to_string());
+                self.fail(id, failure, &crate::time::iso_utc_now())
                     .map_err(ExecuteError::Journal)?;
                 Err(ExecuteError::Operation(error))
             }
@@ -488,13 +498,16 @@ fn invalid_transition(id: u64, outcome: JournalOutcome) -> std::io::Error {
 }
 
 fn same_plan(left: &PlannedAction, right: &PlannedAction) -> bool {
-    left.args == right.args
+    left.incident_id == right.incident_id
+        && left.before_state == right.before_state
+        && left.args == right.args
         && left.request.serial == right.request.serial
         && left.request.target == right.request.target
         && left.request.package == right.request.package
         && left.request.kind == right.request.kind
         && left.request.user_id == right.request.user_id
         && left.request.pack_context == right.request.pack_context
+        && left.request.context == right.request.context
 }
 
 /// Every production record ends in `\n`. If a process or filesystem failure
@@ -553,7 +566,23 @@ pub fn undo_request_for(journal: &Journal, entry_id: u64) -> Option<ActionReques
     if entry.undone_by.is_some() {
         return None; // already undone
     }
-    let kind = entry.applied.plan.request.kind.inverse()?;
+    let original_kind = entry.applied.plan.request.kind;
+    match original_kind {
+        crate::adb::actions::ActionKind::GrantPermission
+            if entry.applied.before_state != "revoked"
+                || entry.applied.after_state != "granted" =>
+        {
+            return None;
+        }
+        crate::adb::actions::ActionKind::RevokePermission
+            if entry.applied.before_state != "granted"
+                || entry.applied.after_state != "revoked" =>
+        {
+            return None;
+        }
+        _ => {}
+    }
+    let kind = original_kind.inverse()?;
     Some(ActionRequest {
         serial: entry.applied.plan.request.serial.clone(),
         target: entry.applied.plan.request.target.clone(),
@@ -564,6 +593,10 @@ pub fn undo_request_for(journal: &Journal, entry_id: u64) -> Option<ActionReques
         // the owner instead.
         user_id: entry.applied.plan.request.user_id,
         pack_context: entry.applied.plan.request.pack_context.clone(),
+        context: crate::adb::actions::ActionContext {
+            confirmation_source: crate::adb::actions::ConfirmationSource::JournalUndo,
+            ..entry.applied.plan.request.context.clone()
+        },
     })
 }
 
@@ -604,8 +637,12 @@ mod tests {
                 kind,
                 user_id: 0,
                 pack_context: None,
+                context: crate::adb::actions::ActionContext::default(),
             }),
             stdout: "Package x new state: disabled\n".into(),
+            display_stdout: "Package x new state: disabled\n".into(),
+            before_state: "installed_enabled".into(),
+            after_state: "installed_disabled".into(),
             applied_at: "2026-05-25T12:00:00Z".into(),
         }
     }
@@ -707,6 +744,42 @@ mod tests {
     }
 
     #[test]
+    fn permission_undo_requires_a_verified_state_transition() {
+        let dir = fresh_tmp_dir("permission-undo");
+        let make_applied = |before: &str, after: &str| AppliedAction {
+            plan: plan(ActionRequest {
+                serial: "abc".into(),
+                target: target("abc"),
+                package: "com.foo".into(),
+                kind: ActionKind::GrantPermission,
+                user_id: 0,
+                pack_context: None,
+                context: crate::adb::actions::ActionContext {
+                    confirmation_source: crate::adb::actions::ConfirmationSource::PermissionToggle,
+                    permission: Some("android.permission.CAMERA".into()),
+                    shell_argv: Vec::new(),
+                },
+            }),
+            stdout: String::new(),
+            display_stdout: String::new(),
+            before_state: before.into(),
+            after_state: after.into(),
+            applied_at: "2026-07-14T12:00:00Z".into(),
+        };
+
+        let mut journal = Journal::open(&dir, "abc").unwrap();
+        journal.record(make_applied("unknown", "granted")).unwrap();
+        assert!(undo_request_for(&journal, 1).is_none());
+        journal.record(make_applied("revoked", "granted")).unwrap();
+        let undo = undo_request_for(&journal, 2).unwrap();
+        assert_eq!(undo.kind, ActionKind::RevokePermission);
+        assert_eq!(
+            undo.context.permission.as_deref(),
+            Some("android.permission.CAMERA")
+        );
+    }
+
+    #[test]
     fn record_undo_links_both_sides() {
         let dir = fresh_tmp_dir("link");
         let mut j = Journal::open(&dir, "abc").unwrap();
@@ -762,12 +835,16 @@ mod tests {
             kind: ActionKind::Disable,
             user_id: 0,
             pack_context: None,
+            context: crate::adb::actions::ActionContext::default(),
         });
         let entry = JournalEntry {
             id: 1,
             applied: AppliedAction {
                 plan: good,
                 stdout: "ok".into(),
+                display_stdout: "ok".into(),
+                before_state: "unknown".into(),
+                after_state: "unknown".into(),
                 applied_at: "2026-05-25T12:00:00Z".into(),
             },
             undone_by: None,
@@ -891,6 +968,32 @@ mod tests {
             Journal::open(&dir, "abc").unwrap().entries()[0].outcome,
             JournalOutcome::Failed
         );
+    }
+
+    #[test]
+    fn shell_failures_persist_only_a_redacted_summary() {
+        let dir = fresh_tmp_dir("shell-failure-redaction");
+        let mut journal = Journal::open(&dir, "abc").unwrap();
+        let plan = plan(ActionRequest {
+            serial: "abc".into(),
+            target: target("abc"),
+            package: String::new(),
+            kind: ActionKind::Shell,
+            user_id: 0,
+            pack_context: None,
+            context: crate::adb::actions::ActionContext {
+                confirmation_source: crate::adb::actions::ConfirmationSource::ConsoleReview,
+                permission: None,
+                shell_argv: vec!["rm".into(), "/sdcard/private.txt".into()],
+            },
+        });
+        let result = journal.execute(plan, None, "2026-07-14T12:00:00Z", |_| {
+            Err::<AppliedAction, _>("secret device failure from abc")
+        });
+        assert!(matches!(result, Err(ExecuteError::Operation(_))));
+        let failure = journal.entries()[0].failure.as_deref().unwrap();
+        assert!(failure.contains("redacted"));
+        assert!(!failure.contains("secret device failure"));
     }
 
     #[test]

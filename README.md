@@ -14,8 +14,9 @@ root, without a closed-source binary, without paywalled features.
 
 Functional early desktop build. The Tauri shell builds and runs; shipped routes
 cover device readiness, wireless ADB pairing/connect, package inventory and
-actions, package backups, journal undo, debloat queue recovery, scrcpy launch
-and session supervision, shell/logcat/file utilities, and fastboot inspection.
+actions, package backups, audited permission/device-control mutations, reviewed
+shell mutations, journal undo, debloat queue recovery, scrcpy launch and session
+supervision, read-only shell/logcat/file utilities, and fastboot inspection.
 
 Current blockers are tracked separately in [Roadmap_Blocked.md](Roadmap_Blocked.md):
 signed release pipeline, bundled platform-tools wiring, UAD-NG redistribution,

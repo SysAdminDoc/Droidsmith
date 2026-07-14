@@ -344,12 +344,17 @@
     "journalIrreversible": "No safe undo",
     "journalNoUndo": "No undo",
     "journalNoOutput": "(no output)",
+    "journalAuditMeta": "{{incident}} · {{source}}",
+    "journalStateChange": "State: {{before}} → {{after}}",
     "actionKind": {
       "disable": "Disable",
       "enable": "Enable",
       "uninstall_for_user": "Uninstall for user",
       "clear_data": "Clear data",
-      "force_stop": "Force stop"
+      "force_stop": "Force stop",
+      "grant_permission": "Grant permission",
+      "revoke_permission": "Revoke permission",
+      "shell": "Reviewed shell mutation"
     }
   },
   "debloat": {
@@ -493,7 +498,7 @@
   },
   "console": {
     "title": "Console",
-    "description": "Run ADB shell commands with output history and command recall.",
+    "description": "Run read-only ADB shell commands directly; review and journal every mutation before it executes.",
     "clearHistory": "Clear history",
     "placeholder": "getprop ro.product.model",
     "run": "Run",
@@ -504,7 +509,12 @@
     "noAuthorizedBody": "Connect and authorize a device to use the console.",
     "noOutput": "(no output)",
     "running": "Running...",
-    "commandLabel": "ADB shell command"
+    "commandLabel": "ADB shell command",
+    "mutation": "Mutation",
+    "dangerousMutation": "Dangerous mutation",
+    "reviewMutation": "Review shell mutation",
+    "reviewMutationBody": "This command can change device state. Verify the exact argv and target before running it; the intent, outcome, and redacted output will be written to the device journal.",
+    "runReviewedMutation": "Run and journal"
   },
   "logcat": {
     "title": "Logcat",
@@ -639,6 +649,7 @@
     "select": "Select",
     "noAction": "No action",
     "close": "Close",
+    "cancel": "Cancel",
     "deviceCount_one": "{{count}} device",
     "deviceCount_other": "{{count}} devices",
     "packageCount_one": "{{count}} package",

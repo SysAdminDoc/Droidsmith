@@ -333,7 +333,7 @@ export default function DebloatRoute() {
             );
           }
           before = await readPackageSnapshot(row.entry.id);
-          journal = await callApplyAction(plan);
+          journal = (await callApplyAction(plan)).entry;
           after = await readPackageSnapshot(row.entry.id);
           error = verificationMessage(verifyDisabled(after));
         } catch (e) {

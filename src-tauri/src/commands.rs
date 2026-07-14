@@ -211,8 +211,28 @@ pub fn list_users(target: adb::DeviceTarget) -> Result<Vec<adb::AndroidUser>, ad
 /// preview surface the confirmation dialog renders before the user
 /// commits.
 #[tauri::command]
-pub fn plan_action(request: actions::ActionRequest) -> actions::PlannedAction {
-    actions::plan(request)
+pub fn plan_action(
+    mut request: actions::ActionRequest,
+) -> Result<actions::PlannedAction, CommandError> {
+    if !matches!(
+        request.kind,
+        actions::ActionKind::Disable
+            | actions::ActionKind::Enable
+            | actions::ActionKind::UninstallForUser
+            | actions::ActionKind::ClearData
+            | actions::ActionKind::ForceStop
+    ) {
+        return Err(CommandError {
+            code: "invalid_action_kind",
+            message: "use the dedicated audited planner for this operation kind".to_string(),
+        });
+    }
+    request.pack_context = None;
+    request.context = actions::ActionContext {
+        confirmation_source: actions::ConfirmationSource::AppsPreview,
+        ..Default::default()
+    };
+    Ok(actions::plan(request))
 }
 
 /// Generic Tauri-command error envelope so the JS side gets the same
@@ -274,18 +294,33 @@ fn validate_serial_arg(serial: &str) -> Result<(), CommandError> {
 fn execute_journaled(
     journal: &mut Journal,
     transport: &adb::ShellTransport,
-    plan: actions::PlannedAction,
+    mut plan: actions::PlannedAction,
     undoes: Option<u64>,
-) -> Result<JournalEntry, CommandError> {
+) -> Result<ApplyActionResult, CommandError> {
+    actions::validate_plan(&plan)?;
+    adb::validate_device_target(transport, &plan.request.target)?;
+    plan.before_state = actions::capture_state(transport, &plan.request);
     let started_at = iso_now();
-    journal
+    let entry = journal
         .execute(plan, undoes, &started_at, |plan| {
             actions::apply(transport, plan, &iso_now())
         })
         .map_err(|error| match error {
             journal::ExecuteError::Journal(error) => CommandError::from(error),
             journal::ExecuteError::Operation(error) => CommandError::from(error),
-        })
+        })?;
+    Ok(ApplyActionResult {
+        stdout: entry.applied.display_stdout.clone(),
+        entry,
+    })
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ApplyActionResult {
+    pub entry: JournalEntry,
+    /// Raw output is returned only to the initiating view and is excluded from
+    /// the persisted journal, which carries the redacted/bounded copy.
+    pub stdout: String,
 }
 
 fn validated_transport(target: &adb::DeviceTarget) -> Result<adb::ShellTransport, CommandError> {
@@ -382,7 +417,7 @@ fn validate_fastboot_key(key: &str) -> Result<(), CommandError> {
 pub fn apply_action(
     app: tauri::AppHandle,
     plan: actions::PlannedAction,
-) -> Result<JournalEntry, CommandError> {
+) -> Result<ApplyActionResult, CommandError> {
     let resolution = adb::locate_adb();
     let path = resolution
         .path
@@ -394,10 +429,10 @@ pub fn apply_action(
     // Serialize intent → device mutation → terminal outcome per device. The
     // durable intent is written and synced before `actions::apply` runs.
     let dir = journal_dir(&app)?;
-    let entry = journal::with_journal(&dir, &serial, |journal| {
+    let result = journal::with_journal(&dir, &serial, |journal| {
         execute_journaled(journal, &transport, plan, None)
     })?;
-    Ok(entry)
+    Ok(result)
 }
 
 #[tauri::command]
@@ -440,7 +475,7 @@ pub fn journal_undo(
         undo_request.target = target.clone();
 
         let plan = actions::plan(undo_request);
-        execute_journaled(journal, &transport, plan, Some(entry_id))
+        execute_journaled(journal, &transport, plan, Some(entry_id)).map(|result| result.entry)
     })?;
     Ok(entry)
 }
@@ -454,10 +489,174 @@ pub fn get_device_info(target: adb::DeviceTarget) -> Result<adb::DeviceInfo, Com
 /// Run a one-shot shell command on a device and return its output.
 #[tauri::command]
 pub fn shell_run(target: adb::DeviceTarget, argv: Vec<String>) -> Result<String, CommandError> {
+    if !actions::valid_shell_argv(&argv) {
+        return Err(CommandError {
+            code: "invalid_shell_argv",
+            message: "shell argv is empty, oversized, or contains control characters".to_string(),
+        });
+    }
+    if classify_shell(&argv) != ShellClassification::ReadOnly {
+        return Err(CommandError {
+            code: "shell_mutation_requires_review",
+            message: "mutating shell commands must be reviewed and executed through the audited operation planner".to_string(),
+        });
+    }
     let transport = validated_transport(&target)?;
     let refs: Vec<&str> = argv.iter().map(String::as_str).collect();
     let stdout = transport.shell_target(&target, &refs)?;
     Ok(stdout)
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ShellClassification {
+    ReadOnly,
+    Mutation,
+    Dangerous,
+}
+
+fn classify_shell(argv: &[String]) -> ShellClassification {
+    let head = argv.first().map(String::as_str).unwrap_or_default();
+    let subcommand = argv.get(1).map(String::as_str).unwrap_or_default();
+    match head {
+        "logcat" | "getprop" | "dumpsys" | "ps" | "ss" | "netstat" | "ls" | "df" | "stat"
+        | "cat" | "id" | "uname" => ShellClassification::ReadOnly,
+        "wm" if argv.len() <= 2 && matches!(subcommand, "size" | "density") => {
+            ShellClassification::ReadOnly
+        }
+        "settings" if matches!(subcommand, "get" | "list") => ShellClassification::ReadOnly,
+        "pm" if matches!(subcommand, "list" | "path" | "dump") => ShellClassification::ReadOnly,
+        "cmd"
+            if argv.get(1).map(String::as_str) == Some("package")
+                && matches!(argv.get(2).map(String::as_str), Some("list") | Some("path")) =>
+        {
+            ShellClassification::ReadOnly
+        }
+        "input" | "wm" | "settings" => ShellClassification::Mutation,
+        _ => ShellClassification::Dangerous,
+    }
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct PlanShellActionRequest {
+    pub target: adb::DeviceTarget,
+    pub argv: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ShellActionPlan {
+    pub mutating: bool,
+    pub dangerous: bool,
+    pub plan: Option<actions::PlannedAction>,
+}
+
+#[tauri::command]
+pub fn plan_shell_action(request: PlanShellActionRequest) -> Result<ShellActionPlan, CommandError> {
+    if !actions::valid_shell_argv(&request.argv) {
+        return Err(CommandError {
+            code: "invalid_shell_argv",
+            message: "shell argv is empty, oversized, or contains control characters".to_string(),
+        });
+    }
+    let classification = classify_shell(&request.argv);
+    if classification == ShellClassification::ReadOnly {
+        return Ok(ShellActionPlan {
+            mutating: false,
+            dangerous: false,
+            plan: None,
+        });
+    }
+    let transport = validated_transport(&request.target)?;
+    let users = adb::list_users(&transport, &request.target)?;
+    let user_id = users
+        .iter()
+        .find(|user| user.current)
+        .map(|user| user.id)
+        .ok_or(CommandError {
+            code: "current_user_missing",
+            message: "could not bind the shell mutation to the current Android user".to_string(),
+        })?;
+    let plan = actions::plan(actions::ActionRequest {
+        serial: request.target.serial.clone(),
+        target: request.target,
+        package: String::new(),
+        kind: actions::ActionKind::Shell,
+        user_id,
+        pack_context: None,
+        context: actions::ActionContext {
+            confirmation_source: actions::ConfirmationSource::ConsoleReview,
+            permission: None,
+            shell_argv: request.argv,
+        },
+    });
+    Ok(ShellActionPlan {
+        mutating: true,
+        dangerous: classification == ShellClassification::Dangerous,
+        plan: Some(plan),
+    })
+}
+
+fn is_allowed_device_control(argv: &[String]) -> bool {
+    matches!(
+        argv,
+        [input, keyevent, code]
+            if input == "input" && keyevent == "keyevent" && code.parse::<u32>().is_ok()
+    ) || matches!(
+        argv,
+        [wm, density, value]
+            if wm == "wm"
+                && density == "density"
+                && (value == "reset" || value.parse::<u16>().is_ok_and(|value| (72..=1000).contains(&value)))
+    ) || matches!(
+        argv,
+        [settings, put, secure, key, value]
+            if settings == "settings"
+                && put == "put"
+                && secure == "secure"
+                && key == "ui_night_mode"
+                && matches!(value.as_str(), "1" | "2")
+    )
+}
+
+#[tauri::command]
+pub fn apply_device_control(
+    app: tauri::AppHandle,
+    target: adb::DeviceTarget,
+    argv: Vec<String>,
+) -> Result<ApplyActionResult, CommandError> {
+    if !is_allowed_device_control(&argv) {
+        return Err(CommandError {
+            code: "device_control_not_allowed",
+            message: "command is not an allowlisted Droidsmith device control".to_string(),
+        });
+    }
+    let transport = validated_transport(&target)?;
+    let users = adb::list_users(&transport, &target)?;
+    let user_id = users
+        .iter()
+        .find(|user| user.current)
+        .map(|user| user.id)
+        .ok_or(CommandError {
+            code: "current_user_missing",
+            message: "could not bind the device control to the current Android user".to_string(),
+        })?;
+    let serial = target.serial.clone();
+    let plan = actions::plan(actions::ActionRequest {
+        serial: serial.clone(),
+        target,
+        package: String::new(),
+        kind: actions::ActionKind::Shell,
+        user_id,
+        pack_context: None,
+        context: actions::ActionContext {
+            confirmation_source: actions::ConfirmationSource::DeviceControl,
+            permission: None,
+            shell_argv: argv,
+        },
+    });
+    let dir = journal_dir(&app)?;
+    journal::with_journal(&dir, &serial, |journal| {
+        execute_journaled(journal, &transport, plan, None)
+    })
 }
 
 /// List files in a remote directory on the device.
@@ -884,26 +1083,50 @@ pub fn list_permissions(
 /// Grant or revoke a runtime permission.
 #[tauri::command]
 pub fn set_permission(
+    app: tauri::AppHandle,
     target: adb::DeviceTarget,
     package: String,
     permission: String,
     grant: bool,
-) -> Result<String, CommandError> {
+    #[allow(non_snake_case)] userId: u32,
+) -> Result<ApplyActionResult, CommandError> {
     let transport = validated_transport(&target)?;
     validate_package_arg(&package)?;
-    if permission.is_empty()
-        || !permission
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_'))
-    {
+    if !actions::valid_permission(&permission) {
         return Err(CommandError {
             code: "invalid_permission",
             message: format!("invalid permission identifier {permission:?}"),
         });
     }
-    let action = if grant { "grant" } else { "revoke" };
-    let stdout = transport.shell_target(&target, &["pm", action, &package, &permission])?;
-    Ok(stdout)
+    let users = adb::list_users(&transport, &target)?;
+    if !users.iter().any(|user| user.id == userId) {
+        return Err(CommandError {
+            code: "permission_user_missing",
+            message: format!("Android user {userId} is not available"),
+        });
+    }
+    let serial = target.serial.clone();
+    let plan = actions::plan(actions::ActionRequest {
+        serial: serial.clone(),
+        target,
+        package,
+        kind: if grant {
+            actions::ActionKind::GrantPermission
+        } else {
+            actions::ActionKind::RevokePermission
+        },
+        user_id: userId,
+        pack_context: None,
+        context: actions::ActionContext {
+            confirmation_source: actions::ConfirmationSource::PermissionToggle,
+            permission: Some(permission),
+            shell_argv: Vec::new(),
+        },
+    });
+    let dir = journal_dir(&app)?;
+    journal::with_journal(&dir, &serial, |journal| {
+        execute_journaled(journal, &transport, plan, None)
+    })
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -1341,6 +1564,10 @@ pub fn plan_pack(
                 compatibility_status: format!("{:?}", assessment.status).to_lowercase(),
                 override_accepted: request.override_compatibility,
             }),
+            context: actions::ActionContext {
+                confirmation_source: actions::ConfirmationSource::DebloatPreview,
+                ..Default::default()
+            },
         }));
     }
     Ok(PlannedPack {
@@ -1360,9 +1587,10 @@ fn iso_now() -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        classify_backup_size, load_runtime_packs, pack_error_to_load_error, parse_fastboot_getvar,
-        unique_screenshot_remote, validate_backup_target, validate_local_path,
-        validate_remote_path, ProcessOutput,
+        classify_backup_size, classify_shell, is_allowed_device_control, load_runtime_packs,
+        pack_error_to_load_error, parse_fastboot_getvar, unique_screenshot_remote,
+        validate_backup_target, validate_local_path, validate_remote_path, ProcessOutput,
+        ShellClassification,
     };
 
     #[test]
@@ -1385,6 +1613,51 @@ mod tests {
             validate_remote_path("/sdcard/Download/app.apk").unwrap(),
             "/sdcard/Download/app.apk"
         );
+    }
+
+    #[test]
+    fn shell_classifier_fails_unknown_commands_into_review() {
+        let args = |values: &[&str]| {
+            values
+                .iter()
+                .map(|value| value.to_string())
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(
+            classify_shell(&args(&["getprop", "ro.product.model"])),
+            ShellClassification::ReadOnly
+        );
+        assert_eq!(
+            classify_shell(&args(&["wm", "density", "420"])),
+            ShellClassification::Mutation
+        );
+        assert_eq!(
+            classify_shell(&args(&["rm", "-rf", "/sdcard/data"])),
+            ShellClassification::Dangerous
+        );
+    }
+
+    #[test]
+    fn device_control_allowlist_is_exact_and_bounded() {
+        let args = |values: &[&str]| {
+            values
+                .iter()
+                .map(|value| value.to_string())
+                .collect::<Vec<_>>()
+        };
+        assert!(is_allowed_device_control(&args(&[
+            "input", "keyevent", "3"
+        ])));
+        assert!(is_allowed_device_control(&args(&["wm", "density", "420"])));
+        assert!(!is_allowed_device_control(&args(&[
+            "wm", "density", "5000"
+        ])));
+        assert!(!is_allowed_device_control(&args(&[
+            "settings",
+            "delete",
+            "secure",
+            "adb_enabled"
+        ])));
     }
 
     #[test]

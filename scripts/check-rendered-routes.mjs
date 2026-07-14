@@ -53,6 +53,22 @@ async function runDesktopFlow(browser) {
     await page.getByRole("heading", { name: route, exact: true }).waitFor();
   }
 
+  await page.getByLabel("ADB shell command").fill("getprop ro.product.model");
+  await page.getByRole("button", { name: "Run", exact: true }).click();
+  await page.getByText("Pixel QA", { exact: true }).waitFor();
+  await page.getByLabel("ADB shell command").fill("rm /sdcard/qa.txt");
+  await page.getByRole("button", { name: "Run", exact: true }).click();
+  await page
+    .getByRole("alertdialog", { name: "Review shell mutation" })
+    .waitFor();
+  await page.getByText("Dangerous mutation", { exact: true }).waitFor();
+  await assertTabMovesFocus(page, "Console mutation review");
+  await page.screenshot({
+    path: path.join(screenshotDir, "desktop-console-mutation-review.png"),
+    fullPage: false,
+  });
+  await page.getByRole("button", { name: "Cancel", exact: true }).click();
+
   await page.getByRole("button", { name: /Apps/ }).click();
   await page.getByText("com.example.app").waitFor();
   await page.getByText("com.android.settings").waitFor();
@@ -330,6 +346,39 @@ async function installTauriMock(page) {
         if (cmd === "plan_action") {
           return planFor(args.request);
         }
+        if (cmd === "plan_shell_action") {
+          const shellArgv = args.request.argv;
+          const readOnly = shellArgv[0] === "getprop";
+          return {
+            mutating: !readOnly,
+            dangerous: !readOnly,
+            plan: readOnly
+              ? null
+              : {
+                  request: {
+                    serial: "QA123",
+                    target: args.request.target,
+                    package: "",
+                    kind: "shell",
+                    user_id: 0,
+                    pack_context: null,
+                    context: {
+                      confirmation_source: "console_review",
+                      permission: null,
+                      shell_argv: shellArgv,
+                    },
+                  },
+                  args: shellArgv,
+                  description: `Run reviewed shell mutation: ${shellArgv.join(" ")}`,
+                  incident_id: `op-ui-console-${journalId + 1}`,
+                  before_state: "not_captured",
+                },
+          };
+        }
+        if (cmd === "shell_run") {
+          if (args.argv[0] === "getprop") return "Pixel QA\n";
+          throw new Error("Mock shell_run only allows read-only commands");
+        }
         if (cmd === "apply_action") {
           const request = args.plan.request;
           if (request.package === "com.example.fail") {
@@ -338,16 +387,20 @@ async function installTauriMock(page) {
           const pkg = packages.find((item) => item.package === request.package);
           if (pkg && request.kind === "disable") pkg.enabled = false;
           if (pkg && request.kind === "enable") pkg.enabled = true;
-          return {
+          const stdout = `Applied ${request.kind} to ${request.package}`;
+          const entry = {
             id: ++journalId,
             applied: {
               plan: args.plan,
-              stdout: `Applied ${request.kind} to ${request.package}`,
+              stdout,
+              before_state: "installed_enabled",
+              after_state: "installed_disabled",
               applied_at: "2026-06-29T10:05:00Z",
             },
             undone_by: null,
             undoes: null,
           };
+          return { entry, stdout };
         }
         if (cmd === "list_packs") {
           return {
@@ -463,9 +516,18 @@ async function installTauriMock(page) {
           ? ["pm", "enable", request.package]
           : ["pm", "disable-user", "--user", "0", request.package];
       return {
-        request,
+        request: {
+          ...request,
+          context: request.context ?? {
+            confirmation_source: "apps_preview",
+            permission: null,
+            shell_argv: [],
+          },
+        },
         args: action,
         description: `${request.kind} ${request.package}`,
+        incident_id: `op-ui-smoke-${journalId + 1}`,
+        before_state: "installed_enabled",
       };
     }
   });

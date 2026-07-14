@@ -256,7 +256,8 @@ fn cmd_run(argv: &[String]) -> ExitCode {
             return ExitCode::from(1);
         }
     };
-    for (i, plan) in plans.into_iter().enumerate() {
+    for (i, mut plan) in plans.into_iter().enumerate() {
+        plan.before_state = actions::capture_state(&transport, &plan.request);
         let now = iso_now();
         let result = journal::with_journal(&journal_dir, &target.serial, |journal| {
             journal.execute(plan, None, &now, |plan| {

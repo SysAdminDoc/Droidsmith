@@ -23,5 +23,17 @@ export function journalEntryStatus(
   }
   if (entry.undone_by !== null) return "undone";
   const kind = entry.applied.plan.request.kind;
+  if (kind === "grant_permission") {
+    return entry.applied.before_state === "revoked" &&
+      entry.applied.after_state === "granted"
+      ? "undoable"
+      : "irreversible";
+  }
+  if (kind === "revoke_permission") {
+    return entry.applied.before_state === "granted" &&
+      entry.applied.after_state === "revoked"
+      ? "undoable"
+      : "irreversible";
+  }
   return kind === "disable" || kind === "enable" ? "undoable" : "irreversible";
 }
