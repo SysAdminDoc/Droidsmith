@@ -14,6 +14,7 @@ import { CommandPalette, type PaletteItem } from "./routes/CommandPalette";
 import { useCommandPalette } from "./routes/useCommandPalette";
 import { useFocusTrap } from "./lib/useFocusTrap";
 import OnboardingTour from "./routes/Onboarding";
+import DiagnosticsCenter from "./routes/DiagnosticsCenter";
 
 import DevicesRoute from "./routes/Devices";
 import WirelessRoute from "./routes/Wireless";
@@ -113,6 +114,7 @@ export default function App() {
   const [hb, setHb] = useState<LoadState>({ status: "loading" });
   const [active, setActive] = useState<NavItem["id"]>(NAV_ITEMS[0].id);
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [showDiagnostics, setShowDiagnostics] = useState(false);
   const palette = useCommandPalette();
 
   const paletteItems: PaletteItem[] = useMemo(
@@ -201,11 +203,13 @@ export default function App() {
             className="mt-3 lg:hidden"
             onOpenPalette={() => palette.setOpen(true)}
             onOpenGuide={() => setShowOnboarding(true)}
+            onOpenDiagnostics={() => setShowDiagnostics(true)}
           />
           <ShellActions
             className="mt-4 hidden lg:grid"
             onOpenPalette={() => palette.setOpen(true)}
             onOpenGuide={() => setShowOnboarding(true)}
+            onOpenDiagnostics={() => setShowDiagnostics(true)}
           />
           <LanguageSelector className="mt-3" />
 
@@ -226,6 +230,9 @@ export default function App() {
       </div>
       {showOnboarding && (
         <OnboardingModal onDismiss={() => setShowOnboarding(false)} />
+      )}
+      {showDiagnostics && (
+        <DiagnosticsCenter onDismiss={() => setShowDiagnostics(false)} />
       )}
       <CommandPalette
         open={palette.open}
@@ -270,10 +277,12 @@ function ShellActions({
   className,
   onOpenPalette,
   onOpenGuide,
+  onOpenDiagnostics,
 }: {
   className?: string;
   onOpenPalette: () => void;
   onOpenGuide: () => void;
+  onOpenDiagnostics: () => void;
 }) {
   const { t } = useTranslation();
 
@@ -298,6 +307,16 @@ function ShellActions({
       >
         <GuideIcon />
         {t("app.guide")}
+      </Button>
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        className="col-span-2 w-full"
+        onClick={onOpenDiagnostics}
+      >
+        <DiagnosticsIcon />
+        {t("diagnostics.open")}
       </Button>
     </div>
   );
@@ -596,6 +615,24 @@ function GuideIcon() {
     >
       <path d="M5 5.5A2.5 2.5 0 0 1 7.5 3H19v16H7.5A2.5 2.5 0 0 0 5 21.5v-16Z" />
       <path d="M9 7h6M9 10h5" />
+    </svg>
+  );
+}
+
+function DiagnosticsIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className="h-4 w-4"
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="1.8"
+      aria-hidden="true"
+    >
+      <path d="M5 5.5h14v13H5zM8 9h3M8 12h8M8 15h6" />
+      <path d="m15.5 7.5 1 1 2-2" />
     </svg>
   );
 }

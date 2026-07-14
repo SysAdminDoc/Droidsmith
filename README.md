@@ -19,7 +19,9 @@ shell mutations, journal undo, debloat queue recovery, scrcpy launch and session
 supervision, cancellable background shell/backup/file operations, incremental
 Logcat streaming and export, live cross-route device hot-plug updates, ADB
 server/mDNS/Wi-Fi 2.0 health with audited guided recovery, and fastboot
-inspection.
+inspection. A local-only Diagnostics center previews and saves redacted support
+bundles with tool/OS/ADB health, failed-operation records, and crash excerpts;
+it never uploads data and can wipe disposable local diagnostic history.
 
 Current blockers are tracked separately in [Roadmap_Blocked.md](Roadmap_Blocked.md):
 signed release pipeline, bundled platform-tools wiring, UAD-NG redistribution,
@@ -123,8 +125,9 @@ npm run release:smoke
 
 `npm run ui:smoke` starts Vite with mocked Tauri IPC and checks sidebar
 navigation, command palette focus, Apps action overlays, Debloat queue results,
-ADB health/recovery review, cross-route disconnect/reconnect behavior,
-incremental Logcat reconnect/cancel behavior, and mobile/narrow overflow.
+ADB health/recovery review, the redacted Diagnostics preview/save/wipe flow,
+cross-route disconnect/reconnect behavior, incremental Logcat reconnect/cancel
+behavior, and mobile/narrow overflow.
 `npm run release:smoke` builds the frontend and Tauri bundle, checks bundled
 resource metadata, validates third-party notices, and fails if expected local
 installer artifacts are missing.

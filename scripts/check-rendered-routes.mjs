@@ -66,6 +66,38 @@ async function runDesktopFlow(browser) {
     fullPage: false,
   });
   await page.getByRole("button", { name: "Close", exact: true }).click();
+  await page.getByRole("button", { name: "Diagnostics", exact: true }).click();
+  await page.getByRole("dialog", { name: "Diagnostics center" }).waitFor();
+  await page.getByText("Nothing is uploaded", { exact: true }).waitFor();
+  const diagnosticsPreview = page.getByLabel("Redacted bundle preview");
+  await diagnosticsPreview.waitFor();
+  const diagnosticsValue = await diagnosticsPreview.inputValue();
+  if (
+    !diagnosticsValue.includes('"uploads_performed": false') ||
+    !diagnosticsValue.includes("device-01") ||
+    diagnosticsValue.includes("QA123")
+  ) {
+    throw new Error(
+      "Diagnostics preview did not enforce the redacted local-only contract",
+    );
+  }
+  await page.getByRole("button", { name: "Save bundle" }).click();
+  await page
+    .getByText(/Saved .* support bundle to .*droidsmith-support\.json/)
+    .waitFor();
+  await page
+    .getByRole("button", { name: "Wipe local diagnostic history" })
+    .click();
+  await page
+    .getByRole("alertdialog", { name: "Wipe erasable diagnostic history?" })
+    .waitFor();
+  await assertTabMovesFocus(page, "Diagnostics wipe review");
+  await page.getByRole("button", { name: "Cancel", exact: true }).click();
+  await page.screenshot({
+    path: path.join(screenshotDir, "desktop-diagnostics-center.png"),
+    fullPage: false,
+  });
+  await page.getByRole("button", { name: "Close", exact: true }).click();
   for (const route of ["Devices", "Apps", "Debloat", "Console"]) {
     await page.getByRole("button", { name: new RegExp(route) }).click();
     await page.getByRole("heading", { name: route, exact: true }).waitFor();
@@ -165,6 +197,10 @@ async function runMobileFlow(browser) {
   const errors = collectConsoleErrors(page);
   await installTauriMock(page);
   await page.goto(baseUrl, { waitUntil: "networkidle" });
+  await page.getByRole("button", { name: "Diagnostics", exact: true }).click();
+  await page.getByRole("dialog", { name: "Diagnostics center" }).waitFor();
+  await assertNoHorizontalOverflow(page, "mobile Diagnostics center");
+  await page.getByRole("button", { name: "Close", exact: true }).click();
   await page.getByRole("button", { name: /Apps/ }).click();
   await page.getByText("com.example.app").waitFor();
   await assertNoHorizontalOverflow(page, "mobile Apps route");
@@ -345,6 +381,9 @@ async function installTauriMock(page) {
 
     window.__TAURI_INTERNALS__ = {
       async invoke(cmd, args = {}) {
+        if (cmd === "plugin:dialog|save") {
+          return "C:/Users/QA/Desktop/droidsmith-support.json";
+        }
         if (cmd === "heartbeat") {
           return {
             version: "0.1.0",
@@ -431,6 +470,67 @@ async function installTauriMock(page) {
               health_after: adbHealth,
               failure: null,
             },
+          };
+        }
+        if (cmd === "preview_diagnostics") {
+          const content = JSON.stringify(
+            {
+              schema_version: 1,
+              generated_at: "2026-07-14T18:02:00Z",
+              privacy: {
+                local_only: true,
+                uploads_performed: false,
+                redactions: [
+                  "raw device serials",
+                  "network device addresses",
+                  "wireless pairing secrets",
+                  "host filesystem paths",
+                  "credential-like values",
+                ],
+              },
+              environment: {
+                app_version: "0.1.0",
+                adb_version: "37.0.0",
+              },
+              devices: [
+                { id: "device-01", state: "device", model: "Pixel QA" },
+              ],
+              failed_operations: [
+                {
+                  source: "device_journal",
+                  device_id: "device-01",
+                  operation_id: "op-redacted",
+                  operation: "disable",
+                  outcome: "failed",
+                },
+              ],
+              crash_logs: [],
+            },
+            null,
+            2,
+          );
+          return {
+            generated_at: "2026-07-14T18:02:00Z",
+            content,
+            byte_size: content.length,
+            device_count: 1,
+            failed_operation_count: 1,
+            crash_line_count: 0,
+            local_only: true,
+          };
+        }
+        if (cmd === "save_diagnostics") {
+          return {
+            path: args.local_path,
+            byte_size: 1024,
+            generated_at: "2026-07-14T18:02:01Z",
+          };
+        }
+        if (cmd === "wipe_diagnostics") {
+          return {
+            files_removed: 2,
+            bytes_removed: 4096,
+            device_journals_preserved: true,
           };
         }
         if (cmd === "list_packages") {

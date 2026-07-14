@@ -28,6 +28,7 @@ use crate::adb::{self, actions};
 use crate::journal::{self, Journal, JournalEntry};
 use crate::operations::{self, OperationEvent};
 use crate::quirks::{self, DeviceContext, Quirk};
+use crate::support_bundle;
 
 #[derive(Serialize)]
 pub struct Heartbeat {
@@ -447,6 +448,139 @@ fn diagnostic_text(value: &str) -> String {
         .filter(|character| *character == '\n' || !character.is_control())
         .collect::<String>();
     normalized.trim().chars().take(1_024).collect()
+}
+
+/// Build a bounded, redacted support snapshot entirely on the local machine.
+/// The payload deliberately excludes resolver paths and raw device targets.
+#[tauri::command]
+pub async fn preview_diagnostics(
+    app: tauri::AppHandle,
+) -> Result<support_bundle::SupportPreview, CommandError> {
+    let app_data_dir = app.path().app_data_dir().map_err(|error| CommandError {
+        code: "no_app_data_dir",
+        message: error.to_string(),
+    })?;
+    spawn_blocking_operation(move || build_support_preview(&app_data_dir)).await
+}
+
+/// Generate a fresh redacted snapshot and persist it to the path returned by
+/// the renderer's native save dialog. No renderer-supplied bundle content is
+/// accepted, so the backend remains the sole redaction boundary.
+#[tauri::command]
+pub async fn save_diagnostics(
+    app: tauri::AppHandle,
+    local_path: String,
+) -> Result<support_bundle::SavedResult, CommandError> {
+    let path = validate_local_path(&local_path)?;
+    if path.extension().and_then(|value| value.to_str()) != Some("json") {
+        return Err(CommandError {
+            code: "invalid_diagnostics_extension",
+            message: "support bundles must use a .json extension".to_string(),
+        });
+    }
+    if path.parent().map_or(true, |parent| !parent.is_dir()) {
+        return Err(CommandError {
+            code: "invalid_path",
+            message: "support bundle parent directory does not exist".to_string(),
+        });
+    }
+    if fs::symlink_metadata(&path).is_ok_and(|metadata| metadata.file_type().is_symlink()) {
+        return Err(CommandError {
+            code: "invalid_path",
+            message: "support bundle target must not be a symbolic link".to_string(),
+        });
+    }
+    let app_data_dir = app.path().app_data_dir().map_err(|error| CommandError {
+        code: "no_app_data_dir",
+        message: error.to_string(),
+    })?;
+    spawn_blocking_operation(move || {
+        let preview = build_support_preview(&app_data_dir)?;
+        let mut file = OpenOptions::new()
+            .create(true)
+            .truncate(true)
+            .write(true)
+            .open(&path)?;
+        file.write_all(preview.content.as_bytes())?;
+        file.flush()?;
+        file.sync_data()?;
+        Ok(support_bundle::SavedResult {
+            path: path.display().to_string(),
+            byte_size: preview.byte_size,
+            generated_at: preview.generated_at,
+        })
+    })
+    .await
+}
+
+/// Remove only erasable diagnostic history: rotating crash logs and host-wide
+/// recovery records. Per-device journals are intentionally preserved because
+/// they back undo/recovery and are not disposable telemetry.
+#[tauri::command]
+pub async fn wipe_diagnostics(
+    app: tauri::AppHandle,
+    confirmed: bool,
+) -> Result<support_bundle::WipeResult, CommandError> {
+    if !confirmed {
+        return Err(CommandError {
+            code: "confirmation_required",
+            message: "wiping diagnostic history requires explicit confirmation".to_string(),
+        });
+    }
+    let app_data_dir = app.path().app_data_dir().map_err(|error| CommandError {
+        code: "no_app_data_dir",
+        message: error.to_string(),
+    })?;
+    spawn_blocking_operation(move || {
+        Ok(support_bundle::wipe_local_data(
+            &app_data_dir,
+            &crate::diagnostics::fallback_log_dir(),
+        )?)
+    })
+    .await
+}
+
+fn build_support_preview(
+    app_data_dir: &Path,
+) -> Result<support_bundle::SupportPreview, CommandError> {
+    let resolution = adb::locate_adb();
+    let mut warnings = Vec::new();
+    let mut devices = Vec::new();
+    let mut health = None;
+    if let Some(path) = resolution.path.as_ref() {
+        let transport = adb::ShellTransport::new(path);
+        match transport.list_devices() {
+            Ok(mut found) => {
+                adb::observe_connection_generations(&mut found);
+                devices = found;
+            }
+            Err(error) => warnings.push(error.to_string()),
+        }
+        health = Some(adb::health::probe(&transport, resolution.version.clone()));
+    }
+    let source = serde_json::to_value(resolution.source)
+        .ok()
+        .and_then(|value| value.as_str().map(str::to_string))
+        .unwrap_or_else(|| "unknown".to_string());
+    let os = cached_os_info();
+    Ok(support_bundle::build_preview(
+        app_data_dir,
+        &crate::diagnostics::fallback_log_dir(),
+        support_bundle::EnvironmentInput {
+            app_version: env!("CARGO_PKG_VERSION").to_string(),
+            tauri_version: tauri::VERSION.to_string(),
+            rust_version: env!("CARGO_PKG_RUST_VERSION").to_string(),
+            os_family: os.family.clone(),
+            os_version: os.version.clone(),
+            os_arch: os.arch.clone(),
+            adb_available: resolution.path.is_some(),
+            adb_source: source,
+            adb_version: resolution.version,
+            adb_health: health,
+            devices,
+            collection_warnings: warnings,
+        },
+    )?)
 }
 
 fn recovery_operation_failure(error: &operations::OperationError) -> String {

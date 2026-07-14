@@ -154,6 +154,28 @@ export type AdbRecoveryResult = {
   record_path: string;
 };
 
+export type SupportPreview = {
+  generated_at: string;
+  content: string;
+  byte_size: number;
+  device_count: number;
+  failed_operation_count: number;
+  crash_line_count: number;
+  local_only: boolean;
+};
+
+export type SavedDiagnostics = {
+  path: string;
+  byte_size: number;
+  generated_at: string;
+};
+
+export type WipeDiagnosticsResult = {
+  files_removed: number;
+  bytes_removed: number;
+  device_journals_preserved: boolean;
+};
+
 export type OperationEventKind =
   | "started"
   | "output"
@@ -464,6 +486,24 @@ export async function callRecoverAdb(
     "adb-recovery",
     options,
   );
+}
+
+export async function callPreviewDiagnostics(): Promise<SupportPreview> {
+  return invoke<SupportPreview>("preview_diagnostics");
+}
+
+export async function callSaveDiagnostics(
+  localPath: string,
+): Promise<SavedDiagnostics> {
+  return invoke<SavedDiagnostics>("save_diagnostics", {
+    local_path: localPath,
+  });
+}
+
+export async function callWipeDiagnostics(
+  confirmed: boolean,
+): Promise<WipeDiagnosticsResult> {
+  return invoke<WipeDiagnosticsResult>("wipe_diagnostics", { confirmed });
 }
 
 export async function callListWirelessServices(): Promise<ListWirelessServicesResult> {
