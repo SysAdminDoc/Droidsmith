@@ -7,17 +7,21 @@ import {
   callListPackages,
   callListPacks,
   callListUsers,
-  callPlanAction,
+  callPlanPack,
   deviceTarget,
   inTauri,
-  type ActionKind,
   type AndroidUser,
+  type CompatibilityStatus,
   type Device,
   type JournalEntry,
   type ListDevicesResult,
   type Pack,
+  type PackAssessment,
+  type PackCandidate,
   type PackEntry,
+  type PackEntryAssessment,
   type PackLoadError,
+  type PlannedAction,
   type RemovalLevel,
 } from "../lib/tauri";
 
@@ -29,6 +33,7 @@ import {
   type PackageSnapshot,
   type QueueStatus,
 } from "./debloatQueue";
+import { expandPackDependencies } from "./debloatPack";
 import {
   Badge,
   Button,
@@ -48,7 +53,7 @@ type DevicesState =
 
 type PacksState =
   | { kind: "loading" }
-  | { kind: "ok"; packs: Pack[]; errors: PackLoadError[] }
+  | { kind: "ok"; packs: PackCandidate[]; errors: PackLoadError[] }
   | { kind: "error"; message: string };
 
 type DebloatQueueRow = {
@@ -63,22 +68,31 @@ type DebloatQueueRow = {
 
 type WizardStep =
   | { step: "pick_pack" }
-  | { step: "preview"; pack: Pack; selected: Set<string> }
+  | {
+      step: "preview";
+      pack: Pack;
+      assessment: PackAssessment;
+      selected: Set<string>;
+      overrideAccepted: boolean;
+      planError: string | null;
+    }
   | {
       step: "applying";
       pack: Pack;
+      assessment: PackAssessment;
       queue: DebloatQueueRow[];
       currentPackage: string | null;
       cancelRequested: boolean;
+      overrideAccepted: boolean;
     }
   | {
       step: "done";
       pack: Pack;
+      assessment: PackAssessment;
       queue: DebloatQueueRow[];
       cancelled: boolean;
+      overrideAccepted: boolean;
     };
-
-const DEBLOAT_ACTION_KIND: ActionKind = "disable";
 
 export default function DebloatRoute() {
   const { t } = useTranslation();
@@ -135,10 +149,13 @@ export default function DebloatRoute() {
   }, []);
 
   const loadPacks = useCallback(async () => {
-    if (!inTauri()) return;
+    if (!inTauri() || !selectedDevice || !usersReady) return;
     setPacksState({ kind: "loading" });
     try {
-      const listing = await callListPacks();
+      const listing = await callListPacks(
+        deviceTarget(selectedDevice),
+        selectedUser,
+      );
       setPacksState({
         kind: "ok",
         packs: listing.packs,
@@ -150,7 +167,7 @@ export default function DebloatRoute() {
         message: e instanceof Error ? e.message : String(e),
       });
     }
-  }, []);
+  }, [selectedDevice, selectedUser, usersReady]);
 
   const loadUsers = useCallback(async () => {
     if (!selectedDevice) {
@@ -177,18 +194,39 @@ export default function DebloatRoute() {
 
   useEffect(() => {
     void loadDevices();
-    void loadPacks();
-  }, [loadDevices, loadPacks]);
+  }, [loadDevices]);
 
   useEffect(() => {
     void loadUsers();
   }, [loadUsers]);
 
-  const selectPack = useCallback((pack: Pack) => {
-    const recommended = new Set(
-      pack.packages.filter((p) => p.removal === "recommended").map((p) => p.id),
+  useEffect(() => {
+    if (selectedDevice && usersReady) {
+      setWizard({ step: "pick_pack" });
+      void loadPacks();
+    }
+  }, [loadPacks, selectedDevice, usersReady]);
+
+  const selectPack = useCallback((candidate: PackCandidate) => {
+    const { pack, assessment } = candidate;
+    const ready = new Set(
+      assessment.entries
+        .filter((entry) => entry.status === "ready")
+        .map((entry) => entry.id),
     );
-    setWizard({ step: "preview", pack, selected: recommended });
+    const recommended = new Set(
+      pack.packages
+        .filter((p) => p.removal === "recommended" && ready.has(p.id))
+        .map((p) => p.id),
+    );
+    setWizard({
+      step: "preview",
+      pack,
+      assessment,
+      selected: expandPackDependencies(pack, recommended),
+      overrideAccepted: false,
+      planError: null,
+    });
   }, []);
 
   const toggleEntry = useCallback((id: string) => {
@@ -200,7 +238,11 @@ export default function DebloatRoute() {
       } else {
         next.add(id);
       }
-      return { ...prev, selected: next };
+      return {
+        ...prev,
+        selected: expandPackDependencies(prev.pack, next),
+        planError: null,
+      };
     });
   }, []);
 
@@ -228,10 +270,22 @@ export default function DebloatRoute() {
   );
 
   const runQueue = useCallback(
-    async (pack: Pack, rows: DebloatQueueRow[]) => {
+    async (
+      pack: Pack,
+      assessment: PackAssessment,
+      rows: DebloatQueueRow[],
+      plans: PlannedAction[],
+      overrideAccepted: boolean,
+    ) => {
       if (!selectedDevice || !usersReady) return;
       cancelRequestedRef.current = false;
       let queue = rows;
+      const plansByPackage = new Map(
+        plans.map((plan) => [plan.request.package, plan]),
+      );
+      const assessmentsByPackage = new Map(
+        assessment.entries.map((entry) => [entry.id, entry]),
+      );
 
       const commitQueue = (
         patch: Partial<Extract<WizardStep, { step: "applying" }>> = {},
@@ -244,9 +298,11 @@ export default function DebloatRoute() {
       setWizard({
         step: "applying",
         pack,
+        assessment,
         queue,
         currentPackage: null,
         cancelRequested: false,
+        overrideAccepted,
       });
 
       for (const row of queue.filter((item) => item.status === "pending")) {
@@ -269,14 +325,14 @@ export default function DebloatRoute() {
         let error: string | null = null;
 
         try {
+          const plan = plansByPackage.get(row.entry.id);
+          if (!plan) {
+            const support = assessmentsByPackage.get(row.entry.id);
+            throw new Error(
+              support?.detail ?? t("debloat.entryUnavailableForPlan"),
+            );
+          }
           before = await readPackageSnapshot(row.entry.id);
-          const plan = await callPlanAction({
-            serial: selectedDevice.serial,
-            target: deviceTarget(selectedDevice),
-            package: row.entry.id,
-            kind: DEBLOAT_ACTION_KIND,
-            user_id: selectedUser,
-          });
           journal = await callApplyAction(plan);
           after = await readPackageSnapshot(row.entry.id);
           error = verificationMessage(verifyDisabled(after));
@@ -313,25 +369,50 @@ export default function DebloatRoute() {
         );
       }
 
-      setWizard({ step: "done", pack, queue, cancelled });
+      setWizard({
+        step: "done",
+        pack,
+        assessment,
+        queue,
+        cancelled,
+        overrideAccepted,
+      });
     },
-    [
-      readPackageSnapshot,
-      selectedDevice,
-      selectedUser,
-      t,
-      usersReady,
-      verificationMessage,
-    ],
+    [readPackageSnapshot, selectedDevice, t, usersReady, verificationMessage],
   );
 
   const applyPack = useCallback(async () => {
     if (wizard.step !== "preview" || !selectedDevice || !usersReady) return;
-    const queue = makeQueueRows(
-      wizard.pack.packages.filter((p) => wizard.selected.has(p.id)),
-    );
-    await runQueue(wizard.pack, queue);
-  }, [runQueue, selectedDevice, usersReady, wizard]);
+    try {
+      const planned = await callPlanPack({
+        target: deviceTarget(selectedDevice),
+        user_id: selectedUser,
+        pack_id: wizard.pack.id,
+        revision: wizard.pack.revision,
+        selected: [...wizard.selected],
+        override_compatibility: wizard.overrideAccepted,
+      });
+      const queue = makeQueueRows(
+        wizard.pack.packages.filter((entry) =>
+          planned.selected_ids.includes(entry.id),
+        ),
+      );
+      await runQueue(
+        wizard.pack,
+        planned.assessment,
+        queue,
+        planned.plans,
+        wizard.overrideAccepted,
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setWizard((previous) =>
+        previous.step === "preview"
+          ? { ...previous, planError: message }
+          : previous,
+      );
+    }
+  }, [runQueue, selectedDevice, selectedUser, usersReady, wizard]);
 
   const cancelAfterCurrent = useCallback(() => {
     cancelRequestedRef.current = true;
@@ -342,20 +423,37 @@ export default function DebloatRoute() {
 
   const retryFailed = useCallback(async () => {
     if (wizard.step !== "done" || !selectedDevice || !usersReady) return;
-    const queue = wizard.queue.map((row) =>
-      row.status === "failed"
-        ? {
-            ...row,
-            status: "pending" as QueueStatus,
-            before: null,
-            after: null,
-            journalId: null,
-            error: null,
-          }
-        : row,
+    const failedIds = wizard.queue
+      .filter((row) => row.status === "failed")
+      .map((row) => row.entry.id);
+    const planned = await callPlanPack({
+      target: deviceTarget(selectedDevice),
+      user_id: selectedUser,
+      pack_id: wizard.pack.id,
+      revision: wizard.pack.revision,
+      selected: failedIds,
+      override_compatibility: wizard.overrideAccepted,
+    });
+    const previousRows = new Map(
+      wizard.queue.map((row) => [row.entry.id, row]),
     );
-    await runQueue(wizard.pack, queue);
-  }, [runQueue, selectedDevice, usersReady, wizard]);
+    const queue = planned.selected_ids.map((id) => {
+      const previous = previousRows.get(id);
+      if (previous && previous.status !== "failed") return previous;
+      const entry = wizard.pack.packages.find((item) => item.id === id)!;
+      return {
+        ...makeQueueRows([entry])[0]!,
+        attempts: previous?.attempts ?? 0,
+      };
+    });
+    await runQueue(
+      wizard.pack,
+      planned.assessment,
+      queue,
+      planned.plans,
+      wizard.overrideAccepted,
+    );
+  }, [runQueue, selectedDevice, selectedUser, usersReady, wizard]);
 
   return (
     <>
@@ -440,8 +538,22 @@ export default function DebloatRoute() {
         {usersReady && wizard.step === "preview" && (
           <PackPreview
             pack={wizard.pack}
+            assessment={wizard.assessment}
             selected={wizard.selected}
+            overrideAccepted={wizard.overrideAccepted}
+            planError={wizard.planError}
             onToggle={toggleEntry}
+            onOverrideChange={(accepted) =>
+              setWizard((previous) =>
+                previous.step === "preview"
+                  ? {
+                      ...previous,
+                      overrideAccepted: accepted,
+                      planError: null,
+                    }
+                  : previous,
+              )
+            }
             onApply={() => void applyPack()}
             onBack={() => setWizard({ step: "pick_pack" })}
           />
@@ -545,7 +657,7 @@ function PackPicker({
   onRefresh,
 }: {
   state: PacksState;
-  onSelect: (pack: Pack) => void;
+  onSelect: (candidate: PackCandidate) => void;
   onRefresh: () => void;
 }) {
   const { t } = useTranslation();
@@ -607,40 +719,46 @@ function PackPicker({
         {t("debloat.choosePackBody")}
       </p>
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
-        {state.packs.map((pack) => (
-          <button
-            key={pack.name}
-            type="button"
-            onClick={() => onSelect(pack)}
-            className="group rounded-lg border border-white/10 bg-white/[0.02] p-4 text-left transition hover:border-circuit-300/30 hover:bg-circuit-300/[0.04] focus:outline-none focus-visible:ring-2 focus-visible:ring-circuit-300"
-          >
-            <div className="flex items-start justify-between gap-3">
-              <h4 className="text-sm font-semibold text-anvil-50">
-                {pack.name}
-              </h4>
-              <Badge tone="neutral">
-                {t("debloat.packageShortCount", {
-                  count: pack.packages.length,
-                })}
-              </Badge>
-            </div>
-            <p className="mt-2 line-clamp-3 text-xs leading-5 text-anvil-400">
-              {pack.description}
-            </p>
-            <div className="mt-3 flex flex-wrap gap-1.5">
-              {pack.targets.manufacturer.map((m) => (
-                <Badge key={m} tone="info">
-                  {m}
+        {state.packs.map((candidate) => {
+          const { pack, assessment } = candidate;
+          return (
+            <button
+              key={pack.id}
+              type="button"
+              onClick={() => onSelect(candidate)}
+              className="group rounded-lg border border-white/10 bg-white/[0.02] p-4 text-left transition hover:border-circuit-300/30 hover:bg-circuit-300/[0.04] focus:outline-none focus-visible:ring-2 focus-visible:ring-circuit-300"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <h4 className="text-sm font-semibold text-anvil-50">
+                  {pack.name}
+                </h4>
+                <Badge tone="neutral">
+                  {t("debloat.packageShortCount", {
+                    count: pack.packages.length,
+                  })}
                 </Badge>
-              ))}
-              {pack.targets.rom.map((r) => (
-                <Badge key={r} tone="neutral">
-                  {r}
+                <Badge tone={compatibilityTone(assessment.status)}>
+                  {t(`debloat.compatibility.${assessment.status}`)}
                 </Badge>
-              ))}
-            </div>
-          </button>
-        ))}
+              </div>
+              <p className="mt-2 line-clamp-3 text-xs leading-5 text-anvil-400">
+                {pack.description}
+              </p>
+              <div className="mt-3 flex flex-wrap gap-1.5">
+                {pack.targets.manufacturer.map((m) => (
+                  <Badge key={m} tone="info">
+                    {m}
+                  </Badge>
+                ))}
+                {pack.targets.rom.map((r) => (
+                  <Badge key={r} tone="neutral">
+                    {r}
+                  </Badge>
+                ))}
+              </div>
+            </button>
+          );
+        })}
       </div>
     </Card>
   );
@@ -648,19 +766,30 @@ function PackPicker({
 
 function PackPreview({
   pack,
+  assessment,
   selected,
+  overrideAccepted,
+  planError,
   onToggle,
+  onOverrideChange,
   onApply,
   onBack,
 }: {
   pack: Pack;
+  assessment: PackAssessment;
   selected: Set<string>;
+  overrideAccepted: boolean;
+  planError: string | null;
   onToggle: (id: string) => void;
+  onOverrideChange: (accepted: boolean) => void;
   onApply: () => void;
   onBack: () => void;
 }) {
   const { t } = useTranslation();
   const tiers = groupByTier(pack.packages);
+  const assessments = new Map(
+    assessment.entries.map((entry) => [entry.id, entry]),
+  );
 
   return (
     <>
@@ -677,9 +806,27 @@ function PackPreview({
             <Badge tone="neutral">
               {t("common.totalCount", { count: pack.packages.length })}
             </Badge>
+            <Badge tone={compatibilityTone(assessment.status)}>
+              {t(`debloat.compatibility.${assessment.status}`)}
+            </Badge>
           </div>
         </div>
+        <p className="mt-3 text-xs text-anvil-400">
+          {t("debloat.packIdentity", {
+            id: pack.id,
+            revision: pack.revision,
+            license: pack.provenance.license,
+          })}
+        </p>
       </Card>
+
+      <CompatibilityChecks assessment={assessment} />
+
+      {planError && (
+        <StatePanel title={t("debloat.planFailed")} tone="danger">
+          <p>{planError}</p>
+        </StatePanel>
+      )}
 
       {(["recommended", "advanced", "expert", "unsafe"] as RemovalLevel[]).map(
         (tier) => {
@@ -703,50 +850,91 @@ function PackPreview({
                 </span>
               </div>
               <div className="divide-y divide-white/10">
-                {entries.map((entry) => (
-                  <label
-                    key={entry.id}
-                    className="flex cursor-pointer gap-3 p-4 transition hover:bg-white/[0.03]"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={selected.has(entry.id)}
-                      onChange={() => onToggle(entry.id)}
-                      className="mt-1 h-4 w-4 shrink-0 rounded border-white/20 bg-white/[0.06] text-circuit-300 focus:ring-2 focus:ring-circuit-300/30"
-                    />
-                    <div className="min-w-0 flex-1">
-                      <code className="font-mono text-xs text-anvil-50">
-                        {entry.id}
-                      </code>
-                      <p className="mt-1 text-xs leading-5 text-anvil-400">
-                        {entry.description}
-                      </p>
-                      {entry.needed_by.length > 0 && (
-                        <p className="mt-1 text-[11px] text-amber-300/80">
-                          {t("debloat.neededBy", {
-                            items: entry.needed_by.join(", "),
-                          })}
+                {entries.map((entry) => {
+                  const support = assessments.get(entry.id);
+                  const selectable = support?.status === "ready";
+                  return (
+                    <label
+                      key={entry.id}
+                      className={`flex gap-3 p-4 transition ${
+                        selectable
+                          ? "cursor-pointer hover:bg-white/[0.03]"
+                          : "cursor-not-allowed opacity-70"
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selected.has(entry.id)}
+                        onChange={() => onToggle(entry.id)}
+                        disabled={!selectable}
+                        className="mt-1 h-4 w-4 shrink-0 rounded border-white/20 bg-white/[0.06] text-circuit-300 focus:ring-2 focus:ring-circuit-300/30"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <code className="font-mono text-xs text-anvil-50">
+                          {entry.id}
+                        </code>
+                        {support && (
+                          <Badge
+                            tone={entryStatusTone(support.status)}
+                            className="ml-2"
+                          >
+                            {t(`debloat.entryStatus.${support.status}`)}
+                          </Badge>
+                        )}
+                        <p className="mt-1 text-xs leading-5 text-anvil-400">
+                          {entry.description}
                         </p>
-                      )}
-                      {entry.labels.length > 0 && (
-                        <div className="mt-2 flex flex-wrap gap-1">
-                          {entry.labels.map((l) => (
-                            <span
-                              key={l}
-                              className="rounded-md border border-white/10 px-1.5 py-0.5 text-[10px] text-anvil-500"
-                            >
-                              {l}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </label>
-                ))}
+                        {entry.needed_by.length > 0 && (
+                          <p className="mt-1 text-[11px] text-amber-300/80">
+                            {t("debloat.neededBy", {
+                              items: entry.needed_by.join(", "),
+                            })}
+                          </p>
+                        )}
+                        {entry.depends_on.length > 0 && (
+                          <p className="mt-1 text-[11px] text-circuit-100/80">
+                            {t("debloat.dependsOn", {
+                              items: entry.depends_on.join(", "),
+                            })}
+                          </p>
+                        )}
+                        {support?.detail && (
+                          <p className="mt-1 text-[11px] text-red-200/80">
+                            {support.detail}
+                          </p>
+                        )}
+                        {entry.labels.length > 0 && (
+                          <div className="mt-2 flex flex-wrap gap-1">
+                            {entry.labels.map((l) => (
+                              <span
+                                key={l}
+                                className="rounded-md border border-white/10 px-1.5 py-0.5 text-[10px] text-anvil-500"
+                              >
+                                {l}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </label>
+                  );
+                })}
               </div>
             </Card>
           );
         },
+      )}
+
+      {assessment.override_required && (
+        <label className="flex items-start gap-3 rounded-lg border border-amber-300/30 bg-amber-300/[0.06] p-4 text-sm text-amber-100">
+          <input
+            type="checkbox"
+            checked={overrideAccepted}
+            onChange={(event) => onOverrideChange(event.target.checked)}
+            className="mt-0.5 h-4 w-4 shrink-0 rounded border-amber-200/40 bg-anvil-950 text-amber-300 focus:ring-2 focus:ring-amber-300/30"
+          />
+          <span>{t("debloat.compatibilityOverride")}</span>
+        </label>
       )}
 
       <div className="flex justify-between">
@@ -757,13 +945,76 @@ function PackPreview({
           type="button"
           variant="primary"
           onClick={onApply}
-          disabled={selected.size === 0}
+          disabled={
+            selected.size === 0 ||
+            (assessment.override_required && !overrideAccepted)
+          }
         >
           {t("debloat.applyCount", { count: selected.size })}
         </Button>
       </div>
     </>
   );
+}
+
+function CompatibilityChecks({ assessment }: { assessment: PackAssessment }) {
+  const { t } = useTranslation();
+  return (
+    <Card className="p-4">
+      <h4 className="text-xs font-semibold text-anvil-200">
+        {t("debloat.compatibilityChecks")}
+      </h4>
+      <ul className="mt-3 grid gap-2 sm:grid-cols-2">
+        {assessment.checks.map((check) => (
+          <li
+            key={check.field}
+            className="rounded-md border border-white/10 bg-white/[0.02] p-3"
+          >
+            <div className="flex items-center justify-between gap-2">
+              <code className="font-mono text-xs text-anvil-200">
+                {check.field}
+              </code>
+              <Badge tone={compatibilityTone(check.status)}>
+                {t(`debloat.compatibility.${check.status}`)}
+              </Badge>
+            </div>
+            <p className="mt-2 text-[11px] text-anvil-400">
+              {t("debloat.expectedActual", {
+                expected: check.expected.join(", "),
+                actual: check.actual ?? t("debloat.unknownValue"),
+              })}
+            </p>
+          </li>
+        ))}
+      </ul>
+    </Card>
+  );
+}
+
+function compatibilityTone(
+  status: CompatibilityStatus,
+): "success" | "warning" | "danger" {
+  switch (status) {
+    case "compatible":
+      return "success";
+    case "unknown":
+      return "warning";
+    case "mismatch":
+      return "danger";
+  }
+}
+
+function entryStatusTone(
+  status: PackEntryAssessment["status"],
+): "success" | "warning" | "danger" {
+  switch (status) {
+    case "ready":
+      return "success";
+    case "missing":
+      return "warning";
+    case "unsupported":
+      return "danger";
+  }
 }
 
 function makeQueueRows(entries: PackEntry[]): DebloatQueueRow[] {

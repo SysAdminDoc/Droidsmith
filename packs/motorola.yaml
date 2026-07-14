@@ -1,3 +1,5 @@
+id: "motorola-stock"
+revision: 1
 name: "Motorola — near-stock Android"
 version: "1"
 description: >
@@ -7,11 +9,16 @@ description: >
 attribution: |
   Original Droidsmith authoring based on public Motorola package lists and
   community debloat experience. MIT licensed.
+provenance:
+  source: "https://github.com/SysAdminDoc/Droidsmith"
+  license: "MIT"
 
 targets:
   manufacturer: ["motorola", "Motorola"]
   rom: ["stock", "moto"]
+  build_fingerprint: ["motorola/"]
   android_min: 33
+  user_scope: owner
 
 packages:
   - id: com.motorola.moto

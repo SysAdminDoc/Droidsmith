@@ -494,6 +494,7 @@ fn same_plan(left: &PlannedAction, right: &PlannedAction) -> bool {
         && left.request.package == right.request.package
         && left.request.kind == right.request.kind
         && left.request.user_id == right.request.user_id
+        && left.request.pack_context == right.request.pack_context
 }
 
 /// Every production record ends in `\n`. If a process or filesystem failure
@@ -562,6 +563,7 @@ pub fn undo_request_for(journal: &Journal, entry_id: u64) -> Option<ActionReques
         // action mutated, or a work-profile disable would re-enable on
         // the owner instead.
         user_id: entry.applied.plan.request.user_id,
+        pack_context: entry.applied.plan.request.pack_context.clone(),
     })
 }
 
@@ -601,6 +603,7 @@ mod tests {
                 package: pkg.into(),
                 kind,
                 user_id: 0,
+                pack_context: None,
             }),
             stdout: "Package x new state: disabled\n".into(),
             applied_at: "2026-05-25T12:00:00Z".into(),
@@ -621,6 +624,35 @@ mod tests {
         assert_eq!(j2.entries().len(), 2);
         assert_eq!(j2.entries()[0].id, 1);
         assert_eq!(j2.entries()[1].id, 2);
+    }
+
+    #[test]
+    fn pack_provenance_and_override_round_trip() {
+        let dir = fresh_tmp_dir("pack-context");
+        let mut journal = Journal::open(&dir, "abc").unwrap();
+        let mut applied = fake_applied("abc", "com.foo", ActionKind::Disable);
+        applied.plan.request.pack_context = Some(crate::adb::actions::PackActionContext {
+            pack_id: "pixel-stock".into(),
+            revision: 4,
+            provenance_source: "https://example.invalid/pixel".into(),
+            provenance_license: "MIT".into(),
+            compatibility_status: "mismatch".into(),
+            override_accepted: true,
+        });
+        journal.record(applied).unwrap();
+        drop(journal);
+
+        let reloaded = Journal::open(&dir, "abc").unwrap();
+        let context = reloaded.entries()[0]
+            .applied
+            .plan
+            .request
+            .pack_context
+            .as_ref()
+            .unwrap();
+        assert_eq!(context.pack_id, "pixel-stock");
+        assert_eq!(context.revision, 4);
+        assert!(context.override_accepted);
     }
 
     #[test]
@@ -729,6 +761,7 @@ mod tests {
             package: "com.foo".into(),
             kind: ActionKind::Disable,
             user_id: 0,
+            pack_context: None,
         });
         let entry = JournalEntry {
             id: 1,

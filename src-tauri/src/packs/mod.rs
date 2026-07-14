@@ -6,13 +6,20 @@
 //! cheap:
 //!
 //! ```yaml
+//! id: "pixel-vanilla"
+//! revision: 1
 //! name: "Pixel — vanilla Android"
 //! version: "1"
 //! description: "Tested on Pixel 6/7/8 with stock Android 14."
 //! targets:
 //!   manufacturer: ["Google"]
 //!   rom: ["aosp"]
+//!   build_fingerprint: ["google/"]
 //!   android_min: 12
+//!   user_scope: owner
+//! provenance:
+//!   source: "https://github.com/SysAdminDoc/Droidsmith"
+//!   license: "MIT"
 //! packages:
 //!   - id: com.android.bookmarkprovider
 //!     removal: recommended
@@ -36,7 +43,7 @@
 //! Validation is done with serde — invalid YAML → typed error → CLI
 //! exit code != 0 in `droidsmith-pack-lint`.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
@@ -51,6 +58,12 @@ const PACK_SCHEMA_MIGRATION: &str =
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Pack {
+    /// Stable machine identifier; never derived from the display name.
+    #[serde(default)]
+    pub id: String,
+    /// Monotonic content revision for audit records and cached assessments.
+    #[serde(default)]
+    pub revision: u32,
     /// Human-friendly title shown in the pack picker.
     pub name: String,
     /// Bump on every breaking change; the loader checks
@@ -58,9 +71,8 @@ pub struct Pack {
     pub version: String,
     /// One-paragraph description shown under the title.
     pub description: String,
-    /// Optional device targeting hints. None of these are enforced at
-    /// load time — the wizard uses them to default-select compatible
-    /// packs based on the connected device.
+    /// Device and Android-user constraints assessed before the picker and
+    /// revalidated immediately before a pack plan is created.
     #[serde(default)]
     pub targets: PackTargets,
     /// The packages this pack offers to remove.
@@ -69,6 +81,15 @@ pub struct Pack {
     /// Optional, but pack-lint warns when missing for community packs.
     #[serde(default)]
     pub attribution: Option<String>,
+    /// Structured source/license information retained in every operation plan.
+    #[serde(default)]
+    pub provenance: PackProvenance,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct PackProvenance {
+    pub source: String,
+    pub license: String,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -80,12 +101,31 @@ pub struct PackTargets {
     /// case-insensitively.
     #[serde(default)]
     pub rom: Vec<String>,
+    /// Optional case-insensitive model substrings.
+    #[serde(default)]
+    pub model: Vec<String>,
+    /// Optional case-insensitive build-fingerprint substrings.
+    #[serde(default)]
+    pub build_fingerprint: Vec<String>,
     /// Inclusive minimum Android API level (e.g. 30 for Android 11).
     #[serde(default)]
     pub android_min: Option<u32>,
     /// Inclusive maximum Android API level.
     #[serde(default)]
     pub android_max: Option<u32>,
+    /// Explicit Android-user policy. Packs must never silently inherit user 0.
+    #[serde(default)]
+    pub user_scope: UserScope,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum UserScope {
+    #[default]
+    Unspecified,
+    Owner,
+    Current,
+    Any,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -118,6 +158,62 @@ pub enum RemovalLevel {
     Advanced,
     Expert,
     Unsafe,
+}
+
+#[derive(Debug, Clone)]
+pub struct DevicePackContext {
+    pub manufacturer: Option<String>,
+    pub model: Option<String>,
+    pub build_fingerprint: Option<String>,
+    pub api_level: Option<u32>,
+    pub user_id: u32,
+    pub user_current: bool,
+    pub installed_packages: HashSet<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CompatibilityStatus {
+    Compatible,
+    Unknown,
+    Mismatch,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct CompatibilityCheck {
+    pub field: String,
+    pub status: CompatibilityStatus,
+    pub expected: Vec<String>,
+    pub actual: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PackEntryStatus {
+    Ready,
+    Missing,
+    Unsupported,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct PackEntryAssessment {
+    pub id: String,
+    pub status: PackEntryStatus,
+    pub detail: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct PackAssessment {
+    pub status: CompatibilityStatus,
+    pub override_required: bool,
+    pub checks: Vec<CompatibilityCheck>,
+    pub entries: Vec<PackEntryAssessment>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct PackCandidate {
+    pub pack: Pack,
+    pub assessment: PackAssessment,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -165,6 +261,15 @@ pub fn load(path: &Path) -> Result<Pack, PackError> {
 pub fn lint(p: &Pack) -> Vec<String> {
     let mut issues = Vec::new();
 
+    if !valid_pack_id(&p.id) {
+        issues.push(format!(
+            "id {:?} must be lowercase kebab-case and 3-64 characters",
+            p.id
+        ));
+    }
+    if p.revision == 0 {
+        issues.push("revision must be at least 1".to_string());
+    }
     if p.name.trim().is_empty() {
         issues.push("name is empty".to_string());
     }
@@ -178,6 +283,15 @@ pub fn lint(p: &Pack) -> Vec<String> {
         issues.push(
             "description is empty (community packs need a one-paragraph rationale)".to_string(),
         );
+    }
+    if p.provenance.source.trim().is_empty() {
+        issues.push("provenance.source is empty".to_string());
+    }
+    if p.provenance.license.trim().is_empty() {
+        issues.push("provenance.license is empty".to_string());
+    }
+    if p.targets.user_scope == UserScope::Unspecified {
+        issues.push("targets.user_scope must be owner, current, or any".to_string());
     }
     if p.packages.is_empty() {
         issues.push("pack has no entries".to_string());
@@ -226,7 +340,233 @@ pub fn lint(p: &Pack) -> Vec<String> {
         }
     }
 
+    for entry in &p.packages {
+        for dependency in &entry.depends_on {
+            if !seen.contains(dependency.as_str()) {
+                issues.push(format!(
+                    "entry {:?}: depends_on references package {:?} outside this pack",
+                    entry.id, dependency
+                ));
+            }
+        }
+    }
+    if let Err(error) = expand_dependencies(p, p.packages.iter().map(|entry| entry.id.clone())) {
+        issues.push(error);
+    }
+
     issues
+}
+
+pub fn valid_pack_id(value: &str) -> bool {
+    (3..=64).contains(&value.len())
+        && !value.starts_with('-')
+        && !value.ends_with('-')
+        && value.chars().all(|character| {
+            character.is_ascii_lowercase() || character.is_ascii_digit() || character == '-'
+        })
+}
+
+/// Compute the recursive `depends_on` closure in pack order. Cycles are
+/// rejected by lint and again here so renderer input can never create a loop.
+pub fn expand_dependencies(
+    pack: &Pack,
+    selected: impl IntoIterator<Item = String>,
+) -> Result<HashSet<String>, String> {
+    let entries: HashMap<&str, &PackEntry> = pack
+        .packages
+        .iter()
+        .map(|entry| (entry.id.as_str(), entry))
+        .collect();
+    let mut expanded = HashSet::new();
+    let mut visiting = HashSet::new();
+
+    fn visit(
+        id: &str,
+        entries: &HashMap<&str, &PackEntry>,
+        expanded: &mut HashSet<String>,
+        visiting: &mut HashSet<String>,
+    ) -> Result<(), String> {
+        let entry = entries
+            .get(id)
+            .ok_or_else(|| format!("selected package {id:?} is not in this pack"))?;
+        if expanded.contains(id) {
+            return Ok(());
+        }
+        if !visiting.insert(id.to_string()) {
+            return Err(format!("dependency cycle includes package {id:?}"));
+        }
+        for dependency in &entry.depends_on {
+            visit(dependency, entries, expanded, visiting)?;
+        }
+        visiting.remove(id);
+        expanded.insert(id.to_string());
+        Ok(())
+    }
+
+    for id in selected {
+        visit(&id, &entries, &mut expanded, &mut visiting)?;
+    }
+    Ok(expanded)
+}
+
+pub fn assess(pack: &Pack, context: &DevicePackContext) -> PackAssessment {
+    let mut checks = vec![pattern_check(
+        "manufacturer",
+        &pack.targets.manufacturer,
+        context.manufacturer.as_deref(),
+    )];
+    checks.push(pattern_check(
+        "model",
+        &pack.targets.model,
+        context.model.as_deref(),
+    ));
+    checks.push(pattern_check(
+        "build_fingerprint",
+        &pack.targets.build_fingerprint,
+        context.build_fingerprint.as_deref(),
+    ));
+
+    let api_expected = match (pack.targets.android_min, pack.targets.android_max) {
+        (Some(min), Some(max)) => vec![format!("{min}-{max}")],
+        (Some(min), None) => vec![format!(">={min}")],
+        (None, Some(max)) => vec![format!("<={max}")],
+        (None, None) => vec!["any".to_string()],
+    };
+    let api_status = match context.api_level {
+        Some(api)
+            if pack.targets.android_min.is_some_and(|min| api < min)
+                || pack.targets.android_max.is_some_and(|max| api > max) =>
+        {
+            CompatibilityStatus::Mismatch
+        }
+        Some(_) => CompatibilityStatus::Compatible,
+        None if pack.targets.android_min.is_some() || pack.targets.android_max.is_some() => {
+            CompatibilityStatus::Unknown
+        }
+        None => CompatibilityStatus::Compatible,
+    };
+    checks.push(CompatibilityCheck {
+        field: "api_level".to_string(),
+        status: api_status,
+        expected: api_expected,
+        actual: context.api_level.map(|api| api.to_string()),
+    });
+
+    let user_status = match pack.targets.user_scope {
+        UserScope::Owner if context.user_id == 0 => CompatibilityStatus::Compatible,
+        UserScope::Current if context.user_current => CompatibilityStatus::Compatible,
+        UserScope::Any => CompatibilityStatus::Compatible,
+        UserScope::Unspecified => CompatibilityStatus::Unknown,
+        UserScope::Owner | UserScope::Current => CompatibilityStatus::Mismatch,
+    };
+    checks.push(CompatibilityCheck {
+        field: "android_user".to_string(),
+        status: user_status,
+        expected: vec![format!("{:?}", pack.targets.user_scope).to_lowercase()],
+        actual: Some(format!(
+            "{}{}",
+            context.user_id,
+            if context.user_current {
+                " (current)"
+            } else {
+                ""
+            }
+        )),
+    });
+
+    let status = if checks
+        .iter()
+        .any(|check| check.status == CompatibilityStatus::Mismatch)
+    {
+        CompatibilityStatus::Mismatch
+    } else if checks
+        .iter()
+        .any(|check| check.status == CompatibilityStatus::Unknown)
+    {
+        CompatibilityStatus::Unknown
+    } else {
+        CompatibilityStatus::Compatible
+    };
+
+    let pack_ids: HashSet<&str> = pack
+        .packages
+        .iter()
+        .map(|entry| entry.id.as_str())
+        .collect();
+    let entries = pack
+        .packages
+        .iter()
+        .map(|entry| {
+            if !context.installed_packages.contains(&entry.id) {
+                return PackEntryAssessment {
+                    id: entry.id.clone(),
+                    status: PackEntryStatus::Missing,
+                    detail: Some(
+                        "package is not installed for the selected Android user".to_string(),
+                    ),
+                };
+            }
+            let unavailable: Vec<&str> = entry
+                .depends_on
+                .iter()
+                .filter(|dependency| {
+                    !pack_ids.contains(dependency.as_str())
+                        || !context.installed_packages.contains(dependency.as_str())
+                })
+                .map(String::as_str)
+                .collect();
+            if unavailable.is_empty() {
+                PackEntryAssessment {
+                    id: entry.id.clone(),
+                    status: PackEntryStatus::Ready,
+                    detail: None,
+                }
+            } else {
+                PackEntryAssessment {
+                    id: entry.id.clone(),
+                    status: PackEntryStatus::Unsupported,
+                    detail: Some(format!(
+                        "required package(s) unavailable: {}",
+                        unavailable.join(", ")
+                    )),
+                }
+            }
+        })
+        .collect();
+
+    PackAssessment {
+        status,
+        override_required: status != CompatibilityStatus::Compatible,
+        checks,
+        entries,
+    }
+}
+
+fn pattern_check(field: &str, expected: &[String], actual: Option<&str>) -> CompatibilityCheck {
+    let status = if expected.is_empty() {
+        CompatibilityStatus::Compatible
+    } else if let Some(actual) = actual {
+        if expected
+            .iter()
+            .any(|pattern| actual.to_lowercase().contains(&pattern.to_lowercase()))
+        {
+            CompatibilityStatus::Compatible
+        } else {
+            CompatibilityStatus::Mismatch
+        }
+    } else {
+        CompatibilityStatus::Unknown
+    };
+    CompatibilityCheck {
+        field: field.to_string(),
+        status,
+        expected: if expected.is_empty() {
+            vec!["any".to_string()]
+        } else {
+            expected.to_vec()
+        },
+        actual: actual.map(str::to_string),
+    }
 }
 
 #[cfg(test)]
@@ -234,13 +574,20 @@ mod tests {
     use super::*;
 
     const GOOD: &str = r#"
+id: "pixel-vanilla"
+revision: 1
 name: "Pixel — vanilla Android"
 version: "1"
 description: "Tested on Pixel 6/7/8 with stock Android 14."
 targets:
   manufacturer: ["Google"]
   rom: ["aosp"]
+  build_fingerprint: ["google/"]
   android_min: 12
+  user_scope: owner
+provenance:
+  source: "https://github.com/SysAdminDoc/Droidsmith"
+  license: "MIT"
 packages:
   - id: com.android.bookmarkprovider
     removal: recommended
@@ -373,5 +720,44 @@ packages:
         std::fs::write(&path, GOOD).unwrap();
         let p = load(&path).unwrap();
         assert_eq!(p.packages.len(), 2);
+    }
+
+    #[test]
+    fn expands_transitive_dependencies_and_rejects_cycles() {
+        let mut pack: Pack = serde_yaml_ng::from_str(GOOD).unwrap();
+        pack.packages[1].depends_on = vec![pack.packages[0].id.clone()];
+        let expanded = expand_dependencies(&pack, vec![pack.packages[1].id.clone()]).unwrap();
+        assert_eq!(expanded.len(), 2);
+        assert!(expanded.contains(&pack.packages[0].id));
+
+        pack.packages[0].depends_on = vec![pack.packages[1].id.clone()];
+        assert!(lint(&pack)
+            .iter()
+            .any(|issue| issue.contains("dependency cycle")));
+    }
+
+    #[test]
+    fn assesses_device_user_and_per_entry_support() {
+        let mut pack: Pack = serde_yaml_ng::from_str(GOOD).unwrap();
+        pack.packages[1].depends_on = vec![pack.packages[0].id.clone()];
+        let context = DevicePackContext {
+            manufacturer: Some("Samsung".into()),
+            model: Some("SM-S928U".into()),
+            build_fingerprint: Some("samsung/e3q/e3q:15/test".into()),
+            api_level: Some(35),
+            user_id: 10,
+            user_current: true,
+            installed_packages: HashSet::from([pack.packages[1].id.clone()]),
+        };
+
+        let assessment = assess(&pack, &context);
+        assert_eq!(assessment.status, CompatibilityStatus::Mismatch);
+        assert!(assessment.override_required);
+        assert_eq!(assessment.entries[0].status, PackEntryStatus::Missing);
+        assert_eq!(assessment.entries[1].status, PackEntryStatus::Unsupported);
+        assert!(assessment.entries[1]
+            .detail
+            .as_deref()
+            .is_some_and(|detail| detail.contains(&pack.packages[0].id)));
     }
 }

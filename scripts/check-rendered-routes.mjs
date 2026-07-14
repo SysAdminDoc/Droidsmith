@@ -80,6 +80,13 @@ async function runDesktopFlow(browser) {
   await page.getByRole("heading", { name: "Debloat", exact: true }).waitFor();
 
   await page.getByRole("button", { name: /QA Debloat Pack/ }).click();
+  await page.getByRole("heading", { name: "Compatibility checks" }).waitFor();
+  await page.getByText(/Pack qa-debloat · revision 3 · MIT/).waitFor();
+  await assertNoHorizontalOverflow(page, "desktop Debloat pack preview");
+  await page.screenshot({
+    path: path.join(screenshotDir, "desktop-debloat-preview.png"),
+    fullPage: false,
+  });
   await page.getByRole("button", { name: /Apply 2 packages/ }).click();
   await page.getByText(/QA Debloat Pack - debloat complete/).waitFor();
   await page.getByText("Failed", { exact: true }).waitFor();
@@ -230,6 +237,35 @@ async function installTauriMock(page) {
       },
     ];
     let journalId = 20;
+    const qaPackAssessment = {
+      status: "compatible",
+      override_required: false,
+      checks: [
+        {
+          field: "manufacturer",
+          status: "compatible",
+          expected: ["Google"],
+          actual: "Google",
+        },
+        {
+          field: "build_fingerprint",
+          status: "compatible",
+          expected: ["google/"],
+          actual: "google/oriole/oriole:15/QA",
+        },
+        {
+          field: "android_user",
+          status: "compatible",
+          expected: ["owner"],
+          actual: "0 (current)",
+        },
+      ],
+      entries: [
+        { id: "com.example.app", status: "ready", detail: null },
+        { id: "com.example.fail", status: "ready", detail: null },
+        { id: "com.android.settings", status: "ready", detail: null },
+      ],
+    };
 
     window.__TAURI_INTERNALS__ = {
       async invoke(cmd, args = {}) {
@@ -318,47 +354,84 @@ async function installTauriMock(page) {
             errors: [],
             packs: [
               {
-                name: "QA Debloat Pack",
-                version: "1.0.0",
-                description:
-                  "Synthetic pack used by rendered route smoke tests.",
-                targets: {
-                  manufacturer: ["Google"],
-                  rom: ["Pixel"],
-                  android_min: 13,
-                  android_max: null,
+                pack: {
+                  id: "qa-debloat",
+                  revision: 3,
+                  name: "QA Debloat Pack",
+                  version: "1",
+                  description:
+                    "Synthetic pack used by rendered route smoke tests.",
+                  targets: {
+                    manufacturer: ["Google"],
+                    rom: ["Pixel"],
+                    model: [],
+                    build_fingerprint: ["google/"],
+                    android_min: 13,
+                    android_max: null,
+                    user_scope: "owner",
+                  },
+                  packages: [
+                    {
+                      id: "com.example.app",
+                      removal: "recommended",
+                      description: "Safe QA package.",
+                      depends_on: [],
+                      needed_by: [],
+                      labels: ["qa"],
+                    },
+                    {
+                      id: "com.example.fail",
+                      removal: "recommended",
+                      description:
+                        "Package that simulates an OEM policy failure.",
+                      depends_on: [],
+                      needed_by: [],
+                      labels: ["qa", "failure"],
+                    },
+                    {
+                      id: "com.android.settings",
+                      removal: "expert",
+                      description:
+                        "System settings is intentionally not preselected.",
+                      depends_on: [],
+                      needed_by: ["device settings"],
+                      labels: ["system"],
+                    },
+                  ],
+                  attribution: null,
+                  provenance: { source: "ui-smoke", license: "MIT" },
                 },
-                packages: [
-                  {
-                    id: "com.example.app",
-                    removal: "recommended",
-                    description: "Safe QA package.",
-                    depends_on: [],
-                    needed_by: [],
-                    labels: ["qa"],
-                  },
-                  {
-                    id: "com.example.fail",
-                    removal: "recommended",
-                    description:
-                      "Package that simulates an OEM policy failure.",
-                    depends_on: [],
-                    needed_by: [],
-                    labels: ["qa", "failure"],
-                  },
-                  {
-                    id: "com.android.settings",
-                    removal: "expert",
-                    description:
-                      "System settings is intentionally not preselected.",
-                    depends_on: [],
-                    needed_by: ["device settings"],
-                    labels: ["system"],
-                  },
-                ],
-                attribution: null,
+                assessment: qaPackAssessment,
               },
             ],
+          };
+        }
+        if (cmd === "plan_pack") {
+          const selected = args.request.selected;
+          const packContext = {
+            pack_id: "qa-debloat",
+            revision: 3,
+            provenance_source: "ui-smoke",
+            provenance_license: "MIT",
+            compatibility_status: "compatible",
+            override_accepted: false,
+          };
+          return {
+            pack_id: "qa-debloat",
+            revision: 3,
+            assessment: qaPackAssessment,
+            selected_ids: selected,
+            plans: selected.map((packageId) =>
+              planFor({
+                serial: "QA123",
+                target: args.request.target,
+                package: packageId,
+                kind: "disable",
+                user_id: args.request.user_id,
+                pack_context: packContext,
+              }),
+            ),
+            skipped: [],
           };
         }
         if (cmd === "locate_scrcpy" || cmd === "locate_fastboot") return null;

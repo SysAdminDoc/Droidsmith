@@ -154,6 +154,7 @@ pub fn requests_for(profile: &Profile, target: &DeviceTarget) -> Vec<ActionReque
             package: a.package.clone(),
             kind: a.kind,
             user_id: a.user,
+            pack_context: None,
         })
         .collect()
 }

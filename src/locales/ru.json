@@ -388,6 +388,24 @@
       "unsafe": "Небезопасный"
     },
     "neededBy": "Нужно для: {{items}}",
+    "dependsOn": "Также выбираются обязательные пакеты: {{items}}",
+    "packIdentity": "Pack {{id}} · ревизия {{revision}} · {{license}}",
+    "compatibilityChecks": "Проверки совместимости",
+    "expectedActual": "Ожидается: {{expected}} · Устройство: {{actual}}",
+    "unknownValue": "неизвестно",
+    "compatibility": {
+      "compatible": "Совместим",
+      "unknown": "Неизвестно",
+      "mismatch": "Несовпадение"
+    },
+    "entryStatus": {
+      "ready": "Готов",
+      "missing": "Не установлен",
+      "unsupported": "Не поддерживается"
+    },
+    "compatibilityOverride": "Я проверил несовпадающие или неизвестные параметры устройства и принимаю применение этой точной ревизии pack. Переопределение будет записано в журнал действий.",
+    "planFailed": "Не удалось создать план pack",
+    "entryUnavailableForPlan": "Этот пакет недоступен для выбранного устройства и пользователя Android.",
     "applyingPack": "Применение {{name}}",
     "progressCount": "{{applied}} / {{total}} пакетов",
     "errorCount_one": "{{count}} ошибка",

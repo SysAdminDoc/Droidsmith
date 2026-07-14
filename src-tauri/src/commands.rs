@@ -11,7 +11,7 @@
 use std::path::PathBuf;
 use std::sync::OnceLock;
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use tauri::Manager;
 
 use crate::adb::device::valid_serial;
@@ -1082,7 +1082,8 @@ pub fn extract_apk(
 pub struct PackLoadError {
     /// File name (not full path — no host paths leak to the renderer).
     pub file: String,
-    /// Stable code: `pack_read`, `pack_parse`, or `pack_validate`.
+    /// Stable code: `pack_read`, `pack_parse`, `pack_validate`, or
+    /// `pack_duplicate_id`.
     pub code: &'static str,
     pub message: String,
 }
@@ -1092,8 +1093,29 @@ pub struct PackLoadError {
 /// silently — it surfaces as an error the user can act on.
 #[derive(Debug, Clone, Serialize)]
 pub struct PackListing {
-    pub packs: Vec<crate::packs::Pack>,
+    pub packs: Vec<crate::packs::PackCandidate>,
     pub errors: Vec<PackLoadError>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct PlanPackRequest {
+    pub target: adb::DeviceTarget,
+    pub user_id: u32,
+    pub pack_id: String,
+    pub revision: u32,
+    pub selected: Vec<String>,
+    #[serde(default)]
+    pub override_compatibility: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct PlannedPack {
+    pub pack_id: String,
+    pub revision: u32,
+    pub assessment: crate::packs::PackAssessment,
+    pub selected_ids: Vec<String>,
+    pub plans: Vec<actions::PlannedAction>,
+    pub skipped: Vec<crate::packs::PackEntryAssessment>,
 }
 
 fn pack_error_to_load_error(file: String, err: &crate::packs::PackError) -> PackLoadError {
@@ -1113,49 +1135,222 @@ fn pack_error_to_load_error(file: String, err: &crate::packs::PackError) -> Pack
 /// Returns packs that parse and lint cleanly, plus a per-file error for
 /// each broken file so a packaging defect is visible instead of looking
 /// like an empty pack list.
+fn load_runtime_packs(
+    packs_dir: &std::path::Path,
+) -> Result<(Vec<crate::packs::Pack>, Vec<PackLoadError>), CommandError> {
+    if !packs_dir.is_dir() {
+        return Ok((Vec::new(), Vec::new()));
+    }
+    let entries = std::fs::read_dir(packs_dir).map_err(|e| CommandError {
+        code: "io_error",
+        message: format!("could not read packs directory: {e}"),
+    })?;
+    let mut loaded = Vec::new();
+    let mut errors = Vec::new();
+    for entry in entries {
+        let Ok(entry) = entry else { continue };
+        let path = entry.path();
+        let file = path
+            .file_name()
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        if file.starts_with('_') {
+            continue;
+        }
+        if path
+            .extension()
+            .is_some_and(|ext| ext == "yaml" || ext == "yml")
+        {
+            match crate::packs::load(&path) {
+                Ok(pack) => loaded.push((file, pack)),
+                Err(err) => errors.push(pack_error_to_load_error(file, &err)),
+            }
+        }
+    }
+    let id_counts = loaded.iter().fold(
+        std::collections::HashMap::<String, usize>::new(),
+        |mut counts, (_, pack)| {
+            *counts.entry(pack.id.clone()).or_default() += 1;
+            counts
+        },
+    );
+    let mut packs = Vec::new();
+    for (file, pack) in loaded {
+        if id_counts.get(pack.id.as_str()).copied().unwrap_or_default() > 1 {
+            errors.push(PackLoadError {
+                file,
+                code: "pack_duplicate_id",
+                message: format!(
+                    "stable pack id {:?} is declared by more than one runtime pack",
+                    pack.id
+                ),
+            });
+        } else {
+            packs.push(pack);
+        }
+    }
+    packs.sort_by(|a, b| a.id.cmp(&b.id));
+    errors.sort_by(|a, b| a.file.cmp(&b.file));
+    Ok((packs, errors))
+}
+
+fn pack_context(
+    transport: &adb::ShellTransport,
+    target: &adb::DeviceTarget,
+    user_id: u32,
+) -> Result<crate::packs::DevicePackContext, CommandError> {
+    adb::validate_device_target(transport, target)?;
+    let users = adb::list_users(transport, target)?;
+    let user = users
+        .iter()
+        .find(|user| user.id == user_id)
+        .ok_or(CommandError {
+            code: "pack_user_missing",
+            message: format!("Android user {user_id} is not available"),
+        })?;
+    let info = adb::get_device_info(transport, target)?;
+    let installed_packages =
+        adb::list_packages(transport, target, adb::PackageFilter::All, user_id)?
+            .into_iter()
+            .map(|package| package.package)
+            .collect();
+    Ok(crate::packs::DevicePackContext {
+        manufacturer: info.manufacturer,
+        model: info.model,
+        build_fingerprint: info.build_fingerprint,
+        api_level: info.sdk_level.and_then(|value| value.parse().ok()),
+        user_id,
+        user_current: user.current,
+        installed_packages,
+    })
+}
+
 #[tauri::command]
-pub fn list_packs(app: tauri::AppHandle) -> Result<PackListing, CommandError> {
+pub fn list_packs(
+    app: tauri::AppHandle,
+    target: adb::DeviceTarget,
+    #[allow(non_snake_case)] userId: u32,
+) -> Result<PackListing, CommandError> {
     let resource_dir = app.path().resource_dir().map_err(|e| CommandError {
         code: "no_resource_dir",
         message: e.to_string(),
     })?;
     let packs_dir = resource_dir.join("packs");
 
-    if !packs_dir.is_dir() {
-        return Ok(PackListing {
-            packs: Vec::new(),
-            errors: Vec::new(),
+    let (packs, errors) = load_runtime_packs(&packs_dir)?;
+    let transport = validated_transport(&target)?;
+    let context = pack_context(&transport, &target, userId)?;
+    let packs = packs
+        .into_iter()
+        .map(|pack| crate::packs::PackCandidate {
+            assessment: crate::packs::assess(&pack, &context),
+            pack,
+        })
+        .collect();
+    Ok(PackListing { packs, errors })
+}
+
+#[tauri::command]
+pub fn plan_pack(
+    app: tauri::AppHandle,
+    request: PlanPackRequest,
+) -> Result<PlannedPack, CommandError> {
+    if request.selected.is_empty() {
+        return Err(CommandError {
+            code: "pack_selection_empty",
+            message: "select at least one pack entry".to_string(),
         });
     }
-
-    let entries = std::fs::read_dir(&packs_dir).map_err(|e| CommandError {
-        code: "io_error",
-        message: format!("could not read packs directory: {e}"),
+    let resource_dir = app.path().resource_dir().map_err(|e| CommandError {
+        code: "no_resource_dir",
+        message: e.to_string(),
     })?;
-
-    let mut packs = Vec::new();
-    let mut errors = Vec::new();
-    for entry in entries {
-        let Ok(entry) = entry else { continue };
-        let path = entry.path();
-        if path
-            .extension()
-            .is_some_and(|ext| ext == "yaml" || ext == "yml")
-        {
-            let file = path
-                .file_name()
-                .map(|n| n.to_string_lossy().into_owned())
-                .unwrap_or_default();
-            match crate::packs::load(&path) {
-                Ok(pack) => packs.push(pack),
-                Err(err) => errors.push(pack_error_to_load_error(file, &err)),
-            }
-        }
+    let (packs, _) = load_runtime_packs(&resource_dir.join("packs"))?;
+    let pack = packs
+        .into_iter()
+        .find(|pack| pack.id == request.pack_id)
+        .ok_or(CommandError {
+            code: "pack_not_found",
+            message: format!("debloat pack {:?} is not bundled", request.pack_id),
+        })?;
+    if pack.revision != request.revision {
+        return Err(CommandError {
+            code: "pack_revision_changed",
+            message: format!(
+                "pack {} changed from revision {} to {}; review it again",
+                pack.id, request.revision, pack.revision
+            ),
+        });
     }
-
-    packs.sort_by(|a, b| a.name.cmp(&b.name));
-    errors.sort_by(|a, b| a.file.cmp(&b.file));
-    Ok(PackListing { packs, errors })
+    let transport = validated_transport(&request.target)?;
+    let context = pack_context(&transport, &request.target, request.user_id)?;
+    let assessment = crate::packs::assess(&pack, &context);
+    if assessment.override_required && !request.override_compatibility {
+        return Err(CommandError {
+            code: "pack_compatibility_override_required",
+            message: format!(
+                "pack {} is {:?} for this device/user; review checks and explicitly accept the override",
+                pack.id, assessment.status
+            ),
+        });
+    }
+    let selected =
+        crate::packs::expand_dependencies(&pack, request.selected).map_err(|message| {
+            CommandError {
+                code: "pack_selection_invalid",
+                message,
+            }
+        })?;
+    let selected_ids: Vec<String> = pack
+        .packages
+        .iter()
+        .filter(|entry| selected.contains(&entry.id))
+        .map(|entry| entry.id.clone())
+        .collect();
+    let status_by_id: std::collections::HashMap<&str, &crate::packs::PackEntryAssessment> =
+        assessment
+            .entries
+            .iter()
+            .map(|entry| (entry.id.as_str(), entry))
+            .collect();
+    let mut plans = Vec::new();
+    let mut skipped = Vec::new();
+    for entry in pack
+        .packages
+        .iter()
+        .filter(|entry| selected.contains(&entry.id))
+    {
+        let support = status_by_id
+            .get(entry.id.as_str())
+            .expect("assessment covers every pack entry");
+        if support.status != crate::packs::PackEntryStatus::Ready {
+            skipped.push((*support).clone());
+            continue;
+        }
+        plans.push(actions::plan(actions::ActionRequest {
+            serial: request.target.serial.clone(),
+            target: request.target.clone(),
+            package: entry.id.clone(),
+            kind: actions::ActionKind::Disable,
+            user_id: request.user_id,
+            pack_context: Some(actions::PackActionContext {
+                pack_id: pack.id.clone(),
+                revision: pack.revision,
+                provenance_source: pack.provenance.source.clone(),
+                provenance_license: pack.provenance.license.clone(),
+                compatibility_status: format!("{:?}", assessment.status).to_lowercase(),
+                override_accepted: request.override_compatibility,
+            }),
+        }));
+    }
+    Ok(PlannedPack {
+        pack_id: pack.id,
+        revision: pack.revision,
+        assessment,
+        selected_ids,
+        plans,
+        skipped,
+    })
 }
 
 fn iso_now() -> String {
@@ -1165,7 +1360,7 @@ fn iso_now() -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        classify_backup_size, pack_error_to_load_error, parse_fastboot_getvar,
+        classify_backup_size, load_runtime_packs, pack_error_to_load_error, parse_fastboot_getvar,
         unique_screenshot_remote, validate_backup_target, validate_local_path,
         validate_remote_path, ProcessOutput,
     };
@@ -1218,6 +1413,70 @@ mod tests {
         let err = crate::packs::load(&bad_validate).unwrap_err();
         let mapped = pack_error_to_load_error("empty.yaml".to_string(), &err);
         assert_eq!(mapped.code, "pack_validate");
+    }
+
+    #[test]
+    fn runtime_pack_loader_never_lists_underscore_templates() {
+        let dir = std::env::temp_dir().join("droidsmith-runtime-pack-filter-test");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let yaml = r#"
+id: runtime-test
+revision: 1
+name: Runtime test
+version: "1"
+description: Runtime loader test.
+targets:
+  user_scope: any
+provenance:
+  source: https://example.invalid/test
+  license: MIT
+packages:
+  - id: com.example.runtime
+    removal: recommended
+    description: Runtime test package.
+"#;
+        std::fs::write(dir.join("runtime.yaml"), yaml).unwrap();
+        std::fs::write(
+            dir.join("_template.yaml"),
+            yaml.replace("runtime-test", "template-test"),
+        )
+        .unwrap();
+
+        let (packs, errors) = load_runtime_packs(&dir).unwrap();
+        assert!(errors.is_empty());
+        assert_eq!(packs.len(), 1);
+        assert_eq!(packs[0].id, "runtime-test");
+    }
+
+    #[test]
+    fn runtime_pack_loader_rejects_duplicate_stable_ids() {
+        let dir = std::env::temp_dir().join("droidsmith-runtime-pack-id-test");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let yaml = r#"
+id: duplicate-test
+revision: 1
+name: Duplicate test
+version: "1"
+description: Duplicate stable ID test.
+targets:
+  user_scope: any
+provenance:
+  source: https://example.invalid/test
+  license: MIT
+packages:
+  - id: com.example.duplicate
+    removal: recommended
+    description: Duplicate test package.
+"#;
+        std::fs::write(dir.join("one.yaml"), yaml).unwrap();
+        std::fs::write(dir.join("two.yaml"), yaml).unwrap();
+
+        let (packs, errors) = load_runtime_packs(&dir).unwrap();
+        assert!(packs.is_empty());
+        assert_eq!(errors.len(), 2);
+        assert!(errors.iter().all(|error| error.code == "pack_duplicate_id"));
     }
 
     #[test]

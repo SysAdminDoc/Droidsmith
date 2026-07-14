@@ -20,7 +20,7 @@ use commands::{
     get_device_info, heartbeat, install_apk, journal_list, journal_undo, launch_scrcpy,
     list_devices, list_fastboot_devices, list_network_connections, list_packages, list_packs,
     list_permissions, list_processes, list_remote_files, list_users, list_wireless_services,
-    locate_fastboot, locate_scrcpy, pair_wireless, plan_action, pull_file, push_file,
+    locate_fastboot, locate_scrcpy, pair_wireless, plan_action, plan_pack, pull_file, push_file,
     scrcpy_session_status, set_permission, shell_run, stop_scrcpy, take_screenshot,
 };
 
@@ -54,6 +54,7 @@ pub fn run() {
             list_packages,
             list_users,
             list_packs,
+            plan_pack,
             plan_action,
             apply_action,
             shell_run,

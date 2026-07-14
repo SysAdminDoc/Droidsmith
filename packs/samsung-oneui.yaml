@@ -1,3 +1,5 @@
+id: "samsung-oneui"
+revision: 1
 name: "Samsung — One UI"
 version: "1"
 description: >
@@ -7,11 +9,16 @@ description: >
 attribution: |
   Original Droidsmith authoring based on public Samsung package lists and
   community debloat experience. MIT licensed.
+provenance:
+  source: "https://github.com/SysAdminDoc/Droidsmith"
+  license: "MIT"
 
 targets:
   manufacturer: ["samsung", "Samsung"]
   rom: ["oneui", "One UI"]
+  build_fingerprint: ["samsung/"]
   android_min: 33
+  user_scope: owner
 
 packages:
   # ── Samsung apps: safe to remove ──────────────────────────────────

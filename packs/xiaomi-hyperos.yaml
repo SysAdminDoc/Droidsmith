@@ -1,3 +1,5 @@
+id: "xiaomi-hyperos"
+revision: 1
 name: "Xiaomi — HyperOS / MIUI"
 version: "1"
 description: >
@@ -8,11 +10,16 @@ description: >
 attribution: |
   Original Droidsmith authoring based on public MIUI/HyperOS package lists
   and community debloat guides. MIT licensed.
+provenance:
+  source: "https://github.com/SysAdminDoc/Droidsmith"
+  license: "MIT"
 
 targets:
   manufacturer: ["Xiaomi", "xiaomi", "Redmi", "POCO"]
   rom: ["hyperos", "HyperOS", "miui", "MIUI"]
+  build_fingerprint: ["xiaomi/", "redmi/", "poco/"]
   android_min: 33
+  user_scope: owner
 
 packages:
   # ── Xiaomi bloatware: safe to remove ──────────────────────────────

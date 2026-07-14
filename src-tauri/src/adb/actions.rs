@@ -254,6 +254,20 @@ pub struct ActionRequest {
     /// callers that predate multi-user targeting deserialize unchanged.
     #[serde(default)]
     pub user_id: u32,
+    /// Structured provenance for actions planned from a debloat pack. This is
+    /// persisted in the journal, including any explicit compatibility override.
+    #[serde(default)]
+    pub pack_context: Option<PackActionContext>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PackActionContext {
+    pub pack_id: String,
+    pub revision: u32,
+    pub provenance_source: String,
+    pub provenance_license: String,
+    pub compatibility_status: String,
+    pub override_accepted: bool,
 }
 
 /// Synthesised plan. The `args` field is exactly what the action will
@@ -489,6 +503,7 @@ mod tests {
             package: "com.facebook.appmanager".into(),
             kind: ActionKind::Disable,
             user_id: 0,
+            pack_context: None,
         };
         let p = plan(r);
         assert_eq!(
@@ -512,6 +527,7 @@ mod tests {
             package: "com.x".into(),
             kind: ActionKind::Enable,
             user_id: 0,
+            pack_context: None,
         });
         assert_eq!(p.args, vec!["pm", "enable", "--user", "0", "com.x"]);
     }
@@ -524,6 +540,7 @@ mod tests {
             package: "com.x".into(),
             kind: ActionKind::UninstallForUser,
             user_id: 0,
+            pack_context: None,
         });
         assert_eq!(p.args, vec!["pm", "uninstall", "--user", "0", "com.x"]);
     }
@@ -546,6 +563,7 @@ mod tests {
                 package: "com.x".into(),
                 kind,
                 user_id: 10,
+                pack_context: None,
             });
             let mut expected: Vec<String> = head.into_iter().map(String::from).collect();
             expected.push("--user".into());
@@ -564,6 +582,7 @@ mod tests {
             package: ".dotleading".into(),
             kind: ActionKind::Disable,
             user_id: 0,
+            pack_context: None,
         });
         assert!(p.description.starts_with("[suspicious package id"));
         // Args still synthesised — the caller decides whether to
@@ -596,6 +615,7 @@ mod tests {
             package: "com.x".into(),
             kind: ActionKind::Disable,
             user_id: 0,
+            pack_context: None,
         });
         let applied = apply(&mock, p, "2026-05-25T12:00:00Z").unwrap();
         assert_eq!(applied.applied_at, "2026-05-25T12:00:00Z");
@@ -617,6 +637,7 @@ mod tests {
             package: "com.x".into(),
             kind: ActionKind::UninstallForUser,
             user_id: 0,
+            pack_context: None,
         });
         let err = apply(&mock, p, "2026-05-25T12:00:00Z").unwrap_err();
         match err {
@@ -637,6 +658,7 @@ mod tests {
             package: "com.x".into(),
             kind: ActionKind::Disable,
             user_id: 0,
+            pack_context: None,
         });
         p.args = vec!["pm".into(), "clear".into(), "com.x".into()];
         let err = apply(&mock, p, "2026-05-25T12:00:00Z").unwrap_err();
@@ -652,6 +674,7 @@ mod tests {
             package: ".dotleading".into(),
             kind: ActionKind::Disable,
             user_id: 0,
+            pack_context: None,
         });
         let err = apply(&mock, p, "2026-05-25T12:00:00Z").unwrap_err();
         assert!(matches!(err, TransportError::Parse(_)));
@@ -666,6 +689,7 @@ mod tests {
             package: "com.x".into(),
             kind: ActionKind::Disable,
             user_id: 0,
+            pack_context: None,
         });
         let err = apply(&mock, p, "2026-05-25T12:00:00Z").unwrap_err();
         assert!(matches!(err, TransportError::Parse(_)));
@@ -686,6 +710,7 @@ mod tests {
             package: "com.x".into(),
             kind: ActionKind::Disable,
             user_id: 0,
+            pack_context: None,
         });
         let err = apply(&mock, p, "2026-05-25T12:00:00Z").unwrap_err();
         assert!(err.to_string().contains("user 0 is no longer available"));

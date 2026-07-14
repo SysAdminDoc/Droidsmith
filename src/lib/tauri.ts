@@ -186,6 +186,16 @@ export type ActionRequest = {
   kind: ActionKind;
   /** Android user id the action targets (`pm --user`). Defaults to 0. */
   user_id: number;
+  pack_context?: PackActionContext | null;
+};
+
+export type PackActionContext = {
+  pack_id: string;
+  revision: number;
+  provenance_source: string;
+  provenance_license: string;
+  compatibility_status: string;
+  override_accepted: boolean;
 };
 
 export type AndroidUser = {
@@ -230,17 +240,55 @@ export type PackEntry = {
 export type PackTargets = {
   manufacturer: string[];
   rom: string[];
+  model: string[];
+  build_fingerprint: string[];
   android_min: number | null;
   android_max: number | null;
+  user_scope: "owner" | "current" | "any";
 };
 
 export type Pack = {
+  id: string;
+  revision: number;
   name: string;
   version: string;
   description: string;
   targets: PackTargets;
   packages: PackEntry[];
   attribution: string | null;
+  provenance: {
+    source: string;
+    license: string;
+  };
+};
+
+export type CompatibilityStatus = "compatible" | "unknown" | "mismatch";
+
+export type CompatibilityCheck = {
+  field: string;
+  status: CompatibilityStatus;
+  expected: string[];
+  actual: string | null;
+};
+
+export type PackEntryStatus = "ready" | "missing" | "unsupported";
+
+export type PackEntryAssessment = {
+  id: string;
+  status: PackEntryStatus;
+  detail: string | null;
+};
+
+export type PackAssessment = {
+  status: CompatibilityStatus;
+  override_required: boolean;
+  checks: CompatibilityCheck[];
+  entries: PackEntryAssessment[];
+};
+
+export type PackCandidate = {
+  pack: Pack;
+  assessment: PackAssessment;
 };
 
 export function summarizeState(s: SerializedDeviceState): string {
@@ -561,10 +609,37 @@ export type PackLoadError = {
 };
 
 export type PackListing = {
-  packs: Pack[];
+  packs: PackCandidate[];
   errors: PackLoadError[];
 };
 
-export async function callListPacks(): Promise<PackListing> {
-  return invoke<PackListing>("list_packs");
+export async function callListPacks(
+  target: DeviceTarget,
+  userId: number,
+): Promise<PackListing> {
+  return invoke<PackListing>("list_packs", { target, userId });
+}
+
+export type PlanPackRequest = {
+  target: DeviceTarget;
+  user_id: number;
+  pack_id: string;
+  revision: number;
+  selected: string[];
+  override_compatibility: boolean;
+};
+
+export type PlannedPack = {
+  pack_id: string;
+  revision: number;
+  assessment: PackAssessment;
+  selected_ids: string[];
+  plans: PlannedAction[];
+  skipped: PackEntryAssessment[];
+};
+
+export async function callPlanPack(
+  request: PlanPackRequest,
+): Promise<PlannedPack> {
+  return invoke<PlannedPack>("plan_pack", { request });
 }

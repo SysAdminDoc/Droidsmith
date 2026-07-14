@@ -4,6 +4,8 @@
 #
 # Schema is documented in src-tauri/src/packs/mod.rs.
 
+id: "template-pixel-sampler"
+revision: 1
 name: "Example — Pixel sampler"
 version: "1"
 description: >
@@ -11,11 +13,16 @@ description: >
   recommending anything serious. Real Pixel pack lands with R-032.
 attribution: |
   Original Droidsmith authoring. MIT.
+provenance:
+  source: "https://github.com/SysAdminDoc/Droidsmith"
+  license: "MIT"
 
 targets:
   manufacturer: ["Google"]
   rom: ["aosp", "stock"]
+  build_fingerprint: ["google/"]
   android_min: 12
+  user_scope: owner
 
 packages:
   - id: com.android.bookmarkprovider

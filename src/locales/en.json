@@ -388,6 +388,24 @@
       "unsafe": "Unsafe"
     },
     "neededBy": "Needed by: {{items}}",
+    "dependsOn": "Also selects required package(s): {{items}}",
+    "packIdentity": "Pack {{id}} · revision {{revision}} · {{license}}",
+    "compatibilityChecks": "Compatibility checks",
+    "expectedActual": "Expected: {{expected}} · Device: {{actual}}",
+    "unknownValue": "unknown",
+    "compatibility": {
+      "compatible": "Compatible",
+      "unknown": "Unknown",
+      "mismatch": "Mismatch"
+    },
+    "entryStatus": {
+      "ready": "Ready",
+      "missing": "Not installed",
+      "unsupported": "Unsupported"
+    },
+    "compatibilityOverride": "I reviewed the mismatched or unknown device checks and accept applying this exact pack revision anyway. This override will be recorded in the action journal.",
+    "planFailed": "Pack plan could not be created",
+    "entryUnavailableForPlan": "This package is not available for the selected device and Android user.",
     "applyingPack": "Applying {{name}}",
     "progressCount": "{{applied}} / {{total}} packages",
     "errorCount_one": "{{count}} error",

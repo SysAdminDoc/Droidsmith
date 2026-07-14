@@ -47,7 +47,12 @@
       "icons/icon.ico"
     ],
     "resources": {
-      "../packs/": "packs/",
+      "../packs/amazon-fireos.yaml": "packs/amazon-fireos.yaml",
+      "../packs/motorola.yaml": "packs/motorola.yaml",
+      "../packs/oppo-coloros.yaml": "packs/oppo-coloros.yaml",
+      "../packs/pixel.yaml": "packs/pixel.yaml",
+      "../packs/samsung-oneui.yaml": "packs/samsung-oneui.yaml",
+      "../packs/xiaomi-hyperos.yaml": "packs/xiaomi-hyperos.yaml",
       "../quirks/": "quirks/"
     }
   }

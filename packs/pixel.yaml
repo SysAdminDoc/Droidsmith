@@ -1,3 +1,5 @@
+id: "pixel-stock"
+revision: 1
 name: "Pixel — stock Android"
 version: "1"
 description: >
@@ -9,11 +11,16 @@ description: >
 attribution: |
   Original Droidsmith authoring based on public AOSP package lists and
   community debloat guides. MIT licensed.
+provenance:
+  source: "https://github.com/SysAdminDoc/Droidsmith"
+  license: "MIT"
 
 targets:
   manufacturer: ["Google"]
   rom: ["aosp", "stock"]
+  build_fingerprint: ["google/"]
   android_min: 33
+  user_scope: owner
 
 packages:
   # ── Google apps: safe to remove ────────────────────────────────────
