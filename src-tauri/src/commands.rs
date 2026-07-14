@@ -297,6 +297,34 @@ fn validate_local_path(local_path: &str) -> Result<PathBuf, CommandError> {
     Ok(path)
 }
 
+/// Validate a device-side (remote) path before it reaches `adb pull`,
+/// `adb push`, or `pm`. Argv-scoped calls have no shell-metachar risk,
+/// but a leading `-` would be parsed by adb as an option flag, so reject
+/// it — and require an absolute device path so callers can't smuggle a
+/// flag or relative token across the IPC boundary.
+fn validate_remote_path(remote_path: &str) -> Result<String, CommandError> {
+    let trimmed = remote_path.trim();
+    if trimmed.is_empty() {
+        return Err(CommandError {
+            code: "invalid_remote_path",
+            message: "device path cannot be empty".to_string(),
+        });
+    }
+    if trimmed.starts_with('-') {
+        return Err(CommandError {
+            code: "invalid_remote_path",
+            message: format!("device path must not start with '-': {trimmed}"),
+        });
+    }
+    if !trimmed.starts_with('/') {
+        return Err(CommandError {
+            code: "invalid_remote_path",
+            message: format!("device path must be absolute: {trimmed}"),
+        });
+    }
+    Ok(trimmed.to_string())
+}
+
 fn validate_fastboot_key(key: &str) -> Result<(), CommandError> {
     if key.is_empty() || key.len() > 128 {
         return Err(CommandError {
@@ -422,20 +450,21 @@ pub fn list_remote_files(
     remote_path: String,
 ) -> Result<RemoteListing, CommandError> {
     validate_serial_arg(&serial)?;
+    let remote = validate_remote_path(&remote_path)?;
     let resolution = adb::locate_adb();
     let path = resolution
         .path
         .as_ref()
         .ok_or(adb::TransportError::AdbNotFound)?;
     let transport = adb::ShellTransport::new(path);
-    let stdout = transport.shell(&serial, &["ls", "-la", &remote_path])?;
+    let stdout = transport.shell(&serial, &["ls", "-la", &remote])?;
     let entries = parse_ls_output(&stdout);
     let free_space = transport
-        .shell(&serial, &["df", &remote_path])
+        .shell(&serial, &["df", "-k", &remote])
         .ok()
         .and_then(|s| parse_df_free(&s));
     Ok(RemoteListing {
-        path: remote_path,
+        path: remote,
         entries,
         free_space_kb: free_space,
     })
@@ -450,6 +479,7 @@ pub fn push_file(
 ) -> Result<String, CommandError> {
     validate_serial_arg(&serial)?;
     let validated_path = validate_local_path(&local_path)?;
+    let remote = validate_remote_path(&remote_path)?;
     let resolution = adb::locate_adb();
     let adb_path = resolution
         .path
@@ -460,7 +490,7 @@ pub fn push_file(
     let timeout = std::time::Duration::from_secs(120);
     let output = run_adb_simple(
         std::path::Path::new(adb_path),
-        &["-s", &serial, "push", &local_arg, &remote_path],
+        &["-s", &serial, "push", &local_arg, &remote],
         timeout,
     )?;
     Ok(output)
@@ -475,6 +505,7 @@ pub fn pull_file(
 ) -> Result<String, CommandError> {
     validate_serial_arg(&serial)?;
     let validated_path = validate_local_path(&local_path)?;
+    let remote = validate_remote_path(&remote_path)?;
     let resolution = adb::locate_adb();
     let adb_path = resolution
         .path
@@ -485,7 +516,7 @@ pub fn pull_file(
     let timeout = std::time::Duration::from_secs(120);
     let output = run_adb_simple(
         std::path::Path::new(adb_path),
-        &["-s", &serial, "pull", &remote_path, &local_arg],
+        &["-s", &serial, "pull", &remote, &local_arg],
         timeout,
     )?;
     Ok(output)
@@ -1055,18 +1086,14 @@ pub fn extract_apk(
 ) -> Result<String, CommandError> {
     validate_serial_arg(&serial)?;
     let validated_path = validate_local_path(&local_path)?;
+    let remote = validate_remote_path(&remote_path)?;
     let resolution = adb::locate_adb();
     let path = resolution
         .path
         .as_ref()
         .ok_or(adb::TransportError::AdbNotFound)?;
     let local_arg = validated_path.display().to_string();
-    let stdout = actions::extract_apk(
-        std::path::Path::new(path),
-        &serial,
-        &remote_path,
-        &local_arg,
-    )?;
+    let stdout = actions::extract_apk(std::path::Path::new(path), &serial, &remote, &local_arg)?;
     Ok(stdout)
 }
 
@@ -1161,8 +1188,31 @@ fn iso_now() -> String {
 mod tests {
     use super::{
         classify_backup_size, pack_error_to_load_error, parse_fastboot_getvar,
-        unique_screenshot_remote, validate_backup_target, validate_local_path, ProcessOutput,
+        unique_screenshot_remote, validate_backup_target, validate_local_path,
+        validate_remote_path, ProcessOutput,
     };
+
+    #[test]
+    fn remote_path_rejects_flags_and_relative() {
+        // A leading '-' would reach adb as an option flag.
+        assert_eq!(
+            validate_remote_path("-a").unwrap_err().code,
+            "invalid_remote_path"
+        );
+        // Relative and empty are rejected; only absolute device paths pass.
+        assert_eq!(
+            validate_remote_path("sdcard/x").unwrap_err().code,
+            "invalid_remote_path"
+        );
+        assert_eq!(
+            validate_remote_path("   ").unwrap_err().code,
+            "invalid_remote_path"
+        );
+        assert_eq!(
+            validate_remote_path("/sdcard/Download/app.apk").unwrap(),
+            "/sdcard/Download/app.apk"
+        );
+    }
 
     #[test]
     fn broken_pack_maps_to_stable_error_code() {

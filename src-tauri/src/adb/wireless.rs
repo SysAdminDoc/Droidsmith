@@ -138,6 +138,10 @@ fn validate_pairing_code(code: &str) -> Result<(), TransportError> {
 
 fn valid_host(host: &str) -> bool {
     !host.is_empty()
+        // A leading '-' would let the host reach `adb connect`/`adb pair`
+        // as an option flag rather than a positional endpoint (the serial
+        // path already blocks this via `valid_serial`).
+        && !host.starts_with('-')
         && host.len() <= 255
         && host
             .chars()
@@ -213,6 +217,8 @@ adb-bad _adb-tls-connect._tcp no-port
         assert!(validated_endpoint("bad host", 37099).is_err());
         assert!(validated_endpoint("bad/host", 37099).is_err());
         assert!(validated_endpoint("192.168.1.42", 0).is_err());
+        // A leading '-' host would reach `adb connect`/`adb pair` as a flag.
+        assert!(validated_endpoint("-oProxyCommand", 37099).is_err());
     }
 
     #[test]

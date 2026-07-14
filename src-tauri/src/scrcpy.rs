@@ -170,6 +170,13 @@ pub fn build_args(request: &LaunchScrcpyRequest) -> Result<Vec<String>, String> 
         .map(str::trim)
         .filter(|value| !value.is_empty())
     {
+        // A leading '-' would be parsed by scrcpy as an option flag rather
+        // than the recording filename.
+        if record_path.starts_with('-') {
+            return Err(format!(
+                "scrcpy recording path must not start with '-': {record_path}"
+            ));
+        }
         args.push("--record".to_string());
         args.push(record_path.to_string());
     }
@@ -246,5 +253,14 @@ mod tests {
         assert!(build_args(&req)
             .unwrap_err()
             .contains("unsupported scrcpy keyboard mode"));
+    }
+
+    #[test]
+    fn rejects_record_path_that_looks_like_a_flag() {
+        let mut req = request();
+        req.record_path = Some("--version".to_string());
+        assert!(build_args(&req)
+            .unwrap_err()
+            .contains("must not start with"));
     }
 }
