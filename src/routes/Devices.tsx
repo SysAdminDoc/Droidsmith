@@ -618,22 +618,23 @@ function formatStateLabel(state: SerializedDeviceState): string {
   return label.charAt(0).toUpperCase() + label.slice(1);
 }
 
-const REMOTE_BUTTONS: { label: string; keycode: number }[] = [
-  { label: "Home", keycode: 3 },
-  { label: "Back", keycode: 4 },
-  { label: "Recents", keycode: 187 },
-  { label: "Up", keycode: 19 },
-  { label: "Down", keycode: 20 },
-  { label: "Left", keycode: 21 },
-  { label: "Right", keycode: 22 },
-  { label: "OK", keycode: 23 },
-  { label: "Vol +", keycode: 24 },
-  { label: "Vol -", keycode: 25 },
-  { label: "Power", keycode: 26 },
-  { label: "Menu", keycode: 82 },
+const REMOTE_BUTTONS: { id: string; labelKey: string; keycode: number }[] = [
+  { id: "Home", labelKey: "devices.controls.remoteHome", keycode: 3 },
+  { id: "Back", labelKey: "devices.controls.remoteBack", keycode: 4 },
+  { id: "Recents", labelKey: "devices.controls.remoteRecents", keycode: 187 },
+  { id: "Up", labelKey: "devices.controls.remoteUp", keycode: 19 },
+  { id: "Down", labelKey: "devices.controls.remoteDown", keycode: 20 },
+  { id: "Left", labelKey: "devices.controls.remoteLeft", keycode: 21 },
+  { id: "Right", labelKey: "devices.controls.remoteRight", keycode: 22 },
+  { id: "OK", labelKey: "devices.controls.remoteOk", keycode: 23 },
+  { id: "Vol +", labelKey: "devices.controls.remoteVolUp", keycode: 24 },
+  { id: "Vol -", labelKey: "devices.controls.remoteVolDown", keycode: 25 },
+  { id: "Power", labelKey: "devices.controls.remotePower", keycode: 26 },
+  { id: "Menu", labelKey: "devices.controls.remoteMenu", keycode: 82 },
 ];
 
 function DeviceControls({ serial }: { serial: string }) {
+  const { t } = useTranslation();
   const [lastKey, setLastKey] = useState<string | null>(null);
   const [screenshotMsg, setScreenshotMsg] = useState<string | null>(null);
   const [density, setDensity] = useState("");
@@ -645,10 +646,10 @@ function DeviceControls({ serial }: { serial: string }) {
         await callShellRun(serial, ["input", "keyevent", String(keycode)]);
         setLastKey(label);
       } catch {
-        setLastKey(`${label} failed`);
+        setLastKey(t("devices.controls.keyFailed", { label }));
       }
     },
-    [serial],
+    [serial, t],
   );
 
   const takeScreenshot = useCallback(async () => {
@@ -656,7 +657,7 @@ function DeviceControls({ serial }: { serial: string }) {
       // The host destination comes from the native save dialog, never a
       // renderer-built path; the backend rejects non-absolute paths.
       const localPath = await save({
-        title: "Save screenshot as",
+        title: t("devices.controls.saveScreenshotAs"),
         defaultPath: `screenshot-${serial}-${Date.now()}.png`,
         filters: [{ name: "PNG", extensions: ["png"] }],
       });
@@ -664,32 +665,46 @@ function DeviceControls({ serial }: { serial: string }) {
         setScreenshotMsg(null);
         return;
       }
-      setScreenshotMsg("Capturing...");
+      setScreenshotMsg(t("devices.controls.capturing"));
       await callTakeScreenshot(serial, localPath);
-      setScreenshotMsg(`Saved to ${localPath}`);
+      setScreenshotMsg(t("devices.controls.savedTo", { path: localPath }));
     } catch (e) {
-      setScreenshotMsg(`Failed: ${e instanceof Error ? e.message : String(e)}`);
+      setScreenshotMsg(
+        t("devices.controls.failed", {
+          message: e instanceof Error ? e.message : String(e),
+        }),
+      );
     }
-  }, [serial]);
+  }, [serial, t]);
 
   const applyDensity = useCallback(async () => {
     if (!density.trim()) return;
     try {
       await callShellRun(serial, ["wm", "density", density.trim()]);
-      setDisplayMsg(`Density set to ${density.trim()}`);
+      setDisplayMsg(
+        t("devices.controls.densitySet", { value: density.trim() }),
+      );
     } catch (e) {
-      setDisplayMsg(`Failed: ${e instanceof Error ? e.message : String(e)}`);
+      setDisplayMsg(
+        t("devices.controls.failed", {
+          message: e instanceof Error ? e.message : String(e),
+        }),
+      );
     }
-  }, [serial, density]);
+  }, [serial, density, t]);
 
   const resetDensity = useCallback(async () => {
     try {
       await callShellRun(serial, ["wm", "density", "reset"]);
-      setDisplayMsg("Density reset to default");
+      setDisplayMsg(t("devices.controls.densityReset"));
     } catch (e) {
-      setDisplayMsg(`Failed: ${e instanceof Error ? e.message : String(e)}`);
+      setDisplayMsg(
+        t("devices.controls.failed", {
+          message: e instanceof Error ? e.message : String(e),
+        }),
+      );
     }
-  }, [serial]);
+  }, [serial, t]);
 
   const toggleForceDark = useCallback(
     async (enable: boolean) => {
@@ -701,12 +716,20 @@ function DeviceControls({ serial }: { serial: string }) {
           "ui_night_mode",
           enable ? "2" : "1",
         ]);
-        setDisplayMsg(enable ? "Force dark enabled" : "Force dark disabled");
+        setDisplayMsg(
+          enable
+            ? t("devices.controls.forceDarkEnabled")
+            : t("devices.controls.forceDarkDisabled"),
+        );
       } catch (e) {
-        setDisplayMsg(`Failed: ${e instanceof Error ? e.message : String(e)}`);
+        setDisplayMsg(
+          t("devices.controls.failed", {
+            message: e instanceof Error ? e.message : String(e),
+          }),
+        );
       }
     },
-    [serial],
+    [serial, t],
   );
 
   return (
@@ -715,34 +738,41 @@ function DeviceControls({ serial }: { serial: string }) {
         <Card className="p-5">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-semibold text-anvil-50">
-              Virtual remote
+              {t("devices.controls.virtualRemote")}
             </h3>
             {lastKey && (
-              <span className="text-xs text-anvil-400">Last: {lastKey}</span>
+              <span className="text-xs text-anvil-400">
+                {t("devices.controls.lastKey", { key: lastKey })}
+              </span>
             )}
           </div>
           <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
-            {REMOTE_BUTTONS.map((btn) => (
-              <Button
-                key={btn.label}
-                type="button"
-                size="sm"
-                onClick={() => void sendKey(btn.keycode, btn.label)}
-                title={`keyevent ${btn.keycode}`}
-                className="justify-start"
-              >
-                <RemoteGlyph label={btn.label} />
-                <span>{btn.label}</span>
-              </Button>
-            ))}
+            {REMOTE_BUTTONS.map((btn) => {
+              const label = t(btn.labelKey);
+              return (
+                <Button
+                  key={btn.id}
+                  type="button"
+                  size="sm"
+                  onClick={() => void sendKey(btn.keycode, label)}
+                  title={`keyevent ${btn.keycode}`}
+                  className="justify-start"
+                >
+                  <RemoteGlyph label={btn.id} />
+                  <span>{label}</span>
+                </Button>
+              );
+            })}
           </div>
         </Card>
 
         <div className="space-y-4">
           <Card className="p-5">
-            <h3 className="text-sm font-semibold text-anvil-50">Screenshot</h3>
+            <h3 className="text-sm font-semibold text-anvil-50">
+              {t("devices.controls.screenshot")}
+            </h3>
             <p className="mt-1 text-xs text-anvil-400">
-              Capture the current screen to a local PNG file.
+              {t("devices.controls.screenshotBody")}
             </p>
             <div className="mt-3 flex items-center gap-3">
               <Button
@@ -751,7 +781,7 @@ function DeviceControls({ serial }: { serial: string }) {
                 variant="primary"
                 onClick={() => void takeScreenshot()}
               >
-                Capture
+                {t("devices.controls.capture")}
               </Button>
               {screenshotMsg && (
                 <span className="text-xs text-anvil-300">{screenshotMsg}</span>
@@ -761,13 +791,13 @@ function DeviceControls({ serial }: { serial: string }) {
 
           <Card className="p-5">
             <h3 className="text-sm font-semibold text-anvil-50">
-              Display tuning
+              {t("devices.controls.displayTuning")}
             </h3>
             <div className="mt-3 grid gap-3 sm:grid-cols-2">
               <div className="flex items-end gap-2">
                 <label className="grid flex-1 gap-1.5">
                   <span className="text-xs font-medium text-anvil-400">
-                    Density (DPI)
+                    {t("devices.controls.densityLabel")}
                   </span>
                   <FieldInput
                     type="text"
@@ -783,7 +813,7 @@ function DeviceControls({ serial }: { serial: string }) {
                   size="sm"
                   onClick={() => void applyDensity()}
                 >
-                  Set
+                  {t("devices.controls.set")}
                 </Button>
                 <Button
                   type="button"
@@ -791,7 +821,7 @@ function DeviceControls({ serial }: { serial: string }) {
                   variant="ghost"
                   onClick={() => void resetDensity()}
                 >
-                  Reset
+                  {t("devices.controls.reset")}
                 </Button>
               </div>
               <div className="flex items-end gap-2">
@@ -800,7 +830,7 @@ function DeviceControls({ serial }: { serial: string }) {
                   size="sm"
                   onClick={() => void toggleForceDark(true)}
                 >
-                  Force dark on
+                  {t("devices.controls.forceDarkOn")}
                 </Button>
                 <Button
                   type="button"
@@ -808,7 +838,7 @@ function DeviceControls({ serial }: { serial: string }) {
                   variant="ghost"
                   onClick={() => void toggleForceDark(false)}
                 >
-                  Force dark off
+                  {t("devices.controls.forceDarkOff")}
                 </Button>
               </div>
             </div>
@@ -882,6 +912,7 @@ function RemoteGlyph({ label }: { label: string }) {
 }
 
 function ProcessManager({ serial }: { serial: string }) {
+  const { t } = useTranslation();
   const [processes, setProcesses] = useState<ProcessInfo[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -915,10 +946,10 @@ function ProcessManager({ serial }: { serial: string }) {
       <div className="flex flex-col gap-3 border-b border-white/10 p-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h3 className="text-sm font-semibold text-anvil-50">
-            Process manager
+            {t("devices.controls.processManager")}
           </h3>
           <p className="mt-1 text-xs text-anvil-400">
-            Snapshot of running processes sorted by memory usage.
+            {t("devices.controls.processManagerBody")}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -926,8 +957,8 @@ function ProcessManager({ serial }: { serial: string }) {
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Filter"
-            aria-label="Filter processes"
+            placeholder={t("devices.controls.filter")}
+            aria-label={t("devices.controls.filterProcesses")}
             className="h-8 w-40 px-2 font-mono text-xs"
           />
           <Button
@@ -937,23 +968,27 @@ function ProcessManager({ serial }: { serial: string }) {
             onClick={() => void refresh()}
             disabled={loading}
           >
-            {loading ? "Loading..." : processes.length > 0 ? "Refresh" : "Load"}
+            {loading
+              ? t("devices.controls.loading")
+              : processes.length > 0
+                ? t("devices.controls.refresh")
+                : t("devices.controls.load")}
           </Button>
         </div>
       </div>
       {error && (
         <div className="border-b border-rose-500/20 bg-rose-500/10 px-4 py-3 text-xs text-rose-200">
-          Couldn't read processes: {error}
+          {t("devices.controls.processReadFailed", { message: error })}
         </div>
       )}
       {processes.length === 0 && !loading && !error && (
-        <EmptyState title="No process snapshot loaded">
-          <p>Load a process snapshot to inspect memory-heavy apps.</p>
+        <EmptyState title={t("devices.controls.noProcesses")}>
+          <p>{t("devices.controls.noProcessesBody")}</p>
         </EmptyState>
       )}
       {processes.length > 0 && filtered.length === 0 && (
-        <EmptyState title="No matching processes">
-          <p>Clear the filter or search for another process name.</p>
+        <EmptyState title={t("devices.controls.noMatchingProcesses")}>
+          <p>{t("devices.controls.noMatchingProcessesBody")}</p>
         </EmptyState>
       )}
       {processes.length > 0 && filtered.length > 0 && (
@@ -962,22 +997,38 @@ function ProcessManager({ serial }: { serial: string }) {
             <thead className="sticky top-0 bg-anvil-900">
               <tr>
                 <th className="px-3 py-2 text-left font-semibold text-anvil-400">
-                  PID
+                  {t("devices.controls.colPid")}
                 </th>
                 <th className="px-3 py-2 text-left font-semibold text-anvil-400">
-                  User
+                  {t("devices.controls.colUser")}
                 </th>
                 <th
-                  className="cursor-pointer px-3 py-2 text-right font-semibold text-anvil-400"
-                  onClick={() => setSortBy("rss")}
+                  className="px-3 py-2 text-right font-semibold text-anvil-400"
+                  aria-sort={sortBy === "rss" ? "descending" : "none"}
                 >
-                  RSS {sortBy === "rss" ? "(sorted)" : ""}
+                  <button
+                    type="button"
+                    onClick={() => setSortBy("rss")}
+                    className="ml-auto flex items-center gap-1 hover:text-anvil-200"
+                  >
+                    {t("devices.controls.colRss")}
+                    {sortBy === "rss" && <span aria-hidden="true">&darr;</span>}
+                  </button>
                 </th>
                 <th
-                  className="cursor-pointer px-3 py-2 text-left font-semibold text-anvil-400"
-                  onClick={() => setSortBy("name")}
+                  className="px-3 py-2 text-left font-semibold text-anvil-400"
+                  aria-sort={sortBy === "name" ? "ascending" : "none"}
                 >
-                  Name {sortBy === "name" ? "(sorted)" : ""}
+                  <button
+                    type="button"
+                    onClick={() => setSortBy("name")}
+                    className="flex items-center gap-1 hover:text-anvil-200"
+                  >
+                    {t("devices.controls.colName")}
+                    {sortBy === "name" && (
+                      <span aria-hidden="true">&uarr;</span>
+                    )}
+                  </button>
                 </th>
               </tr>
             </thead>
@@ -998,7 +1049,7 @@ function ProcessManager({ serial }: { serial: string }) {
                     <span>{p.name}</span>
                     {p.parse_error && (
                       <Badge tone="warning" className="ml-2">
-                        Parse issue
+                        {t("devices.controls.parseIssue")}
                       </Badge>
                     )}
                   </td>
@@ -1008,7 +1059,9 @@ function ProcessManager({ serial }: { serial: string }) {
           </table>
           {filtered.length > 100 && (
             <p className="px-3 py-2 text-xs text-anvil-500">
-              Showing 100 of {filtered.length} processes
+              {t("devices.controls.showingProcesses", {
+                count: filtered.length,
+              })}
             </p>
           )}
         </div>
@@ -1032,6 +1085,7 @@ function formatBytes(bytes: number | null): string {
 }
 
 function FileManager({ serial }: { serial: string }) {
+  const { t } = useTranslation();
   const [listing, setListing] = useState<RemoteListing | null>(null);
   const [currentPath, setCurrentPath] = useState("/sdcard");
   const [loading, setLoading] = useState(false);
@@ -1068,39 +1122,54 @@ function FileManager({ serial }: { serial: string }) {
         // Destination is chosen through the native save dialog so the
         // renderer never dictates an arbitrary host path.
         const localPath = await save({
-          title: `Save ${entry.name} as`,
+          title: t("devices.controls.savePrompt", { name: entry.name }),
           defaultPath: entry.name,
         });
         if (!localPath) {
           setPullMsg(null);
           return;
         }
-        setPullMsg(`Pulling ${entry.name}...`);
+        setPullMsg(t("devices.controls.pulling", { name: entry.name }));
         const remoteFull =
           currentPath === "/"
             ? `/${entry.name}`
             : `${currentPath}/${entry.name}`;
         await callPullFile(serial, remoteFull, localPath);
-        setPullMsg(`Saved ${entry.name} to ${localPath}`);
+        setPullMsg(
+          t("devices.controls.savedName", {
+            name: entry.name,
+            path: localPath,
+          }),
+        );
       } catch (e) {
-        setPullMsg(`Failed: ${e instanceof Error ? e.message : String(e)}`);
+        setPullMsg(
+          t("devices.controls.failed", {
+            message: e instanceof Error ? e.message : String(e),
+          }),
+        );
       }
     },
-    [serial, currentPath],
+    [serial, currentPath, t],
   );
 
   return (
     <Card className="overflow-hidden p-0">
       <div className="flex flex-col gap-3 border-b border-white/10 p-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h3 className="text-sm font-semibold text-anvil-50">File manager</h3>
+          <h3 className="text-sm font-semibold text-anvil-50">
+            {t("devices.controls.fileManager")}
+          </h3>
           <p className="mt-1 text-xs text-anvil-400">
-            Browse, pull, and inspect files on the device.
+            {t("devices.controls.fileManagerBody")}
           </p>
         </div>
         <div className="flex items-center gap-2">
           {listing?.free_space_kb != null && (
-            <Badge tone="neutral">{formatKb(listing.free_space_kb)} free</Badge>
+            <Badge tone="neutral">
+              {t("devices.controls.freeSpace", {
+                size: formatKb(listing.free_space_kb),
+              })}
+            </Badge>
           )}
           <Button
             type="button"
@@ -1109,22 +1178,29 @@ function FileManager({ serial }: { serial: string }) {
             onClick={() => void browse(currentPath)}
             disabled={loading}
           >
-            {loading ? "Loading..." : listing ? "Refresh" : "Browse"}
+            {loading
+              ? t("devices.controls.loading")
+              : listing
+                ? t("devices.controls.refresh")
+                : t("devices.controls.browse")}
           </Button>
         </div>
       </div>
 
       {error && (
         <div className="border-b border-rose-500/20 bg-rose-500/10 px-4 py-3 text-xs text-rose-200">
-          Couldn't list {currentPath}: {error}
+          {t("devices.controls.fileListFailed", {
+            path: currentPath,
+            message: error,
+          })}
         </div>
       )}
 
       {!listing && !loading && !error && (
-        <EmptyState title="No directory loaded">
+        <EmptyState title={t("devices.controls.noDirectory")}>
           <p>
-            Browse <code>/sdcard</code> to inspect device files and pull local
-            copies.
+            {t("devices.controls.noDirectoryBodyPrefix")} <code>/sdcard</code>{" "}
+            {t("devices.controls.noDirectoryBodySuffix")}
           </p>
         </EmptyState>
       )}
@@ -1150,8 +1226,11 @@ function FileManager({ serial }: { serial: string }) {
             style={{ maxHeight: "20rem" }}
           >
             {listing.entries.length === 0 && (
-              <EmptyState title="Empty directory" className="border-t-0">
-                <p>This path has no visible entries.</p>
+              <EmptyState
+                title={t("devices.controls.emptyDirectory")}
+                className="border-t-0"
+              >
+                <p>{t("devices.controls.emptyDirectoryBody")}</p>
               </EmptyState>
             )}
             {listing.entries.map((entry, index) => (
@@ -1187,7 +1266,7 @@ function FileManager({ serial }: { serial: string }) {
                 </span>
                 {entry.parse_error && (
                   <Badge tone="warning" className="shrink-0">
-                    Parse issue
+                    {t("devices.controls.parseIssue")}
                   </Badge>
                 )}
                 {!entry.is_dir && (
@@ -1197,7 +1276,7 @@ function FileManager({ serial }: { serial: string }) {
                     variant="ghost"
                     onClick={() => void pullRemote(entry)}
                   >
-                    Pull
+                    {t("devices.controls.pull")}
                   </Button>
                 )}
               </div>
@@ -1243,6 +1322,7 @@ function FileGlyph({ directory }: { directory: boolean }) {
 }
 
 function NetworkInspector({ serial }: { serial: string }) {
+  const { t } = useTranslation();
   const [connections, setConnections] = useState<NetworkConnection[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -1276,10 +1356,10 @@ function NetworkInspector({ serial }: { serial: string }) {
       <div className="flex flex-col gap-3 border-b border-white/10 p-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h3 className="text-sm font-semibold text-anvil-50">
-            Network connections
+            {t("devices.controls.networkConnections")}
           </h3>
           <p className="mt-1 text-xs text-anvil-400">
-            Active TCP/UDP connections via <code>ss -tunp</code>.
+            {t("devices.controls.networkBody")} <code>ss -tunp</code>.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -1287,8 +1367,8 @@ function NetworkInspector({ serial }: { serial: string }) {
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Filter"
-            aria-label="Filter network connections"
+            placeholder={t("devices.controls.filter")}
+            aria-label={t("devices.controls.filterConnections")}
             className="h-8 w-40 px-2 font-mono text-xs"
           />
           <Button
@@ -1299,29 +1379,26 @@ function NetworkInspector({ serial }: { serial: string }) {
             disabled={loading}
           >
             {loading
-              ? "Loading..."
+              ? t("devices.controls.loading")
               : connections.length > 0
-                ? "Refresh"
-                : "Load"}
+                ? t("devices.controls.refresh")
+                : t("devices.controls.load")}
           </Button>
         </div>
       </div>
       {error && (
         <div className="border-b border-rose-500/20 bg-rose-500/10 px-4 py-3 text-xs text-rose-200">
-          Couldn't read connections: {error}. Some devices restrict{" "}
-          <code>ss</code>/<code>netstat</code> without root.
+          {t("devices.controls.connectionsReadFailed", { message: error })}
         </div>
       )}
       {connections.length === 0 && !loading && !error && (
-        <EmptyState title="No network snapshot loaded">
-          <p>Load active sockets to review endpoints and owning processes.</p>
+        <EmptyState title={t("devices.controls.noConnections")}>
+          <p>{t("devices.controls.noConnectionsBody")}</p>
         </EmptyState>
       )}
       {connections.length > 0 && filtered.length === 0 && (
-        <EmptyState title="No matching connections">
-          <p>
-            Clear the filter or search for another address, process, or state.
-          </p>
+        <EmptyState title={t("devices.controls.noMatchingConnections")}>
+          <p>{t("devices.controls.noMatchingConnectionsBody")}</p>
         </EmptyState>
       )}
       {connections.length > 0 && filtered.length > 0 && (
@@ -1330,19 +1407,19 @@ function NetworkInspector({ serial }: { serial: string }) {
             <thead className="sticky top-0 bg-anvil-900">
               <tr>
                 <th className="px-3 py-2 text-left font-semibold text-anvil-400">
-                  Proto
+                  {t("devices.controls.colProto")}
                 </th>
                 <th className="px-3 py-2 text-left font-semibold text-anvil-400">
-                  State
+                  {t("devices.controls.colState")}
                 </th>
                 <th className="px-3 py-2 text-left font-semibold text-anvil-400">
-                  Local
+                  {t("devices.controls.colLocal")}
                 </th>
                 <th className="px-3 py-2 text-left font-semibold text-anvil-400">
-                  Remote
+                  {t("devices.controls.colRemote")}
                 </th>
                 <th className="px-3 py-2 text-left font-semibold text-anvil-400">
-                  Process
+                  {t("devices.controls.colProcess")}
                 </th>
               </tr>
             </thead>
@@ -1360,10 +1437,10 @@ function NetworkInspector({ serial }: { serial: string }) {
                     {c.remote_addr}
                   </td>
                   <td className="px-3 py-1.5 font-mono text-anvil-400">
-                    {c.process ?? "Not reported"}
+                    {c.process ?? t("devices.controls.notReported")}
                     {c.parse_error && (
                       <Badge tone="warning" className="ml-2">
-                        Parse issue
+                        {t("devices.controls.parseIssue")}
                       </Badge>
                     )}
                   </td>
@@ -1373,7 +1450,9 @@ function NetworkInspector({ serial }: { serial: string }) {
           </table>
           {filtered.length > 100 && (
             <p className="px-3 py-2 text-xs text-anvil-500">
-              Showing 100 of {filtered.length} connections
+              {t("devices.controls.showingConnections", {
+                count: filtered.length,
+              })}
             </p>
           )}
         </div>
