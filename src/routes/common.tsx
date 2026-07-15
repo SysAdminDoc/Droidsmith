@@ -6,6 +6,7 @@ import { cn } from "../lib/cn";
 import {
   callRevealInFolder,
   requiresTransportOverride,
+  type Device,
   type DeviceTarget,
   type DeviceTransportKind,
 } from "../lib/tauri";
@@ -209,6 +210,52 @@ export function RevealInFolderButton({
         </span>
       )}
     </span>
+  );
+}
+
+/// Shared authorized-device selector shown by every route that targets a single
+/// device (Apps, Debloat). Selection prefers the stable transport id and falls
+/// back to the serial so a reconnected device keeps its selection.
+export function DevicePicker({
+  devices,
+  selected,
+  selectedSerial,
+  onSelect,
+}: {
+  devices: Device[];
+  selected: number | null;
+  selectedSerial: string | null;
+  onSelect: (device: Device) => void;
+}) {
+  const { t } = useTranslation();
+
+  return (
+    <Card className="p-4">
+      <h3 className="text-sm font-semibold text-anvil-50">
+        {t("common.selectDevice")}
+      </h3>
+      <div className="mt-3 flex flex-wrap gap-2">
+        {devices.map((d) => (
+          <Button
+            key={`${d.transport_id ?? d.serial}:${d.connection_generation}`}
+            type="button"
+            variant={
+              (
+                d.transport_id != null
+                  ? d.transport_id === selected
+                  : d.serial === selectedSerial
+              )
+                ? "primary"
+                : "secondary"
+            }
+            size="sm"
+            onClick={() => onSelect(d)}
+          >
+            {d.model ?? d.serial}
+          </Button>
+        ))}
+      </div>
+    </Card>
   );
 }
 

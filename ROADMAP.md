@@ -19,10 +19,6 @@ instead.
   Why: Russian has 3 plural forms (one, few, many). Keys like `deviceCount` only define `_one` and `_other`, producing grammatically incorrect output for counts 2-4.
   Where: `src/locales/ru.json`
 
-- [ ] P3 — **IMP-37** Extract duplicated `DevicePicker` component
-  Why: `Apps.tsx` and `Debloat.tsx` contain identical inline device-picker components.
-  Where: `src/routes/Apps.tsx`, `src/routes/Debloat.tsx`, `src/routes/common.tsx`
-
 ## Research-Driven Additions
 
 ### P0

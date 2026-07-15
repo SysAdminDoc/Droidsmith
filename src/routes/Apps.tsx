@@ -31,7 +31,6 @@ import {
   type BatchActionItemResult,
   type BatchActionPlan,
   type BatchActionResult,
-  type Device,
   type DeviceTarget,
   type JournalEntry,
   type InstallOptions,
@@ -62,6 +61,7 @@ import {
   Badge,
   Button,
   Card,
+  DevicePicker,
   EmptyState,
   FieldInput,
   PaneHeader,
@@ -1683,49 +1683,6 @@ function installErrorMessage(error: unknown): string {
   )
     return error.message;
   return String(error);
-}
-
-function DevicePicker({
-  devices,
-  selected,
-  selectedSerial,
-  onSelect,
-}: {
-  devices: Device[];
-  selected: number | null;
-  selectedSerial: string | null;
-  onSelect: (device: Device) => void;
-}) {
-  const { t } = useTranslation();
-
-  return (
-    <Card className="p-4">
-      <h3 className="text-sm font-semibold text-anvil-50">
-        {t("common.selectDevice")}
-      </h3>
-      <div className="mt-3 flex flex-wrap gap-2">
-        {devices.map((d) => (
-          <Button
-            key={`${d.transport_id ?? d.serial}:${d.connection_generation}`}
-            type="button"
-            variant={
-              (
-                d.transport_id != null
-                  ? d.transport_id === selected
-                  : d.serial === selectedSerial
-              )
-                ? "primary"
-                : "secondary"
-            }
-            size="sm"
-            onClick={() => onSelect(d)}
-          >
-            {d.model ?? d.serial}
-          </Button>
-        ))}
-      </div>
-    </Card>
-  );
 }
 
 function FilterChips({
