@@ -31,13 +31,6 @@ instead.
 
 ### P2
 
-- [ ] P2 — Annotate Debloat packages with removal risk and description search
-  Why: Blanket debloat lists brick lockscreen/OEM features; users need per-item "what breaks if removed" risk badges and the ability to search by description, not codename.
-  Evidence: UAD-ng issue #640 and description-search feature; existing `packs/` + `quirks/` schemas
-  Touches: `src-tauri/src/packs/mod.rs`, `quirks/*.yaml`, `packs/*.yaml`, `src/lib/tauri.ts`, `src/routes/Debloat.tsx`, pack-lint tests
-  Acceptance: Pack/quirk schema (still v1-compatible or explicitly migrated) carries optional risk level + human description; Debloat renders risk badges and filters by description text; a high-risk item requires acknowledgement before it enters the queue.
-  Complexity: M
-
 ### P3
 
 - [ ] P3 — Replace misleading documentation screenshots with deterministic native-state captures

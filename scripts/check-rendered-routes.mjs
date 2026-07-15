@@ -540,9 +540,20 @@ async function runDesktopFlow(browser) {
     path: path.join(screenshotDir, "desktop-debloat-final-review.png"),
     fullPage: false,
   });
-  await debloatReview
-    .getByRole("button", { name: "Disable 3 packages" })
-    .click();
+  const debloatDisable = debloatReview.getByRole("button", {
+    name: "Disable 3 packages",
+  });
+  await debloatDisable.waitFor();
+  if (await debloatDisable.isDisabled()) {
+    await debloatReview
+      .getByRole("checkbox", { name: /I understand these unsafe-tier/ })
+      .check();
+  } else {
+    throw new Error(
+      "Unsafe-tier debloat selection did not gate the confirm button",
+    );
+  }
+  await debloatDisable.click();
   await page.getByText(/QA Debloat Pack - debloat complete/).waitFor();
   await page.getByText("Failed", { exact: true }).waitFor();
   await page.getByRole("button", { name: /Retry 1 failed/ }).waitFor();

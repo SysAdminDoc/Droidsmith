@@ -44,6 +44,7 @@ import {
   Badge,
   Button,
   Card,
+  FieldInput,
   PaneHeader,
   SkeletonLine,
   StatePanel,
@@ -737,6 +738,9 @@ function DebloatApplyReview({
   const { t } = useTranslation();
   const trapRef = useFocusTrap<HTMLDivElement>();
   const summary = summarizePackSelection(pack, selected);
+  const [unsafeAcknowledged, setUnsafeAcknowledged] = useState(false);
+  const hasUnsafe = summary.unsafeIds.length > 0;
+  const confirmBlocked = hasUnsafe && !unsafeAcknowledged;
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -807,6 +811,17 @@ function DebloatApplyReview({
                 </li>
               ))}
             </ul>
+            <label className="mt-3 flex items-start gap-2 text-xs leading-5 text-red-100">
+              <input
+                type="checkbox"
+                checked={unsafeAcknowledged}
+                onChange={(event) =>
+                  setUnsafeAcknowledged(event.target.checked)
+                }
+                className="mt-0.5 h-4 w-4 shrink-0 rounded border-red-300/40 bg-red-300/10 text-red-400 focus:ring-2 focus:ring-red-300/40"
+              />
+              <span>{t("debloat.unsafeAcknowledge")}</span>
+            </label>
           </div>
         ) : (
           <p className="mt-4 rounded-md border border-circuit-300/20 bg-circuit-300/[0.06] p-3 text-sm text-circuit-100">
@@ -822,8 +837,9 @@ function DebloatApplyReview({
           </Button>
           <Button
             type="button"
-            variant={summary.unsafeIds.length > 0 ? "danger" : "primary"}
+            variant={hasUnsafe ? "danger" : "primary"}
             onClick={onConfirm}
+            disabled={confirmBlocked}
           >
             {t("debloat.confirmDisable", { count: summary.total })}
           </Button>
@@ -1040,7 +1056,17 @@ function PackPreview({
   onBack: () => void;
 }) {
   const { t } = useTranslation();
-  const tiers = groupByTier(pack.packages);
+  const [entrySearch, setEntrySearch] = useState("");
+  const query = entrySearch.trim().toLowerCase();
+  const visiblePackages = query
+    ? pack.packages.filter((entry) =>
+        [entry.id, entry.description, ...entry.labels]
+          .join(" ")
+          .toLowerCase()
+          .includes(query),
+      )
+    : pack.packages;
+  const tiers = groupByTier(visiblePackages);
   const assessments = new Map(
     assessment.entries.map((entry) => [entry.id, entry]),
   );
@@ -1079,6 +1105,28 @@ function PackPreview({
       {planError && (
         <StatePanel title={t("debloat.planFailed")} tone="danger">
           <p>{planError}</p>
+        </StatePanel>
+      )}
+
+      <div className="flex flex-wrap items-center gap-3">
+        <FieldInput
+          type="search"
+          value={entrySearch}
+          onChange={(event) => setEntrySearch(event.target.value)}
+          placeholder={t("debloat.searchPlaceholder")}
+          aria-label={t("debloat.searchLabel")}
+          className="w-72 max-w-full font-mono"
+        />
+        {query && (
+          <span className="text-xs text-anvil-400">
+            {t("debloat.searchMatches", { count: visiblePackages.length })}
+          </span>
+        )}
+      </div>
+
+      {query && visiblePackages.length === 0 && (
+        <StatePanel title={t("debloat.noMatches")} tone="info">
+          <p>{t("debloat.noMatchesBody")}</p>
         </StatePanel>
       )}
 
