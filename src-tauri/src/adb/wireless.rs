@@ -6,6 +6,7 @@
 //! renderer wizard.
 
 use std::collections::HashSet;
+use std::net::IpAddr;
 use std::sync::{Mutex, OnceLock};
 
 use serde::{Deserialize, Serialize};
@@ -59,6 +60,72 @@ pub struct WirelessCommandResult {
     pub transport_kind: Option<DeviceTransportKind>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum WirelessFailureHintCode {
+    VpnInterferenceLikely,
+    MdnsInterferenceLikely,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum WirelessEndpointKind {
+    IpAddress,
+    LocalName,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct WirelessFailureDiagnostics {
+    pub platform_tools_version: Option<String>,
+    pub mdns_enabled: Option<bool>,
+    pub mdns_backend: Option<String>,
+    pub mdns_check_succeeded: bool,
+    pub active_vpn_interfaces: u32,
+    pub endpoint_kind: WirelessEndpointKind,
+    pub adb_error_kind: &'static str,
+}
+
+#[derive(Debug, Serialize, thiserror::Error)]
+#[error("{message}")]
+pub struct WirelessCommandError {
+    pub code: &'static str,
+    pub message: String,
+    pub hint_code: Option<WirelessFailureHintCode>,
+    pub diagnostics: WirelessFailureDiagnostics,
+}
+
+impl WirelessCommandError {
+    pub fn unavailable(
+        error: TransportError,
+        host: &str,
+        platform_tools_version: Option<String>,
+    ) -> Self {
+        let diagnostics = WirelessFailureDiagnostics {
+            platform_tools_version,
+            mdns_enabled: None,
+            mdns_backend: None,
+            mdns_check_succeeded: false,
+            active_vpn_interfaces: 0,
+            endpoint_kind: endpoint_kind(host),
+            adb_error_kind: transport_error_kind(&error),
+        };
+        Self {
+            code: "wireless_adb_failed",
+            message: bounded_error_message(&error),
+            hint_code: None,
+            diagnostics,
+        }
+    }
+
+    fn validation(
+        error: TransportError,
+        host: &str,
+        platform_tools_version: Option<String>,
+    ) -> Self {
+        Self::unavailable(error, host, platform_tools_version)
+    }
+}
+
 fn tls_connect_endpoints() -> &'static Mutex<HashSet<String>> {
     static ENDPOINTS: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
     ENDPOINTS.get_or_init(|| Mutex::new(HashSet::new()))
@@ -88,10 +155,19 @@ fn remember_tls_connect_services(services: &[WirelessAdbService]) {
 pub fn pair(
     transport: &ShellTransport,
     req: &WirelessPairRequest,
-) -> Result<WirelessCommandResult, TransportError> {
-    validate_pairing_code(&req.pairing_code)?;
-    let endpoint = validated_endpoint(&req.host, req.port)?;
-    let stdout = transport.adb(&["pair", &endpoint, &req.pairing_code])?;
+    platform_tools_version: Option<String>,
+) -> Result<WirelessCommandResult, WirelessCommandError> {
+    validate_pairing_code(&req.pairing_code).map_err(|error| {
+        WirelessCommandError::validation(error, &req.host, platform_tools_version.clone())
+    })?;
+    let endpoint = validated_endpoint(&req.host, req.port).map_err(|error| {
+        WirelessCommandError::validation(error, &req.host, platform_tools_version.clone())
+    })?;
+    let stdout = transport
+        .adb(&["pair", &endpoint, &req.pairing_code])
+        .map_err(|error| {
+            diagnose_wireless_failure(transport, &req.host, platform_tools_version, error)
+        })?;
     Ok(WirelessCommandResult {
         endpoint,
         stdout,
@@ -102,9 +178,14 @@ pub fn pair(
 pub fn connect(
     transport: &ShellTransport,
     req: &WirelessConnectRequest,
-) -> Result<WirelessCommandResult, TransportError> {
-    let endpoint = validated_endpoint(&req.host, req.port)?;
-    let stdout = transport.adb(&["connect", &endpoint])?;
+    platform_tools_version: Option<String>,
+) -> Result<WirelessCommandResult, WirelessCommandError> {
+    let endpoint = validated_endpoint(&req.host, req.port).map_err(|error| {
+        WirelessCommandError::validation(error, &req.host, platform_tools_version.clone())
+    })?;
+    let stdout = transport.adb(&["connect", &endpoint]).map_err(|error| {
+        diagnose_wireless_failure(transport, &req.host, platform_tools_version, error)
+    })?;
     let transport_kind = classify_connect_transport(&endpoint, req.legacy_tcp);
     if connect_succeeded(&stdout) {
         remember_wireless_transport(&endpoint, transport_kind);
@@ -114,6 +195,92 @@ pub fn connect(
         stdout,
         transport_kind: Some(transport_kind),
     })
+}
+
+fn diagnose_wireless_failure(
+    transport: &ShellTransport,
+    host: &str,
+    platform_tools_version: Option<String>,
+    error: TransportError,
+) -> WirelessCommandError {
+    let message = bounded_error_message(&error);
+    let health = crate::adb::health::probe(transport, platform_tools_version.clone());
+    let active_vpn_interfaces = crate::host_diagnostics::active_vpn_interface_count();
+    let endpoint_kind = endpoint_kind(host);
+    let mdns_unhealthy = health.mdns_enabled == Some(false) || health.mdns_check.is_none();
+    let hint_code = select_failure_hint(
+        active_vpn_interfaces,
+        endpoint_kind,
+        mdns_unhealthy,
+        &message,
+    );
+    WirelessCommandError {
+        code: "wireless_adb_failed",
+        message,
+        hint_code,
+        diagnostics: WirelessFailureDiagnostics {
+            platform_tools_version,
+            mdns_enabled: health.mdns_enabled,
+            mdns_backend: health.mdns_backend,
+            mdns_check_succeeded: health.mdns_check.is_some(),
+            active_vpn_interfaces,
+            endpoint_kind,
+            adb_error_kind: transport_error_kind(&error),
+        },
+    }
+}
+
+fn select_failure_hint(
+    active_vpn_interfaces: u32,
+    endpoint_kind: WirelessEndpointKind,
+    mdns_unhealthy: bool,
+    error_message: &str,
+) -> Option<WirelessFailureHintCode> {
+    if active_vpn_interfaces > 0 {
+        return Some(WirelessFailureHintCode::VpnInterferenceLikely);
+    }
+    let lower = error_message.to_ascii_lowercase();
+    let name_resolution_failed = [
+        "cannot resolve",
+        "failed to resolve",
+        "unknown host",
+        "no such host",
+        "name or service not known",
+    ]
+    .iter()
+    .any(|marker| lower.contains(marker));
+    if endpoint_kind == WirelessEndpointKind::LocalName
+        && (mdns_unhealthy || name_resolution_failed)
+    {
+        return Some(WirelessFailureHintCode::MdnsInterferenceLikely);
+    }
+    None
+}
+
+fn endpoint_kind(host: &str) -> WirelessEndpointKind {
+    let bare = host
+        .trim()
+        .trim_matches(|character| character == '[' || character == ']');
+    if bare.parse::<IpAddr>().is_ok() {
+        WirelessEndpointKind::IpAddress
+    } else {
+        WirelessEndpointKind::LocalName
+    }
+}
+
+fn transport_error_kind(error: &TransportError) -> &'static str {
+    match error {
+        TransportError::AdbNotFound => "adb_not_found",
+        TransportError::Spawn(_) => "spawn_failed",
+        TransportError::Exit { .. } => "adb_exit",
+        TransportError::Signaled { .. } => "adb_signaled",
+        TransportError::Timeout(_) => "adb_timeout",
+        TransportError::Parse(_) => "parse_error",
+    }
+}
+
+fn bounded_error_message(error: &TransportError) -> String {
+    error.to_string().chars().take(4_096).collect()
 }
 
 fn classify_connect_transport(endpoint: &str, legacy_tcp: bool) -> DeviceTransportKind {
@@ -325,5 +492,36 @@ adb-bad _adb-tls-connect._tcp no-port
         assert!(!connect_succeeded("failed to connect"));
 
         remember_tls_connect_services(&[]);
+    }
+
+    #[test]
+    fn failure_hints_require_observed_vpn_or_mdns_evidence() {
+        assert_eq!(
+            select_failure_hint(
+                1,
+                WirelessEndpointKind::IpAddress,
+                false,
+                "failed to connect"
+            ),
+            Some(WirelessFailureHintCode::VpnInterferenceLikely)
+        );
+        assert_eq!(
+            select_failure_hint(
+                0,
+                WirelessEndpointKind::LocalName,
+                true,
+                "failed to connect"
+            ),
+            Some(WirelessFailureHintCode::MdnsInterferenceLikely)
+        );
+        assert_eq!(
+            select_failure_hint(
+                0,
+                WirelessEndpointKind::IpAddress,
+                true,
+                "failed to connect"
+            ),
+            None
+        );
     }
 }

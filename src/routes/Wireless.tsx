@@ -9,6 +9,7 @@ import {
   inTauri,
   type ListWirelessServicesResult,
   type WirelessAdbService,
+  WirelessCommandFailure,
   type WirelessCommandResult,
 } from "../lib/tauri";
 
@@ -35,7 +36,7 @@ type ActionState =
   | { kind: "idle" }
   | { kind: "busy"; label: string }
   | { kind: "success"; label: string; result: WirelessCommandResult }
-  | { kind: "error"; label: string; message: string };
+  | { kind: "error"; label: string; failure: WirelessCommandFailure };
 
 export default function WirelessRoute() {
   const { t } = useTranslation();
@@ -356,7 +357,12 @@ async function runWirelessAction(
     setActionState({
       kind: "error",
       label,
-      message: e instanceof Error ? e.message : String(e),
+      failure:
+        e instanceof WirelessCommandFailure
+          ? e
+          : new WirelessCommandFailure(
+              e instanceof Error ? e.message : String(e),
+            ),
     });
   }
 }
@@ -578,12 +584,47 @@ function ActionStatus({ state }: { state: ActionState }) {
   }
 
   if (state.kind === "error") {
+    const diagnostics = state.failure.diagnostics
+      ? `${JSON.stringify(
+          {
+            code: state.failure.code,
+            hint_code: state.failure.hintCode,
+            ...state.failure.diagnostics,
+          },
+          null,
+          2,
+        )}\n`
+      : null;
     return (
       <StatePanel
         title={t("wireless.actionFailed", { action: state.label })}
         tone="danger"
       >
-        <p>{state.message}</p>
+        <div className="grid gap-4">
+          <p>{state.failure.message}</p>
+          <WirelessFailureHint hintCode={state.failure.hintCode} />
+          {diagnostics && (
+            <div>
+              <label
+                htmlFor="wireless-failure-diagnostics"
+                className="text-sm font-semibold text-anvil-50"
+              >
+                {t("wireless.failureDiagnostics")}
+              </label>
+              <p className="mt-1 text-xs text-anvil-400">
+                {t("wireless.failureDiagnosticsPrivacy")}
+              </p>
+              <textarea
+                id="wireless-failure-diagnostics"
+                rows={8}
+                readOnly
+                spellCheck={false}
+                value={diagnostics}
+                className="mt-2 w-full resize-y rounded-md border border-white/10 bg-anvil-950/70 p-3 font-mono text-xs text-anvil-100 outline-none focus:border-forge-400/60 focus:ring-2 focus:ring-forge-400/20"
+              />
+            </div>
+          )}
+        </div>
       </StatePanel>
     );
   }
@@ -611,6 +652,35 @@ function ActionStatus({ state }: { state: ActionState }) {
         </dd>
       </dl>
     </StatePanel>
+  );
+}
+
+function WirelessFailureHint({
+  hintCode,
+}: {
+  hintCode: WirelessCommandFailure["hintCode"];
+}) {
+  const { t } = useTranslation();
+
+  if (!hintCode) {
+    return null;
+  }
+
+  const prefix =
+    hintCode === "vpn_interference_likely" ? "vpnHint" : "mdnsHint";
+  return (
+    <div className="rounded-md border border-amber-300/25 bg-amber-300/[0.07] p-4">
+      <h4 className="text-sm font-semibold text-amber-100">
+        {t(`wireless.${prefix}Title`)}
+      </h4>
+      <p className="mt-1 text-sm text-anvil-200">
+        {t(`wireless.${prefix}Body`)}
+      </p>
+      <ol className="mt-3 list-decimal space-y-1 pl-5 text-sm text-anvil-200">
+        <li>{t(`wireless.${prefix}Step1`)}</li>
+        <li>{t(`wireless.${prefix}Step2`)}</li>
+      </ol>
+    </div>
   );
 }
 

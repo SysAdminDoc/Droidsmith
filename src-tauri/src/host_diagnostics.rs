@@ -618,6 +618,95 @@ fn directory_has_android_rule(directory: &Path) -> bool {
         })
 }
 
+/// Return only a count of likely active tunnel/VPN interfaces. Adapter names
+/// and descriptions are intentionally discarded so wireless failure
+/// diagnostics remain copyable without exposing host network identifiers.
+#[cfg(target_os = "windows")]
+pub(crate) fn active_vpn_interface_count() -> u32 {
+    run_probe(
+        "powershell.exe",
+        &[
+            "-NoProfile",
+            "-NonInteractive",
+            "-Command",
+            "Get-NetAdapter -IncludeHidden -ErrorAction SilentlyContinue | Where-Object Status -eq 'Up' | Select-Object -ExpandProperty Name",
+        ],
+        Duration::from_secs(2),
+    )
+    .map_or(0, |output| count_vpn_interfaces(&output))
+}
+
+#[cfg(target_os = "linux")]
+pub(crate) fn active_vpn_interface_count() -> u32 {
+    fs::read_dir("/sys/class/net")
+        .ok()
+        .into_iter()
+        .flatten()
+        .filter_map(Result::ok)
+        .filter(|entry| {
+            let name = entry.file_name().to_string_lossy().into_owned();
+            let state = fs::read_to_string(entry.path().join("operstate")).unwrap_or_default();
+            matches!(state.trim(), "up" | "unknown") && looks_like_vpn_interface(&name)
+        })
+        .count()
+        .try_into()
+        .unwrap_or(u32::MAX)
+}
+
+#[cfg(target_os = "macos")]
+pub(crate) fn active_vpn_interface_count() -> u32 {
+    run_probe("ifconfig", &["-l"], Duration::from_secs(2)).map_or(0, |output| {
+        output
+            .split_whitespace()
+            .filter(|value| looks_like_vpn_interface(value))
+            .count()
+            .try_into()
+            .unwrap_or(u32::MAX)
+    })
+}
+
+#[cfg(not(any(target_os = "windows", target_os = "linux", target_os = "macos")))]
+pub(crate) const fn active_vpn_interface_count() -> u32 {
+    0
+}
+
+fn count_vpn_interfaces(output: &str) -> u32 {
+    output
+        .lines()
+        .filter(|line| line.split_whitespace().any(looks_like_vpn_interface))
+        .count()
+        .try_into()
+        .unwrap_or(u32::MAX)
+}
+
+fn looks_like_vpn_interface(value: &str) -> bool {
+    let lower = value.to_ascii_lowercase();
+    let compact: String = lower
+        .chars()
+        .filter(|character| character.is_ascii_alphanumeric())
+        .collect();
+    lower.starts_with("utun")
+        || lower.starts_with("tun")
+        || lower.starts_with("tap")
+        || lower.starts_with("wg")
+        || lower.starts_with("ppp")
+        || lower.starts_with("ipsec")
+        || [
+            "vpn",
+            "wireguard",
+            "wintun",
+            "tailscale",
+            "zerotier",
+            "nordlynx",
+            "anyconnect",
+            "globalprotect",
+            "fortinet",
+            "hamachi",
+        ]
+        .iter()
+        .any(|marker| compact.contains(marker))
+}
+
 fn run_probe(program: &str, args: &[&str], timeout: Duration) -> Option<String> {
     let mut command = Command::new(program);
     command
@@ -758,5 +847,13 @@ mod tests {
         );
         assert_eq!(evidence.android_devices, 2);
         assert_eq!(evidence.adb_interfaces, 1);
+    }
+
+    #[test]
+    fn vpn_interface_detection_counts_tunnels_without_matching_ethernet() {
+        let output = "Ethernet\nWi-Fi\nWireGuard Tunnel\nutun4\nTailscale\n";
+        assert_eq!(count_vpn_interfaces(output), 3);
+        assert!(!looks_like_vpn_interface("Ethernet"));
+        assert!(!looks_like_vpn_interface("Bluetooth Network Connection"));
     }
 }

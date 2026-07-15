@@ -335,6 +335,39 @@ export type WirelessCommandResult = {
   transport_kind: DeviceTransportKind | null;
 };
 
+export type WirelessFailureHintCode =
+  | "vpn_interference_likely"
+  | "mdns_interference_likely";
+
+export type WirelessFailureDiagnostics = {
+  platform_tools_version: string | null;
+  mdns_enabled: boolean | null;
+  mdns_backend: string | null;
+  mdns_check_succeeded: boolean;
+  active_vpn_interfaces: number;
+  endpoint_kind: "ip_address" | "local_name";
+  adb_error_kind: string;
+};
+
+export class WirelessCommandFailure extends Error {
+  readonly code: string;
+  readonly hintCode: WirelessFailureHintCode | null;
+  readonly diagnostics: WirelessFailureDiagnostics | null;
+
+  constructor(
+    message: string,
+    code = "wireless_adb_failed",
+    hintCode: WirelessFailureHintCode | null = null,
+    diagnostics: WirelessFailureDiagnostics | null = null,
+  ) {
+    super(message);
+    this.name = "WirelessCommandFailure";
+    this.code = code;
+    this.hintCode = hintCode;
+    this.diagnostics = diagnostics;
+  }
+}
+
 export type BatteryInfo = {
   level: number | null;
   status: string | null;
@@ -693,13 +726,87 @@ export async function callListWirelessServices(): Promise<ListWirelessServicesRe
 export async function callPairWireless(
   request: WirelessPairRequest,
 ): Promise<WirelessCommandResult> {
-  return invoke<WirelessCommandResult>("pair_wireless", { request });
+  try {
+    return await invoke<WirelessCommandResult>("pair_wireless", { request });
+  } catch (error) {
+    throw normalizeWirelessFailure(error);
+  }
 }
 
 export async function callConnectWireless(
   request: WirelessConnectRequest,
 ): Promise<WirelessCommandResult> {
-  return invoke<WirelessCommandResult>("connect_wireless", { request });
+  try {
+    return await invoke<WirelessCommandResult>("connect_wireless", {
+      request,
+    });
+  } catch (error) {
+    throw normalizeWirelessFailure(error);
+  }
+}
+
+export function normalizeWirelessFailure(
+  error: unknown,
+): WirelessCommandFailure {
+  if (error instanceof WirelessCommandFailure) {
+    return error;
+  }
+
+  let payload: unknown = error;
+  if (error instanceof Error) {
+    payload = errorPayload(error.message) ?? error;
+  } else if (typeof error === "string") {
+    payload = errorPayload(error) ?? error;
+  }
+
+  if (isRecord(payload)) {
+    const message =
+      typeof payload.message === "string" ? payload.message : String(error);
+    const code =
+      typeof payload.code === "string" ? payload.code : "wireless_adb_failed";
+    const hintCode =
+      payload.hint_code === "vpn_interference_likely" ||
+      payload.hint_code === "mdns_interference_likely"
+        ? payload.hint_code
+        : null;
+    const diagnostics = isWirelessFailureDiagnostics(payload.diagnostics)
+      ? payload.diagnostics
+      : null;
+    return new WirelessCommandFailure(message, code, hintCode, diagnostics);
+  }
+
+  return new WirelessCommandFailure(
+    error instanceof Error ? error.message : String(error),
+  );
+}
+
+function errorPayload(message: string): unknown | null {
+  try {
+    return JSON.parse(message) as unknown;
+  } catch {
+    return null;
+  }
+}
+
+function isWirelessFailureDiagnostics(
+  value: unknown,
+): value is WirelessFailureDiagnostics {
+  return (
+    isRecord(value) &&
+    (typeof value.platform_tools_version === "string" ||
+      value.platform_tools_version === null) &&
+    (typeof value.mdns_enabled === "boolean" || value.mdns_enabled === null) &&
+    (typeof value.mdns_backend === "string" || value.mdns_backend === null) &&
+    typeof value.mdns_check_succeeded === "boolean" &&
+    typeof value.active_vpn_interfaces === "number" &&
+    (value.endpoint_kind === "ip_address" ||
+      value.endpoint_kind === "local_name") &&
+    typeof value.adb_error_kind === "string"
+  );
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
 }
 
 export async function callGetDeviceInfo(

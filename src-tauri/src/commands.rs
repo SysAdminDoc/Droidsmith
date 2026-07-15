@@ -653,27 +653,33 @@ pub fn list_wireless_services() -> Result<ListWirelessServicesResult, adb::Trans
 #[tauri::command]
 pub fn pair_wireless(
     request: adb::WirelessPairRequest,
-) -> Result<adb::WirelessCommandResult, CommandError> {
+) -> Result<adb::WirelessCommandResult, adb::WirelessCommandError> {
     let resolution = adb::locate_adb();
-    let path = resolution
-        .path
-        .as_ref()
-        .ok_or(adb::TransportError::AdbNotFound)?;
+    let path = resolution.path.as_ref().ok_or_else(|| {
+        adb::WirelessCommandError::unavailable(
+            adb::TransportError::AdbNotFound,
+            &request.host,
+            resolution.version.clone(),
+        )
+    })?;
     let transport = adb::ShellTransport::new(path);
-    Ok(adb::pair_wireless(&transport, &request)?)
+    adb::pair_wireless(&transport, &request, resolution.version)
 }
 
 #[tauri::command]
 pub fn connect_wireless(
     request: adb::WirelessConnectRequest,
-) -> Result<adb::WirelessCommandResult, CommandError> {
+) -> Result<adb::WirelessCommandResult, adb::WirelessCommandError> {
     let resolution = adb::locate_adb();
-    let path = resolution
-        .path
-        .as_ref()
-        .ok_or(adb::TransportError::AdbNotFound)?;
+    let path = resolution.path.as_ref().ok_or_else(|| {
+        adb::WirelessCommandError::unavailable(
+            adb::TransportError::AdbNotFound,
+            &request.host,
+            resolution.version.clone(),
+        )
+    })?;
     let transport = adb::ShellTransport::new(path);
-    Ok(adb::connect_wireless(&transport, &request)?)
+    adb::connect_wireless(&transport, &request, resolution.version)
 }
 
 #[tauri::command]

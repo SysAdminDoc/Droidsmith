@@ -80,7 +80,7 @@ ADB front end, but it has hard limits that an open project can fix:
 | Free tier | Core only — dark theme, Process Manager, batch ops are sponsor-gated | All features always free |
 | Debloat lists | Static, underperforms Universal Android Debloater per user reports | Versioned YAML packs and vendor quirks; UAD-NG import is blocked on redistribution permission |
 | Screen mirror | Virtual buttons + screenshots | System scrcpy launch/supervision with per-device presets; bundled scrcpy remains planned |
-| Wireless ADB | Manual `adb pair` in console | First-class Android 11+ pairing, exact mDNS TLS provenance, and explicit warnings for legacy/unknown TCP |
+| Wireless ADB | Manual `adb pair` in console | First-class Android 11+ pairing, exact mDNS TLS provenance, explicit legacy/unknown TCP warnings, and privacy-bounded VPN/mDNS failure guidance |
 | Automation | None | YAML profiles + headless CLI for reproducible device actions |
 | Extensibility | None | Versioned local pack, quirk, and profile schemas; plugin API and marketplace are deferred |
 | i18n | EN + RU | i18next-driven, contributor-friendly |

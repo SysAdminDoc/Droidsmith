@@ -371,6 +371,41 @@ async function runDesktopFlow(browser) {
     fullPage: false,
   });
 
+  await page.getByRole("button", { name: /Wireless/ }).click();
+  await page.getByRole("heading", { name: "Wireless", exact: true }).waitFor();
+  const wirelessConnectPanel = page
+    .getByRole("heading", { name: "Paired endpoint", exact: true })
+    .locator("..")
+    .locator("..");
+  await wirelessConnectPanel.getByLabel("Host").fill("pixel.local");
+  await wirelessConnectPanel.getByLabel("Port").fill("38899");
+  await wirelessConnectPanel
+    .getByRole("button", { name: "Connect", exact: true })
+    .click();
+  await page
+    .getByText("An active VPN or tunnel may be blocking the device route", {
+      exact: true,
+    })
+    .waitFor();
+  const wirelessDiagnostics = page.getByLabel(
+    "Copyable wireless failure diagnostics",
+  );
+  await wirelessDiagnostics.waitFor();
+  const wirelessDiagnosticsValue = await wirelessDiagnostics.inputValue();
+  if (
+    !wirelessDiagnosticsValue.includes('"active_vpn_interfaces": 1') ||
+    wirelessDiagnosticsValue.includes("pixel.local")
+  ) {
+    throw new Error(
+      "Wireless diagnostics did not enforce the privacy-bounded evidence contract",
+    );
+  }
+  await assertNoHorizontalOverflow(page, "desktop Wireless failure hint");
+  await page.screenshot({
+    path: path.join(screenshotDir, "desktop-wireless-failure-hint.png"),
+    fullPage: false,
+  });
+
   await page.getByRole("button", { name: /Mirror/ }).click();
   await page.getByRole("heading", { name: "Mirror", exact: true }).waitFor();
   await page.getByRole("checkbox", { name: "Record session" }).check();
@@ -757,6 +792,29 @@ async function installTauriMock(page) {
             adb_resolved: true,
             adb_path: "C:/Android/platform-tools/adb.exe",
             devices: [device],
+          };
+        }
+        if (cmd === "list_wireless_services") {
+          return {
+            adb_resolved: true,
+            adb_path: "C:/Android/platform-tools/adb.exe",
+            services: [],
+          };
+        }
+        if (cmd === "connect_wireless") {
+          throw {
+            code: "wireless_adb_failed",
+            message: "adb exited with code 1: failed to connect",
+            hint_code: "vpn_interference_likely",
+            diagnostics: {
+              platform_tools_version: "37.0.0",
+              mdns_enabled: true,
+              mdns_backend: "LIBADBMDNS",
+              mdns_check_succeeded: true,
+              active_vpn_interfaces: 1,
+              endpoint_kind: "local_name",
+              adb_error_kind: "adb_exit",
+            },
           };
         }
         if (cmd === "watch_devices") {

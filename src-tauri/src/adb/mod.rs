@@ -49,5 +49,5 @@ pub use transport::{validate_device_target, AdbTransport, ShellTransport, Transp
 pub use users::{list_users, AndroidUser};
 pub use wireless::{
     connect as connect_wireless, list_mdns_services, pair as pair_wireless, WirelessAdbService,
-    WirelessCommandResult, WirelessConnectRequest, WirelessPairRequest,
+    WirelessCommandError, WirelessCommandResult, WirelessConnectRequest, WirelessPairRequest,
 };
