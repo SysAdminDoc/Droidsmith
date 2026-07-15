@@ -134,6 +134,82 @@ async function runDesktopFlow(browser) {
     fullPage: false,
   });
   await page.getByRole("button", { name: "Close", exact: true }).click();
+
+  await page.getByRole("button", { name: "Select Pixel QA" }).click();
+  await page.getByRole("heading", { name: "File manager" }).waitFor();
+  await page.getByRole("button", { name: "Browse", exact: true }).click();
+  await page.getByText("Résumé final.txt", { exact: true }).waitFor();
+
+  await page.getByRole("button", { name: "New folder" }).click();
+  await page.getByRole("dialog", { name: "Create device folder" }).waitFor();
+  await page.getByLabel("Name", { exact: true }).fill("Project notes");
+  await page.getByRole("button", { name: "Review file change" }).click();
+  const mkdirReview = page.getByRole("alertdialog", {
+    name: "Review file change",
+  });
+  await mkdirReview.waitFor();
+  await mkdirReview
+    .getByText('adb shell "mkdir" "/sdcard/Project notes"', { exact: true })
+    .waitFor();
+  await assertTabMovesFocus(page, "File mkdir review");
+  await mkdirReview.getByRole("button", { name: "Confirm and run" }).click();
+  await page.getByText("Project notes/", { exact: true }).waitFor();
+
+  const unicodeRow = page
+    .getByText("Résumé final.txt", { exact: true })
+    .locator("..");
+  await unicodeRow.getByRole("button", { name: "Rename" }).click();
+  await page.getByLabel("Name", { exact: true }).fill("Résumé archived.txt");
+  await page.getByRole("button", { name: "Review file change" }).click();
+  const renameReview = page.getByRole("alertdialog", {
+    name: "Review file change",
+  });
+  await renameReview
+    .getByText(
+      'adb shell "mv" "-n" "/sdcard/Résumé final.txt" "/sdcard/Résumé archived.txt"',
+      { exact: true },
+    )
+    .waitFor();
+  await renameReview.getByRole("button", { name: "Confirm and run" }).click();
+  await page.getByText("Résumé archived.txt", { exact: true }).waitFor();
+
+  const protectedRow = page
+    .getByText("Protected notes.txt", { exact: true })
+    .locator("..");
+  await protectedRow.getByRole("button", { name: "Delete" }).click();
+  const deleteReview = page.getByRole("alertdialog", {
+    name: "Review file change",
+  });
+  await deleteReview
+    .getByText('adb shell "rm" "-f" "/sdcard/Protected notes.txt"', {
+      exact: true,
+    })
+    .waitFor();
+  await deleteReview.getByRole("button", { name: "Confirm and run" }).click();
+  await page.getByText(/Permission denied.*left available/).waitFor();
+  await deleteReview.getByRole("button", { name: "Cancel" }).click();
+
+  await page.getByRole("button", { name: "Push file" }).click();
+  const pushReview = page.getByRole("alertdialog", {
+    name: "Review file change",
+  });
+  await pushReview.waitFor();
+  await pushReview
+    .getByText(
+      'adb push "C:/Users/QA/Downloads/新しい report.txt" "/sdcard/新しい report.txt"',
+      { exact: true },
+    )
+    .waitFor();
+  await pushReview.getByRole("button", { name: "Confirm and run" }).click();
+  await page.getByText("新しい report.txt", { exact: true }).waitFor();
+  await page.screenshot({
+    path: path.join(
+      screenshotDir,
+      "desktop-file-manager-guarded-operations.png",
+    ),
+    fullPage: false,
+  });
+
   for (const route of ["Devices", "Apps", "Debloat", "Profiles", "Console"]) {
     await page.getByRole("button", { name: new RegExp(route) }).click();
     await page.getByRole("heading", { name: route, exact: true }).waitFor();
@@ -696,6 +772,22 @@ async function installTauriMock(page) {
         installer: null,
       },
     ];
+    let remoteFiles = [
+      {
+        name: "Résumé final.txt",
+        is_dir: false,
+        size: 2048,
+        permissions: "-rw-rw----",
+        parse_error: null,
+      },
+      {
+        name: "Protected notes.txt",
+        is_dir: false,
+        size: 1024,
+        permissions: "-r--------",
+        parse_error: null,
+      },
+    ];
     let journalId = 20;
     let installAttempts = 0;
     let scrcpyLaunches = 0;
@@ -775,6 +867,10 @@ async function installTauriMock(page) {
             backup_save: {
               id: "123e4567-e89b-42d3-a456-426614174007",
               local_path: "C:/Users/QA/Desktop/com.example.app.legacy-data.zip",
+            },
+            push_open: {
+              id: "123e4567-e89b-42d3-a456-42661417400c",
+              local_path: "C:/Users/QA/Downloads/新しい report.txt",
             },
           };
           const selection = selections[args.purpose];
@@ -1073,6 +1169,76 @@ async function installTauriMock(page) {
             storage: null,
             wifi_ip: null,
           };
+        }
+        if (cmd === "list_remote_files") {
+          return {
+            path: args.remote_path,
+            entries: remoteFiles.map((entry) => ({ ...entry })),
+            free_space_kb: 8_388_608,
+          };
+        }
+        if (cmd === "plan_remote_file_mutation") {
+          return remoteFilePlan(args.request);
+        }
+        if (cmd === "apply_remote_file_mutation") {
+          if (args.confirmed !== true) {
+            throw new Error("confirmation_required");
+          }
+          const plan = remoteFilePlan(args.request);
+          if (plan.source_path.includes("Protected notes.txt")) {
+            throw new Error(
+              "remote_file_operation_failed: Permission denied by Android storage policy",
+            );
+          }
+          const sourceName = plan.source_path.split("/").pop();
+          if (plan.kind === "mkdir") {
+            remoteFiles.push({
+              name: sourceName,
+              is_dir: true,
+              size: null,
+              permissions: "drwxrwx---",
+              parse_error: null,
+            });
+          } else if (plan.kind === "rename") {
+            const entry = remoteFiles.find((item) => item.name === sourceName);
+            if (entry) entry.name = plan.destination_path.split("/").pop();
+          } else {
+            remoteFiles = remoteFiles.filter(
+              (item) => item.name !== sourceName,
+            );
+          }
+          return fileMutationResult(plan);
+        }
+        if (cmd === "push_file") {
+          if (
+            args.confirmed !== true ||
+            args.path_grant !== "123e4567-e89b-42d3-a456-42661417400c"
+          ) {
+            throw new Error(
+              "File push bypassed its confirmation or path grant",
+            );
+          }
+          emitChannel(args.on_event, {
+            operation_id: args.operation_id,
+            kind: "progress",
+            message: "Pushing file to device",
+            elapsed_ms: 1200,
+          });
+          remoteFiles.push({
+            name: args.remote_path.split("/").pop(),
+            is_dir: false,
+            size: 4096,
+            permissions: "-rw-rw----",
+            parse_error: null,
+          });
+          return fileMutationResult({
+            kind: "shell",
+            source_path: args.remote_path,
+            destination_path: null,
+            argv: ["droidsmith-file-push", args.remote_path],
+            description: "Push native-selected file",
+            destructive: false,
+          });
         }
         if (cmd === "get_package_metadata") {
           return {
@@ -1805,6 +1971,79 @@ async function installTauriMock(page) {
         description: `${request.kind} ${request.package}`,
         incident_id: `op-ui-smoke-${journalId + 1}`,
         before_state: "installed_enabled",
+      };
+    }
+
+    function remoteFilePlan(request) {
+      const destination = request.destination_path ?? null;
+      const argv =
+        request.kind === "mkdir"
+          ? ["mkdir", request.source_path]
+          : request.kind === "rename"
+            ? ["mv", "-n", request.source_path, destination]
+            : request.kind === "delete_directory"
+              ? ["rm", "-rf", request.source_path]
+              : ["rm", "-f", request.source_path];
+      return {
+        kind: request.kind,
+        source_path: request.source_path,
+        destination_path: destination,
+        argv,
+        description: `Reviewed ${request.kind} operation`,
+        destructive: request.kind !== "mkdir",
+      };
+    }
+
+    function fileMutationResult(plan) {
+      const actionPlan = {
+        request: {
+          serial: device.serial,
+          target: {
+            serial: device.serial,
+            transport_id: device.transport_id,
+            connection_generation: device.connection_generation,
+            transport_kind: device.transport_kind,
+            untrusted_transport_override: false,
+            model: device.model,
+            product: device.product,
+            device: device.device,
+            build_fingerprint: device.build_fingerprint,
+          },
+          package: "",
+          kind: "shell",
+          user_id: 0,
+          pack_context: null,
+          context: {
+            confirmation_source: "file_manager_review",
+            permission: null,
+            shell_argv: plan.argv,
+            transport_override: null,
+            restore_enabled_state: null,
+          },
+        },
+        args: plan.argv,
+        description: plan.description,
+        incident_id: `file-ui-smoke-${journalId + 1}`,
+        before_state: "present",
+      };
+      const stdout = "File operation completed";
+      return {
+        stdout,
+        entry: {
+          id: ++journalId,
+          applied: {
+            plan: actionPlan,
+            stdout,
+            display_stdout: stdout,
+            before_state: "present",
+            after_state: "present",
+            applied_at: "2026-07-15T12:00:00Z",
+          },
+          undone_by: null,
+          undoes: null,
+          outcome: "succeeded",
+          failure: null,
+        },
       };
     }
   });

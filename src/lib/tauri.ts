@@ -48,6 +48,8 @@ import {
   type Profile,
   type ProfilePreview,
   type RecoveryBaselineDiff as GeneratedRecoveryBaselineDiff,
+  type RemoteFileMutationPlan,
+  type RemoteFileMutationRequest,
   type RemoteListing,
   type SavedResult,
   type ScrcpyCapabilities as GeneratedScrcpyCapabilities,
@@ -586,14 +588,40 @@ export async function callListRemoteFiles(
   return commands.listRemoteFiles(target, remotePath);
 }
 
+export async function callPlanRemoteFileMutation(
+  request: RemoteFileMutationRequest,
+): Promise<RemoteFileMutationPlan> {
+  return commands.planRemoteFileMutation(request);
+}
+
+export async function callApplyRemoteFileMutation(
+  target: DeviceTarget,
+  request: RemoteFileMutationRequest,
+  confirmed: boolean,
+): Promise<ApplyActionResult> {
+  return rendererRecord(
+    await commands.applyRemoteFileMutation(target, request, confirmed),
+  );
+}
+
 export async function callPushFile(
   target: DeviceTarget,
   pathGrant: string,
   remotePath: string,
+  confirmed: boolean,
   options?: OperationOptions,
-): Promise<string> {
+): Promise<ApplyActionResult> {
   const { operationId, channel } = operationChannel("push", options);
-  return commands.pushFile(target, pathGrant, remotePath, operationId, channel);
+  return rendererRecord(
+    await commands.pushFile(
+      target,
+      pathGrant,
+      remotePath,
+      confirmed,
+      operationId,
+      channel,
+    ),
+  );
 }
 
 export async function callPullFile(

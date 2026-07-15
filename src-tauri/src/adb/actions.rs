@@ -60,6 +60,7 @@ pub enum ConfirmationSource {
     DeviceControl,
     CliApply,
     ProfilePreview,
+    FileManagerReview,
     JournalUndo,
     RecoveryBaseline,
 }
@@ -585,6 +586,15 @@ pub fn capture_state(transport: &dyn AdbTransport, request: &ActionRequest) -> S
             .shell_target(&request.target, &["dumpsys", "package", &request.package])
             .map(|output| permission_state(&output, request.context.permission.as_deref()))
             .unwrap_or_else(|_| "unknown".to_string()),
+        ActionKind::Shell
+            if request.context.confirmation_source == ConfirmationSource::FileManagerReview =>
+        {
+            crate::remote_files::capture_state(
+                transport,
+                &request.target,
+                &request.context.shell_argv,
+            )
+        }
         ActionKind::Shell
             if request
                 .context

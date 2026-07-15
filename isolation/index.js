@@ -27,6 +27,7 @@
     "list_permissions",
     "list_processes",
     "list_remote_files",
+    "plan_remote_file_mutation",
     "locate_scrcpy",
     "scrcpy_session_status",
     "locate_fastboot",
@@ -64,8 +65,16 @@
       ["target", "path_grant", "privacy_confirmed", "operation_id", "on_event"],
       [],
     ],
+    apply_remote_file_mutation: [["target", "request", "confirmed"], []],
     push_file: [
-      ["target", "path_grant", "remote_path", "operation_id", "on_event"],
+      [
+        "target",
+        "path_grant",
+        "remote_path",
+        "confirmed",
+        "operation_id",
+        "on_event",
+      ],
       [],
     ],
     pull_file: [
@@ -255,7 +264,9 @@
         }
       } else if (["local_path", "apk_path"].includes(key)) {
         validateLocalPath(value);
-      } else if (key === "remote_path") {
+      } else if (
+        ["remote_path", "source_path", "destination_path"].includes(key)
+      ) {
         validateRemotePath(value);
       } else if (key === "package") {
         if (!/^[A-Za-z0-9_][A-Za-z0-9_.-]{0,254}$/u.test(value)) {
@@ -462,6 +473,40 @@
     }
     if (command === "capture_bugreport" && payload.privacy_confirmed !== true) {
       reject("bugreport_privacy_confirmation");
+    }
+    if (
+      ["apply_remote_file_mutation", "push_file"].includes(command) &&
+      payload.confirmed !== true
+    ) {
+      reject("file_mutation_confirmation");
+    }
+    if (command === "apply_remote_file_mutation") {
+      validateKeys(
+        payload.request,
+        ["kind", "source_path"],
+        ["destination_path"],
+        "remote_file_request",
+      );
+      if (
+        !["mkdir", "rename", "delete_file", "delete_directory"].includes(
+          payload.request.kind,
+        )
+      ) {
+        reject("remote_file_kind");
+      }
+      if (
+        payload.request.kind === "rename" &&
+        (typeof payload.request.destination_path !== "string" ||
+          payload.request.destination_path.length === 0)
+      ) {
+        reject("remote_file_destination");
+      }
+      if (
+        payload.request.kind !== "rename" &&
+        payload.request.destination_path != null
+      ) {
+        reject("remote_file_destination");
+      }
     }
     if (
       ["pair_wireless", "connect_wireless", "launch_scrcpy"].includes(command)

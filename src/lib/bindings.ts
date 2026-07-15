@@ -290,19 +290,46 @@ export const commands = {
     });
   },
   /**
+   * Validate a structured file mutation and return the exact argv that will be
+   * journaled and executed after the renderer presents its confirmation review.
+   */
+  async planRemoteFileMutation(
+    request: RemoteFileMutationRequest,
+  ): Promise<RemoteFileMutationPlan> {
+    return await TAURI_INVOKE("plan_remote_file_mutation", { request });
+  },
+  /**
+   * Rebuild and execute a reviewed device-side file mutation. The renderer
+   * cannot supply argv: it submits only structured paths and the backend
+   * regenerates the canonical mkdir/mv/rm command before writing the intent.
+   */
+  async applyRemoteFileMutation(
+    target: DeviceTarget,
+    request: RemoteFileMutationRequest,
+    confirmed: boolean,
+  ): Promise<ApplyActionResult> {
+    return await TAURI_INVOKE("apply_remote_file_mutation", {
+      target,
+      request,
+      confirmed,
+    });
+  },
+  /**
    * Push a local file to the device.
    */
   async pushFile(
     target: DeviceTarget,
     pathGrant: string,
     remotePath: string,
+    confirmed: boolean,
     operationId: string,
     onEvent: TAURI_CHANNEL<OperationEvent>,
-  ): Promise<string> {
+  ): Promise<ApplyActionResult> {
     return await TAURI_INVOKE("push_file", {
       target,
       path_grant: pathGrant,
       remote_path: remotePath,
+      confirmed,
       operation_id: operationId,
       on_event: onEvent,
     });
@@ -867,6 +894,7 @@ export type ConfirmationSource =
   | "device_control"
   | "cli_apply"
   | "profile_preview"
+  | "file_manager_review"
   | "journal_undo"
   | "recovery_baseline";
 /**
@@ -1586,6 +1614,24 @@ export type RemoteFileEntry = {
   size: number | null;
   permissions: string;
   parse_error?: string | null;
+};
+export type RemoteFileMutationKind =
+  | "mkdir"
+  | "rename"
+  | "delete_file"
+  | "delete_directory";
+export type RemoteFileMutationPlan = {
+  kind: RemoteFileMutationKind;
+  source_path: string;
+  destination_path: string | null;
+  argv: string[];
+  description: string;
+  destructive: boolean;
+};
+export type RemoteFileMutationRequest = {
+  kind: RemoteFileMutationKind;
+  source_path: string;
+  destination_path?: string | null;
 };
 export type RemoteListing = {
   path: string;

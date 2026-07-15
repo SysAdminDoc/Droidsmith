@@ -102,6 +102,60 @@ test("passes a schema-valid sensitive command", () => {
   assert.equal(hook(valid), valid);
 });
 
+test("permits only explicitly confirmed structured file mutations", () => {
+  const valid = message("apply_remote_file_mutation", {
+    target,
+    request: {
+      kind: "rename",
+      source_path: "/sdcard/Download/Résumé final.txt",
+      destination_path: "/sdcard/Download/Résumé archived.txt",
+    },
+    confirmed: true,
+  });
+  assert.equal(hook(valid), valid);
+
+  for (const invalid of [
+    { ...valid.payload, confirmed: false },
+    {
+      ...valid.payload,
+      request: {
+        ...valid.payload.request,
+        source_path: "/sdcard/../data/secret",
+      },
+    },
+    {
+      ...valid.payload,
+      request: {
+        kind: "delete_file",
+        source_path: "/sdcard/Download/report.txt",
+        destination_path: "/sdcard/Download/other.txt",
+      },
+    },
+  ]) {
+    assert.equal(
+      hook(message("apply_remote_file_mutation", invalid)).cmd,
+      blockedCommand,
+    );
+  }
+});
+
+test("requires confirmation for a native-grant file push", () => {
+  const payload = {
+    target,
+    path_grant: pathGrant,
+    remote_path: "/sdcard/Download/Résumé final.txt",
+    confirmed: true,
+    operation_id: "push-123",
+    on_event: 99,
+  };
+  const valid = message("push_file", payload);
+  assert.equal(hook(valid), valid);
+  assert.equal(
+    hook(message("push_file", { ...payload, confirmed: false })).cmd,
+    blockedCommand,
+  );
+});
+
 test("rejects malformed path grants without echoing them", () => {
   for (const invalidGrant of ["not-a-grant", "/tmp/../etc/passwd"]) {
     const result = hook(

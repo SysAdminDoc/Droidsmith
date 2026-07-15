@@ -38,6 +38,7 @@ use crate::operations::{self, OperationEvent};
 use crate::profile;
 use crate::quirks::{self, DeviceContext, Quirk};
 use crate::recovery_baseline::{self, BaselineActionInput, BaselinePack, RecoveryBaselineDiff};
+use crate::remote_files;
 use crate::support_bundle;
 
 #[derive(specta::Type, Serialize)]
@@ -1050,6 +1051,15 @@ impl From<profile::ProfileError> for CommandError {
     }
 }
 
+impl From<remote_files::RemoteFileError> for CommandError {
+    fn from(error: remote_files::RemoteFileError) -> Self {
+        Self {
+            code: "invalid_remote_file_operation",
+            message: error.to_string(),
+        }
+    }
+}
+
 impl From<operations::OperationError> for CommandError {
     fn from(error: operations::OperationError) -> Self {
         let code = match &error {
@@ -1232,6 +1242,64 @@ fn execute_journaled(
     })
 }
 
+fn execute_remote_file_journaled(
+    journal: &mut Journal,
+    transport: &adb::ShellTransport,
+    mut plan: actions::PlannedAction,
+) -> Result<ApplyActionResult, CommandError> {
+    actions::validate_plan(&plan)?;
+    adb::validate_device_target(transport, &plan.request.target)?;
+    plan.before_state = actions::capture_state(transport, &plan.request);
+    let started_at = iso_now();
+    let entry = journal
+        .execute(
+            plan,
+            None,
+            &started_at,
+            |plan| -> Result<_, adb::TransportError> {
+                let applied = actions::apply(transport, plan, &iso_now())?;
+                remote_files::verify_transition(
+                    transport,
+                    &applied.plan.request.target,
+                    &applied.plan.args,
+                )?;
+                Ok(applied)
+            },
+        )
+        .map_err(map_remote_file_execute_error)?;
+    Ok(ApplyActionResult {
+        stdout: entry.applied.display_stdout.clone(),
+        entry,
+    })
+}
+
+fn map_remote_file_execute_error<E: std::fmt::Display>(
+    error: journal::ExecuteError<E>,
+) -> CommandError {
+    match error {
+        journal::ExecuteError::Journal(error) => CommandError::from(error),
+        journal::ExecuteError::Operation(error) => CommandError {
+            code: "remote_file_operation_failed",
+            message: error.to_string(),
+        },
+    }
+}
+
+fn current_android_user(
+    transport: &adb::ShellTransport,
+    target: &adb::DeviceTarget,
+) -> Result<u32, CommandError> {
+    adb::list_users(transport, target)?
+        .into_iter()
+        .find(|user| user.current)
+        .map(|user| user.id)
+        .ok_or(CommandError {
+            code: "current_user_missing",
+            message: "could not bind the remote file operation to the current Android user"
+                .to_string(),
+        })
+}
+
 #[derive(specta::Type, Debug, Clone, Serialize)]
 pub struct ApplyActionResult {
     pub entry: JournalEntry,
@@ -1308,34 +1376,10 @@ fn validate_package_arg(package: &str) -> Result<(), CommandError> {
 /// it — and require an absolute device path so callers can't smuggle a
 /// flag or relative token across the IPC boundary.
 fn validate_remote_path(remote_path: &str) -> Result<String, CommandError> {
-    let trimmed = remote_path.trim();
-    if trimmed.is_empty() {
-        return Err(CommandError {
-            code: "invalid_remote_path",
-            message: "device path cannot be empty".to_string(),
-        });
-    }
-    if trimmed.starts_with('-') {
-        return Err(CommandError {
-            code: "invalid_remote_path",
-            message: format!("device path must not start with '-': {trimmed}"),
-        });
-    }
-    if !trimmed.starts_with('/') {
-        return Err(CommandError {
-            code: "invalid_remote_path",
-            message: format!("device path must be absolute: {trimmed}"),
-        });
-    }
-    if trimmed.chars().any(char::is_control)
-        || trimmed.split('/').any(|part| matches!(part, "." | ".."))
-    {
-        return Err(CommandError {
-            code: "invalid_remote_path",
-            message: "device path must be normalized and contain no control characters".to_string(),
-        });
-    }
-    Ok(trimmed.to_string())
+    remote_files::validate_path(remote_path).map_err(|error| CommandError {
+        code: "invalid_remote_path",
+        message: error.to_string(),
+    })
 }
 
 fn validate_fastboot_key(key: &str) -> Result<(), CommandError> {
@@ -1785,36 +1829,137 @@ pub fn list_remote_files(
     })
 }
 
+/// Validate a structured file mutation and return the exact argv that will be
+/// journaled and executed after the renderer presents its confirmation review.
+#[tauri::command]
+#[specta::specta]
+pub fn plan_remote_file_mutation(
+    request: remote_files::RemoteFileMutationRequest,
+) -> Result<remote_files::RemoteFileMutationPlan, CommandError> {
+    Ok(remote_files::plan(&request)?)
+}
+
+/// Rebuild and execute a reviewed device-side file mutation. The renderer
+/// cannot supply argv: it submits only structured paths and the backend
+/// regenerates the canonical mkdir/mv/rm command before writing the intent.
+#[tauri::command]
+#[specta::specta]
+pub fn apply_remote_file_mutation(
+    app: tauri::AppHandle,
+    target: adb::DeviceTarget,
+    request: remote_files::RemoteFileMutationRequest,
+    confirmed: bool,
+) -> Result<ApplyActionResult, CommandError> {
+    let reviewed = remote_files::plan(&request)?;
+    if !confirmed {
+        return Err(CommandError {
+            code: "confirmation_required",
+            message: "remote file mutation requires an explicit confirmation review".to_string(),
+        });
+    }
+    let (transport, transport_override) = privileged_transport(&target)?;
+    let user_id = current_android_user(&transport, &target)?;
+    let serial = target.serial.clone();
+    let plan = remote_files::action_plan(target, user_id, transport_override, &reviewed);
+    let dir = journal_dir(&app)?;
+    journal::with_journal(&dir, &serial, |journal| {
+        execute_remote_file_journaled(journal, &transport, plan)
+    })
+}
+
 /// Push a local file to the device.
 #[tauri::command]
 #[specta::specta]
 pub async fn push_file(
+    app: tauri::AppHandle,
     target: adb::DeviceTarget,
     grants: tauri::State<'_, PathGrantStore>,
     path_grant: String,
     remote_path: String,
+    confirmed: bool,
     operation_id: String,
     on_event: tauri::ipc::Channel<OperationEvent>,
-) -> Result<String, CommandError> {
-    let (transport, _) = privileged_transport(&target)?;
+) -> Result<ApplyActionResult, CommandError> {
+    if !confirmed {
+        return Err(CommandError {
+            code: "confirmation_required",
+            message: "file push requires an explicit source/target confirmation".to_string(),
+        });
+    }
+    let (transport, transport_override) = privileged_transport(&target)?;
     let validated_path = grants.consume(&path_grant, HostPathPurpose::PushOpen)?;
     let remote = validate_remote_path(&remote_path)?;
+    let user_id = current_android_user(&transport, &target)?;
     let local_arg = validated_path.display().to_string();
     let timeout = std::time::Duration::from_secs(120);
     let mut args = target.adb_selector();
-    args.extend(["push".to_string(), local_arg, remote]);
+    args.extend(["push".to_string(), local_arg, remote.clone()]);
     let adb_path = transport.adb_path.clone();
     let sink = operations::channel_sink(on_event);
+    let serial = target.serial.clone();
+    let journal_path = journal_dir(&app)?;
+    let mut plan = actions::plan(actions::ActionRequest {
+        serial: serial.clone(),
+        target: target.clone(),
+        package: String::new(),
+        kind: actions::ActionKind::Shell,
+        user_id,
+        pack_context: None,
+        context: actions::ActionContext {
+            confirmation_source: actions::ConfirmationSource::FileManagerReview,
+            permission: None,
+            shell_argv: vec!["droidsmith-file-push".to_string(), remote.clone()],
+            transport_override,
+            restore_enabled_state: None,
+        },
+    });
+    plan.description = format!("Push a native-selected local file to {remote:?}");
+    plan.before_state = format!(
+        "{remote}={}",
+        remote_files::capture_path_state(&transport, &target, &remote)
+    );
     spawn_blocking_operation(move || {
-        let output = operations::run_process(
-            &adb_path,
-            &args,
-            timeout,
-            &operation_id,
-            "Pushing file to device",
-            sink,
-        )?;
-        completed_adb_output(output, "adb push")
+        journal::with_journal(&journal_path, &serial, |journal| {
+            let started_at = iso_now();
+            let entry = journal
+                .execute(plan, None, &started_at, |plan| {
+                    adb::validate_device_target(&transport, &target)?;
+                    let output = operations::run_process(
+                        &adb_path,
+                        &args,
+                        timeout,
+                        &operation_id,
+                        "Pushing file to device",
+                        sink,
+                    )?;
+                    let stdout = completed_adb_output(output, "adb push")?;
+                    let after_state = format!(
+                        "{remote}={}",
+                        remote_files::capture_path_state(&transport, &target, &remote)
+                    );
+                    if !after_state.ends_with("=present") {
+                        return Err(CommandError {
+                            code: "remote_file_operation_failed",
+                            message:
+                                "adb push exited successfully but the target file was not observed"
+                                    .to_string(),
+                        });
+                    }
+                    Ok::<_, CommandError>(actions::AppliedAction {
+                        stdout: actions::redact_journal_text(&plan.request, &stdout),
+                        display_stdout: stdout,
+                        before_state: plan.before_state.clone(),
+                        after_state,
+                        plan,
+                        applied_at: iso_now(),
+                    })
+                })
+                .map_err(map_remote_file_execute_error)?;
+            Ok(ApplyActionResult {
+                stdout: entry.applied.display_stdout.clone(),
+                entry,
+            })
+        })
     })
     .await
 }
