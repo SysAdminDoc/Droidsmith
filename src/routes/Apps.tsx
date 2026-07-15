@@ -29,7 +29,10 @@ import {
   type PermissionInfo,
   type PlannedAction,
 } from "../lib/tauri";
-import { useAuthorizedDevices } from "../lib/useAuthorizedDevices";
+import {
+  useAuthorizedDevices,
+  useTransportAuthorization,
+} from "../lib/useAuthorizedDevices";
 
 import {
   backupDefaultFileName,
@@ -49,6 +52,8 @@ import {
   StatePanel,
   TableCell,
   TableHeaderCell,
+  TransportBadge,
+  TransportTrustNotice,
 } from "./common";
 
 type PackagesState =
@@ -142,6 +147,12 @@ export default function AppsRoute() {
         ? device.transport_id === selectedTransportId
         : device.serial === selectedSerial,
     ) ?? null;
+  const selectedTarget = selectedDevice ? deviceTarget(selectedDevice) : null;
+  const {
+    accepted: transportOverrideAccepted,
+    setAccepted: setTransportOverrideAccepted,
+    authorizedTarget,
+  } = useTransportAuthorization(selectedTarget);
 
   const loadUsers = useCallback(async () => {
     if (!selectedDevice) {
@@ -268,11 +279,11 @@ export default function AppsRoute() {
 
   const startAction = useCallback(
     async (pkg: string, kind: ActionKind) => {
-      if (!selectedDevice || !usersReady) return;
+      if (!selectedDevice || !authorizedTarget || !usersReady) return;
       try {
         const plan = await callPlanAction({
           serial: selectedDevice.serial,
-          target: deviceTarget(selectedDevice),
+          target: authorizedTarget,
           package: pkg,
           kind,
           user_id: selectedUser,
@@ -285,12 +296,12 @@ export default function AppsRoute() {
         });
       }
     },
-    [selectedDevice, selectedUser, usersReady],
+    [authorizedTarget, selectedDevice, selectedUser, usersReady],
   );
 
   const startBackup = useCallback(
     async (pkg: string) => {
-      if (!selectedDevice || !usersReady) return;
+      if (!selectedDevice || !authorizedTarget || !usersReady) return;
       let startedOperationId: string | null = null;
       let startedGeneration: number | null = null;
       setBackupNotice({
@@ -336,7 +347,7 @@ export default function AppsRoute() {
         );
 
         const result = await callBackupPackage(
-          deviceTarget(selectedDevice),
+          authorizedTarget,
           pkg,
           pathGrant.id,
           {
@@ -413,7 +424,7 @@ export default function AppsRoute() {
         });
       }
     },
-    [selectedDevice, t, usersReady],
+    [authorizedTarget, selectedDevice, t, usersReady],
   );
 
   const cancelBackup = useCallback(async () => {
@@ -431,7 +442,7 @@ export default function AppsRoute() {
       localPath: string,
       installOptions: InstallOptions,
     ) => {
-      if (!selectedDevice) return;
+      if (!selectedDevice || !authorizedTarget) return;
       const operationId = newOperationId("install");
       const generation = installGenerationRef.current + 1;
       installGenerationRef.current = generation;
@@ -444,7 +455,7 @@ export default function AppsRoute() {
       });
       try {
         const result = await callInstallApk(
-          deviceTarget(selectedDevice),
+          authorizedTarget,
           pathGrant,
           installOptions,
           {
@@ -494,7 +505,7 @@ export default function AppsRoute() {
         });
       }
     },
-    [loadPackages, selectedDevice, t],
+    [authorizedTarget, loadPackages, selectedDevice, t],
   );
 
   const startInstall = useCallback(async () => {
@@ -573,10 +584,10 @@ export default function AppsRoute() {
 
   const undoJournalEntry = useCallback(
     async (entry: JournalEntry) => {
-      if (!selectedDevice || !usersReady) return;
+      if (!selectedDevice || !authorizedTarget || !usersReady) return;
       setUndoingEntryId(entry.id);
       try {
-        await callJournalUndo(deviceTarget(selectedDevice), entry.id);
+        await callJournalUndo(authorizedTarget, entry.id);
         setActionState({
           kind: "success",
           message: t("apps.journalUndoCompleted", {
@@ -593,7 +604,14 @@ export default function AppsRoute() {
         setUndoingEntryId(null);
       }
     },
-    [loadJournal, loadPackages, selectedDevice, t, usersReady],
+    [
+      authorizedTarget,
+      loadJournal,
+      loadPackages,
+      selectedDevice,
+      t,
+      usersReady,
+    ],
   );
 
   const filteredPackages =
@@ -652,6 +670,9 @@ export default function AppsRoute() {
                 <code className="font-mono">{selectedSerial}</code>
               </Badge>
             )}
+            {selectedTarget && (
+              <TransportBadge kind={selectedTarget.transport_kind} />
+            )}
           </div>
         }
       />
@@ -699,6 +720,12 @@ export default function AppsRoute() {
             }}
           />
         )}
+
+        <TransportTrustNotice
+          target={selectedTarget}
+          accepted={transportOverrideAccepted}
+          onAcceptedChange={setTransportOverrideAccepted}
+        />
 
         {selectedSerial && (
           <>
@@ -774,9 +801,9 @@ export default function AppsRoute() {
           </>
         )}
 
-        {inspectedPkg && selectedDevice && usersReady && (
+        {inspectedPkg && authorizedTarget && usersReady && (
           <PermissionsPanel
-            target={deviceTarget(selectedDevice)}
+            target={authorizedTarget}
             pkg={inspectedPkg}
             userId={selectedUser}
             onClose={() => setInspectedPkg(null)}

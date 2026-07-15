@@ -189,6 +189,7 @@ fn device(serial: &str, build: &str) -> Device {
         build_fingerprint: Some(build.to_string()),
         transport_id: Some(77),
         connection_generation: 0,
+        transport_kind: droidsmith_lib::adb::DeviceTransportKind::Usb,
         wireless: false,
     }
 }

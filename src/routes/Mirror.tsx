@@ -14,6 +14,7 @@ import {
 import {
   resolveAuthorizedTarget,
   useAuthorizedDevices,
+  useTransportAuthorization,
 } from "../lib/useAuthorizedDevices";
 
 import {
@@ -31,6 +32,8 @@ import {
   FieldInput,
   PaneHeader,
   StatePanel,
+  TransportBadge,
+  TransportTrustNotice,
 } from "./common";
 
 type ScrcpyState =
@@ -62,6 +65,11 @@ export default function MirrorRoute() {
   const [selectedTarget, setSelectedTarget] = useState<DeviceTarget | null>(
     null,
   );
+  const {
+    accepted: transportOverrideAccepted,
+    setAccepted: setTransportOverrideAccepted,
+    authorizedTarget,
+  } = useTransportAuthorization(selectedTarget);
   const [session, setSession] = useState<SessionState>({ kind: "idle" });
   const [preset, setPreset] = useState<MirrorPreset>(DEFAULT_MIRROR_PRESET);
   const [presetMessage, setPresetMessage] = useState<string | null>(null);
@@ -159,12 +167,13 @@ export default function MirrorRoute() {
   }, [selectedTarget, t]);
 
   const launchMirror = useCallback(async () => {
-    if (!selectedTarget || scrcpyState.kind !== "found") return;
+    if (!selectedTarget || !authorizedTarget || scrcpyState.kind !== "found")
+      return;
     setSession({ kind: "launching" });
     try {
       const next = await callLaunchScrcpy({
         serial: selectedTarget.serial,
-        target: selectedTarget,
+        target: authorizedTarget,
         max_size: parsePositiveInt(preset.maxSize),
         bit_rate: preset.bitRate.trim() || null,
         no_audio: preset.noAudio,
@@ -184,7 +193,7 @@ export default function MirrorRoute() {
         message: e instanceof Error ? e.message : String(e),
       });
     }
-  }, [selectedTarget, scrcpyState, preset]);
+  }, [authorizedTarget, selectedTarget, scrcpyState, preset]);
 
   const stopMirror = useCallback(async () => {
     if (session.kind !== "running") return;
@@ -217,9 +226,12 @@ export default function MirrorRoute() {
               <Badge tone="info">{t("common.checking")}</Badge>
             )}
             {selectedTarget && (
-              <Badge tone="info">
-                <code className="font-mono">{selectedTarget.serial}</code>
-              </Badge>
+              <>
+                <Badge tone="info">
+                  <code className="font-mono">{selectedTarget.serial}</code>
+                </Badge>
+                <TransportBadge kind={selectedTarget.transport_kind} />
+              </>
             )}
           </div>
         }
@@ -287,6 +299,12 @@ export default function MirrorRoute() {
                 </div>
               </Card>
             )}
+
+            <TransportTrustNotice
+              target={selectedTarget}
+              accepted={transportOverrideAccepted}
+              onAcceptedChange={setTransportOverrideAccepted}
+            />
 
             {selectedTarget && (
               <Card className="p-5">

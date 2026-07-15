@@ -203,6 +203,8 @@ mod tests {
             product: None,
             device: None,
             build_fingerprint: Some("build/test".into()),
+            transport_kind: crate::adb::DeviceTransportKind::Usb,
+            untrusted_transport_override: false,
         }
     }
 

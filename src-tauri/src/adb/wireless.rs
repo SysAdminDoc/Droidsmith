@@ -5,8 +5,12 @@
 //! output parsing, and the narrow raw `adb` invocations needed by the
 //! renderer wizard.
 
+use std::collections::HashSet;
+use std::sync::{Mutex, OnceLock};
+
 use serde::{Deserialize, Serialize};
 
+use crate::adb::device::{remember_wireless_transport, DeviceTransportKind};
 use crate::adb::transport::{ShellTransport, TransportError};
 
 const PAIRING_SERVICE: &str = "_adb-tls-pairing._tcp";
@@ -41,19 +45,44 @@ pub struct WirelessPairRequest {
 pub struct WirelessConnectRequest {
     pub host: String,
     pub port: u16,
+    /// Explicitly labels a manual endpoint as legacy `adb tcpip`. This can
+    /// never upgrade an endpoint to TLS; exact current mDNS discovery is the
+    /// only source of `tls_wifi` provenance.
+    #[serde(default)]
+    pub legacy_tcp: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
 pub struct WirelessCommandResult {
     pub endpoint: String,
     pub stdout: String,
+    pub transport_kind: Option<DeviceTransportKind>,
+}
+
+fn tls_connect_endpoints() -> &'static Mutex<HashSet<String>> {
+    static ENDPOINTS: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
+    ENDPOINTS.get_or_init(|| Mutex::new(HashSet::new()))
 }
 
 pub fn list_mdns_services(
     transport: &ShellTransport,
 ) -> Result<Vec<WirelessAdbService>, TransportError> {
     let stdout = transport.adb(&["mdns", "services"])?;
-    parse_mdns_services(&stdout)
+    let services = parse_mdns_services(&stdout)?;
+    remember_tls_connect_services(&services);
+    Ok(services)
+}
+
+fn remember_tls_connect_services(services: &[WirelessAdbService]) {
+    if let Ok(mut known) = tls_connect_endpoints().lock() {
+        known.clear();
+        known.extend(
+            services
+                .iter()
+                .filter(|service| service.kind == WirelessServiceKind::Connect)
+                .map(|service| service.endpoint.clone()),
+        );
+    }
 }
 
 pub fn pair(
@@ -63,7 +92,11 @@ pub fn pair(
     validate_pairing_code(&req.pairing_code)?;
     let endpoint = validated_endpoint(&req.host, req.port)?;
     let stdout = transport.adb(&["pair", &endpoint, &req.pairing_code])?;
-    Ok(WirelessCommandResult { endpoint, stdout })
+    Ok(WirelessCommandResult {
+        endpoint,
+        stdout,
+        transport_kind: None,
+    })
 }
 
 pub fn connect(
@@ -72,7 +105,33 @@ pub fn connect(
 ) -> Result<WirelessCommandResult, TransportError> {
     let endpoint = validated_endpoint(&req.host, req.port)?;
     let stdout = transport.adb(&["connect", &endpoint])?;
-    Ok(WirelessCommandResult { endpoint, stdout })
+    let transport_kind = classify_connect_transport(&endpoint, req.legacy_tcp);
+    if connect_succeeded(&stdout) {
+        remember_wireless_transport(&endpoint, transport_kind);
+    }
+    Ok(WirelessCommandResult {
+        endpoint,
+        stdout,
+        transport_kind: Some(transport_kind),
+    })
+}
+
+fn classify_connect_transport(endpoint: &str, legacy_tcp: bool) -> DeviceTransportKind {
+    if tls_connect_endpoints()
+        .lock()
+        .is_ok_and(|known| known.contains(endpoint))
+    {
+        DeviceTransportKind::TlsWifi
+    } else if legacy_tcp {
+        DeviceTransportKind::LegacyTcp
+    } else {
+        DeviceTransportKind::UnknownTcp
+    }
+}
+
+fn connect_succeeded(stdout: &str) -> bool {
+    let normalized = stdout.trim().to_ascii_lowercase();
+    normalized.starts_with("connected to ") || normalized.starts_with("already connected to ")
 }
 
 pub fn parse_mdns_services(stdout: &str) -> Result<Vec<WirelessAdbService>, TransportError> {
@@ -123,7 +182,14 @@ fn validated_endpoint(host: &str, port: u16) -> Result<String, TransportError> {
             "wireless adb port must be between 1 and 65535".to_string(),
         ));
     }
-    Ok(format!("{host}:{port}"))
+    if host.contains(':') {
+        Ok(format!(
+            "[{}]:{port}",
+            host.trim_matches(|c| c == '[' || c == ']')
+        ))
+    } else {
+        Ok(format!("{host}:{port}"))
+    }
 }
 
 fn validate_pairing_code(code: &str) -> Result<(), TransportError> {
@@ -213,6 +279,10 @@ adb-bad _adb-tls-connect._tcp no-port
     fn endpoint_validation_rejects_bad_hosts_and_ports() {
         assert!(validated_endpoint("192.168.1.42", 37099).is_ok());
         assert!(validated_endpoint("device.local", 37099).is_ok());
+        assert_eq!(
+            validated_endpoint("fe80::1", 37099).unwrap(),
+            "[fe80::1]:37099"
+        );
         assert!(validated_endpoint("", 37099).is_err());
         assert!(validated_endpoint("bad host", 37099).is_err());
         assert!(validated_endpoint("bad/host", 37099).is_err());
@@ -227,5 +297,33 @@ adb-bad _adb-tls-connect._tcp no-port
         assert!(validate_pairing_code("12345").is_err());
         assert!(validate_pairing_code("abcdef").is_err());
         assert!(validate_pairing_code("1234567").is_err());
+    }
+
+    #[test]
+    fn connect_trust_requires_exact_mdns_provenance_or_explicit_legacy_mode() {
+        let services =
+            parse_mdns_services("adb-imp44 _adb-tls-connect._tcp imp44-mdns.local:38899\n")
+                .unwrap();
+        remember_tls_connect_services(&services);
+
+        assert_eq!(
+            classify_connect_transport("imp44-mdns.local:38899", false),
+            DeviceTransportKind::TlsWifi
+        );
+        assert_eq!(
+            classify_connect_transport("imp44-mdns.local:5555", false),
+            DeviceTransportKind::UnknownTcp
+        );
+        assert_eq!(
+            classify_connect_transport("imp44-mdns.local:5555", true),
+            DeviceTransportKind::LegacyTcp
+        );
+        assert!(connect_succeeded("connected to imp44-mdns.local:38899"));
+        assert!(connect_succeeded(
+            "already connected to imp44-mdns.local:38899"
+        ));
+        assert!(!connect_succeeded("failed to connect"));
+
+        remember_tls_connect_services(&[]);
     }
 }

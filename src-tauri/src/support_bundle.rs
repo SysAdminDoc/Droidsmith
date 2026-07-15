@@ -117,6 +117,7 @@ struct SupportDevice {
     product: Option<String>,
     device: Option<String>,
     wireless: bool,
+    transport_kind: crate::adb::DeviceTransportKind,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -202,6 +203,7 @@ pub fn build_preview(
                 .as_deref()
                 .map(|value| sanitize_text(value, &aliases)),
             wireless: device.wireless,
+            transport_kind: device.transport_kind,
         })
         .collect::<Vec<_>>();
 
@@ -751,6 +753,7 @@ mod tests {
                 build_fingerprint: None,
                 transport_id: Some(7),
                 connection_generation: 8,
+                transport_kind: adb::DeviceTransportKind::Usb,
                 wireless: false,
             }],
             collection_warnings: Vec::new(),

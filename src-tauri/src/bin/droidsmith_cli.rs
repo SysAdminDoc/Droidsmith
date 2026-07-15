@@ -200,6 +200,8 @@ fn cmd_run(argv: &[String]) -> ExitCode {
             product: None,
             device: None,
             build_fingerprint: Some("dry-run-unverified".to_string()),
+            transport_kind: droidsmith_lib::adb::DeviceTransportKind::UnknownTcp,
+            untrusted_transport_override: false,
         },
     };
     let requests = profile::requests_for(&profile, &target);

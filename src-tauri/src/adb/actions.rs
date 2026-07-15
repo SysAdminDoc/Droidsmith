@@ -66,6 +66,10 @@ pub struct ActionContext {
     pub permission: Option<String>,
     #[serde(default)]
     pub shell_argv: Vec<String>,
+    /// Set by the trusted backend only after it revalidates and accepts an
+    /// explicit renderer acknowledgement for an unauthenticated transport.
+    #[serde(default)]
+    pub transport_override: Option<super::DeviceTransportKind>,
 }
 
 /// Install an APK on a device using `adb install`. The APK path is a
@@ -814,6 +818,8 @@ mod tests {
             product: None,
             device: None,
             build_fingerprint: Some("build/test".into()),
+            transport_kind: crate::adb::DeviceTransportKind::Usb,
+            untrusted_transport_override: false,
         }
     }
 
@@ -827,6 +833,7 @@ mod tests {
             build_fingerprint: Some("build/test".into()),
             transport_id: Some(1),
             connection_generation: 0,
+            transport_kind: crate::adb::DeviceTransportKind::Usb,
             wireless: false,
         }
     }
@@ -968,6 +975,7 @@ mod tests {
                 confirmation_source: ConfirmationSource::PermissionToggle,
                 permission: Some("android.permission.CAMERA".into()),
                 shell_argv: Vec::new(),
+                transport_override: None,
             },
         });
         assert_eq!(
@@ -1000,6 +1008,7 @@ mod tests {
                     "x".into(),
                     "1".into(),
                 ],
+                transport_override: None,
             },
         });
         assert_eq!(shell.args, shell.request.context.shell_argv);
@@ -1046,6 +1055,7 @@ mod tests {
                     confirmation_source: ConfirmationSource::PermissionToggle,
                     permission: Some("android.permission.CAMERA".into()),
                     shell_argv: Vec::new(),
+                    transport_override: None,
                 },
             }),
             "2026-07-14T12:00:00Z",
@@ -1083,6 +1093,7 @@ mod tests {
                         "qa".into(),
                         "secret".into(),
                     ],
+                    transport_override: None,
                 },
             }),
             "2026-07-14T12:00:00Z",

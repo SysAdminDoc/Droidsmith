@@ -935,7 +935,9 @@ pub struct ApplyActionResult {
     pub stdout: String,
 }
 
-fn validated_transport(target: &adb::DeviceTarget) -> Result<adb::ShellTransport, CommandError> {
+fn validated_transport_with_device(
+    target: &adb::DeviceTarget,
+) -> Result<(adb::ShellTransport, adb::Device), CommandError> {
     validate_serial_arg(&target.serial)?;
     let resolution = adb::locate_adb();
     let path = resolution
@@ -943,8 +945,45 @@ fn validated_transport(target: &adb::DeviceTarget) -> Result<adb::ShellTransport
         .as_ref()
         .ok_or(adb::TransportError::AdbNotFound)?;
     let transport = adb::ShellTransport::new(path);
-    adb::validate_device_target(&transport, target)?;
-    Ok(transport)
+    let device = adb::validate_device_target(&transport, target)?;
+    Ok((transport, device))
+}
+
+fn validated_transport(target: &adb::DeviceTarget) -> Result<adb::ShellTransport, CommandError> {
+    validated_transport_with_device(target).map(|(transport, _)| transport)
+}
+
+fn accepted_transport_override(
+    kind: adb::DeviceTransportKind,
+    acknowledged: bool,
+) -> Result<Option<adb::DeviceTransportKind>, ()> {
+    if kind.requires_override() {
+        acknowledged.then_some(Some(kind)).ok_or(())
+    } else {
+        Ok(None)
+    }
+}
+
+/// Revalidate transport provenance at the privileged boundary. Renderer
+/// acknowledgement is authorization metadata, never evidence that a TCP
+/// endpoint is authenticated.
+fn privileged_transport(
+    target: &adb::DeviceTarget,
+) -> Result<(adb::ShellTransport, Option<adb::DeviceTransportKind>), CommandError> {
+    let (transport, device) = validated_transport_with_device(target)?;
+    let override_kind = accepted_transport_override(
+        device.transport_kind,
+        target.untrusted_transport_override,
+    )
+    .map_err(|()| CommandError {
+        code: "untrusted_transport_override_required",
+        message: format!(
+            "{} is connected over an unauthenticated {} transport; explicitly acknowledge the warning before running this operation",
+            target.serial,
+            device.transport_kind.label()
+        ),
+    })?;
+    Ok((transport, override_kind))
 }
 
 fn validate_package_arg(package: &str) -> Result<(), CommandError> {
@@ -1018,14 +1057,10 @@ fn validate_fastboot_key(key: &str) -> Result<(), CommandError> {
 #[tauri::command]
 pub fn apply_action(
     app: tauri::AppHandle,
-    plan: actions::PlannedAction,
+    mut plan: actions::PlannedAction,
 ) -> Result<ApplyActionResult, CommandError> {
-    let resolution = adb::locate_adb();
-    let path = resolution
-        .path
-        .as_ref()
-        .ok_or(adb::TransportError::AdbNotFound)?;
-    let transport = adb::ShellTransport::new(path);
+    let (transport, transport_override) = privileged_transport(&plan.request.target)?;
+    plan.request.context.transport_override = transport_override;
 
     let serial = plan.request.serial.clone();
     // Serialize intent → device mutation → terminal outcome per device. The
@@ -1060,7 +1095,7 @@ pub fn journal_undo(
 ) -> Result<JournalEntry, CommandError> {
     let serial = target.serial.clone();
     validate_serial_arg(&serial)?;
-    let transport = validated_transport(&target)?;
+    let (transport, transport_override) = privileged_transport(&target)?;
 
     // Hold the per-device lock across the reversibility check, the inverse
     // ADB call, and the undo record so two undos of the same entry cannot
@@ -1075,6 +1110,7 @@ pub fn journal_undo(
         })?;
 
         undo_request.target = target.clone();
+        undo_request.context.transport_override = transport_override;
 
         let plan = actions::plan(undo_request);
         execute_journaled(journal, &transport, plan, Some(entry_id)).map(|result| result.entry)
@@ -1110,7 +1146,7 @@ pub async fn shell_run(
             message: "mutating shell commands must be reviewed and executed through the audited operation planner".to_string(),
         });
     }
-    let transport = validated_transport(&target)?;
+    let (transport, _) = privileged_transport(&target)?;
     let adb_path = transport.adb_path.clone();
     let mut args = target.adb_selector();
     args.push("shell".to_string());
@@ -1146,7 +1182,7 @@ pub async fn stream_logcat(
     operation_id: String,
     on_event: tauri::ipc::Channel<OperationEvent>,
 ) -> Result<(), CommandError> {
-    let transport = validated_transport(&target)?;
+    let (transport, _) = privileged_transport(&target)?;
     let adb_path = transport.adb_path.clone();
     let mut args = target.adb_selector();
     args.extend([
@@ -1251,7 +1287,7 @@ pub fn plan_shell_action(request: PlanShellActionRequest) -> Result<ShellActionP
             plan: None,
         });
     }
-    let transport = validated_transport(&request.target)?;
+    let (transport, transport_override) = privileged_transport(&request.target)?;
     let users = adb::list_users(&transport, &request.target)?;
     let user_id = users
         .iter()
@@ -1272,6 +1308,7 @@ pub fn plan_shell_action(request: PlanShellActionRequest) -> Result<ShellActionP
             confirmation_source: actions::ConfirmationSource::ConsoleReview,
             permission: None,
             shell_argv: request.argv,
+            transport_override,
         },
     });
     Ok(ShellActionPlan {
@@ -1315,7 +1352,7 @@ pub fn apply_device_control(
             message: "command is not an allowlisted Droidsmith device control".to_string(),
         });
     }
-    let transport = validated_transport(&target)?;
+    let (transport, transport_override) = privileged_transport(&target)?;
     let users = adb::list_users(&transport, &target)?;
     let user_id = users
         .iter()
@@ -1337,6 +1374,7 @@ pub fn apply_device_control(
             confirmation_source: actions::ConfirmationSource::DeviceControl,
             permission: None,
             shell_argv: argv,
+            transport_override,
         },
     });
     let dir = journal_dir(&app)?;
@@ -1376,7 +1414,7 @@ pub async fn push_file(
     operation_id: String,
     on_event: tauri::ipc::Channel<OperationEvent>,
 ) -> Result<String, CommandError> {
-    let transport = validated_transport(&target)?;
+    let (transport, _) = privileged_transport(&target)?;
     let validated_path = grants.consume(&path_grant, HostPathPurpose::PushOpen)?;
     let remote = validate_remote_path(&remote_path)?;
     let local_arg = validated_path.display().to_string();
@@ -1409,7 +1447,7 @@ pub async fn pull_file(
     operation_id: String,
     on_event: tauri::ipc::Channel<OperationEvent>,
 ) -> Result<HostArtifact, CommandError> {
-    let transport = validated_transport(&target)?;
+    let (transport, _) = privileged_transport(&target)?;
     let output_target = grants.consume(&path_grant, HostPathPurpose::PullSave)?;
     let remote = validate_remote_path(&remote_path)?;
     let timeout = std::time::Duration::from_secs(120);
@@ -1750,7 +1788,7 @@ pub async fn backup_package(
     operation_id: String,
     on_event: tauri::ipc::Channel<OperationEvent>,
 ) -> Result<BackupPackageResult, CommandError> {
-    let transport = validated_transport(&target)?;
+    let (transport, _) = privileged_transport(&target)?;
     validate_package_arg(&package)?;
     let granted_path = grants.consume(&path_grant, HostPathPurpose::BackupSave)?;
     let output_target = validate_backup_target(&granted_path.display().to_string())?;
@@ -1830,7 +1868,7 @@ pub fn set_permission(
     grant: bool,
     #[allow(non_snake_case)] userId: u32,
 ) -> Result<ApplyActionResult, CommandError> {
-    let transport = validated_transport(&target)?;
+    let (transport, transport_override) = privileged_transport(&target)?;
     validate_package_arg(&package)?;
     if !actions::valid_permission(&permission) {
         return Err(CommandError {
@@ -1861,6 +1899,7 @@ pub fn set_permission(
             confirmation_source: actions::ConfirmationSource::PermissionToggle,
             permission: Some(permission),
             shell_argv: Vec::new(),
+            transport_override,
         },
     });
     let dir = journal_dir(&app)?;
@@ -1925,7 +1964,7 @@ pub fn take_screenshot(
     grants: tauri::State<'_, PathGrantStore>,
     path_grant: String,
 ) -> Result<HostArtifact, CommandError> {
-    let transport = validated_transport(&target)?;
+    let (transport, _) = privileged_transport(&target)?;
     let output_target = grants.consume(&path_grant, HostPathPurpose::ScreenshotSave)?;
     let staged = StagedArtifact::new(&output_target)?;
     // Unique device-side temp so concurrent captures (multiple devices or
@@ -1977,7 +2016,7 @@ pub fn launch_scrcpy(
             message: "scrcpy target does not match the requested serial".to_string(),
         });
     }
-    let transport = validated_transport(&request.target)?;
+    let (transport, _) = privileged_transport(&request.target)?;
     let duplicate_count = transport
         .list_devices()?
         .into_iter()
@@ -2030,7 +2069,7 @@ pub async fn install_apk(
     operation_id: String,
     on_event: tauri::ipc::Channel<OperationEvent>,
 ) -> Result<install::InstallPackageResult, CommandError> {
-    let transport = validated_transport(&target)?;
+    let (transport, _) = privileged_transport(&target)?;
     let validated_path = grants.consume(&path_grant, HostPathPurpose::InstallOpen)?;
     let retry_path = validated_path.clone();
     let app_data_dir = app.path().app_data_dir().map_err(|error| CommandError {
@@ -2075,7 +2114,7 @@ pub async fn extract_apk(
     operation_id: String,
     on_event: tauri::ipc::Channel<OperationEvent>,
 ) -> Result<HostArtifact, CommandError> {
-    let transport = validated_transport(&target)?;
+    let (transport, _) = privileged_transport(&target)?;
     let output_target = grants.consume(&path_grant, HostPathPurpose::ExtractApkSave)?;
     let remote = validate_remote_path(&remote_path)?;
     let selector = target.adb_selector();
@@ -2392,12 +2431,13 @@ fn iso_now() -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        append_host_operation, classify_backup_size, classify_shell, diagnostic_text,
-        is_allowed_device_control, load_runtime_packs, pack_error_to_load_error,
+        accepted_transport_override, append_host_operation, classify_backup_size, classify_shell,
+        diagnostic_text, is_allowed_device_control, load_runtime_packs, pack_error_to_load_error,
         parse_fastboot_getvar, unique_screenshot_remote, validate_backup_target,
         validate_remote_path, AdbRecoveryOutcome, AdbRecoveryRecord, ProcessOutput,
         ShellClassification,
     };
+    use crate::adb::DeviceTransportKind;
 
     #[test]
     fn host_recovery_records_are_newline_delimited_and_synced() {
@@ -2719,6 +2759,24 @@ packages:
             validate_backup_target(&valid.display().to_string()).unwrap(),
             valid
         );
+    }
+
+    #[test]
+    fn unsafe_transport_requires_explicit_acknowledgement() {
+        assert_eq!(
+            accepted_transport_override(DeviceTransportKind::Usb, false),
+            Ok(None)
+        );
+        assert_eq!(
+            accepted_transport_override(DeviceTransportKind::TlsWifi, false),
+            Ok(None)
+        );
+        assert!(accepted_transport_override(DeviceTransportKind::LegacyTcp, false).is_err());
+        assert_eq!(
+            accepted_transport_override(DeviceTransportKind::LegacyTcp, true),
+            Ok(Some(DeviceTransportKind::LegacyTcp))
+        );
+        assert!(accepted_transport_override(DeviceTransportKind::UnknownTcp, false).is_err());
     }
 }
 

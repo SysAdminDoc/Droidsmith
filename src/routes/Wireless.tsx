@@ -22,6 +22,7 @@ import {
   StatePanel,
   TableCell,
   TableHeaderCell,
+  TransportBadge,
 } from "./common";
 
 type ServicesState =
@@ -49,6 +50,7 @@ export default function WirelessRoute() {
   const [manualCode, setManualCode] = useState("");
   const [connectHost, setConnectHost] = useState("");
   const [connectPort, setConnectPort] = useState("");
+  const [connectLegacyTcp, setConnectLegacyTcp] = useState(false);
 
   const qrPayload = useMemo(
     () =>
@@ -110,10 +112,11 @@ export default function WirelessRoute() {
         callConnectWireless({
           host: connectHost.trim(),
           port: Number(connectPort),
+          legacy_tcp: connectLegacyTcp,
         }),
       loadServices,
     );
-  }, [connectHost, connectPort, loadServices, t]);
+  }, [connectHost, connectLegacyTcp, connectPort, loadServices, t]);
 
   const pairService = useCallback(
     async (service: WirelessAdbService) => {
@@ -141,6 +144,7 @@ export default function WirelessRoute() {
           callConnectWireless({
             host: service.host,
             port: service.port,
+            legacy_tcp: false,
           }),
         loadServices,
       );
@@ -294,6 +298,17 @@ export default function WirelessRoute() {
                   placeholder="38899"
                   inputMode="numeric"
                 />
+                <label className="flex items-start gap-3 rounded-md border border-amber-300/20 bg-amber-300/[0.05] p-3 text-sm leading-5 text-anvil-200">
+                  <input
+                    type="checkbox"
+                    className="mt-1 h-4 w-4 accent-amber-300"
+                    checked={connectLegacyTcp}
+                    onChange={(event) =>
+                      setConnectLegacyTcp(event.currentTarget.checked)
+                    }
+                  />
+                  <span>{t("wireless.legacyTcpEndpoint")}</span>
+                </label>
               </div>
               <Button
                 type="button"
@@ -581,9 +596,14 @@ function ActionStatus({ state }: { state: ActionState }) {
       <dl className="grid gap-2 text-sm sm:grid-cols-[auto_minmax(0,1fr)]">
         <dt className="text-anvil-500">{t("wireless.endpoint")}</dt>
         <dd>
-          <code className="font-mono text-anvil-100">
-            {state.result.endpoint}
-          </code>
+          <span className="flex flex-wrap items-center gap-2">
+            <code className="font-mono text-anvil-100">
+              {state.result.endpoint}
+            </code>
+            {state.result.transport_kind && (
+              <TransportBadge kind={state.result.transport_kind} />
+            )}
+          </span>
         </dd>
         <dt className="text-anvil-500">{t("wireless.adbOutput")}</dt>
         <dd className="whitespace-pre-wrap font-mono text-xs text-anvil-200">

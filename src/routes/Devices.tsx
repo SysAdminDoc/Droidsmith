@@ -29,6 +29,7 @@ import {
   type SerializedDeviceState,
 } from "../lib/tauri";
 import { useFocusTrap } from "../lib/useFocusTrap";
+import { useTransportAuthorization } from "../lib/useAuthorizedDevices";
 import {
   restartDeviceLifecycle,
   useDeviceStore,
@@ -46,6 +47,8 @@ import {
   StatePanel,
   TableCell,
   TableHeaderCell,
+  TransportBadge,
+  TransportTrustNotice,
 } from "./common";
 import { ADB_RECOVERY_COMMANDS, formatAdbDiagnostics } from "./adbHealth";
 
@@ -745,7 +748,7 @@ function DeviceTable({
                       <code className="font-mono text-xs text-anvil-50">
                         {device.serial}
                       </code>
-                      {device.wireless && <Badge tone="info">Wi-Fi</Badge>}
+                      <TransportBadge kind={device.transport_kind} />
                     </div>
                   </TableCell>
                   <TableCell>
@@ -1004,6 +1007,12 @@ const REMOTE_BUTTONS: { id: string; labelKey: string; keycode: number }[] = [
 
 function DeviceControls({ target }: { target: DeviceTarget }) {
   const { t } = useTranslation();
+  const {
+    accepted: transportOverrideAccepted,
+    setAccepted: setTransportOverrideAccepted,
+    authorizedTarget,
+  } = useTransportAuthorization(target);
+  const operationTarget = authorizedTarget ?? target;
   const serial = target.serial;
   const [lastKey, setLastKey] = useState<string | null>(null);
   const [screenshotMsg, setScreenshotMsg] = useState<string | null>(null);
@@ -1013,7 +1022,7 @@ function DeviceControls({ target }: { target: DeviceTarget }) {
   const sendKey = useCallback(
     async (keycode: number, label: string) => {
       try {
-        await callApplyDeviceControl(target, [
+        await callApplyDeviceControl(operationTarget, [
           "input",
           "keyevent",
           String(keycode),
@@ -1023,7 +1032,7 @@ function DeviceControls({ target }: { target: DeviceTarget }) {
         setLastKey(t("devices.controls.keyFailed", { label }));
       }
     },
-    [target, t],
+    [operationTarget, t],
   );
 
   const takeScreenshot = useCallback(async () => {
@@ -1037,7 +1046,7 @@ function DeviceControls({ target }: { target: DeviceTarget }) {
         return;
       }
       setScreenshotMsg(t("devices.controls.capturing"));
-      const artifact = await callTakeScreenshot(target, pathGrant.id);
+      const artifact = await callTakeScreenshot(operationTarget, pathGrant.id);
       setScreenshotMsg(
         t("devices.controls.savedTo", { path: artifact.local_path }),
       );
@@ -1048,12 +1057,16 @@ function DeviceControls({ target }: { target: DeviceTarget }) {
         }),
       );
     }
-  }, [serial, target, t]);
+  }, [operationTarget, serial, t]);
 
   const applyDensity = useCallback(async () => {
     if (!density.trim()) return;
     try {
-      await callApplyDeviceControl(target, ["wm", "density", density.trim()]);
+      await callApplyDeviceControl(operationTarget, [
+        "wm",
+        "density",
+        density.trim(),
+      ]);
       setDisplayMsg(
         t("devices.controls.densitySet", { value: density.trim() }),
       );
@@ -1064,11 +1077,11 @@ function DeviceControls({ target }: { target: DeviceTarget }) {
         }),
       );
     }
-  }, [target, density, t]);
+  }, [operationTarget, density, t]);
 
   const resetDensity = useCallback(async () => {
     try {
-      await callApplyDeviceControl(target, ["wm", "density", "reset"]);
+      await callApplyDeviceControl(operationTarget, ["wm", "density", "reset"]);
       setDisplayMsg(t("devices.controls.densityReset"));
     } catch (e) {
       setDisplayMsg(
@@ -1077,12 +1090,12 @@ function DeviceControls({ target }: { target: DeviceTarget }) {
         }),
       );
     }
-  }, [target, t]);
+  }, [operationTarget, t]);
 
   const toggleForceDark = useCallback(
     async (enable: boolean) => {
       try {
-        await callApplyDeviceControl(target, [
+        await callApplyDeviceControl(operationTarget, [
           "settings",
           "put",
           "secure",
@@ -1102,11 +1115,16 @@ function DeviceControls({ target }: { target: DeviceTarget }) {
         );
       }
     },
-    [target, t],
+    [operationTarget, t],
   );
 
   return (
     <div className="space-y-4">
+      <TransportTrustNotice
+        target={target}
+        accepted={transportOverrideAccepted}
+        onAcceptedChange={setTransportOverrideAccepted}
+      />
       <div className="grid gap-4 lg:grid-cols-[1fr_1fr]">
         <Card className="p-5">
           <div className="flex items-center justify-between">
@@ -1221,9 +1239,9 @@ function DeviceControls({ target }: { target: DeviceTarget }) {
           </Card>
         </div>
       </div>
-      <ProcessManager target={target} />
-      <FileManager target={target} />
-      <NetworkInspector target={target} />
+      <ProcessManager target={operationTarget} />
+      <FileManager target={operationTarget} />
+      <NetworkInspector target={operationTarget} />
     </div>
   );
 }

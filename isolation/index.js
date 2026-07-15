@@ -81,6 +81,8 @@
     "serial",
     "transport_id",
     "connection_generation",
+    "transport_kind",
+    "untrusted_transport_override",
     "model",
     "product",
     "device",
@@ -148,6 +150,16 @@
     ensureIdentifier(target.serial, "target_serial");
     if (target.serial.startsWith("-")) reject("target_serial");
     ensureInteger(target.connection_generation, "target_generation", 1);
+    if (
+      !["usb", "tls_wifi", "legacy_tcp", "unknown_tcp"].includes(
+        target.transport_kind,
+      )
+    ) {
+      reject("target_transport_kind");
+    }
+    if (typeof target.untrusted_transport_override !== "boolean") {
+      reject("target_transport_override");
+    }
     if (target.transport_id !== null) {
       ensureInteger(target.transport_id, "target_transport", 1);
     }
@@ -271,10 +283,18 @@
         reject("pair_request_value");
       }
     } else if (command === "connect_wireless") {
-      validateKeys(request, ["host", "port"], [], "connect_request");
+      validateKeys(
+        request,
+        ["host", "port", "legacy_tcp"],
+        [],
+        "connect_request",
+      );
       validateWirelessHost(request.host, "connect_host");
       ensureInteger(request.port, "connect_port", 1);
       if (request.port > 65535) reject("connect_port");
+      if (typeof request.legacy_tcp !== "boolean") {
+        reject("connect_legacy_tcp");
+      }
     } else if (command === "launch_scrcpy") {
       validateKeys(
         request,

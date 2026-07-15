@@ -37,7 +37,10 @@ pub mod wireless;
 // Public re-exports for cross-module consumers (`commands`, tests).
 // Items in `actions` are reached via `crate::adb::actions::*` so no
 // short alias is needed here.
-pub use device::{observe_connection_generations, Device, DeviceTarget};
+pub use device::{
+    attach_transport_provenance, observe_connection_generations, Device, DeviceTarget,
+    DeviceTransportKind,
+};
 pub use device_info::{get_device_info, DeviceInfo};
 pub use packages::{list_packages, AppPackage, PackageFilter};
 pub use resolver::{locate_adb, AdbResolution};

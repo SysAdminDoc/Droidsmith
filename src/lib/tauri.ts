@@ -38,6 +38,12 @@ export type DeviceState =
   | { kind: "no_permissions" }
   | { kind: "other"; raw: string };
 
+export type DeviceTransportKind =
+  | "usb"
+  | "tls_wifi"
+  | "legacy_tcp"
+  | "unknown_tcp";
+
 export type Device = {
   serial: string;
   state: SerializedDeviceState;
@@ -47,6 +53,7 @@ export type Device = {
   build_fingerprint: string | null;
   transport_id: number | null;
   connection_generation: number;
+  transport_kind: DeviceTransportKind;
   wireless: boolean;
 };
 
@@ -55,17 +62,19 @@ export type DeviceTarget = Pick<
   | "serial"
   | "transport_id"
   | "connection_generation"
+  | "transport_kind"
   | "model"
   | "product"
   | "device"
   | "build_fingerprint"
->;
+> & { untrusted_transport_override: boolean };
 
 export function deviceTarget(device: Device): DeviceTarget {
   const {
     serial,
     transport_id,
     connection_generation,
+    transport_kind,
     model,
     product,
     device: codename,
@@ -75,10 +84,31 @@ export function deviceTarget(device: Device): DeviceTarget {
     serial,
     transport_id,
     connection_generation,
+    transport_kind,
+    untrusted_transport_override: false,
     model,
     product,
     device: codename,
     build_fingerprint,
+  };
+}
+
+export function requiresTransportOverride(
+  target: DeviceTarget | null | undefined,
+): boolean {
+  return (
+    target?.transport_kind === "legacy_tcp" ||
+    target?.transport_kind === "unknown_tcp"
+  );
+}
+
+export function withTransportOverride(
+  target: DeviceTarget,
+  accepted: boolean,
+): DeviceTarget {
+  return {
+    ...target,
+    untrusted_transport_override: accepted && requiresTransportOverride(target),
   };
 }
 
@@ -249,11 +279,13 @@ export type WirelessPairRequest = {
 export type WirelessConnectRequest = {
   host: string;
   port: number;
+  legacy_tcp: boolean;
 };
 
 export type WirelessCommandResult = {
   endpoint: string;
   stdout: string;
+  transport_kind: DeviceTransportKind | null;
 };
 
 export type BatteryInfo = {
@@ -318,6 +350,7 @@ export type ActionContext = {
   confirmation_source: ConfirmationSource;
   permission: string | null;
   shell_argv: string[];
+  transport_override: DeviceTransportKind | null;
 };
 
 export type ActionRequest = {

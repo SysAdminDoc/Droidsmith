@@ -18,9 +18,18 @@ import {
   resolveAuthorizedTarget,
   sameDeviceTarget,
   useAuthorizedDevices,
+  useTransportAuthorization,
 } from "../lib/useAuthorizedDevices";
 
-import { Badge, Button, Card, PaneHeader, StatePanel } from "./common";
+import {
+  Badge,
+  Button,
+  Card,
+  PaneHeader,
+  StatePanel,
+  TransportBadge,
+  TransportTrustNotice,
+} from "./common";
 
 type HistoryEntry = {
   command: string;
@@ -44,6 +53,11 @@ export default function ConsoleRoute() {
   const [selectedTarget, setSelectedTarget] = useState<DeviceTarget | null>(
     null,
   );
+  const {
+    accepted: transportOverrideAccepted,
+    setAccepted: setTransportOverrideAccepted,
+    authorizedTarget,
+  } = useTransportAuthorization(selectedTarget);
   const [command, setCommand] = useState("");
   const [running, setRunning] = useState(false);
   const [operationStatus, setOperationStatus] = useState<string | null>(null);
@@ -101,7 +115,7 @@ export default function ConsoleRoute() {
 
   const runCommand = useCallback(async () => {
     const trimmed = command.trim();
-    if (!trimmed || !selectedTarget || running) return;
+    if (!trimmed || !authorizedTarget || running) return;
 
     setRunning(true);
     setOperationStatus(null);
@@ -113,7 +127,7 @@ export default function ConsoleRoute() {
     const argv = trimmed.split(/\s+/);
 
     try {
-      const assessment = await callPlanShellAction(selectedTarget, argv);
+      const assessment = await callPlanShellAction(authorizedTarget, argv);
       if (assessment.mutating) {
         if (!assessment.plan) {
           throw new Error("Audited shell planner returned no mutation plan");
@@ -129,7 +143,7 @@ export default function ConsoleRoute() {
       const operationId = newOperationId("console");
       activeOperationRef.current = operationId;
       setOperationStatus(t("console.starting"));
-      const output = await callShellRun(selectedTarget, argv, {
+      const output = await callShellRun(authorizedTarget, argv, {
         operationId,
         onEvent: (event: OperationEvent) => {
           if (
@@ -186,7 +200,7 @@ export default function ConsoleRoute() {
         inputRef.current?.focus();
       }
     }
-  }, [command, selectedTarget, running, t]);
+  }, [authorizedTarget, command, running, t]);
 
   const cancelRunning = useCallback(async () => {
     const operationId = activeOperationRef.current;
@@ -323,9 +337,12 @@ export default function ConsoleRoute() {
         meta={
           <div className="flex flex-wrap items-center gap-2">
             {selectedTarget && (
-              <Badge tone="info">
-                <code className="font-mono">{selectedTarget.serial}</code>
-              </Badge>
+              <>
+                <Badge tone="info">
+                  <code className="font-mono">{selectedTarget.serial}</code>
+                </Badge>
+                <TransportBadge kind={selectedTarget.transport_kind} />
+              </>
             )}
             <Badge tone="neutral">
               {t("console.commandCount", { count: history.length })}
@@ -401,6 +418,12 @@ export default function ConsoleRoute() {
             </div>
           </Card>
         )}
+
+        <TransportTrustNotice
+          target={selectedTarget}
+          accepted={transportOverrideAccepted}
+          onAcceptedChange={setTransportOverrideAccepted}
+        />
 
         {selectedTarget && (
           <Card className="overflow-hidden p-0">

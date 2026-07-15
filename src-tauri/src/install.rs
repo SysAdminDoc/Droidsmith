@@ -13,7 +13,7 @@ use std::time::Duration;
 use serde::{Deserialize, Serialize};
 
 use crate::adb::actions::pm_failure_marker;
-use crate::adb::{DeviceTarget, ShellTransport};
+use crate::adb::{DeviceTarget, DeviceTransportKind, ShellTransport};
 use crate::operations::{self, EventSink, ProcessOutput, RegisteredOperation};
 
 const MAX_ARCHIVE_ENTRIES: usize = 4_096;
@@ -173,6 +173,8 @@ struct InstallAuditRecord {
     allow_downgrade: bool,
     bypass_low_target_sdk_block: bool,
     override_confirmed: bool,
+    transport_kind: DeviceTransportKind,
+    untrusted_transport_override: Option<DeviceTransportKind>,
     outcome: AuditOutcome,
     started_at: String,
     completed_at: Option<String>,
@@ -210,7 +212,7 @@ pub fn install_package(
     let started_at = crate::time::iso_utc_now();
     let audit_path = app_data_dir.join("install-operations.jsonl");
     let mut audit = InstallAuditRecord {
-        schema_version: 1,
+        schema_version: 2,
         operation_id: operation_id.to_string(),
         device_serial: target.serial.clone(),
         source_kind: prepared.kind,
@@ -219,6 +221,12 @@ pub fn install_package(
         allow_downgrade: options.allow_downgrade,
         bypass_low_target_sdk_block: options.bypass_low_target_sdk_block,
         override_confirmed: options.override_confirmed,
+        transport_kind: target.transport_kind,
+        // The Tauri command revalidates this target and rejects unsafe
+        // transports without acknowledgement before entering the installer.
+        untrusted_transport_override: (target.untrusted_transport_override
+            && target.transport_kind.requires_override())
+        .then_some(target.transport_kind),
         outcome: AuditOutcome::Pending,
         started_at,
         completed_at: None,
@@ -1041,7 +1049,7 @@ mod tests {
         let dir = temp_dir("audit");
         let path = dir.join("install-operations.jsonl");
         let record = InstallAuditRecord {
-            schema_version: 1,
+            schema_version: 2,
             operation_id: "install-audit-01".to_string(),
             device_serial: "SERIAL-1".to_string(),
             source_kind: InstallSourceKind::Apks,
@@ -1050,6 +1058,8 @@ mod tests {
             allow_downgrade: true,
             bypass_low_target_sdk_block: false,
             override_confirmed: true,
+            transport_kind: DeviceTransportKind::LegacyTcp,
+            untrusted_transport_override: Some(DeviceTransportKind::LegacyTcp),
             outcome: AuditOutcome::Pending,
             started_at: "2026-07-14T18:00:00Z".to_string(),
             completed_at: None,
@@ -1061,6 +1071,8 @@ mod tests {
         let value: serde_json::Value = serde_json::from_str(text.trim()).unwrap();
         assert_eq!(value["allow_downgrade"], true);
         assert_eq!(value["override_confirmed"], true);
+        assert_eq!(value["transport_kind"], "legacy_tcp");
+        assert_eq!(value["untrusted_transport_override"], "legacy_tcp");
         assert!(value.get("source_path").is_none());
         fs::remove_dir_all(dir).unwrap();
     }

@@ -614,6 +614,8 @@ mod tests {
             product: None,
             device: None,
             build_fingerprint: Some("build/test".into()),
+            transport_kind: crate::adb::DeviceTransportKind::Usb,
+            untrusted_transport_override: false,
         }
     }
 
@@ -690,6 +692,30 @@ mod tests {
     }
 
     #[test]
+    fn unsafe_transport_override_round_trips_in_mutation_audit() {
+        let dir = fresh_tmp_dir("transport-override");
+        let mut journal = Journal::open(&dir, "wifi.local:5555").unwrap();
+        let mut applied = fake_applied("wifi.local:5555", "com.foo", ActionKind::Disable);
+        applied.plan.request.target.transport_kind = crate::adb::DeviceTransportKind::LegacyTcp;
+        applied.plan.request.target.untrusted_transport_override = true;
+        applied.plan.request.context.transport_override =
+            Some(crate::adb::DeviceTransportKind::LegacyTcp);
+        journal.record(applied).unwrap();
+        drop(journal);
+
+        let reloaded = Journal::open(&dir, "wifi.local:5555").unwrap();
+        assert_eq!(
+            reloaded.entries()[0]
+                .applied
+                .plan
+                .request
+                .context
+                .transport_override,
+            Some(crate::adb::DeviceTransportKind::LegacyTcp)
+        );
+    }
+
+    #[test]
     fn concurrent_records_produce_unique_ids() {
         // Regression for IMP-30: independent `Journal::open` instances
         // used to derive the same next_id and append duplicate ids under
@@ -755,6 +781,7 @@ mod tests {
                     confirmation_source: crate::adb::actions::ConfirmationSource::PermissionToggle,
                     permission: Some("android.permission.CAMERA".into()),
                     shell_argv: Vec::new(),
+                    transport_override: None,
                 },
             }),
             stdout: String::new(),
@@ -982,6 +1009,7 @@ mod tests {
                 confirmation_source: crate::adb::actions::ConfirmationSource::ConsoleReview,
                 permission: None,
                 shell_argv: vec!["rm".into(), "/sdcard/private.txt".into()],
+                transport_override: None,
             },
         });
         let result = journal.execute(plan, None, "2026-07-14T12:00:00Z", |_| {

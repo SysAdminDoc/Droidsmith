@@ -3,6 +3,7 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Mutex, OnceLock};
+use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
 
@@ -29,9 +30,38 @@ pub struct Device {
     /// first appears. A disconnect observed by Droidsmith retires the
     /// generation, so a later reconnect cannot reuse a stale UI target.
     pub connection_generation: u64,
+    /// Trust classification derived from USB identity or process-local
+    /// wireless connection provenance. An address alone is never enough to
+    /// claim Android 11+ TLS Wireless Debugging.
+    pub transport_kind: DeviceTransportKind,
     /// True if the device serial parses as a `host:port` (wireless)
     /// rather than a hardware serial.
     pub wireless: bool,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DeviceTransportKind {
+    Usb,
+    TlsWifi,
+    LegacyTcp,
+    #[default]
+    UnknownTcp,
+}
+
+impl DeviceTransportKind {
+    pub fn requires_override(self) -> bool {
+        matches!(self, Self::LegacyTcp | Self::UnknownTcp)
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Usb => "USB",
+            Self::TlsWifi => "paired TLS Wi-Fi",
+            Self::LegacyTcp => "legacy TCP",
+            Self::UnknownTcp => "unknown TCP",
+        }
+    }
 }
 
 /// Immutable device identity captured by the renderer before an operation.
@@ -48,6 +78,13 @@ pub struct DeviceTarget {
     pub product: Option<String>,
     pub device: Option<String>,
     pub build_fingerprint: Option<String>,
+    #[serde(default)]
+    pub transport_kind: DeviceTransportKind,
+    /// Explicit renderer acknowledgement for one selected connection. This is
+    /// authorization metadata, not identity, and is checked only after the
+    /// live target's independently-derived transport kind is revalidated.
+    #[serde(default)]
+    pub untrusted_transport_override: bool,
 }
 
 impl Device {
@@ -60,6 +97,8 @@ impl Device {
             product: self.product.clone(),
             device: self.device.clone(),
             build_fingerprint: self.build_fingerprint.clone(),
+            transport_kind: self.transport_kind,
+            untrusted_transport_override: false,
         }
     }
 }
@@ -84,6 +123,7 @@ struct DeviceKey {
     product: Option<String>,
     device: Option<String>,
     build_fingerprint: Option<String>,
+    transport_kind: DeviceTransportKind,
 }
 
 impl From<&Device> for DeviceKey {
@@ -95,7 +135,85 @@ impl From<&Device> for DeviceKey {
             product: value.product.clone(),
             device: value.device.clone(),
             build_fingerprint: value.build_fingerprint.clone(),
+            transport_kind: value.transport_kind,
         }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+struct WirelessProvenance {
+    kind: DeviceTransportKind,
+    recorded_at: Instant,
+    observed_live: bool,
+}
+
+fn wireless_provenance() -> &'static Mutex<HashMap<String, WirelessProvenance>> {
+    static PROVENANCE: OnceLock<Mutex<HashMap<String, WirelessProvenance>>> = OnceLock::new();
+    PROVENANCE.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+/// Record the protocol provenance of a successful `adb connect`. Only the
+/// backend wireless module calls this after matching mDNS TLS discovery or an
+/// explicit legacy-mode request.
+pub fn remember_wireless_transport(serial: &str, kind: DeviceTransportKind) {
+    if !looks_wireless(serial) || kind == DeviceTransportKind::Usb {
+        return;
+    }
+    let Ok(mut known) = wireless_provenance().lock() else {
+        return;
+    };
+    known.insert(
+        serial.to_string(),
+        WirelessProvenance {
+            kind,
+            recorded_at: Instant::now(),
+            observed_live: false,
+        },
+    );
+}
+
+/// Attach process-local protocol provenance and retire disconnected endpoints.
+/// Unknown host:port serials remain `unknown_tcp`; TLS is never inferred from
+/// an address, port number, or successful ADB shell alone.
+pub fn attach_transport_provenance(devices: &mut [Device]) {
+    let live_wireless = devices
+        .iter()
+        .filter(|device| looks_wireless(&device.serial))
+        .map(|device| device.serial.clone())
+        .collect::<HashSet<_>>();
+    let Ok(mut known) = wireless_provenance().lock() else {
+        for device in devices {
+            device.transport_kind = if looks_wireless(&device.serial) {
+                DeviceTransportKind::UnknownTcp
+            } else {
+                DeviceTransportKind::Usb
+            };
+            device.wireless = device.transport_kind != DeviceTransportKind::Usb;
+        }
+        return;
+    };
+    // ADB may report `connected to` just before the endpoint appears in a
+    // devices snapshot. Keep a short-lived unobserved claim across that race,
+    // but retire observed disconnects immediately and never persist trust
+    // across a later reconnect.
+    known.retain(|serial, provenance| {
+        live_wireless.contains(serial)
+            || (!provenance.observed_live
+                && provenance.recorded_at.elapsed() < Duration::from_secs(30))
+    });
+    for device in devices {
+        device.transport_kind = if looks_wireless(&device.serial) {
+            known
+                .get_mut(&device.serial)
+                .map(|provenance| {
+                    provenance.observed_live = true;
+                    provenance.kind
+                })
+                .unwrap_or(DeviceTransportKind::UnknownTcp)
+        } else {
+            DeviceTransportKind::Usb
+        };
+        device.wireless = device.transport_kind != DeviceTransportKind::Usb;
     }
 }
 
@@ -285,5 +403,43 @@ mod tests {
         assert!(!valid_serial(&"a".repeat(257)));
         assert!(!valid_serial("-e"));
         assert!(!valid_serial("--help"));
+    }
+
+    #[test]
+    fn provenance_is_explicit_and_retired_after_disconnect() {
+        fn device(serial: &str) -> Device {
+            Device {
+                serial: serial.to_string(),
+                state: DeviceState::Device,
+                model: None,
+                product: None,
+                device: None,
+                build_fingerprint: None,
+                transport_id: Some(99),
+                connection_generation: 0,
+                transport_kind: DeviceTransportKind::UnknownTcp,
+                wireless: false,
+            }
+        }
+
+        let endpoint = "imp44-test.local:38899";
+        remember_wireless_transport(endpoint, DeviceTransportKind::TlsWifi);
+        let mut first = vec![device(endpoint)];
+        attach_transport_provenance(&mut first);
+        assert_eq!(first[0].transport_kind, DeviceTransportKind::TlsWifi);
+        assert!(first[0].wireless);
+
+        attach_transport_provenance(&mut []);
+        let mut reconnected = vec![device(endpoint)];
+        attach_transport_provenance(&mut reconnected);
+        assert_eq!(
+            reconnected[0].transport_kind,
+            DeviceTransportKind::UnknownTcp
+        );
+
+        let mut usb = vec![device("R5CT60ZQR4M")];
+        attach_transport_provenance(&mut usb);
+        assert_eq!(usb[0].transport_kind, DeviceTransportKind::Usb);
+        assert!(!usb[0].wireless);
     }
 }

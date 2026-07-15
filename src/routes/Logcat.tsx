@@ -15,6 +15,7 @@ import {
   resolveAuthorizedTarget,
   sameDeviceTarget,
   useAuthorizedDevices,
+  useTransportAuthorization,
 } from "../lib/useAuthorizedDevices";
 
 import {
@@ -24,6 +25,8 @@ import {
   FieldInput,
   PaneHeader,
   StatePanel,
+  TransportBadge,
+  TransportTrustNotice,
 } from "./common";
 
 type LogLine = {
@@ -43,6 +46,11 @@ export default function LogcatRoute() {
   const [selectedTarget, setSelectedTarget] = useState<DeviceTarget | null>(
     null,
   );
+  const {
+    accepted: transportOverrideAccepted,
+    setAccepted: setTransportOverrideAccepted,
+    authorizedTarget,
+  } = useTransportAuthorization(selectedTarget);
   const [lines, setLines] = useState<LogLine[]>([]);
   const [tailing, setTailing] = useState(false);
   const [paused, setPaused] = useState(false);
@@ -58,7 +66,7 @@ export default function LogcatRoute() {
   const outputRef = useRef<HTMLDivElement>(null);
 
   const startTailing = useCallback(() => {
-    if (!selectedTarget || operationRef.current) return;
+    if (!authorizedTarget || operationRef.current) return;
     const operationId = newOperationId("logcat");
     const generation = generationRef.current + 1;
     generationRef.current = generation;
@@ -92,7 +100,7 @@ export default function LogcatRoute() {
       }
     };
 
-    void callStreamLogcat(selectedTarget, {
+    void callStreamLogcat(authorizedTarget, {
       operationId,
       onEvent,
     })
@@ -117,7 +125,7 @@ export default function LogcatRoute() {
           setReconnecting(false);
         }
       });
-  }, [selectedTarget]);
+  }, [authorizedTarget]);
 
   const stopTailing = useCallback(() => {
     const operationId = operationRef.current;
@@ -200,9 +208,12 @@ export default function LogcatRoute() {
         meta={
           <div className="flex flex-wrap items-center gap-2">
             {selectedTarget && (
-              <Badge tone="info">
-                <code className="font-mono">{selectedTarget.serial}</code>
-              </Badge>
+              <>
+                <Badge tone="info">
+                  <code className="font-mono">{selectedTarget.serial}</code>
+                </Badge>
+                <TransportBadge kind={selectedTarget.transport_kind} />
+              </>
             )}
             {tailing && !streamError && !reconnecting && (
               <Badge tone="success">{t("logcat.tailing")}</Badge>
@@ -263,6 +274,12 @@ export default function LogcatRoute() {
             </div>
           </Card>
         )}
+
+        <TransportTrustNotice
+          target={selectedTarget}
+          accepted={transportOverrideAccepted}
+          onAcceptedChange={setTransportOverrideAccepted}
+        />
 
         {selectedTarget && (
           <>

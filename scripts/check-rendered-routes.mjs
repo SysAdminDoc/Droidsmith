@@ -119,6 +119,41 @@ async function runDesktopFlow(browser) {
   });
   await page.getByRole("button", { name: "Cancel", exact: true }).click();
 
+  await page.evaluate(() =>
+    window.__DROIDSMITH_MOCK_TRANSPORT__("unknown_tcp"),
+  );
+  await page
+    .getByRole("heading", { name: "Unauthenticated wireless transport" })
+    .waitFor();
+  await page.getByLabel("ADB shell command").fill("getprop ro.product.model");
+  await page.getByRole("button", { name: "Run", exact: true }).click();
+  await page
+    .getByText("untrusted_transport_override_required", { exact: true })
+    .waitFor();
+  await page
+    .getByLabel(
+      "Allow privileged operations over this connection until I select another device.",
+    )
+    .check();
+  await page.getByLabel("ADB shell command").fill("getprop ro.product.model");
+  await page.getByRole("button", { name: "Run", exact: true }).click();
+  await page.getByText("Pixel QA", { exact: true }).waitFor();
+  const privilegedTargetAccepted = await page.evaluate(
+    () => window.__DROIDSMITH_LAST_PRIVILEGED_TARGET__,
+  );
+  if (
+    privilegedTargetAccepted?.transport_kind !== "unknown_tcp" ||
+    privilegedTargetAccepted?.untrusted_transport_override !== true
+  ) {
+    throw new Error(
+      "Unsafe transport acknowledgement was not scoped to the live target",
+    );
+  }
+  await page.evaluate(() => window.__DROIDSMITH_MOCK_TRANSPORT__("usb"));
+  await page
+    .getByRole("heading", { name: "Unauthenticated wireless transport" })
+    .waitFor({ state: "hidden" });
+
   await page.getByRole("button", { name: /Logcat/ }).click();
   await page.getByRole("heading", { name: "Logcat", exact: true }).waitFor();
   await page.getByRole("button", { name: "Start tail" }).click();
@@ -313,6 +348,7 @@ async function installTauriMock(page) {
       build_fingerprint: "google/oriole/oriole:15/QA",
       transport_id: 7,
       connection_generation: 8,
+      transport_kind: "usb",
       wireless: false,
     };
     const adbHealth = {
@@ -453,6 +489,21 @@ async function installTauriMock(page) {
               },
               health: adbHealth,
               observed_at: "2026-07-14T18:00:03Z",
+            });
+          };
+          window.__DROIDSMITH_MOCK_TRANSPORT__ = (kind) => {
+            device.transport_kind = kind;
+            device.wireless = kind !== "usb";
+            device.connection_generation += 1;
+            emitChannel(args.on_event, {
+              kind: "snapshot",
+              result: {
+                adb_resolved: true,
+                adb_path: "C:/Android/platform-tools/adb.exe",
+                devices: [{ ...device }],
+              },
+              health: adbHealth,
+              observed_at: "2026-07-14T18:00:04Z",
             });
           };
           emitChannel(args.on_event, {
@@ -669,6 +720,15 @@ async function installTauriMock(page) {
           return planFor(args.request);
         }
         if (cmd === "plan_shell_action") {
+          window.__DROIDSMITH_LAST_PRIVILEGED_TARGET__ = args.request.target;
+          if (
+            ["legacy_tcp", "unknown_tcp"].includes(
+              args.request.target.transport_kind,
+            ) &&
+            !args.request.target.untrusted_transport_override
+          ) {
+            throw new Error("untrusted_transport_override_required");
+          }
           const shellArgv = args.request.argv;
           const readOnly = shellArgv[0] === "getprop";
           return {
@@ -688,6 +748,7 @@ async function installTauriMock(page) {
                       confirmation_source: "console_review",
                       permission: null,
                       shell_argv: shellArgv,
+                      transport_override: null,
                     },
                   },
                   args: shellArgv,
@@ -921,6 +982,7 @@ async function installTauriMock(page) {
             confirmation_source: "apps_preview",
             permission: null,
             shell_argv: [],
+            transport_override: null,
           },
         },
         args: action,

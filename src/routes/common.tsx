@@ -2,6 +2,11 @@ import type { ComponentPropsWithoutRef, ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 
 import { cn } from "../lib/cn";
+import {
+  requiresTransportOverride,
+  type DeviceTarget,
+  type DeviceTransportKind,
+} from "../lib/tauri";
 
 export function PaneHeader({
   title,
@@ -202,6 +207,52 @@ export function MilestoneBadge({ milestone }: { milestone: string }) {
     <Badge tone="neutral" className="font-mono uppercase tracking-[0.08em]">
       {t("common.roadmap", { milestone })}
     </Badge>
+  );
+}
+
+const transportLabels: Record<DeviceTransportKind, string> = {
+  usb: "devices.transportUsb",
+  tls_wifi: "devices.transportTlsWifi",
+  legacy_tcp: "devices.transportLegacyTcp",
+  unknown_tcp: "devices.transportUnknownTcp",
+};
+
+export function TransportBadge({ kind }: { kind: DeviceTransportKind }) {
+  const { t } = useTranslation();
+  const tone =
+    kind === "usb" ? "neutral" : kind === "tls_wifi" ? "success" : "warning";
+  return <Badge tone={tone}>{t(transportLabels[kind])}</Badge>;
+}
+
+export function TransportTrustNotice({
+  target,
+  accepted,
+  onAcceptedChange,
+}: {
+  target: DeviceTarget | null | undefined;
+  accepted: boolean;
+  onAcceptedChange: (accepted: boolean) => void;
+}) {
+  const { t } = useTranslation();
+  if (!target || !requiresTransportOverride(target)) return null;
+
+  return (
+    <StatePanel title={t("devices.transportTrustTitle")} tone="warning">
+      <p>
+        {t("devices.transportTrustBody", {
+          transport: t(transportLabels[target.transport_kind]),
+        })}
+      </p>
+      <label className="mt-4 flex cursor-pointer items-start gap-3 rounded-md border border-amber-300/20 bg-amber-300/[0.06] p-3 text-anvil-100">
+        <input
+          type="checkbox"
+          className="mt-1 h-4 w-4 accent-amber-300"
+          checked={accepted}
+          onChange={(event) => onAcceptedChange(event.currentTarget.checked)}
+        />
+        <span>{t("devices.transportTrustAcknowledge")}</span>
+      </label>
+    </StatePanel>
   );
 }
 

@@ -19,7 +19,8 @@ use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
 use crate::adb::device::{
-    looks_wireless, observe_connection_generations, valid_serial, Device, DeviceState, DeviceTarget,
+    attach_transport_provenance, looks_wireless, observe_connection_generations, valid_serial,
+    Device, DeviceState, DeviceTarget, DeviceTransportKind,
 };
 
 /// Default timeout for non-streaming `adb` calls. Two seconds is enough
@@ -117,7 +118,9 @@ impl ShellTransport {
 impl AdbTransport for ShellTransport {
     fn list_devices(&self) -> Result<Vec<Device>, TransportError> {
         let stdout = self.run(&["devices", "-l"])?;
-        parse_devices_long(&stdout)
+        let mut devices = parse_devices_long(&stdout)?;
+        attach_transport_provenance(&mut devices);
+        Ok(devices)
     }
 
     fn shell(&self, serial: &str, args: &[&str]) -> Result<String, TransportError> {
@@ -200,6 +203,7 @@ pub fn validate_device_target(
         || actual.product != target.product
         || actual.device != target.device
         || actual.build_fingerprint != target.build_fingerprint
+        || actual.transport_kind != target.transport_kind
     {
         return Err(TransportError::Parse(format!(
             "device target changed; refresh the device list before continuing (serial {:?})",
@@ -286,6 +290,11 @@ pub fn parse_devices_long(stdout: &str) -> Result<Vec<Device>, TransportError> {
 
         let mut device = Device {
             wireless: looks_wireless(&serial),
+            transport_kind: if looks_wireless(&serial) {
+                DeviceTransportKind::UnknownTcp
+            } else {
+                DeviceTransportKind::Usb
+            },
             serial,
             state,
             model: None,
@@ -501,6 +510,7 @@ mod tests {
             build_fingerprint: Some(build.into()),
             transport_id,
             connection_generation: 0,
+            transport_kind: DeviceTransportKind::Usb,
             wireless: false,
         }
     }
@@ -573,6 +583,7 @@ emulator-5554          device transport_id:1
             build_fingerprint: Some("build/test".into()),
             transport_id: Some(1),
             connection_generation: 0,
+            transport_kind: DeviceTransportKind::Usb,
             wireless: false,
         }]);
         let devs = mock.list_devices().unwrap();
@@ -622,6 +633,8 @@ emulator-5554          device transport_id:1
             product: Some("panther".into()),
             device: Some("panther".into()),
             build_fingerprint: Some("build/b".into()),
+            transport_kind: DeviceTransportKind::Usb,
+            untrusted_transport_override: false,
         };
         let validated = validate_device_target(&mock, &target).unwrap();
         assert_eq!(validated.transport_id, Some(9));
@@ -642,6 +655,8 @@ emulator-5554          device transport_id:1
             product: Some("panther".into()),
             device: Some("panther".into()),
             build_fingerprint: Some("build/a".into()),
+            transport_kind: DeviceTransportKind::Usb,
+            untrusted_transport_override: false,
         };
         assert!(validate_device_target(&mock, &target).is_err());
     }
@@ -657,6 +672,8 @@ emulator-5554          device transport_id:1
             product: Some("panther".into()),
             device: Some("panther".into()),
             build_fingerprint: Some("build/old".into()),
+            transport_kind: DeviceTransportKind::Usb,
+            untrusted_transport_override: false,
         };
         assert!(validate_device_target(&mock, &target).is_err());
     }

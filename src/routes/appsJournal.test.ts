@@ -26,6 +26,8 @@ function entry(
             serial: "device-1",
             transport_id: 1,
             connection_generation: 2,
+            transport_kind: "usb",
+            untrusted_transport_override: false,
             model: null,
             product: null,
             device: null,

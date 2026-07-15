@@ -19,7 +19,9 @@ package backups, audited permission/device-control mutations, reviewed shell
 mutations, journal undo, debloat queue recovery, scrcpy launch and session
 supervision, cancellable background shell/backup/file operations, incremental
 Logcat streaming and export, live cross-route device hot-plug updates, ADB
-server/mDNS/Wi-Fi 2.0 health with audited guided recovery, and fastboot
+server/mDNS/Wi-Fi 2.0 health with audited guided recovery, provenance-classified
+USB/TLS/legacy/unknown transports with fail-closed unsafe-TCP acknowledgement,
+and fastboot
 inspection. A local-only Diagnostics center previews and saves redacted support
 bundles with tool/OS/ADB health, failed-operation records, and crash excerpts;
 it never uploads data and can wipe disposable local diagnostic history.
@@ -57,7 +59,7 @@ ADB front end, but it has hard limits that an open project can fix:
 | Free tier | Core only — dark theme, Process Manager, batch ops are sponsor-gated | All features always free |
 | Debloat lists | Static, underperforms Universal Android Debloater per user reports | Versioned YAML packs and vendor quirks; UAD-NG import is blocked on redistribution permission |
 | Screen mirror | Virtual buttons + screenshots | System scrcpy launch/supervision with per-device presets; bundled scrcpy remains planned |
-| Wireless ADB | Manual `adb pair` in console | First-class pairing UI (Android 11+) |
+| Wireless ADB | Manual `adb pair` in console | First-class Android 11+ pairing, exact mDNS TLS provenance, and explicit warnings for legacy/unknown TCP |
 | Automation | None | YAML profiles + headless CLI for reproducible device actions |
 | Extensibility | None | Versioned local pack, quirk, and profile schemas; plugin API and marketplace are deferred |
 | i18n | EN + RU | i18next-driven, contributor-friendly |
@@ -138,7 +140,7 @@ navigation, command palette focus, Apps action overlays, Debloat queue results,
 ADB health/recovery review, the redacted Diagnostics preview/save/wipe flow,
 the split-package install and explicit override-confirmation flow, cross-route
 disconnect/reconnect behavior, incremental Logcat reconnect/cancel behavior,
-and mobile/narrow overflow.
+unsafe-transport acknowledgement/reset behavior, and mobile/narrow overflow.
 `npm run release:smoke` builds the frontend and Tauri bundle, checks bundled
 resource metadata, validates third-party notices, and fails if expected local
 installer artifacts are missing.

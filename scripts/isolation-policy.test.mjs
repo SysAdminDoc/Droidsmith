@@ -28,6 +28,8 @@ const target = Object.freeze({
   serial: "R58M12345",
   transport_id: 7,
   connection_generation: 2,
+  transport_kind: "usb",
+  untrusted_transport_override: false,
   model: "Pixel 9",
   product: "tokay",
   device: "tokay",
@@ -144,9 +146,28 @@ test("rejects malformed targets and future mutation commands by default", () => 
   assert.equal(unknown.cmd, blockedCommand);
 });
 
+test("validates transport provenance and explicit override fields", () => {
+  for (const malformedTarget of [
+    { ...target, transport_kind: "wifi" },
+    { ...target, untrusted_transport_override: "yes" },
+  ]) {
+    assert.equal(
+      hook(
+        message("take_screenshot", {
+          target: malformedTarget,
+          path_grant: pathGrant,
+        }),
+      ).cmd,
+      blockedCommand,
+    );
+  }
+});
+
 test("rejects option-like wireless hosts and non-string pairing codes", () => {
   const host = hook(
-    message("connect_wireless", { request: { host: "-a", port: 5555 } }),
+    message("connect_wireless", {
+      request: { host: "-a", port: 5555, legacy_tcp: false },
+    }),
   );
   const code = hook(
     message("pair_wireless", {
@@ -155,6 +176,17 @@ test("rejects option-like wireless hosts and non-string pairing codes", () => {
   );
   assert.equal(host.cmd, blockedCommand);
   assert.equal(code.cmd, blockedCommand);
+});
+
+test("requires an explicit legacy TCP classification on wireless connect", () => {
+  const valid = message("connect_wireless", {
+    request: { host: "pixel.local", port: 5555, legacy_tcp: true },
+  });
+  const missing = message("connect_wireless", {
+    request: { host: "pixel.local", port: 5555 },
+  });
+  assert.equal(hook(valid), valid);
+  assert.equal(hook(missing).cmd, blockedCommand);
 });
 
 test("allows bounded multiline Logcat exports", () => {

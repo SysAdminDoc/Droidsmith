@@ -1,7 +1,12 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { useDeviceStore } from "./deviceStore";
-import { deviceTarget, type Device, type DeviceTarget } from "./tauri";
+import {
+  deviceTarget,
+  withTransportOverride,
+  type Device,
+  type DeviceTarget,
+} from "./tauri";
 
 export function useAuthorizedDevices() {
   const devicesState = useDeviceStore((store) => store.devicesState);
@@ -16,6 +21,24 @@ export function useAuthorizedDevices() {
     [devicesState],
   );
   return { devicesState, authorizedDevices };
+}
+
+/** Keep an unsafe-transport acknowledgement scoped to one live target. */
+export function useTransportAuthorization(target: DeviceTarget | null) {
+  const [accepted, setAccepted] = useState(false);
+  useEffect(() => {
+    setAccepted(false);
+  }, [
+    target?.serial,
+    target?.transport_id,
+    target?.connection_generation,
+    target?.transport_kind,
+  ]);
+  const authorizedTarget = useMemo(
+    () => (target ? withTransportOverride(target, accepted) : null),
+    [accepted, target],
+  );
+  return { accepted, setAccepted, authorizedTarget };
 }
 
 /**
@@ -57,6 +80,7 @@ export function sameDeviceTarget(
     left.serial === right.serial &&
     left.transport_id === right.transport_id &&
     left.connection_generation === right.connection_generation &&
+    left.transport_kind === right.transport_kind &&
     left.model === right.model &&
     left.product === right.product &&
     left.device === right.device &&

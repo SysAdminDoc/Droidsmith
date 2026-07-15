@@ -22,7 +22,10 @@ import {
   type PlannedAction,
   type RemovalLevel,
 } from "../lib/tauri";
-import { useAuthorizedDevices } from "../lib/useAuthorizedDevices";
+import {
+  useAuthorizedDevices,
+  useTransportAuthorization,
+} from "../lib/useAuthorizedDevices";
 
 import {
   queueStats,
@@ -43,6 +46,8 @@ import {
   StatePanel,
   TableCell,
   TableHeaderCell,
+  TransportBadge,
+  TransportTrustNotice,
 } from "./common";
 
 type PacksState =
@@ -109,6 +114,12 @@ export default function DebloatRoute() {
         ? device.transport_id === selectedTransportId
         : device.serial === selectedSerial,
     ) ?? null;
+  const selectedTarget = selectedDevice ? deviceTarget(selectedDevice) : null;
+  const {
+    accepted: transportOverrideAccepted,
+    setAccepted: setTransportOverrideAccepted,
+    authorizedTarget,
+  } = useTransportAuthorization(selectedTarget);
 
   const loadPacks = useCallback(async () => {
     if (!inTauri() || !selectedDevice || !usersReady) return;
@@ -241,7 +252,7 @@ export default function DebloatRoute() {
       plans: PlannedAction[],
       overrideAccepted: boolean,
     ) => {
-      if (!selectedDevice || !usersReady) return;
+      if (!selectedDevice || !authorizedTarget || !usersReady) return;
       cancelRequestedRef.current = false;
       // One baseline listing supplies presence and system metadata for the
       // whole batch. Successful mutations use the backend's targeted journal
@@ -384,14 +395,21 @@ export default function DebloatRoute() {
         overrideAccepted,
       });
     },
-    [selectedDevice, selectedUser, t, usersReady, verificationMessage],
+    [
+      authorizedTarget,
+      selectedDevice,
+      selectedUser,
+      t,
+      usersReady,
+      verificationMessage,
+    ],
   );
 
   const applyPack = useCallback(async () => {
-    if (wizard.step !== "preview" || !selectedDevice || !usersReady) return;
+    if (wizard.step !== "preview" || !authorizedTarget || !usersReady) return;
     try {
       const planned = await callPlanPack({
-        target: deviceTarget(selectedDevice),
+        target: authorizedTarget,
         user_id: selectedUser,
         pack_id: wizard.pack.id,
         revision: wizard.pack.revision,
@@ -418,7 +436,7 @@ export default function DebloatRoute() {
           : previous,
       );
     }
-  }, [runQueue, selectedDevice, selectedUser, usersReady, wizard]);
+  }, [authorizedTarget, runQueue, selectedUser, usersReady, wizard]);
 
   const cancelAfterCurrent = useCallback(() => {
     cancelRequestedRef.current = true;
@@ -428,12 +446,12 @@ export default function DebloatRoute() {
   }, []);
 
   const retryFailed = useCallback(async () => {
-    if (wizard.step !== "done" || !selectedDevice || !usersReady) return;
+    if (wizard.step !== "done" || !authorizedTarget || !usersReady) return;
     const failedIds = wizard.queue
       .filter((row) => row.status === "failed")
       .map((row) => row.entry.id);
     const planned = await callPlanPack({
-      target: deviceTarget(selectedDevice),
+      target: authorizedTarget,
       user_id: selectedUser,
       pack_id: wizard.pack.id,
       revision: wizard.pack.revision,
@@ -459,7 +477,7 @@ export default function DebloatRoute() {
       planned.plans,
       wizard.overrideAccepted,
     );
-  }, [runQueue, selectedDevice, selectedUser, usersReady, wizard]);
+  }, [authorizedTarget, runQueue, selectedUser, usersReady, wizard]);
 
   return (
     <>
@@ -473,6 +491,9 @@ export default function DebloatRoute() {
               <Badge tone="info">
                 <code className="font-mono">{selectedSerial}</code>
               </Badge>
+            )}
+            {selectedTarget && (
+              <TransportBadge kind={selectedTarget.transport_kind} />
             )}
             {packsState.kind === "ok" && (
               <Badge tone="neutral">
@@ -507,6 +528,12 @@ export default function DebloatRoute() {
             }}
           />
         )}
+
+        <TransportTrustNotice
+          target={selectedTarget}
+          accepted={transportOverrideAccepted}
+          onAcceptedChange={setTransportOverrideAccepted}
+        />
 
         {selectedSerial && userError && (
           <StatePanel title={t("apps.userDiscoveryFailed")} tone="danger">
