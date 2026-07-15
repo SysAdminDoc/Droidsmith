@@ -160,6 +160,8 @@
     "noDevicesStep3": "Or use the Wireless tab for Wi-Fi pairing.",
     "linuxPermsBody": "One or more devices report no permissions. Avoid world-writable 0666 rules; use the distribution's device-access group and maintained Android udev rules.",
     "linuxPermsDoctor": "Run the connection doctor below to check group membership and udev-rule coverage, then follow its official setup link.",
+    "unusableState": "Devices not ready to manage",
+    "unusableStateBody": "These devices are connected but not in a manageable ADB state — for example offline, in the bootloader/recovery/sideload mode, or an unrecognized state. Reconnect the cable, unlock the screen, or exit the special mode, then rescan.",
     "scanningBridge": "Scanning bridge",
     "waitingForAdb": "Waiting for ADB",
     "serial": "Serial",

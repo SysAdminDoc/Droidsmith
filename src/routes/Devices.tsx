@@ -325,6 +325,38 @@ export default function DevicesRoute() {
               <p className="mt-2">{t("devices.linuxPermsDoctor")}</p>
             </StatePanel>
           )}
+
+        {state.kind === "ok" &&
+          (() => {
+            const unusable = state.value.devices.filter(
+              (d) =>
+                !(
+                  typeof d.state === "string" &&
+                  ["device", "unauthorized", "no_permissions"].includes(d.state)
+                ),
+            );
+            if (unusable.length === 0) return null;
+            return (
+              <StatePanel title={t("devices.unusableState")} tone="warning">
+                <p>{t("devices.unusableStateBody")}</p>
+                <ul className="mt-3 space-y-1">
+                  {unusable.map((device) => (
+                    <li
+                      key={`${device.transport_id ?? device.serial}:${device.connection_generation}`}
+                      className="text-xs"
+                    >
+                      <code className="font-mono text-anvil-100">
+                        {device.serial}
+                      </code>
+                      <span className="ml-2 text-anvil-400">
+                        {formatStateLabel(device.state)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </StatePanel>
+            );
+          })()}
       </section>
 
       {detail.kind !== "idle" && (
