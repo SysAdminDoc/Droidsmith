@@ -337,6 +337,7 @@
     "installLowTargetWarning": "This retries with --bypass-low-target-sdk-block. The app targets obsolete Android protections and can expose the device or its data to known platform risks.",
     "installOverrideAudit": "Only this retry receives the override. The exact flag and this explicit confirmation are written to the local install audit journal.",
     "installConfirmOverride": "Install with override",
+    "installGrantExpired": "The selected package authorization expired. Choose the package again before retrying.",
     "loading": "Loading...",
     "filterAll": "All",
     "filterUser": "User",

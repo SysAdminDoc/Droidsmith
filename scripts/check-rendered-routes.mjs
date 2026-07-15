@@ -398,11 +398,24 @@ async function installTauriMock(page) {
 
     window.__TAURI_INTERNALS__ = {
       async invoke(cmd, args = {}) {
-        if (cmd === "plugin:dialog|save") {
-          return "C:/Users/QA/Desktop/droidsmith-support.json";
-        }
-        if (cmd === "plugin:dialog|open") {
-          return "C:/Users/QA/Downloads/sample.apks";
+        if (cmd === "select_host_path") {
+          const selections = {
+            diagnostics_save: {
+              id: "123e4567-e89b-42d3-a456-426614174001",
+              local_path: "C:/Users/QA/Desktop/droidsmith-support.json",
+            },
+            install_open: {
+              id: "123e4567-e89b-42d3-a456-426614174002",
+              local_path: "C:/Users/QA/Downloads/sample.apks",
+            },
+          };
+          const selection = selections[args.purpose];
+          if (!selection) {
+            throw new Error(
+              `Unhandled mocked host path purpose: ${args.purpose}`,
+            );
+          }
+          return { ...selection, purpose: args.purpose };
         }
         if (cmd === "heartbeat") {
           return {
@@ -540,8 +553,11 @@ async function installTauriMock(page) {
           };
         }
         if (cmd === "save_diagnostics") {
+          if (args.path_grant !== "123e4567-e89b-42d3-a456-426614174001") {
+            throw new Error("Diagnostics save did not consume its path grant");
+          }
           return {
-            path: args.local_path,
+            path: "C:/Users/QA/Desktop/droidsmith-support.json",
             byte_size: 1024,
             generated_at: "2026-07-14T18:02:01Z",
           };
@@ -558,6 +574,15 @@ async function installTauriMock(page) {
         }
         if (cmd === "install_apk") {
           installAttempts += 1;
+          const expectedGrant =
+            installAttempts === 1
+              ? "123e4567-e89b-42d3-a456-426614174002"
+              : "123e4567-e89b-42d3-a456-426614174003";
+          if (args.path_grant !== expectedGrant) {
+            throw new Error(
+              "Install did not consume the expected one-shot grant",
+            );
+          }
           emitChannel(args.on_event, {
             operation_id: args.operation_id,
             kind: "progress",
@@ -583,6 +608,7 @@ async function installTauriMock(page) {
                   "Failure [INSTALL_FAILED_VERSION_DOWNGRADE: Downgrade detected]",
               },
               audit_id: args.operation_id,
+              retry_path_grant: "123e4567-e89b-42d3-a456-426614174003",
             };
           }
           if (
@@ -602,6 +628,7 @@ async function installTauriMock(page) {
             output: "Success",
             failure: null,
             audit_id: args.operation_id,
+            retry_path_grant: null,
           };
         }
         if (cmd === "list_users") {

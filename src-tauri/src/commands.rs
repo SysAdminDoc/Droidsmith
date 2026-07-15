@@ -11,7 +11,7 @@
 use std::collections::HashMap;
 use std::fs::{self, OpenOptions};
 use std::io::Write;
-use std::path::{Component, Path, PathBuf};
+use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
 
 use serde::{Deserialize, Serialize};
@@ -26,6 +26,9 @@ use crate::adb::parsers::{
 use crate::adb::transport::AdbTransport;
 use crate::adb::{self, actions};
 use crate::fs_util::{ArtifactError, ArtifactKind, HostArtifact, StagedArtifact};
+use crate::host_path::{
+    validate_suggested_file_name, HostPathGrant, HostPathPurpose, PathGrantError, PathGrantStore,
+};
 use crate::install;
 use crate::journal::{self, Journal, JournalEntry};
 use crate::operations::{self, OperationEvent};
@@ -465,15 +468,16 @@ pub async fn preview_diagnostics(
     spawn_blocking_operation(move || build_support_preview(&app_data_dir)).await
 }
 
-/// Generate a fresh redacted snapshot and persist it to the path returned by
-/// the renderer's native save dialog. No renderer-supplied bundle content is
+/// Generate a fresh redacted snapshot and persist it to the path retained by
+/// the backend-owned native save dialog. No renderer-supplied bundle content is
 /// accepted, so the backend remains the sole redaction boundary.
 #[tauri::command]
 pub async fn save_diagnostics(
     app: tauri::AppHandle,
-    local_path: String,
+    grants: tauri::State<'_, PathGrantStore>,
+    path_grant: String,
 ) -> Result<support_bundle::SavedResult, CommandError> {
-    let path = validate_local_path(&local_path)?;
+    let path = grants.consume(&path_grant, HostPathPurpose::DiagnosticsSave)?;
     if path.extension().and_then(|value| value.to_str()) != Some("json") {
         return Err(CommandError {
             code: "invalid_diagnostics_extension",
@@ -761,6 +765,15 @@ impl From<ArtifactError> for CommandError {
     }
 }
 
+impl From<PathGrantError> for CommandError {
+    fn from(error: PathGrantError) -> Self {
+        Self {
+            code: error.code(),
+            message: error.to_string(),
+        }
+    }
+}
+
 impl From<operations::OperationError> for CommandError {
     fn from(error: operations::OperationError) -> Self {
         let code = match &error {
@@ -806,6 +819,44 @@ where
             code: "operation_join_failed",
             message: format!("background operation task failed: {error}"),
         })?
+}
+
+/// Open a backend-owned native file dialog and retain its result as a short-
+/// lived, purpose-scoped, one-shot grant. Privileged commands accept only the
+/// opaque grant id, never a renderer-authored host path.
+#[tauri::command]
+pub async fn select_host_path(
+    app: tauri::AppHandle,
+    grants: tauri::State<'_, PathGrantStore>,
+    purpose: HostPathPurpose,
+    suggested_name: Option<String>,
+) -> Result<Option<HostPathGrant>, CommandError> {
+    use tauri_plugin_dialog::DialogExt;
+
+    let suggested_name = validate_suggested_file_name(suggested_name)?;
+    let mut dialog = app.dialog().file().set_title(purpose.dialog_title());
+    if let Some(name) = suggested_name {
+        dialog = dialog.set_file_name(name);
+    }
+    if let Some((name, extensions)) = purpose.filter() {
+        dialog = dialog.add_filter(name, extensions);
+    }
+    let selected = if purpose.is_write() {
+        dialog.blocking_save_file()
+    } else {
+        dialog.blocking_pick_file()
+    };
+    let Some(selected) = selected else {
+        return Ok(None);
+    };
+    let selected_path = selected
+        .simplified()
+        .into_path()
+        .map_err(|error| CommandError {
+            code: "path_grant_invalid_path",
+            message: error.to_string(),
+        })?;
+    Ok(Some(grants.issue(&selected_path, purpose)?))
 }
 
 fn completed_adb_output(
@@ -905,34 +956,6 @@ fn validate_package_arg(package: &str) -> Result<(), CommandError> {
             message: format!("invalid package name {package:?}"),
         })
     }
-}
-
-fn validate_local_path(local_path: &str) -> Result<PathBuf, CommandError> {
-    let trimmed = local_path.trim();
-    if trimmed.is_empty() {
-        return Err(CommandError {
-            code: "invalid_path",
-            message: "file path cannot be empty".to_string(),
-        });
-    }
-    let path = PathBuf::from(trimmed);
-    if !path.is_absolute() {
-        return Err(CommandError {
-            code: "invalid_path",
-            message: format!("file path must be absolute: {trimmed}"),
-        });
-    }
-    if trimmed.chars().any(char::is_control)
-        || path
-            .components()
-            .any(|part| matches!(part, Component::ParentDir | Component::CurDir))
-    {
-        return Err(CommandError {
-            code: "invalid_path",
-            message: "file path must be normalized and contain no control characters".to_string(),
-        });
-    }
-    Ok(path)
 }
 
 /// Validate a device-side (remote) path before it reaches `adb pull`,
@@ -1140,11 +1163,12 @@ pub async fn stream_logcat(
     .await
 }
 
-/// Persist the renderer's bounded Logcat buffer to a native-dialog-selected
-/// absolute path. The size limit keeps the IPC and host write bounded.
+/// Persist the renderer's bounded Logcat buffer through a one-shot path grant.
+/// The size limit keeps the IPC and host write bounded.
 #[tauri::command]
 pub async fn save_logcat_export(
-    local_path: String,
+    grants: tauri::State<'_, PathGrantStore>,
+    path_grant: String,
     contents: String,
 ) -> Result<String, CommandError> {
     const MAX_LOGCAT_EXPORT_BYTES: usize = 4 * 1024 * 1024;
@@ -1154,7 +1178,7 @@ pub async fn save_logcat_export(
             message: format!("Logcat export exceeds the {MAX_LOGCAT_EXPORT_BYTES}-byte limit"),
         });
     }
-    let path = validate_local_path(&local_path)?;
+    let path = grants.consume(&path_grant, HostPathPurpose::LogcatSave)?;
     if !path.parent().is_some_and(std::path::Path::is_dir) {
         return Err(CommandError {
             code: "invalid_path",
@@ -1346,13 +1370,14 @@ pub fn list_remote_files(
 #[tauri::command]
 pub async fn push_file(
     target: adb::DeviceTarget,
-    local_path: String,
+    grants: tauri::State<'_, PathGrantStore>,
+    path_grant: String,
     remote_path: String,
     operation_id: String,
     on_event: tauri::ipc::Channel<OperationEvent>,
 ) -> Result<String, CommandError> {
     let transport = validated_transport(&target)?;
-    let validated_path = validate_local_path(&local_path)?;
+    let validated_path = grants.consume(&path_grant, HostPathPurpose::PushOpen)?;
     let remote = validate_remote_path(&remote_path)?;
     let local_arg = validated_path.display().to_string();
     let timeout = std::time::Duration::from_secs(120);
@@ -1378,13 +1403,14 @@ pub async fn push_file(
 #[tauri::command]
 pub async fn pull_file(
     target: adb::DeviceTarget,
+    grants: tauri::State<'_, PathGrantStore>,
     remote_path: String,
-    local_path: String,
+    path_grant: String,
     operation_id: String,
     on_event: tauri::ipc::Channel<OperationEvent>,
 ) -> Result<HostArtifact, CommandError> {
     let transport = validated_transport(&target)?;
-    let output_target = validate_local_path(&local_path)?;
+    let output_target = grants.consume(&path_grant, HostPathPurpose::PullSave)?;
     let remote = validate_remote_path(&remote_path)?;
     let timeout = std::time::Duration::from_secs(120);
     let selector = target.adb_selector();
@@ -1715,14 +1741,16 @@ fn validate_backup_target(local_path: &str) -> Result<PathBuf, CommandError> {
 #[tauri::command]
 pub async fn backup_package(
     target: adb::DeviceTarget,
+    grants: tauri::State<'_, PathGrantStore>,
     package: String,
-    local_path: String,
+    path_grant: String,
     operation_id: String,
     on_event: tauri::ipc::Channel<OperationEvent>,
 ) -> Result<BackupPackageResult, CommandError> {
     let transport = validated_transport(&target)?;
     validate_package_arg(&package)?;
-    let output_target = validate_backup_target(&local_path)?;
+    let granted_path = grants.consume(&path_grant, HostPathPurpose::BackupSave)?;
+    let output_target = validate_backup_target(&granted_path.display().to_string())?;
     let timeout = std::time::Duration::from_secs(300);
     let selector = target.adb_selector();
     let adb_path = transport.adb_path.clone();
@@ -1891,10 +1919,11 @@ pub fn list_processes(target: adb::DeviceTarget) -> Result<Vec<ProcessInfo>, Com
 #[tauri::command]
 pub fn take_screenshot(
     target: adb::DeviceTarget,
-    local_path: String,
+    grants: tauri::State<'_, PathGrantStore>,
+    path_grant: String,
 ) -> Result<HostArtifact, CommandError> {
     let transport = validated_transport(&target)?;
-    let output_target = validate_local_path(&local_path)?;
+    let output_target = grants.consume(&path_grant, HostPathPurpose::ScreenshotSave)?;
     let staged = StagedArtifact::new(&output_target)?;
     // Unique device-side temp so concurrent captures (multiple devices or
     // rapid clicks) never clobber each other's PNG mid-pull.
@@ -1992,19 +2021,21 @@ pub fn stop_scrcpy(session_id: u64) -> Result<crate::scrcpy::ScrcpySession, Comm
 pub async fn install_apk(
     app: tauri::AppHandle,
     target: adb::DeviceTarget,
-    apk_path: String,
+    grants: tauri::State<'_, PathGrantStore>,
+    path_grant: String,
     options: install::InstallOptions,
     operation_id: String,
     on_event: tauri::ipc::Channel<OperationEvent>,
 ) -> Result<install::InstallPackageResult, CommandError> {
     let transport = validated_transport(&target)?;
-    let validated_path = validate_local_path(&apk_path)?;
+    let validated_path = grants.consume(&path_grant, HostPathPurpose::InstallOpen)?;
+    let retry_path = validated_path.clone();
     let app_data_dir = app.path().app_data_dir().map_err(|error| CommandError {
         code: "no_app_data_dir",
         message: error.to_string(),
     })?;
     let sink = operations::channel_sink(on_event);
-    spawn_blocking_operation(move || {
+    let mut result = spawn_blocking_operation(move || {
         Ok(install::install_package(
             &transport,
             &target,
@@ -2015,20 +2046,34 @@ pub async fn install_apk(
             sink,
         )?)
     })
-    .await
+    .await?;
+    if result
+        .failure
+        .as_ref()
+        .and_then(|failure| failure.suggested_override)
+        .is_some()
+        && !options.override_confirmed
+    {
+        result.retry_path_grant = grants
+            .issue(&retry_path, HostPathPurpose::InstallOpen)
+            .ok()
+            .map(|grant| grant.id);
+    }
+    Ok(result)
 }
 
 /// Pull an APK from the device to a local path.
 #[tauri::command]
 pub async fn extract_apk(
     target: adb::DeviceTarget,
+    grants: tauri::State<'_, PathGrantStore>,
     remote_path: String,
-    local_path: String,
+    path_grant: String,
     operation_id: String,
     on_event: tauri::ipc::Channel<OperationEvent>,
 ) -> Result<HostArtifact, CommandError> {
     let transport = validated_transport(&target)?;
-    let output_target = validate_local_path(&local_path)?;
+    let output_target = grants.consume(&path_grant, HostPathPurpose::ExtractApkSave)?;
     let remote = validate_remote_path(&remote_path)?;
     let selector = target.adb_selector();
     let adb_path = transport.adb_path.clone();
@@ -2347,8 +2392,8 @@ mod tests {
         append_host_operation, classify_backup_size, classify_shell, diagnostic_text,
         is_allowed_device_control, load_runtime_packs, pack_error_to_load_error,
         parse_fastboot_getvar, unique_screenshot_remote, validate_backup_target,
-        validate_local_path, validate_remote_path, AdbRecoveryOutcome, AdbRecoveryRecord,
-        ProcessOutput, ShellClassification,
+        validate_remote_path, AdbRecoveryOutcome, AdbRecoveryRecord, ProcessOutput,
+        ShellClassification,
     };
 
     #[test]
@@ -2577,38 +2622,6 @@ packages:
         // Real payload → a genuine backup.
         assert_eq!(classify_backup_size(Some(513)), (false, false));
         assert_eq!(classify_backup_size(Some(4096)), (false, false));
-    }
-
-    #[test]
-    fn local_path_requires_normalized_absolute() {
-        assert_eq!(validate_local_path("   ").unwrap_err().code, "invalid_path");
-        // Relative paths (the old screenshot/pull bug) are rejected.
-        assert_eq!(
-            validate_local_path("screenshot-abc.png").unwrap_err().code,
-            "invalid_path"
-        );
-        assert_eq!(
-            validate_local_path("./sub/dir/file.png").unwrap_err().code,
-            "invalid_path"
-        );
-
-        let traversal = if cfg!(windows) {
-            "C:\\Users\\qa\\..\\admin\\shot.png"
-        } else {
-            "/home/qa/../admin/shot.png"
-        };
-        assert_eq!(
-            validate_local_path(traversal).unwrap_err().code,
-            "invalid_path"
-        );
-
-        // An absolute path for the current platform is accepted.
-        let abs = if cfg!(windows) {
-            "C:\\Users\\qa\\shot.png"
-        } else {
-            "/home/qa/shot.png"
-        };
-        assert!(validate_local_path(abs).is_ok());
     }
 
     #[test]

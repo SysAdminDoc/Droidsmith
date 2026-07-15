@@ -16,6 +16,7 @@ const sandbox = { window: {} };
 vm.runInNewContext(source, sandbox, { filename: "isolation/index.js" });
 const hook = sandbox.window.__TAURI_ISOLATION_HOOK__;
 const blockedCommand = "__droidsmith_isolation_rejected__";
+const pathGrant = "123e4567-e89b-42d3-a456-426614174000";
 
 const target = Object.freeze({
   serial: "R58M12345",
@@ -84,21 +85,21 @@ test("passes a schema-valid sensitive command", () => {
   const valid = message("pull_file", {
     target,
     remote_path: "/sdcard/Download/report.txt",
-    local_path: "C:\\Users\\qa\\report.txt",
+    path_grant: pathGrant,
     operation_id: "pull-123",
     on_event: 99,
   });
   assert.equal(hook(valid), valid);
 });
 
-test("rejects relative and traversal host paths without echoing them", () => {
-  for (const localPath of ["report.txt", "/tmp/../etc/passwd"]) {
+test("rejects malformed path grants without echoing them", () => {
+  for (const invalidGrant of ["not-a-grant", "/tmp/../etc/passwd"]) {
     const result = hook(
-      message("take_screenshot", { target, local_path: localPath }),
+      message("take_screenshot", { target, path_grant: invalidGrant }),
     );
     assert.equal(result.cmd, blockedCommand);
     assert.equal(result.payload.code, "ipc_policy_rejected");
-    assert.equal(JSON.stringify(result).includes(localPath), false);
+    assert.equal(JSON.stringify(result).includes(invalidGrant), false);
   }
 });
 
@@ -107,7 +108,7 @@ test("rejects remote traversal and unexpected command fields", () => {
     message("pull_file", {
       target,
       remote_path: "/sdcard/../data/secret",
-      local_path: "/tmp/output.txt",
+      path_grant: pathGrant,
       operation_id: "pull-456",
       on_event: 99,
     }),
@@ -115,7 +116,7 @@ test("rejects remote traversal and unexpected command fields", () => {
   const unexpected = hook(
     message("take_screenshot", {
       target,
-      local_path: "/tmp/shot.png",
+      path_grant: pathGrant,
       arbitrary_path: "/etc/passwd",
     }),
   );
@@ -127,7 +128,7 @@ test("rejects malformed targets and future mutation commands by default", () => 
   const malformed = hook(
     message("take_screenshot", {
       target: { ...target, connection_generation: 0 },
-      local_path: "/tmp/shot.png",
+      path_grant: pathGrant,
     }),
   );
   const unknown = hook(message("delete_remote_file", { path: "/sdcard/x" }));
@@ -150,8 +151,23 @@ test("rejects option-like wireless hosts and non-string pairing codes", () => {
 
 test("allows bounded multiline Logcat exports", () => {
   const valid = message("save_logcat_export", {
-    local_path: "/tmp/logcat.log",
+    path_grant: pathGrant,
     contents: "first line\nsecond line\n",
   });
   assert.equal(hook(valid), valid);
+});
+
+test("allows only bounded native dialog purposes and file names", () => {
+  const valid = message("select_host_path", {
+    purpose: "screenshot_save",
+    suggested_name: "capture.png",
+  });
+  assert.equal(hook(valid), valid);
+
+  for (const payload of [
+    { purpose: "arbitrary_write", suggested_name: "capture.png" },
+    { purpose: "screenshot_save", suggested_name: "../capture.png" },
+  ]) {
+    assert.equal(hook(message("select_host_path", payload)).cmd, blockedCommand);
+  }
 });

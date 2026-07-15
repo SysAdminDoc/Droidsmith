@@ -89,6 +89,9 @@ pub struct InstallPackageResult {
     pub output: String,
     pub failure: Option<InstallFailure>,
     pub audit_id: String,
+    /// A fresh one-shot grant for the same native-dialog-selected source is
+    /// issued only when the backend recommends an explicit override retry.
+    pub retry_path_grant: Option<String>,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -508,6 +511,7 @@ fn success_result(
         output: bounded(&output),
         failure: None,
         audit_id: operation_id.to_string(),
+        retry_path_grant: None,
     }
 }
 
@@ -520,6 +524,7 @@ fn failed_result(package: &PreparedPackage, operation_id: &str, raw: &str) -> In
         output: String::new(),
         failure: Some(classify_install_failure(raw)),
         audit_id: operation_id.to_string(),
+        retry_path_grant: None,
     }
 }
 

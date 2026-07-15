@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
-import { save } from "@tauri-apps/plugin-dialog";
 import { useTranslation } from "react-i18next";
 
 import {
   callPreviewDiagnostics,
   callSaveDiagnostics,
+  callSelectHostPath,
   callWipeDiagnostics,
   type SupportPreview,
   type WipeDiagnosticsResult,
@@ -61,13 +61,12 @@ export default function DiagnosticsCenter({
     setMessage(null);
     try {
       const date = state.preview.generated_at.slice(0, 10);
-      const localPath = await save({
-        title: t("diagnostics.saveTitle"),
-        defaultPath: `droidsmith-support-${date}.json`,
-        filters: [{ name: "JSON", extensions: ["json"] }],
-      });
-      if (!localPath) return;
-      const result = await callSaveDiagnostics(localPath);
+      const pathGrant = await callSelectHostPath(
+        "diagnostics_save",
+        `droidsmith-support-${date}.json`,
+      );
+      if (!pathGrant) return;
+      const result = await callSaveDiagnostics(pathGrant.id);
       setMessage(
         t("diagnostics.saved", {
           path: result.path,

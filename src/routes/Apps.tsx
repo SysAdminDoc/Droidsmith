@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { open, save } from "@tauri-apps/plugin-dialog";
 import { useTranslation } from "react-i18next";
 
 import {
@@ -13,6 +12,7 @@ import {
   callListPermissions,
   callListUsers,
   callPlanAction,
+  callSelectHostPath,
   callSetPermission,
   deviceTarget,
   newOperationId,
@@ -299,12 +299,11 @@ export default function AppsRoute() {
         tone: "info",
       });
       try {
-        const localPath = await save({
-          title: t("apps.backupChooseDestination"),
-          defaultPath: backupDefaultFileName(pkg),
-          filters: [{ name: t("apps.backupFileFilter"), extensions: ["ab"] }],
-        });
-        if (!localPath) {
+        const pathGrant = await callSelectHostPath(
+          "backup_save",
+          backupDefaultFileName(pkg),
+        );
+        if (!pathGrant) {
           setBackupNotice({
             title: t("apps.backupCancelledTitle"),
             message: t("apps.backupCancelled"),
@@ -317,7 +316,7 @@ export default function AppsRoute() {
           title: t("apps.backupRunningTitle", { package: pkg }),
           message: t("apps.backupLimitations"),
           tone: "info",
-          path: localPath,
+          path: pathGrant.local_path,
         });
 
         const operationId = newOperationId("backup");
@@ -339,7 +338,7 @@ export default function AppsRoute() {
         const result = await callBackupPackage(
           deviceTarget(selectedDevice),
           pkg,
-          localPath,
+          pathGrant.id,
           {
             operationId,
             onEvent: (event: OperationEvent) => {
@@ -427,7 +426,11 @@ export default function AppsRoute() {
   }, [t]);
 
   const runInstall = useCallback(
-    async (localPath: string, installOptions: InstallOptions) => {
+    async (
+      pathGrant: string,
+      localPath: string,
+      installOptions: InstallOptions,
+    ) => {
       if (!selectedDevice) return;
       const operationId = newOperationId("install");
       const generation = installGenerationRef.current + 1;
@@ -442,7 +445,7 @@ export default function AppsRoute() {
       try {
         const result = await callInstallApk(
           deviceTarget(selectedDevice),
-          localPath,
+          pathGrant,
           installOptions,
           {
             operationId,
@@ -498,29 +501,19 @@ export default function AppsRoute() {
     if (!selectedDevice) return;
     setInstallState({ kind: "choosing" });
     try {
-      const selected = await open({
-        title: t("apps.installChoosePackage"),
-        multiple: false,
-        directory: false,
-        filters: [
-          {
-            name: t("apps.installFileFilter"),
-            extensions: ["apk", "apks", "xapk", "apkm"],
-          },
-        ],
-      });
-      if (typeof selected !== "string") {
+      const selected = await callSelectHostPath("install_open");
+      if (!selected) {
         setInstallState({ kind: "idle" });
         return;
       }
-      await runInstall(selected, {});
+      await runInstall(selected.id, selected.local_path, {});
     } catch (error) {
       setInstallState({
         kind: "error",
         message: installErrorMessage(error),
       });
     }
-  }, [runInstall, selectedDevice, t]);
+  }, [runInstall, selectedDevice]);
 
   const cancelInstall = useCallback(async () => {
     const operationId = activeInstallRef.current;
@@ -547,8 +540,16 @@ export default function AppsRoute() {
         installState.result.failure.suggested_override ===
         "bypass_low_target_sdk_block",
     };
-    await runInstall(installState.localPath, installOptions);
-  }, [installState, runInstall]);
+    const retryGrant = installState.result.retry_path_grant;
+    if (!retryGrant) {
+      setInstallState({
+        kind: "error",
+        message: t("apps.installGrantExpired"),
+      });
+      return;
+    }
+    await runInstall(retryGrant, installState.localPath, installOptions);
+  }, [installState, runInstall, t]);
 
   const confirmAction = useCallback(async () => {
     if (actionState.kind !== "confirming") return;

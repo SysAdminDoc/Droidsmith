@@ -5,6 +5,7 @@ pub mod adb;
 mod commands;
 mod diagnostics;
 mod fs_util;
+mod host_path;
 mod install;
 pub mod journal;
 mod operations;
@@ -26,8 +27,8 @@ use commands::{
     list_remote_files, list_users, list_wireless_services, locate_fastboot, locate_scrcpy,
     pair_wireless, plan_action, plan_pack, plan_shell_action, preview_diagnostics, pull_file,
     push_file, recover_adb, save_diagnostics, save_logcat_export, scrcpy_session_status,
-    set_permission, shell_run, stop_scrcpy, stream_logcat, take_screenshot, watch_devices,
-    wipe_diagnostics,
+    select_host_path, set_permission, shell_run, stop_scrcpy, stream_logcat, take_screenshot,
+    watch_devices, wipe_diagnostics,
 };
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -38,6 +39,7 @@ pub fn run() {
     diagnostics::install_panic_hook(log_dir.clone());
 
     let builder = tauri::Builder::default()
+        .manage(host_path::PathGrantStore::default())
         // Single-instance must be the FIRST plugin registered (Tauri
         // requirement). A second launch focuses the existing window and
         // exits instead of spawning a rival adb server.
@@ -55,6 +57,7 @@ pub fn run() {
             list_devices,
             watch_devices,
             recover_adb,
+            select_host_path,
             preview_diagnostics,
             save_diagnostics,
             wipe_diagnostics,

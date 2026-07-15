@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { save } from "@tauri-apps/plugin-dialog";
 
 import {
   callCancelOperation,
   callSaveLogcatExport,
+  callSelectHostPath,
   callStreamLogcat,
   deviceTarget,
   newOperationId,
@@ -172,14 +172,13 @@ export default function LogcatRoute() {
     if (lines.length === 0) return;
     setExportMessage(null);
     try {
-      const localPath = await save({
-        title: t("logcat.exportTitle"),
-        defaultPath: `droidsmith-logcat-${Date.now()}.log`,
-        filters: [{ name: "Logcat", extensions: ["log", "txt"] }],
-      });
-      if (!localPath) return;
+      const pathGrant = await callSelectHostPath(
+        "logcat_save",
+        `droidsmith-logcat-${Date.now()}.log`,
+      );
+      if (!pathGrant) return;
       const savedPath = await callSaveLogcatExport(
-        localPath,
+        pathGrant.id,
         `${lines.map((line) => line.raw).join("\n")}\n`,
       );
       setExportMessage(t("logcat.exportSaved", { path: savedPath }));

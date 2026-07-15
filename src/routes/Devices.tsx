@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { save } from "@tauri-apps/plugin-dialog";
 import { useTranslation } from "react-i18next";
 
 import {
@@ -11,6 +10,7 @@ import {
   callListRemoteFiles,
   callPullFile,
   callRecoverAdb,
+  callSelectHostPath,
   callTakeScreenshot,
   deviceTarget,
   newOperationId,
@@ -1028,19 +1028,16 @@ function DeviceControls({ target }: { target: DeviceTarget }) {
 
   const takeScreenshot = useCallback(async () => {
     try {
-      // The host destination comes from the native save dialog, never a
-      // renderer-built path; the backend rejects non-absolute paths.
-      const localPath = await save({
-        title: t("devices.controls.saveScreenshotAs"),
-        defaultPath: `screenshot-${serial}-${Date.now()}.png`,
-        filters: [{ name: "PNG", extensions: ["png"] }],
-      });
-      if (!localPath) {
+      const pathGrant = await callSelectHostPath(
+        "screenshot_save",
+        `screenshot-${serial.replace(/[<>:"/\\|?*]/gu, "_")}-${Date.now()}.png`,
+      );
+      if (!pathGrant) {
         setScreenshotMsg(null);
         return;
       }
       setScreenshotMsg(t("devices.controls.capturing"));
-      const artifact = await callTakeScreenshot(target, localPath);
+      const artifact = await callTakeScreenshot(target, pathGrant.id);
       setScreenshotMsg(
         t("devices.controls.savedTo", { path: artifact.local_path }),
       );
@@ -1509,13 +1506,11 @@ function FileManager({ target }: { target: DeviceTarget }) {
       let operationId: string | null = null;
       let generation: number | null = null;
       try {
-        // Destination is chosen through the native save dialog so the
-        // renderer never dictates an arbitrary host path.
-        const localPath = await save({
-          title: t("devices.controls.savePrompt", { name: entry.name }),
-          defaultPath: entry.name,
-        });
-        if (!localPath) {
+        const pathGrant = await callSelectHostPath(
+          "pull_save",
+          entry.name.replace(/[<>:"/\\|?*]/gu, "_"),
+        );
+        if (!pathGrant) {
           setPullMsg(null);
           return;
         }
@@ -1529,7 +1524,7 @@ function FileManager({ target }: { target: DeviceTarget }) {
         pullGenerationRef.current = generation;
         pullOperationRef.current = operationId;
         setPullOperationId(operationId);
-        const artifact = await callPullFile(target, remoteFull, localPath, {
+        const artifact = await callPullFile(target, remoteFull, pathGrant.id, {
           operationId,
           onEvent: (event: OperationEvent) => {
             if (

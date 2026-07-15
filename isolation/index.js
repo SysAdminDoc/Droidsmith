@@ -36,20 +36,21 @@
   const SENSITIVE_COMMANDS = Object.freeze({
     watch_devices: [[], ["operation_id", "on_event"]],
     recover_adb: [["confirmed", "operation_id", "on_event"], []],
-    save_diagnostics: [["local_path"], []],
+    select_host_path: [["purpose", "suggested_name"], []],
+    save_diagnostics: [["path_grant"], []],
     wipe_diagnostics: [["confirmed"], []],
     pair_wireless: [["request"], []],
     connect_wireless: [["request"], []],
     apply_action: [["plan"], []],
     journal_undo: [["target", "entry_id"], []],
     backup_package: [
-      ["target", "package", "local_path", "operation_id", "on_event"],
+      ["target", "package", "path_grant", "operation_id", "on_event"],
       [],
     ],
     push_file: [
       [
         "target",
-        "local_path",
+        "path_grant",
         "remote_path",
         "operation_id",
         "on_event",
@@ -60,7 +61,7 @@
       [
         "target",
         "remote_path",
-        "local_path",
+        "path_grant",
         "operation_id",
         "on_event",
       ],
@@ -70,23 +71,23 @@
       ["target", "package", "permission", "grant", "userId"],
       [],
     ],
-    take_screenshot: [["target", "local_path"], []],
+    take_screenshot: [["target", "path_grant"], []],
     launch_scrcpy: [["request"], []],
     stop_scrcpy: [["session_id"], []],
     shell_run: [["target", "argv", "operation_id", "on_event"], []],
     stream_logcat: [["target", "operation_id", "on_event"], []],
     cancel_operation: [["operation_id"], []],
-    save_logcat_export: [["local_path", "contents"], []],
+    save_logcat_export: [["path_grant", "contents"], []],
     apply_device_control: [["target", "argv"], []],
     install_apk: [
-      ["target", "apk_path", "options", "operation_id", "on_event"],
+      ["target", "path_grant", "options", "operation_id", "on_event"],
       [],
     ],
     extract_apk: [
       [
         "target",
         "remote_path",
-        "local_path",
+        "path_grant",
         "operation_id",
         "on_event",
       ],
@@ -102,6 +103,16 @@
     "product",
     "device",
     "build_fingerprint",
+  ]);
+  const PATH_PURPOSES = new Set([
+    "diagnostics_save",
+    "logcat_save",
+    "backup_save",
+    "screenshot_save",
+    "pull_save",
+    "extract_apk_save",
+    "push_open",
+    "install_open",
   ]);
 
   function isRecord(value) {
@@ -212,7 +223,11 @@
     if (typeof value === "string") {
       const limit = key === "contents" ? MAX_LOGCAT_EXPORT_LENGTH : MAX_STRING_LENGTH;
       if (value.length > limit || value.includes("\0")) reject("payload_string");
-      if (["local_path", "apk_path", "record_path"].includes(key)) {
+      if (key === "path_grant") {
+        if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u.test(value)) {
+          reject("path_grant");
+        }
+      } else if (["local_path", "apk_path", "record_path"].includes(key)) {
         validateLocalPath(value);
       } else if (key === "remote_path") {
         validateRemotePath(value);
@@ -295,6 +310,21 @@
   }
 
   function validateSpecific(command, payload) {
+    if (command === "select_host_path") {
+      if (!PATH_PURPOSES.has(payload.purpose)) reject("path_purpose");
+      if (payload.suggested_name !== null) {
+        ensureIdentifier(payload.suggested_name, "suggested_name");
+        if (
+          payload.suggested_name.length > 255 ||
+          payload.suggested_name !== payload.suggested_name.trim() ||
+          /[\\/]/u.test(payload.suggested_name) ||
+          payload.suggested_name === "." ||
+          payload.suggested_name === ".."
+        ) {
+          reject("suggested_name");
+        }
+      }
+    }
     if (command === "recover_adb" || command === "wipe_diagnostics") {
       if (typeof payload.confirmed !== "boolean") reject("confirmation");
     }

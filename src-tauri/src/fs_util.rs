@@ -272,7 +272,7 @@ fn atomic_replace(source: &Path, destination: &Path) -> std::io::Result<()> {
 }
 
 #[cfg(windows)]
-fn display_path(path: &Path) -> String {
+pub(crate) fn display_path(path: &Path) -> String {
     let raw = path.display().to_string();
     if let Some(unc) = raw.strip_prefix(r"\\?\UNC\") {
         format!(r"\\{unc}")
@@ -282,7 +282,7 @@ fn display_path(path: &Path) -> String {
 }
 
 #[cfg(not(windows))]
-fn display_path(path: &Path) -> String {
+pub(crate) fn display_path(path: &Path) -> String {
     path.display().to_string()
 }
 

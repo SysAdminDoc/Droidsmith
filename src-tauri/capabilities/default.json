@@ -3,8 +3,5 @@
   "identifier": "default",
   "description": "Scoped capability set for the Droidsmith main window. Privileged Android tooling flows through Rust #[tauri::command] handlers rather than renderer-launched shell commands.",
   "windows": ["main"],
-  "permissions": [
-    "core:default",
-    "dialog:default"
-  ]
+  "permissions": ["core:default"]
 }

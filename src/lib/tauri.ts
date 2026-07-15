@@ -492,11 +492,37 @@ export async function callPreviewDiagnostics(): Promise<SupportPreview> {
   return invoke<SupportPreview>("preview_diagnostics");
 }
 
+export type HostPathPurpose =
+  | "diagnostics_save"
+  | "logcat_save"
+  | "backup_save"
+  | "screenshot_save"
+  | "pull_save"
+  | "extract_apk_save"
+  | "push_open"
+  | "install_open";
+
+export type HostPathGrant = {
+  id: string;
+  purpose: HostPathPurpose;
+  local_path: string;
+};
+
+export async function callSelectHostPath(
+  purpose: HostPathPurpose,
+  suggestedName?: string,
+): Promise<HostPathGrant | null> {
+  return invoke<HostPathGrant | null>("select_host_path", {
+    purpose,
+    suggested_name: suggestedName ?? null,
+  });
+}
+
 export async function callSaveDiagnostics(
-  localPath: string,
+  pathGrant: string,
 ): Promise<SavedDiagnostics> {
   return invoke<SavedDiagnostics>("save_diagnostics", {
-    local_path: localPath,
+    path_grant: pathGrant,
   });
 }
 
@@ -614,12 +640,12 @@ export type HostArtifact = {
 export async function callBackupPackage(
   target: DeviceTarget,
   pkg: string,
-  localPath: string,
+  pathGrant: string,
   options?: OperationOptions,
 ): Promise<BackupPackageResult> {
   return invokeOperation<BackupPackageResult>(
     "backup_package",
-    { target, package: pkg, local_path: localPath },
+    { target, package: pkg, path_grant: pathGrant },
     "backup",
     options,
   );
@@ -637,13 +663,13 @@ export async function callListRemoteFiles(
 
 export async function callPushFile(
   target: DeviceTarget,
-  localPath: string,
+  pathGrant: string,
   remotePath: string,
   options?: OperationOptions,
 ): Promise<string> {
   return invokeOperation<string>(
     "push_file",
-    { target, local_path: localPath, remote_path: remotePath },
+    { target, path_grant: pathGrant, remote_path: remotePath },
     "push",
     options,
   );
@@ -652,12 +678,12 @@ export async function callPushFile(
 export async function callPullFile(
   target: DeviceTarget,
   remotePath: string,
-  localPath: string,
+  pathGrant: string,
   options?: OperationOptions,
 ): Promise<HostArtifact> {
   return invokeOperation<HostArtifact>(
     "pull_file",
-    { target, remote_path: remotePath, local_path: localPath },
+    { target, remote_path: remotePath, path_grant: pathGrant },
     "pull",
     options,
   );
@@ -708,11 +734,11 @@ export async function callListProcesses(
 
 export async function callTakeScreenshot(
   target: DeviceTarget,
-  localPath: string,
+  pathGrant: string,
 ): Promise<HostArtifact> {
   return invoke<HostArtifact>("take_screenshot", {
     target,
-    local_path: localPath,
+    path_grant: pathGrant,
   });
 }
 
@@ -807,11 +833,11 @@ export async function callCancelOperation(
 }
 
 export async function callSaveLogcatExport(
-  localPath: string,
+  pathGrant: string,
   contents: string,
 ): Promise<string> {
   return invoke<string>("save_logcat_export", {
-    local_path: localPath,
+    path_grant: pathGrant,
     contents,
   });
 }
@@ -840,13 +866,13 @@ export async function callApplyDeviceControl(
 
 export async function callInstallApk(
   target: DeviceTarget,
-  apkPath: string,
+  pathGrant: string,
   installOptions: InstallOptions = {},
   options?: OperationOptions,
 ): Promise<InstallPackageResult> {
   return invokeOperation<InstallPackageResult>(
     "install_apk",
-    { target, apk_path: apkPath, options: installOptions },
+    { target, path_grant: pathGrant, options: installOptions },
     "install",
     options,
   );
@@ -880,17 +906,18 @@ export type InstallPackageResult = {
   output: string;
   failure: InstallFailure | null;
   audit_id: string;
+  retry_path_grant: string | null;
 };
 
 export async function callExtractApk(
   target: DeviceTarget,
   remotePath: string,
-  localPath: string,
+  pathGrant: string,
   options?: OperationOptions,
 ): Promise<HostArtifact> {
   return invokeOperation<HostArtifact>(
     "extract_apk",
-    { target, remote_path: remotePath, local_path: localPath },
+    { target, remote_path: remotePath, path_grant: pathGrant },
     "extract",
     options,
   );
