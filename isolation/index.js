@@ -21,6 +21,7 @@
     "list_packs",
     "plan_pack",
     "plan_action",
+    "plan_action_batch",
     "plan_shell_action",
     "journal_list",
     "list_network_connections",
@@ -40,11 +41,13 @@
     watch_devices: [[], ["operation_id", "on_event"]],
     recover_adb: [["confirmed", "operation_id", "on_event"], []],
     select_host_path: [["purpose", "suggested_name"], []],
+    reveal_in_folder: [["path"], []],
     save_diagnostics: [["path_grant"], []],
     wipe_diagnostics: [["confirmed"], []],
     pair_wireless: [["request"], []],
     connect_wireless: [["request"], []],
     apply_action: [["plan"], []],
+    apply_action_batch: [["batch"], []],
     export_recovery_baseline: [
       ["target", "userId", "actions", "pack", "path_grant"],
       [],
@@ -53,6 +56,7 @@
     inspect_profile: [["target", "path_grant"], []],
     save_profile: [["path_grant", "profile"], []],
     journal_undo: [["target", "entry_id"], []],
+    journal_undo_batch: [["target", "batch_id"], []],
     backup_package: [
       ["target", "package", "userId", "path_grant", "operation_id", "on_event"],
       [],
@@ -277,6 +281,8 @@
       } else if (key === "operation_id") {
         if (!/^[a-z0-9][a-z0-9_.-]{0,127}$/u.test(value))
           reject("operation_id");
+      } else if (key === "batch_id") {
+        if (!/^batch-[0-9A-Za-z-]{1,90}$/u.test(value)) reject("batch_id");
       }
       return;
     }
@@ -453,6 +459,9 @@
   }
 
   function validateSpecific(command, payload) {
+    if (command === "reveal_in_folder") {
+      validateLocalPath(payload.path);
+    }
     if (command === "select_host_path") {
       if (!PATH_PURPOSES.has(payload.purpose)) reject("path_purpose");
       if (payload.suggested_name !== null) {

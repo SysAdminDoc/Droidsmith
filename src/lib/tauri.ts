@@ -347,6 +347,10 @@ export async function callSelectHostPath(
   return commands.selectHostPath(purpose, suggestedName ?? null);
 }
 
+export async function callRevealInFolder(path: string): Promise<void> {
+  await commands.revealInFolder(path);
+}
+
 export async function callSaveDiagnostics(
   pathGrant: string,
 ): Promise<SavedDiagnostics> {

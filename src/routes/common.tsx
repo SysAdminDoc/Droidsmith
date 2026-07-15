@@ -1,8 +1,10 @@
 import type { ComponentPropsWithoutRef, ReactNode } from "react";
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { cn } from "../lib/cn";
 import {
+  callRevealInFolder,
   requiresTransportOverride,
   type DeviceTarget,
   type DeviceTransportKind,
@@ -168,6 +170,45 @@ export function Button({
     >
       {children}
     </button>
+  );
+}
+
+/// Reveal a Droidsmith-produced artifact in the OS file manager. The backend
+/// only honors paths it wrote this session, so passing `path` here can never
+/// open an unrelated location; failures (e.g. the file was moved) surface
+/// inline rather than throwing.
+export function RevealInFolderButton({
+  path,
+  label,
+  size = "sm",
+}: {
+  path: string;
+  label?: string;
+  size?: "sm" | "md";
+}) {
+  const { t } = useTranslation();
+  const [error, setError] = useState<string | null>(null);
+  return (
+    <span className="inline-flex items-center gap-2">
+      <Button
+        type="button"
+        size={size}
+        variant="ghost"
+        onClick={() => {
+          setError(null);
+          void callRevealInFolder(path).catch((cause) =>
+            setError(cause instanceof Error ? cause.message : String(cause)),
+          );
+        }}
+      >
+        {label ?? t("common.showInFolder")}
+      </Button>
+      {error && (
+        <span role="alert" className="text-xs text-red-300">
+          {error}
+        </span>
+      )}
+    </span>
   );
 }
 

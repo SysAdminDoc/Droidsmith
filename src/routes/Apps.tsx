@@ -65,6 +65,7 @@ import {
   EmptyState,
   FieldInput,
   PaneHeader,
+  RevealInFolderButton,
   SkeletonLine,
   StatePanel,
   TableCell,
@@ -1663,6 +1664,11 @@ function BackupStatePanel({
           </pre>
         </div>
       )}
+      {notice.path && !notice.operationId && (
+        <div className="mt-3">
+          <RevealInFolderButton path={notice.path} />
+        </div>
+      )}
     </StatePanel>
   );
 }
@@ -2705,6 +2711,9 @@ function RecoveryBaselinePanel({
         <code className="mt-2 block break-all font-mono text-xs">
           sha256 {state.sha256}
         </code>
+        <div className="mt-3">
+          <RevealInFolderButton path={state.path} />
+        </div>
       </StatePanel>
     );
   }

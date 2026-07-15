@@ -45,13 +45,6 @@ instead.
   Acceptance: `tauri build` emits AppImage/deb/rpm on Linux; repo ships a winget manifest with a non-colliding product/upgrade code and a Scoop manifest with SHA-256 `hash`; every release attaches a checksums file (optionally sigstore-signed locally); release:smoke validates the new artifacts.
   Complexity: M
 
-- [ ] P2 — Reveal-in-folder / open output artifacts via scoped opener plugin
-  Why: After a backup, pull, or screenshot there is no way to open the containing folder; Tauri v2 removed the old shell.open API and the app registers no opener.
-  Evidence: `src-tauri/src/lib.rs:34` (dialog plugin only); `tauri-plugin-opener` docs
-  Touches: `src-tauri/Cargo.toml`, `src-tauri/src/lib.rs`, `src-tauri/capabilities/default.json`, `src/routes/{Apps,Devices,Mirror}.tsx`, `src/lib/tauri.ts`
-  Acceptance: A "Show in folder" action opens the OS file manager at the produced artifact via a path-scoped opener permission; attempts outside produced paths fail; no arbitrary renderer-driven open is possible.
-  Complexity: S
-
 ### P3
 
 - [ ] P3 — Replace misleading documentation screenshots with deterministic native-state captures

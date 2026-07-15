@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::fs;
 use std::path::{Component, Path, PathBuf};
 use std::sync::Mutex;
@@ -8,6 +8,9 @@ use serde::{Deserialize, Serialize};
 
 const DEFAULT_GRANT_TTL: Duration = Duration::from_secs(5 * 60);
 const MAX_ACTIVE_GRANTS: usize = 64;
+/// How many recently-produced artifact paths stay eligible for a "reveal in
+/// folder" request. Bounded so a long session cannot grow the set without limit.
+const MAX_REVEALABLE_ARTIFACTS: usize = 64;
 
 /// A native-dialog purpose is also the authorization scope. Read grants can
 /// never reach write commands (or another read command), and vice versa.
@@ -135,6 +138,10 @@ struct GrantEntry {
 #[derive(Debug)]
 pub struct PathGrantStore {
     grants: Mutex<HashMap<String, GrantEntry>>,
+    /// Display paths of artifacts Droidsmith has written this session, kept so a
+    /// later "reveal in folder" request can be authorized against a path the app
+    /// itself produced instead of an arbitrary renderer-supplied path.
+    revealable: Mutex<VecDeque<String>>,
     ttl: Duration,
 }
 
@@ -142,6 +149,7 @@ impl Default for PathGrantStore {
     fn default() -> Self {
         Self {
             grants: Mutex::new(HashMap::new()),
+            revealable: Mutex::new(VecDeque::new()),
             ttl: DEFAULT_GRANT_TTL,
         }
     }
@@ -182,11 +190,41 @@ impl PathGrantStore {
                 expires_at: now + self.ttl,
             },
         );
+        drop(grants);
+        let local_path = crate::fs_util::display_path(&path);
+        // Save-dialog destinations are the only paths a reveal request may later
+        // target. Read grants (file pickers) never become revealable.
+        if purpose.is_write() {
+            self.record_revealable(&local_path);
+        }
         Ok(HostPathGrant {
             id,
             purpose,
-            local_path: crate::fs_util::display_path(&path),
+            local_path,
         })
+    }
+
+    fn record_revealable(&self, local_path: &str) {
+        let Ok(mut revealable) = self.revealable.lock() else {
+            return;
+        };
+        if revealable.iter().any(|existing| existing == local_path) {
+            return;
+        }
+        if revealable.len() >= MAX_REVEALABLE_ARTIFACTS {
+            revealable.pop_front();
+        }
+        revealable.push_back(local_path.to_string());
+    }
+
+    /// True only for a path Droidsmith itself wrote via a save-dialog grant this
+    /// session. Everything else — including arbitrary renderer-supplied paths —
+    /// is rejected, so the renderer can never drive an open of an unrelated path.
+    pub fn is_revealable(&self, local_path: &str) -> bool {
+        self.revealable
+            .lock()
+            .map(|revealable| revealable.iter().any(|existing| existing == local_path))
+            .unwrap_or(false)
     }
 
     /// Consume exactly one matching grant. Wrong-purpose probes do not burn a
@@ -220,6 +258,27 @@ impl PathGrantStore {
             return Err(PathGrantError::WrongPurpose);
         }
         Ok(grants.remove(id).expect("grant exists above").path)
+    }
+}
+
+/// Resolve the OS file-manager invocation that reveals `path`. Windows and
+/// macOS select the file inside its folder; other platforms open the containing
+/// directory (no portable "select" primitive exists). Kept pure so the argv is
+/// unit-tested without spawning a real file manager.
+pub fn reveal_command(path: &Path) -> (String, Vec<String>) {
+    if cfg!(target_os = "windows") {
+        (
+            "explorer.exe".to_string(),
+            vec![format!("/select,{}", path.display())],
+        )
+    } else if cfg!(target_os = "macos") {
+        (
+            "open".to_string(),
+            vec!["-R".to_string(), path.display().to_string()],
+        )
+    } else {
+        let target = path.parent().unwrap_or(path);
+        ("xdg-open".to_string(), vec![target.display().to_string()])
     }
 }
 
@@ -355,6 +414,7 @@ mod tests {
         let destination = dir.join("capture.png");
         let store = PathGrantStore {
             grants: Mutex::new(HashMap::new()),
+            revealable: Mutex::new(VecDeque::new()),
             ttl: Duration::from_secs(5),
         };
         let issued_at = Instant::now();
@@ -398,6 +458,69 @@ mod tests {
 
         fs::write(&missing, b"content").unwrap();
         assert!(store.issue(&missing, HostPathPurpose::PushOpen).is_ok());
+    }
+
+    #[test]
+    fn reveal_command_targets_the_produced_artifact() {
+        let path = if cfg!(target_os = "windows") {
+            PathBuf::from(r"C:\Users\tester\export.zip")
+        } else {
+            PathBuf::from("/home/tester/export.zip")
+        };
+        let (program, args) = reveal_command(&path);
+        if cfg!(target_os = "windows") {
+            assert_eq!(program, "explorer.exe");
+            assert_eq!(args, vec![format!("/select,{}", path.display())]);
+        } else if cfg!(target_os = "macos") {
+            assert_eq!(program, "open");
+            assert_eq!(args, vec!["-R".to_string(), path.display().to_string()]);
+        } else {
+            assert_eq!(program, "xdg-open");
+            assert_eq!(args, vec!["/home/tester".to_string()]);
+        }
+    }
+
+    #[test]
+    fn only_written_artifacts_become_revealable() {
+        let dir = test_dir("reveal");
+        let saved = dir.join("export.zip");
+        let store = PathGrantStore::default();
+
+        // A picked (read) source never becomes revealable.
+        let source = dir.join("input.apk");
+        fs::write(&source, b"apk").unwrap();
+        store.issue(&source, HostPathPurpose::InstallOpen).unwrap();
+        assert!(!store.is_revealable(&crate::fs_util::display_path(&source)));
+
+        // A save destination is revealable by the exact display path returned.
+        let grant = store
+            .issue(&saved, HostPathPurpose::PackageExportSave)
+            .unwrap();
+        assert!(store.is_revealable(&grant.local_path));
+        // An arbitrary renderer-supplied path is rejected.
+        assert!(!store.is_revealable("/etc/passwd"));
+        assert!(!store.is_revealable(&crate::fs_util::display_path(&dir.join("other.zip"))));
+    }
+
+    #[test]
+    fn revealable_registry_is_bounded_and_deduplicated() {
+        // Exercise the registry directly: `issue` also consumes the separate
+        // one-shot grant map, whose own cap is unrelated to this bound.
+        let store = PathGrantStore::default();
+        store.record_revealable("/artifacts/a.zip");
+        store.record_revealable("/artifacts/a.zip");
+        assert_eq!(store.revealable.lock().unwrap().len(), 1);
+        assert!(store.is_revealable("/artifacts/a.zip"));
+
+        for index in 0..MAX_REVEALABLE_ARTIFACTS {
+            store.record_revealable(&format!("/artifacts/fill-{index}.zip"));
+        }
+        assert_eq!(
+            store.revealable.lock().unwrap().len(),
+            MAX_REVEALABLE_ARTIFACTS
+        );
+        // The oldest entry was evicted once the bound was exceeded.
+        assert!(!store.is_revealable("/artifacts/a.zip"));
     }
 
     #[test]

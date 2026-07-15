@@ -38,9 +38,10 @@ use commands::{
     list_processes, list_remote_files, list_users, list_wireless_services, locate_fastboot,
     locate_scrcpy, pair_wireless, plan_action, plan_action_batch, plan_pack,
     plan_remote_file_mutation, plan_shell_action, preflight_package_backup, preview_diagnostics,
-    pull_file, push_file, recover_adb, run_host_doctor, save_diagnostics, save_logcat_export,
-    save_profile, scrcpy_capabilities, scrcpy_session_status, select_host_path, set_permission,
-    shell_run, stop_scrcpy, stream_logcat, take_screenshot, watch_devices, wipe_diagnostics,
+    pull_file, push_file, recover_adb, reveal_in_folder, run_host_doctor, save_diagnostics,
+    save_logcat_export, save_profile, scrcpy_capabilities, scrcpy_session_status, select_host_path,
+    set_permission, shell_run, stop_scrcpy, stream_logcat, take_screenshot, watch_devices,
+    wipe_diagnostics,
 };
 
 fn ipc_builder() -> tauri_specta::Builder<tauri::Wry> {
@@ -53,6 +54,7 @@ fn ipc_builder() -> tauri_specta::Builder<tauri::Wry> {
             watch_devices,
             recover_adb,
             select_host_path,
+            reveal_in_folder,
             preview_diagnostics,
             save_diagnostics,
             wipe_diagnostics,

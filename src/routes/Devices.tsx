@@ -51,6 +51,7 @@ import {
   EmptyState,
   FieldInput,
   PaneHeader,
+  RevealInFolderButton,
   SkeletonLine,
   StatePanel,
   TableCell,
@@ -1054,6 +1055,7 @@ function DeviceControls({ target }: { target: DeviceTarget }) {
   const serial = target.serial;
   const [lastKey, setLastKey] = useState<string | null>(null);
   const [screenshotMsg, setScreenshotMsg] = useState<string | null>(null);
+  const [screenshotPath, setScreenshotPath] = useState<string | null>(null);
   const [density, setDensity] = useState("");
   const [displayMsg, setDisplayMsg] = useState<string | null>(null);
 
@@ -1083,12 +1085,15 @@ function DeviceControls({ target }: { target: DeviceTarget }) {
         setScreenshotMsg(null);
         return;
       }
+      setScreenshotPath(null);
       setScreenshotMsg(t("devices.controls.capturing"));
       const artifact = await callTakeScreenshot(operationTarget, pathGrant.id);
       setScreenshotMsg(
         t("devices.controls.savedTo", { path: artifact.local_path }),
       );
+      setScreenshotPath(artifact.local_path);
     } catch (e) {
+      setScreenshotPath(null);
       setScreenshotMsg(
         t("devices.controls.failed", {
           message: e instanceof Error ? e.message : String(e),
@@ -1215,6 +1220,7 @@ function DeviceControls({ target }: { target: DeviceTarget }) {
               {screenshotMsg && (
                 <span className="text-xs text-anvil-300">{screenshotMsg}</span>
               )}
+              {screenshotPath && <RevealInFolderButton path={screenshotPath} />}
             </div>
           </Card>
 
@@ -1537,6 +1543,7 @@ function FileManager({ target }: { target: DeviceTarget }) {
   const [operationMessage, setOperationMessage] = useState<string | null>(null);
   const [fileOperationId, setFileOperationId] = useState<string | null>(null);
   const [pullMsg, setPullMsg] = useState<string | null>(null);
+  const [pullPath, setPullPath] = useState<string | null>(null);
   const [pullOperationId, setPullOperationId] = useState<string | null>(null);
   const pullOperationRef = useRef<string | null>(null);
   const pullGenerationRef = useRef(0);
@@ -1609,6 +1616,7 @@ function FileManager({ target }: { target: DeviceTarget }) {
           setPullMsg(null);
           return;
         }
+        setPullPath(null);
         setPullMsg(t("devices.controls.pulling", { name: entry.name }));
         const remoteFull =
           currentPath === "/"
@@ -1649,6 +1657,7 @@ function FileManager({ target }: { target: DeviceTarget }) {
             path: artifact.local_path,
           }),
         );
+        setPullPath(artifact.local_path);
       } catch (e) {
         if (
           operationId &&
@@ -1658,6 +1667,7 @@ function FileManager({ target }: { target: DeviceTarget }) {
           return;
         pullOperationRef.current = null;
         setPullOperationId(null);
+        setPullPath(null);
         setPullMsg(
           t("devices.controls.failed", {
             message: e instanceof Error ? e.message : String(e),
@@ -2120,7 +2130,7 @@ function FileManager({ target }: { target: DeviceTarget }) {
             {pullMsg && (
               <div className="flex items-center justify-between gap-3 border-t border-white/10 px-4 py-2">
                 <p className="text-xs text-anvil-300">{pullMsg}</p>
-                {pullOperationId && (
+                {pullOperationId ? (
                   <Button
                     type="button"
                     size="sm"
@@ -2129,6 +2139,8 @@ function FileManager({ target }: { target: DeviceTarget }) {
                   >
                     {t("common.cancel")}
                   </Button>
+                ) : (
+                  pullPath && <RevealInFolderButton path={pullPath} />
                 )}
               </div>
             )}

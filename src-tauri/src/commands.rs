@@ -31,7 +31,8 @@ use crate::backup;
 use crate::bugreport;
 use crate::fs_util::{ArtifactError, ArtifactKind, HostArtifact, StagedArtifact};
 use crate::host_path::{
-    validate_suggested_file_name, HostPathGrant, HostPathPurpose, PathGrantError, PathGrantStore,
+    reveal_command, validate_suggested_file_name, HostPathGrant, HostPathPurpose, PathGrantError,
+    PathGrantStore,
 };
 use crate::install;
 use crate::journal::{self, Journal, JournalEntry};
@@ -1261,6 +1262,40 @@ pub async fn select_host_path(
             message: error.to_string(),
         })?;
     Ok(Some(grants.issue(&selected_path, purpose)?))
+}
+
+/// Open the OS file manager at an artifact Droidsmith produced this session.
+/// `path` must equal a save-dialog destination the backend itself issued; any
+/// other renderer-supplied path is rejected, so the renderer can never drive an
+/// open of an arbitrary location. The file manager is spawned detached.
+#[tauri::command]
+#[specta::specta]
+pub fn reveal_in_folder(
+    grants: tauri::State<'_, PathGrantStore>,
+    path: String,
+) -> Result<(), CommandError> {
+    if !grants.is_revealable(&path) {
+        return Err(CommandError {
+            code: "reveal_path_not_produced",
+            message: "only artifacts Droidsmith produced this session can be revealed".to_string(),
+        });
+    }
+    let target = Path::new(&path);
+    if !target.exists() {
+        return Err(CommandError {
+            code: "reveal_path_missing",
+            message: "the artifact is no longer at that location".to_string(),
+        });
+    }
+    let (program, args) = reveal_command(target);
+    std::process::Command::new(&program)
+        .args(&args)
+        .spawn()
+        .map_err(|error| CommandError {
+            code: "reveal_failed",
+            message: format!("could not open the file manager: {error}"),
+        })?;
+    Ok(())
 }
 
 fn completed_adb_output(

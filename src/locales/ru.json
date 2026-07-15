@@ -757,6 +757,7 @@
     "negotiatedCapabilities_one": "scrcpy {{version}} · согласован {{count}} видеокодек",
     "negotiatedCapabilities_other": "scrcpy {{version}} · согласовано видеокодеков: {{count}}",
     "launchFailed": "Запуск зеркала не удался",
+    "recordingSavedTo": "Запись сохранена в {{path}}",
     "sessionRunning": "Mirror-сессия запущена",
     "sessionRunningBody": "scrcpy работает как PID {{pid}}. Закройте окно scrcpy или остановите его здесь, чтобы завершить сессию.",
     "sessionEndedTitle": "Mirror-сессия завершена",
@@ -1093,6 +1094,7 @@
     }
   },
   "common": {
+    "showInFolder": "Показать в папке",
     "selectDevice": "Выбрать устройство",
     "noAuthorized": "Нет авторизованных устройств",
     "desktopRequired": "Требуется десктопная оболочка",

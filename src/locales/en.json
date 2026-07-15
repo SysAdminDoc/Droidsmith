@@ -757,6 +757,7 @@
     "negotiatedCapabilities_one": "scrcpy {{version}} · {{count}} negotiated video codec",
     "negotiatedCapabilities_other": "scrcpy {{version}} · {{count}} negotiated video codecs",
     "launchFailed": "Mirror launch failed",
+    "recordingSavedTo": "Recording saved to {{path}}",
     "sessionRunning": "Mirror session running",
     "sessionRunningBody": "scrcpy is running as PID {{pid}}. Close the scrcpy window or stop it here to end the session.",
     "sessionEndedTitle": "Mirror session ended",
@@ -1095,6 +1096,7 @@
     }
   },
   "common": {
+    "showInFolder": "Show in folder",
     "selectDevice": "Select device",
     "noAuthorized": "No authorized devices",
     "desktopRequired": "Desktop shell required",

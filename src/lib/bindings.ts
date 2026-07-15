@@ -62,6 +62,15 @@ export const commands = {
     });
   },
   /**
+   * Open the OS file manager at an artifact Droidsmith produced this session.
+   * `path` must equal a save-dialog destination the backend itself issued; any
+   * other renderer-supplied path is rejected, so the renderer can never drive an
+   * open of an arbitrary location. The file manager is spawned detached.
+   */
+  async revealInFolder(path: string): Promise<null> {
+    return await TAURI_INVOKE("reveal_in_folder", { path });
+  },
+  /**
    * Build a bounded, redacted support snapshot entirely on the local machine.
    * The payload deliberately excludes resolver paths and raw device targets.
    */

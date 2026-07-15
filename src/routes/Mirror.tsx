@@ -35,6 +35,7 @@ import {
   Card,
   FieldInput,
   PaneHeader,
+  RevealInFolderButton,
   StatePanel,
   TransportBadge,
   TransportTrustNotice,
@@ -81,6 +82,7 @@ export default function MirrorRoute() {
     authorizedTarget,
   } = useTransportAuthorization(selectedTarget);
   const [session, setSession] = useState<SessionState>({ kind: "idle" });
+  const [recordingPath, setRecordingPath] = useState<string | null>(null);
   const [capabilityState, setCapabilityState] = useState<CapabilityState>({
     kind: "idle",
   });
@@ -120,6 +122,7 @@ export default function MirrorRoute() {
     // (and disabled launch button) while device B is selected. The A scrcpy
     // window keeps running independently.
     setSession({ kind: "idle" });
+    setRecordingPath(null);
     try {
       const raw = window.localStorage.getItem(
         presetStorageKey(selectedTarget.serial),
@@ -239,6 +242,7 @@ export default function MirrorRoute() {
         setSession({ kind: "idle" });
         return;
       }
+      setRecordingPath(recordingGrant?.local_path ?? null);
       const next = await callLaunchScrcpy(
         {
           serial: selectedTarget.serial,
@@ -677,6 +681,15 @@ export default function MirrorRoute() {
                     : "warning"
                 }
               />
+            )}
+
+            {session.kind === "ended" && recordingPath && (
+              <div className="flex flex-wrap items-center gap-3">
+                <p className="text-xs text-anvil-300">
+                  {t("mirror.recordingSavedTo", { path: recordingPath })}
+                </p>
+                <RevealInFolderButton path={recordingPath} />
+              </div>
             )}
           </>
         )}
