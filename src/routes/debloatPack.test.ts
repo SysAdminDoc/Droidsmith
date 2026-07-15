@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { Pack } from "../lib/tauri";
-import { expandPackDependencies } from "./debloatPack";
+import { expandPackDependencies, summarizePackSelection } from "./debloatPack";
 
 const pack: Pack = {
   id: "test-pack",
@@ -45,6 +45,14 @@ const pack: Pack = {
       needed_by: [],
       labels: [],
     },
+    {
+      id: "com.example.unsafe",
+      removal: "unsafe",
+      description: "Unsafe",
+      depends_on: [],
+      needed_by: [],
+      labels: [],
+    },
   ],
 };
 
@@ -59,6 +67,23 @@ describe("expandPackDependencies", () => {
 
   it("rejects renderer selections outside the signed pack revision", () => {
     expect(() => expandPackDependencies(pack, ["com.example.unknown"])).toThrow(
+      "is not in pack",
+    );
+  });
+});
+
+describe("summarizePackSelection", () => {
+  it("counts the exact selection and names unsafe-tier packages", () => {
+    expect(
+      summarizePackSelection(pack, ["com.example.base", "com.example.unsafe"]),
+    ).toEqual({
+      total: 2,
+      unsafeIds: ["com.example.unsafe"],
+    });
+  });
+
+  it("rejects selections outside the reviewed pack revision", () => {
+    expect(() => summarizePackSelection(pack, ["com.example.unknown"])).toThrow(
       "is not in pack",
     );
   });

@@ -78,7 +78,7 @@ ADB front end, but it has hard limits that an open project can fix:
 | Source | Closed | MIT, public on GitHub |
 | Platforms | Windows only (.NET 4.6+) | Windows, macOS, Linux |
 | Free tier | Core only — dark theme, Process Manager, batch ops are sponsor-gated | All features always free |
-| Debloat lists | Static, underperforms Universal Android Debloater per user reports | Versioned YAML packs and vendor quirks; UAD-NG import is blocked on redistribution permission |
+| Debloat lists | Static, underperforms Universal Android Debloater per user reports | Versioned YAML packs, vendor quirks, recovery baselines, and a final count/unsafe-tier review before apply; UAD-NG import is blocked on redistribution permission |
 | Screen mirror | Virtual buttons + screenshots | System scrcpy launch/supervision with per-device presets; bundled scrcpy remains planned |
 | Wireless ADB | Manual `adb pair` in console | First-class Android 11+ pairing, exact mDNS TLS provenance, explicit legacy/unknown TCP warnings, and privacy-bounded VPN/mDNS failure guidance |
 | Automation | None | YAML profiles + headless CLI for reproducible device actions |

@@ -1,5 +1,31 @@
 import type { Pack } from "../lib/tauri";
 
+export type PackSelectionSummary = {
+  total: number;
+  unsafeIds: string[];
+};
+
+export function summarizePackSelection(
+  pack: Pack,
+  selected: Iterable<string>,
+): PackSelectionSummary {
+  const selectedIds = new Set(selected);
+  const knownIds = new Set(pack.packages.map((entry) => entry.id));
+  for (const id of selectedIds) {
+    if (!knownIds.has(id)) {
+      throw new Error(`Selected package ${id} is not in pack ${pack.id}`);
+    }
+  }
+  return {
+    total: selectedIds.size,
+    unsafeIds: pack.packages
+      .filter(
+        (entry) => entry.removal === "unsafe" && selectedIds.has(entry.id),
+      )
+      .map((entry) => entry.id),
+  };
+}
+
 /** Expand the recursive pack dependency closure without changing pack order. */
 export function expandPackDependencies(
   pack: Pack,

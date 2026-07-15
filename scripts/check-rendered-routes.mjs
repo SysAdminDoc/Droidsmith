@@ -357,11 +357,29 @@ async function runDesktopFlow(browser) {
     path: path.join(screenshotDir, "desktop-debloat-preview.png"),
     fullPage: false,
   });
+  await page.getByRole("checkbox", { name: /com\.android\.settings/ }).check();
   await page
     .getByRole("button", { name: "Export baseline before applying" })
     .click();
   await page.getByText(/Baseline saved to .*qa-debloat/).waitFor();
-  await page.getByRole("button", { name: /Apply 2 packages/ }).click();
+  await page.getByRole("button", { name: /Apply 3 packages/ }).click();
+  const debloatReview = page.getByRole("alertdialog", {
+    name: "Confirm debloat changes",
+  });
+  await debloatReview.waitFor();
+  await debloatReview
+    .getByText("com.android.settings", { exact: true })
+    .waitFor();
+  await debloatReview.getByText("3", { exact: true }).waitFor();
+  await debloatReview.getByText("1", { exact: true }).waitFor();
+  await assertTabMovesFocus(page, "Debloat final safety review");
+  await page.screenshot({
+    path: path.join(screenshotDir, "desktop-debloat-final-review.png"),
+    fullPage: false,
+  });
+  await debloatReview
+    .getByRole("button", { name: "Disable 3 packages" })
+    .click();
   await page.getByText(/QA Debloat Pack - debloat complete/).waitFor();
   await page.getByText("Failed", { exact: true }).waitFor();
   await page.getByRole("button", { name: /Retry 1 failed/ }).waitFor();
@@ -1381,7 +1399,7 @@ async function installTauriMock(page) {
                     },
                     {
                       id: "com.android.settings",
-                      removal: "expert",
+                      removal: "unsafe",
                       description:
                         "System settings is intentionally not preselected.",
                       depends_on: [],
