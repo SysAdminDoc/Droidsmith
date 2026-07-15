@@ -936,13 +936,13 @@ function DeviceDetail({
         {info.battery && (
           <InfoField
             label={t("devices.battery")}
-            value={formatBattery(info.battery)}
+            value={formatBattery(info.battery, t("common.unknown"))}
           />
         )}
         {info.storage && (
           <InfoField
             label={t("devices.storageData")}
-            value={formatStorage(info.storage)}
+            value={formatStorage(info.storage, t("common.unknown"))}
           />
         )}
       </dl>
@@ -977,16 +977,22 @@ function InfoField({
   );
 }
 
-function formatBattery(b: NonNullable<DeviceInfo["battery"]>): string {
+function formatBattery(
+  b: NonNullable<DeviceInfo["battery"]>,
+  unknown: string,
+): string {
   const parts: string[] = [];
   if (b.level != null) parts.push(`${b.level}%`);
   if (b.status) parts.push(b.status);
   if (b.temperature != null) parts.push(`${b.temperature}°C`);
-  return parts.join(" · ") || "Unknown";
+  return parts.join(" · ") || unknown;
 }
 
-function formatStorage(s: NonNullable<DeviceInfo["storage"]>): string {
-  if (s.total_kb == null || s.available_kb == null) return "Unknown";
+function formatStorage(
+  s: NonNullable<DeviceInfo["storage"]>,
+  unknown: string,
+): string {
+  if (s.total_kb == null || s.available_kb == null) return unknown;
   const totalGb = (s.total_kb / 1048576).toFixed(1);
   const availGb = (s.available_kb / 1048576).toFixed(1);
   return `${availGb} GB free / ${totalGb} GB`;
@@ -1511,8 +1517,8 @@ function formatKb(kb: number): string {
   return `${kb} KB`;
 }
 
-function formatBytes(bytes: number | null): string {
-  if (bytes == null) return "Unknown";
+function formatBytes(bytes: number | null, unknown: string): string {
+  if (bytes == null) return unknown;
   if (bytes >= 1073741824) return `${(bytes / 1073741824).toFixed(1)} GB`;
   if (bytes >= 1048576) return `${(bytes / 1048576).toFixed(1)} MB`;
   if (bytes >= 1024) return `${(bytes / 1024).toFixed(1)} KB`;
@@ -2074,7 +2080,9 @@ function FileManager({ target }: { target: DeviceTarget }) {
                     </span>
                   )}
                   <span className="shrink-0 font-mono text-anvil-500">
-                    {entry.is_dir ? "" : formatBytes(entry.size)}
+                    {entry.is_dir
+                      ? ""
+                      : formatBytes(entry.size, t("common.unknown"))}
                   </span>
                   <span className="hidden shrink-0 font-mono text-anvil-600 sm:inline">
                     {entry.permissions}

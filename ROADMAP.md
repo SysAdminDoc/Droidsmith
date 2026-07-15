@@ -71,10 +71,6 @@ instead.
   Why: Screenshot, density, and pull results render as identical faint `text-xs` spans, so a "Saved" and a "Failed" look the same; these confirm real device mutations and should read as success/error states.
   Where: `src/routes/Devices.tsx`
 
-- [ ] P3 — Localize the `Unknown` fallback in battery/storage/bytes formatters
-  Why: `formatBattery`/`formatStorage`/`formatBytes` return a hard-coded English "Unknown" for null values, bypassing i18n.
-  Where: `src/routes/Devices.tsx`
-
 - [ ] P3 — Give non-selectable device states a clear label and guidance
   Why: Devices reported with a non-unit `{ other }` state render a capitalized `Other (…)` badge with no explanatory prompt, unlike the `unauthorized`/`no_permissions` paths.
   Where: `src/routes/Devices.tsx`
