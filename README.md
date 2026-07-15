@@ -170,6 +170,14 @@ and missing production bundle artifacts. Install its Rust tools once with
 `cargo install --locked cargo-audit cargo-deny`; every temporary exception in
 `release-policy.json` names an owner, rationale, and absolute expiry date.
 
+Platform Tools compatibility is governed by
+[`platform-tools-policy.json`](platform-tools-policy.json). The policy was
+reviewed on 2026-07-15, recommends 37.0.0, and warns (without blocking) below
+36.0.2 except for explicitly listed known-bad releases. Unrecognized newer
+versions are never blocked. Both fetch scripts consume the same version,
+official archive URLs, and SHA-256 pins; the release gate rejects policy,
+runtime, script, or documentation drift.
+
 The individual commands (`npm run format:check`, `npm run lint`,
 `npm run typecheck`, `npm test`, `npm run security:audit`, `npm run ui:smoke`,
 and `npm run release:smoke`) remain available for fast iteration.

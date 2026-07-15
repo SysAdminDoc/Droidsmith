@@ -75,8 +75,21 @@ export default function HostDoctor() {
         <div className="mt-4 space-y-3">
           <div className="flex flex-wrap gap-2 text-xs text-anvil-400">
             <Badge
-              tone={state.report.adb.query_succeeded ? "success" : "warning"}
+              tone={
+                state.report.adb.compatibility.status === "blocked"
+                  ? "danger"
+                  : state.report.adb.compatibility.status === "warn"
+                    ? "warning"
+                    : state.report.adb.query_succeeded
+                      ? "success"
+                      : "warning"
+              }
             >
+              {t(
+                `hostDoctor.compatibility.${state.report.adb.compatibility.status}`,
+              )}
+            </Badge>
+            <Badge tone="neutral">
               {state.report.adb.version
                 ? t("hostDoctor.adbVersion", {
                     version: state.report.adb.version,

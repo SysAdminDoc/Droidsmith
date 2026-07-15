@@ -17,6 +17,14 @@ const health: AdbHealth = {
   wifi_v2_state: "supported",
   wifi_v2_devices: ["Pixel 10"],
   warning: null,
+  platform_tools: {
+    status: "supported",
+    rationale: "Current supported release.",
+    recommended_version: "37.0.0",
+    warning_below_version: "36.0.2",
+    policy_reviewed_on: "2026-07-15",
+    source_url: "https://developer.android.com/tools/releases/platform-tools",
+  },
 };
 
 describe("formatAdbDiagnostics", () => {
@@ -44,6 +52,7 @@ describe("formatAdbDiagnostics", () => {
       recovery,
     });
     expect(output).toContain("mDNS backend: LIBADBMDNS");
+    expect(output).toContain("Platform Tools status: supported");
     expect(output).toContain("Wi-Fi 2.0 devices: Pixel 10");
     expect(output).toContain("Recovery outcome: succeeded");
     expect(output).toContain("adb reconnect offline");

@@ -592,6 +592,7 @@ fn build_support_preview(
             adb_available: resolution.path.is_some(),
             adb_source: source,
             adb_version: resolution.version,
+            adb_compatibility: resolution.compatibility,
             adb_health: health,
             devices,
             collection_warnings: warnings,

@@ -10,6 +10,10 @@ const repoRoot = path.resolve(
 );
 const tauriManifest = path.join(repoRoot, "src-tauri", "Cargo.toml");
 const policyPath = path.join(repoRoot, "release-policy.json");
+const platformToolsPolicyPath = path.join(
+  repoRoot,
+  "platform-tools-policy.json",
+);
 
 if (path.resolve(argv[1] ?? "") === fileURLToPath(import.meta.url)) {
   main();
@@ -118,6 +122,145 @@ function validatePolicy() {
     "release-policy.json contains an unsupported exception kind",
   );
   validateVersionParity();
+  validatePlatformToolsPolicy();
+}
+
+function validatePlatformToolsPolicy() {
+  const policy = readJson(platformToolsPolicyPath);
+  assert(
+    policy.schemaVersion === 1,
+    "platform-tools-policy.json schemaVersion must be 1",
+  );
+  for (const field of [
+    "reviewedOn",
+    "recommendedVersion",
+    "warningBelowVersion",
+    "sourceUrl",
+    "rationale",
+  ]) {
+    assert(
+      typeof policy[field] === "string" && policy[field].trim().length > 0,
+      `platform-tools policy ${field} is required`,
+    );
+  }
+  assertAbsoluteDate("platform-tools policy reviewedOn", policy.reviewedOn);
+  assertSemver("platform-tools recommendedVersion", policy.recommendedVersion);
+  assertSemver(
+    "platform-tools warningBelowVersion",
+    policy.warningBelowVersion,
+  );
+  assert(
+    compareVersions(policy.recommendedVersion, policy.warningBelowVersion) >= 0,
+    "platform-tools recommendedVersion must not predate warningBelowVersion",
+  );
+  assert(
+    policy.sourceUrl ===
+      "https://developer.android.com/tools/releases/platform-tools",
+    "platform-tools policy must cite the official Android release notes",
+  );
+  assert(
+    typeof policy.downloads === "object" && policy.downloads !== null,
+    "platform-tools policy downloads are required",
+  );
+  for (const os of ["windows", "linux", "darwin"]) {
+    const download = policy.downloads[os];
+    assert(download && typeof download === "object", `missing ${os} download`);
+    assert(
+      download.url ===
+        `https://dl.google.com/android/repository/platform-tools-latest-${os}.zip`,
+      `${os} Platform Tools URL must be the official archive`,
+    );
+    assert(
+      /^[0-9a-f]{64}$/u.test(download.sha256),
+      `${os} Platform Tools SHA-256 must be pinned`,
+    );
+  }
+  assert(
+    Array.isArray(policy.knownBadRules),
+    "platform-tools knownBadRules must be an array",
+  );
+  const knownBadVersions = new Set();
+  for (const rule of policy.knownBadRules) {
+    assertSemver("platform-tools known-bad version", rule.version);
+    assert(
+      rule.status === "blocked",
+      "platform-tools known-bad rules must explicitly use blocked status",
+    );
+    assert(
+      typeof rule.rationale === "string" && rule.rationale.length >= 40,
+      `platform-tools ${rule.version} known-bad rationale is too short`,
+    );
+    assert(
+      rule.sourceUrl === policy.sourceUrl,
+      `platform-tools ${rule.version} known-bad rule needs the official source`,
+    );
+    assert(
+      !knownBadVersions.has(rule.version),
+      `duplicate platform-tools known-bad version ${rule.version}`,
+    );
+    knownBadVersions.add(rule.version);
+  }
+
+  const readme = fs.readFileSync(path.join(repoRoot, "README.md"), "utf8");
+  validatePlatformToolsDocumentation(policy, readme);
+  for (const script of [
+    path.join(repoRoot, "scripts", "fetch-platform-tools.ps1"),
+    path.join(repoRoot, "scripts", "fetch-platform-tools.sh"),
+  ]) {
+    const content = fs.readFileSync(script, "utf8");
+    assert(
+      content.includes("platform-tools-policy.json") &&
+        content.includes("recommendedVersion"),
+      `${path.basename(script)} must consume platform-tools-policy.json`,
+    );
+    assert(
+      !content.includes("35.0.2"),
+      `${path.basename(script)} retains the stale Platform Tools pin`,
+    );
+  }
+  const rustPolicy = fs.readFileSync(
+    path.join(repoRoot, "src-tauri", "src", "adb", "version_policy.rs"),
+    "utf8",
+  );
+  assert(
+    rustPolicy.includes("platform-tools-policy.json") &&
+      rustPolicy.includes("include_str!"),
+    "Rust runtime must embed platform-tools-policy.json",
+  );
+  const health = fs.readFileSync(
+    path.join(repoRoot, "src-tauri", "src", "adb", "health.rs"),
+    "utf8",
+  );
+  const resolver = fs.readFileSync(
+    path.join(repoRoot, "src-tauri", "src", "adb", "resolver.rs"),
+    "utf8",
+  );
+  assert(
+    health.includes("version_policy::is_recommended") &&
+      resolver.includes("version_policy::assess"),
+    "ADB resolver and health probes must consume the shared version policy",
+  );
+}
+
+export function validatePlatformToolsDocumentation(policy, readme) {
+  const expected = `reviewed on ${policy.reviewedOn}, recommends ${policy.recommendedVersion}, and warns (without blocking) below\n${policy.warningBelowVersion}`;
+  assert(
+    readme.includes(expected),
+    "README Platform Tools policy summary differs from platform-tools-policy.json",
+  );
+}
+
+function assertAbsoluteDate(label, value) {
+  assert(/^\d{4}-\d{2}-\d{2}$/u.test(value), `${label} must use YYYY-MM-DD`);
+  const parsed = new Date(`${value}T00:00:00Z`);
+  assert(
+    !Number.isNaN(parsed.valueOf()) && parsed.toISOString().startsWith(value),
+    `${label} is invalid`,
+  );
+}
+
+function assertSemver(label, value) {
+  assert(/^\d+\.\d+\.\d+$/u.test(value), `${label} must be x.y.z`);
 }
 
 export function validateExpiry(kind, value, now = new Date()) {

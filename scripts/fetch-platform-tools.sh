@@ -5,12 +5,24 @@
 # POSIX side of fetch-platform-tools.ps1 — handles Linux + macOS targets.
 # Binaries are NOT committed to the repo; release CI fetches per build.
 #
-# Pinned channel: stable. Bumping the version is a deliberate PR; never silent.
+# Stable metadata comes from platform-tools-policy.json. Bumping the policy is
+# a deliberate PR; never silent.
 
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BIN_DIR="$REPO_ROOT/src-tauri/binaries"
+POLICY_PATH="$REPO_ROOT/platform-tools-policy.json"
+
+policy_value() {
+    node -e '
+const fs = require("node:fs");
+const policy = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+const value = process.argv[2].split(".").reduce((current, key) => current?.[key], policy);
+if (typeof value !== "string" || value.length === 0) process.exit(2);
+process.stdout.write(value);
+' "$POLICY_PATH" "$1"
+}
 
 usage() {
     cat <<'EOF'
@@ -66,21 +78,19 @@ case "$(uname -s)" in
         ;;
 esac
 
-# Pinned upstream metadata. Bump by following
-# https://developer.android.com/tools/releases/platform-tools and
-# fetching the matching .sha256.
+# Read the single reviewed upstream policy. The release gate validates these
+# fields and ensures this script keeps consuming them.
+STABLE_VERSION="$(policy_value recommendedVersion)"
+URL_LINUX="$(policy_value downloads.linux.url)"
+SHA_LINUX="$(policy_value downloads.linux.sha256)"
+URL_DARWIN="$(policy_value downloads.darwin.url)"
+SHA_DARWIN="$(policy_value downloads.darwin.sha256)"
 case "$CHANNEL" in
     stable)
-        URL_LINUX="https://dl.google.com/android/repository/platform-tools_r35.0.2-linux.zip"
-        SHA_LINUX="PLACEHOLDER-replace-with-real-hash-on-release-PR"
-        URL_DARWIN="https://dl.google.com/android/repository/platform-tools_r35.0.2-darwin.zip"
-        SHA_DARWIN="PLACEHOLDER-replace-with-real-hash-on-release-PR"
-        VERSION="35.0.2"
+        VERSION="$STABLE_VERSION"
         ;;
     preview)
-        URL_LINUX="https://dl.google.com/android/repository/platform-tools-latest-linux.zip"
         SHA_LINUX="SKIP"
-        URL_DARWIN="https://dl.google.com/android/repository/platform-tools-latest-darwin.zip"
         SHA_DARWIN="SKIP"
         VERSION="rolling"
         ;;
@@ -98,9 +108,8 @@ else
     SHA="$SHA_DARWIN"
 fi
 
-if [[ "$CHANNEL" == "stable" && "$SHA" == PLACEHOLDER-* ]]; then
-    echo "[fetch-platform-tools] stable checksum is not pinned yet; refusing to download." >&2
-    echo "Update the SHA in this script from Google's published .sha256, or use --channel preview for local experiments." >&2
+if [[ "$CHANNEL" == "stable" && ! "$SHA" =~ ^[0-9a-fA-F]{64}$ ]]; then
+    echo "[fetch-platform-tools] stable checksum in platform-tools-policy.json is invalid; refusing to download." >&2
     exit 1
 fi
 
@@ -149,6 +158,13 @@ ADB_SRC="$EXTRACT/platform-tools/$ADB_NAME"
 FB_SRC="$EXTRACT/platform-tools/$FB_NAME"
 [[ -f "$ADB_SRC" ]] || { echo "adb not found in archive" >&2; exit 1; }
 [[ -f "$FB_SRC"  ]] || { echo "fastboot not found in archive" >&2; exit 1; }
+if [[ "$CHANNEL" == "stable" ]]; then
+    ARCHIVE_VERSION="$(awk -F= '$1 == "Pkg.Revision" { print $2; exit }' "$EXTRACT/platform-tools/source.properties")"
+    if [[ "$ARCHIVE_VERSION" != "$VERSION" ]]; then
+        echo "[fetch-platform-tools] archive version $ARCHIVE_VERSION does not match policy version $VERSION" >&2
+        exit 1
+    fi
+fi
 
 for triple in "${TRIPLES[@]}"; do
     install -m 0755 "$ADB_SRC" "$BIN_DIR/adb-$triple"

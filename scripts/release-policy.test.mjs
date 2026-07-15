@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   collectCargoDuplicates,
   validateExpiry,
+  validatePlatformToolsDocumentation,
   validateVersionValues,
 } from "./check-release-policy.mjs";
 
@@ -19,6 +20,27 @@ test("exception dates are absolute, valid, and unexpired", () => {
     /expiry is invalid/u,
   );
   assert.throws(() => validateExpiry("test", "07/15/2026", now), /YYYY-MM-DD/u);
+});
+
+test("Platform Tools documentation is generated from policy values", () => {
+  const policy = {
+    reviewedOn: "2026-07-15",
+    recommendedVersion: "37.0.0",
+    warningBelowVersion: "36.0.2",
+  };
+  const matching =
+    "reviewed on 2026-07-15, recommends 37.0.0, and warns (without blocking) below\n36.0.2";
+  assert.doesNotThrow(() =>
+    validatePlatformToolsDocumentation(policy, matching),
+  );
+  assert.throws(
+    () =>
+      validatePlatformToolsDocumentation(
+        { ...policy, recommendedVersion: "38.0.0" },
+        matching,
+      ),
+    /summary differs/u,
+  );
 });
 
 test("Cargo lock duplicate inventory retains exact versions", () => {

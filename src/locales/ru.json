@@ -30,6 +30,14 @@
     "retry": "Повторить",
     "os": "ОС",
     "adb": "ADB",
+    "adbStatus": "Совместимость",
+    "adbVersion": "Версия ADB",
+    "adbPath": "Путь ADB",
+    "adbStatusValue": {
+      "supported": "Поддерживается",
+      "warn": "Рекомендуется обновление",
+      "blocked": "Известная проблема"
+    },
     "resolved": "Найден",
     "missing": "Отсутствует"
   },
@@ -160,6 +168,13 @@
       "reviewRecovery": "Проверить восстановление",
       "client": "Версия клиента",
       "server": "Версия сервера",
+      "compatibility": "Совместимость",
+      "compatibilityStatus": {
+        "supported": "Поддерживается",
+        "warn": "Рекомендуется обновление",
+        "blocked": "Версия с известной проблемой"
+      },
+      "policyLink": "Официальный источник политики (проверено {{date}})",
       "usbBackend": "USB-бэкенд",
       "mdnsBackend": "mDNS-бэкенд",
       "mdns": "Обнаружение mDNS",
@@ -738,6 +753,11 @@
     "failed": "Диагностика подключения не удалась",
     "adbVersion": "ADB {{version}}",
     "adbUnverified": "ADB не проверен",
+    "compatibility": {
+      "supported": "Поддерживается",
+      "warn": "Рекомендуется обновление",
+      "blocked": "Версия с известной проблемой"
+    },
     "scanned": "Сканирование: {{date}}",
     "privacy": "Контракт приватности и отсутствия изменений",
     "officialGuidance": "Открыть официальную инструкцию",
@@ -748,6 +768,12 @@
       },
       "adb_version_unknown": { "title": "Версию ADB не удалось проверить" },
       "adb_ready": { "title": "Исполняемый файл ADB готов" },
+      "platform_tools_blocked": {
+        "title": "Эта версия Platform Tools имеет известную проблему"
+      },
+      "platform_tools_warning": {
+        "title": "Совместимость Platform Tools требует внимания"
+      },
       "unauthorized": { "title": "Android ожидает авторизации USB debugging" },
       "offline": { "title": "ADB transports находятся offline" },
       "no_permissions": {

@@ -8,6 +8,7 @@ use std::time::{Duration, Instant};
 use serde::Serialize;
 
 use crate::adb::transport::ShellTransport;
+use crate::adb::version_policy::{self, PlatformToolsAssessment};
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
 pub struct AdbHealth {
@@ -24,6 +25,7 @@ pub struct AdbHealth {
     pub wifi_v2_state: WifiV2State,
     pub wifi_v2_devices: Vec<String>,
     pub warning: Option<String>,
+    pub platform_tools: PlatformToolsAssessment,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
@@ -37,6 +39,7 @@ pub enum WifiV2State {
 
 pub fn probe(transport: &ShellTransport, client_version: Option<String>) -> AdbHealth {
     let mut health = AdbHealth {
+        platform_tools: version_policy::assess(client_version.as_deref()),
         client_version,
         ..AdbHealth::default()
     };
@@ -59,7 +62,7 @@ pub fn probe(transport: &ShellTransport, client_version: Option<String>) -> AdbH
     health.recommended_for_wifi_v2 = health
         .server_version
         .as_deref()
-        .is_some_and(|version| version_at_least(version, 37));
+        .is_some_and(version_policy::is_recommended);
     health.mdns_check = transport
         .adb(&["mdns", "check"])
         .ok()
@@ -78,10 +81,10 @@ pub fn probe(transport: &ShellTransport, client_version: Option<String>) -> AdbH
 
     if health.warning.is_none() {
         if !health.recommended_for_wifi_v2 {
-            health.warning = Some(
-                "Platform Tools 37.0.0 or newer is required for ADB Wi-Fi 2.0 diagnostics"
-                    .to_string(),
-            );
+            health.warning = Some(format!(
+                "Platform Tools {} or newer is required for ADB Wi-Fi 2.0 diagnostics",
+                health.platform_tools.recommended_version
+            ));
         } else if health.mdns_enabled == Some(false) {
             health.warning = Some("ADB mDNS discovery is disabled".to_string());
         } else if health
@@ -222,8 +225,12 @@ mdns_enabled: true
         assert_eq!(field(STATUS, "version").as_deref(), Some("37.0.0"));
         assert_eq!(field(STATUS, "mdns_backend").as_deref(), Some("LIBADBMDNS"));
         assert_eq!(bool_field(STATUS, "mdns_enabled"), Some(true));
-        assert!(version_at_least("37.0.0", 37));
-        assert!(!version_at_least("36.0.2", 37));
+        assert!(version_at_least("2.0", 2));
+        assert!(!version_at_least("1.0", 2));
+        assert_eq!(
+            version_policy::assess(Some("37.0.0")).status,
+            crate::adb::version_policy::PlatformToolsStatus::Supported
+        );
     }
 
     #[test]

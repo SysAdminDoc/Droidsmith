@@ -26,6 +26,7 @@ pub struct AdbResolution {
     pub path: Option<String>,
     pub source: ResolveSource,
     pub version: Option<String>,
+    pub compatibility: super::version_policy::PlatformToolsAssessment,
 }
 
 #[derive(Debug, Serialize, Clone, Copy, PartialEq, Eq)]
@@ -131,15 +132,18 @@ pub fn resolve(env: &ResolverEnv) -> AdbResolution {
         path: None,
         source: ResolveSource::NotFound,
         version: None,
+        compatibility: super::version_policy::assess(None),
     }
 }
 
 fn finalize(path: PathBuf, source: ResolveSource) -> AdbResolution {
     let version = probe_version(&path);
+    let compatibility = super::version_policy::assess(version.as_deref());
     AdbResolution {
         path: Some(path.display().to_string()),
         source,
         version,
+        compatibility,
     }
 }
 

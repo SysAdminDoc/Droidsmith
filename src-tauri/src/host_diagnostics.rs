@@ -18,6 +18,7 @@ use serde::Serialize;
 
 use crate::adb::device::DeviceState;
 use crate::adb::health::AdbHealth;
+use crate::adb::version_policy::{PlatformToolsAssessment, PlatformToolsStatus};
 use crate::adb::{self, AdbTransport, ShellTransport};
 
 const DEVICE_SETUP_URL: &str = "https://developer.android.com/studio/run/device";
@@ -56,6 +57,7 @@ pub struct HostDoctorAdb {
     pub query_succeeded: bool,
     pub client_version: Option<String>,
     pub server_version: Option<String>,
+    pub compatibility: PlatformToolsAssessment,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -120,6 +122,7 @@ pub fn scan() -> HostDoctorReport {
 fn analyze(snapshot: DoctorSnapshot) -> HostDoctorReport {
     let mut findings = Vec::new();
     let resolved = snapshot.resolution.path.is_some();
+    let compatibility = snapshot.resolution.compatibility.clone();
     let client_version = snapshot
         .health
         .as_ref()
@@ -177,10 +180,39 @@ fn analyze(snapshot: DoctorSnapshot) -> HostDoctorReport {
                     "Platform Tools version: {}",
                     snapshot.resolution.version.as_deref().unwrap_or("unknown")
                 ),
+                format!("Compatibility status: {:?}", compatibility.status),
             ],
             vec!["Keep Platform Tools current when Android device support changes."],
             PLATFORM_TOOLS_URL,
         ));
+    }
+
+    match compatibility.status {
+        PlatformToolsStatus::Blocked if resolved => findings.push(finding(
+            "platform_tools_blocked",
+            FindingSeverity::Error,
+            "This Platform Tools release is known-bad",
+            compatibility.rationale.clone(),
+            vec![format!(
+                "Policy reviewed: {}",
+                compatibility.policy_reviewed_on
+            )],
+            vec!["Replace this release with the policy's recommended official Platform Tools version before continuing."],
+            PLATFORM_TOOLS_URL,
+        )),
+        PlatformToolsStatus::Warn if resolved => findings.push(finding(
+            "platform_tools_warning",
+            FindingSeverity::Warning,
+            "Platform Tools compatibility needs attention",
+            compatibility.rationale.clone(),
+            vec![format!(
+                "Policy reviewed: {}",
+                compatibility.policy_reviewed_on
+            )],
+            vec!["Install the recommended official Platform Tools release, then rescan."],
+            PLATFORM_TOOLS_URL,
+        )),
+        _ => {}
     }
 
     add_state_findings(&snapshot, &mut findings);
@@ -250,6 +282,7 @@ fn analyze(snapshot: DoctorSnapshot) -> HostDoctorReport {
             query_succeeded: snapshot.query_succeeded,
             client_version,
             server_version,
+            compatibility,
         },
         device_state_counts: snapshot.device_state_counts,
         findings,
@@ -636,6 +669,7 @@ mod tests {
                 path: Some("/fixture/adb".to_string()),
                 source: ResolveSource::Path,
                 version: Some("37.0.0".to_string()),
+                compatibility: crate::adb::version_policy::assess(Some("37.0.0")),
             },
             query_succeeded: true,
             device_state_counts: BTreeMap::new(),
@@ -657,6 +691,7 @@ mod tests {
             path: None,
             source: ResolveSource::NotFound,
             version: None,
+            compatibility: crate::adb::version_policy::assess(None),
         };
         input.query_succeeded = false;
         let report = analyze(input);

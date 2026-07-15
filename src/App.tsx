@@ -562,6 +562,18 @@ function HeartbeatSidebarSummary({
           label={t("runtime.adb")}
           value={v.adb.path ? t("runtime.resolved") : t("runtime.missing")}
         />
+        <Metric
+          label={t("runtime.adbStatus")}
+          value={t(`runtime.adbStatusValue.${v.adb.compatibility.status}`)}
+        />
+        <Metric
+          label={t("runtime.adbVersion")}
+          value={v.adb.version ?? t("common.notReported")}
+        />
+        <Metric
+          label={t("runtime.adbPath")}
+          value={v.adb.path ?? t("common.notReported")}
+        />
         <Metric label="Tauri" value={`v${v.tauri_version}`} />
       </dl>
     </div>
@@ -572,7 +584,12 @@ function Metric({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-center justify-between gap-3">
       <dt className="text-anvil-500">{label}</dt>
-      <dd className="truncate text-right font-mono text-anvil-200">{value}</dd>
+      <dd
+        className="truncate text-right font-mono text-anvil-200"
+        title={value}
+      >
+        {value}
+      </dd>
     </div>
   );
 }

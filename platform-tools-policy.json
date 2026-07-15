@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "reviewedOn": "2026-07-15",
+  "recommendedVersion": "37.0.0",
+  "warningBelowVersion": "36.0.2",
+  "sourceUrl": "https://developer.android.com/tools/releases/platform-tools",
+  "rationale": "Platform Tools 37.0.0 makes libadbmdns the default mDNS backend and improves Linux device discovery; 36.0.2 is the reliability floor because it fixes Samsung and legacy USB detection plus Windows push/pull truncation.",
+  "knownBadRules": [
+    {
+      "version": "36.0.1",
+      "status": "blocked",
+      "rationale": "Platform Tools 36.0.1 never advanced beyond Canary because of the Windows push/pull truncation defect fixed in 36.0.2.",
+      "sourceUrl": "https://developer.android.com/tools/releases/platform-tools"
+    }
+  ],
+  "downloads": {
+    "windows": {
+      "url": "https://dl.google.com/android/repository/platform-tools-latest-windows.zip",
+      "sha256": "4fe305812db074cea32903a489d061eb4454cbc90a49e8fea677f4b7af764918"
+    },
+    "linux": {
+      "url": "https://dl.google.com/android/repository/platform-tools-latest-linux.zip",
+      "sha256": "198ae156ab285fa555987219af237b31102fefe8b9d2bc274708a8d4f2865a07"
+    },
+    "darwin": {
+      "url": "https://dl.google.com/android/repository/platform-tools-latest-darwin.zip",
+      "sha256": "094a1395683c509fd4d48667da0d8b5ef4d42b2abfcd29f2e8149e2f989357c7"
+    }
+  }
+}

@@ -11,10 +11,22 @@ export type ResolveSource =
   | "bundled"
   | "not_found";
 
+export type PlatformToolsStatus = "supported" | "warn" | "blocked";
+
+export type PlatformToolsAssessment = {
+  status: PlatformToolsStatus;
+  rationale: string;
+  recommended_version: string;
+  warning_below_version: string;
+  policy_reviewed_on: string;
+  source_url: string;
+};
+
 export type AdbResolution = {
   path: string | null;
   source: ResolveSource;
   version: string | null;
+  compatibility: PlatformToolsAssessment;
 };
 
 export type OsInfo = { family: string; version: string; arch: string };
@@ -148,6 +160,7 @@ export type AdbHealth = {
   wifi_v2_state: WifiV2State;
   wifi_v2_devices: string[];
   warning: string | null;
+  platform_tools: PlatformToolsAssessment;
 };
 
 export type HostFinding = {
@@ -177,6 +190,7 @@ export type HostDoctorReport = {
     query_succeeded: boolean;
     client_version: string | null;
     server_version: string | null;
+    compatibility: PlatformToolsAssessment;
   };
   device_state_counts: Record<string, number>;
   findings: HostFinding[];

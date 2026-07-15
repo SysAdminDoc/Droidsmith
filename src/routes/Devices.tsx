@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { cn } from "../lib/cn";
 import {
   callApplyDeviceControl,
   callCancelOperation,
@@ -423,6 +424,12 @@ function AdbHealthPanel({
             value={health.server_version ?? t("common.notReported")}
           />
           <HealthMetric
+            label={t("devices.health.compatibility")}
+            value={t(
+              `devices.health.compatibilityStatus.${health.platform_tools.status}`,
+            )}
+          />
+          <HealthMetric
             label={t("devices.health.usbBackend")}
             value={health.usb_backend ?? t("common.notReported")}
           />
@@ -469,6 +476,30 @@ function AdbHealthPanel({
           className="mt-4 rounded-md border border-amber-300/20 bg-amber-400/10 px-3 py-2 text-xs leading-5 text-amber-100"
         >
           {health.warning}
+        </p>
+      )}
+      {health && (
+        <p
+          className={cn(
+            "mt-3 rounded-md border px-3 py-2 text-xs leading-5",
+            health.platform_tools.status === "blocked"
+              ? "border-red-300/20 bg-red-950/20 text-red-100"
+              : health.platform_tools.status === "warn"
+                ? "border-amber-300/20 bg-amber-400/10 text-amber-100"
+                : "border-emerald-300/20 bg-emerald-950/20 text-emerald-100",
+          )}
+        >
+          {health.platform_tools.rationale}{" "}
+          <a
+            className="font-medium underline underline-offset-2"
+            href={health.platform_tools.source_url}
+            target="_blank"
+            rel="noreferrer"
+          >
+            {t("devices.health.policyLink", {
+              date: health.platform_tools.policy_reviewed_on,
+            })}
+          </a>
         </p>
       )}
     </Card>

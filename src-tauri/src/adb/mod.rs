@@ -32,6 +32,7 @@ pub mod parsers;
 pub mod resolver;
 pub mod transport;
 pub mod users;
+pub mod version_policy;
 pub mod wireless;
 
 // Public re-exports for cross-module consumers (`commands`, tests).

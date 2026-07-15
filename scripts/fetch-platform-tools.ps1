@@ -23,11 +23,11 @@
 
 .PARAMETER Channel
   "stable" (default) or "preview". The preview channel pulls the same
-  binaries Android Studio Canary ships.
+  rolling upstream URL without a pinned checksum for local experiments.
 
 .NOTES
-  We pin a known SHA-256 per OS. Bumping the platform-tools version
-  is a deliberate PR; never silent.
+  Stable metadata comes from platform-tools-policy.json. Bumping the policy
+  version and checksums is a deliberate PR; never silent.
 #>
 [CmdletBinding()]
 param(
@@ -40,23 +40,25 @@ Set-StrictMode -Version Latest
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $binDir = Join-Path $repoRoot "src-tauri\binaries"
+$policyPath = Join-Path $repoRoot "platform-tools-policy.json"
+$policy = Get-Content -LiteralPath $policyPath -Raw | ConvertFrom-Json
+$stableDownload = $policy.downloads.windows
 
-# Pinned upstream metadata. Update by following
-# https://developer.android.com/tools/releases/platform-tools then
-# fetching the .sha256 next to the .zip from dl.google.com.
+# Pinned upstream metadata. Update only platform-tools-policy.json after
+# reviewing the official release notes and hashing each official archive.
 $PinnedStable = @{
-    Url    = "https://dl.google.com/android/repository/platform-tools_r35.0.2-windows.zip"
-    Sha256 = "PLACEHOLDER-replace-with-real-hash-on-release-PR"
-    Version = "35.0.2"
+    Url    = $stableDownload.url
+    Sha256 = $stableDownload.sha256
+    Version = $policy.recommendedVersion
 }
 $PinnedPreview = $PinnedStable.Clone()
-$PinnedPreview.Url = "https://dl.google.com/android/repository/platform-tools-latest-windows.zip"
 $PinnedPreview.Sha256 = "SKIP"  # rolling channel; checksum can't be pinned
+$PinnedPreview.Version = "rolling"
 
 $Pinned = if ($Channel -eq "preview") { $PinnedPreview } else { $PinnedStable }
 
-if ($Channel -eq "stable" -and $Pinned.Sha256 -like "PLACEHOLDER-*") {
-    throw "[fetch-platform-tools] stable checksum is not pinned yet; refusing to download. Update the SHA from Google's published .sha256, or use -Channel preview for local experiments."
+if ($Channel -eq "stable" -and $Pinned.Sha256 -notmatch "^[0-9a-fA-F]{64}$") {
+    throw "[fetch-platform-tools] stable checksum in platform-tools-policy.json is invalid; refusing to download."
 }
 
 $triples = @("x86_64-pc-windows-msvc", "aarch64-pc-windows-msvc")
@@ -103,8 +105,15 @@ try {
     # The zip extracts to ./platform-tools/{adb.exe,fastboot.exe,...}
     $adbSrc = Join-Path $extractRoot "platform-tools\adb.exe"
     $fbSrc  = Join-Path $extractRoot "platform-tools\fastboot.exe"
+    $sourceProperties = Join-Path $extractRoot "platform-tools\source.properties"
     if (-not (Test-Path $adbSrc)) { throw "adb.exe not found in archive" }
     if (-not (Test-Path $fbSrc))  { throw "fastboot.exe not found in archive" }
+    if ($Channel -eq "stable") {
+        $revision = (Get-Content -LiteralPath $sourceProperties | Where-Object { $_ -match '^Pkg\.Revision=' } | Select-Object -First 1) -replace '^Pkg\.Revision=', ''
+        if ($revision -ne $Pinned.Version) {
+            throw "[fetch-platform-tools] archive version $revision does not match policy version $($Pinned.Version)."
+        }
+    }
 
     # Google ships a single x86_64 binary that runs under emulation on
     # ARM Windows. Stage the same artefact for both triples until Google

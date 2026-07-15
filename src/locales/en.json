@@ -30,6 +30,14 @@
     "retry": "Retry",
     "os": "OS",
     "adb": "ADB",
+    "adbStatus": "Compatibility",
+    "adbVersion": "ADB version",
+    "adbPath": "ADB path",
+    "adbStatusValue": {
+      "supported": "Supported",
+      "warn": "Upgrade advised",
+      "blocked": "Known-bad"
+    },
     "resolved": "Resolved",
     "missing": "Missing"
   },
@@ -160,6 +168,13 @@
       "reviewRecovery": "Review recovery",
       "client": "Client version",
       "server": "Server version",
+      "compatibility": "Compatibility",
+      "compatibilityStatus": {
+        "supported": "Supported",
+        "warn": "Upgrade advised",
+        "blocked": "Known-bad release"
+      },
+      "policyLink": "Official policy source (reviewed {{date}})",
       "usbBackend": "USB backend",
       "mdnsBackend": "mDNS backend",
       "mdns": "mDNS discovery",
@@ -738,6 +753,11 @@
     "failed": "Connection doctor failed",
     "adbVersion": "ADB {{version}}",
     "adbUnverified": "ADB unverified",
+    "compatibility": {
+      "supported": "Supported",
+      "warn": "Upgrade advised",
+      "blocked": "Known-bad release"
+    },
     "scanned": "Scanned {{date}}",
     "privacy": "Privacy and side-effect contract",
     "officialGuidance": "Open official guidance",
@@ -748,6 +768,12 @@
       },
       "adb_version_unknown": { "title": "ADB version could not be verified" },
       "adb_ready": { "title": "ADB executable is ready" },
+      "platform_tools_blocked": {
+        "title": "This Platform Tools release is known-bad"
+      },
+      "platform_tools_warning": {
+        "title": "Platform Tools compatibility needs attention"
+      },
       "unauthorized": {
         "title": "Android is waiting for USB debugging authorization"
       },

@@ -49,6 +49,8 @@ async function runDesktopFlow(browser) {
 
   await page.getByRole("heading", { name: "Droidsmith" }).waitFor();
   await page.getByText("ADB lifecycle health", { exact: true }).waitFor();
+  await page.getByText("Upgrade advised", { exact: true }).waitFor();
+  await page.getByText(/Platform Tools 37\.0\.0 makes libadbmdns/).waitFor();
   await page.getByRole("button", { name: "Select Pixel QA" }).waitFor();
   if ((await page.locator("tr[role='button']").count()) !== 0) {
     throw new Error("Device table rows must retain native table semantics");
@@ -514,6 +516,15 @@ async function installTauriMock(page) {
       transport_kind: "usb",
       wireless: false,
     };
+    const platformToolsPolicy = {
+      status: "supported",
+      rationale:
+        "Platform Tools 37.0.0 makes libadbmdns the default mDNS backend.",
+      recommended_version: "37.0.0",
+      warning_below_version: "36.0.2",
+      policy_reviewed_on: "2026-07-15",
+      source_url: "https://developer.android.com/tools/releases/platform-tools",
+    };
     const adbHealth = {
       server_status_supported: true,
       client_version: "37.0.0",
@@ -528,6 +539,7 @@ async function installTauriMock(page) {
       wifi_v2_state: "supported",
       wifi_v2_devices: ["Pixel QA"],
       warning: null,
+      platform_tools: platformToolsPolicy,
     };
     const packages = [
       {
@@ -644,6 +656,12 @@ async function installTauriMock(page) {
               path: "C:/Android/platform-tools/adb.exe",
               source: "path",
               version: "35.0.2",
+              compatibility: {
+                ...platformToolsPolicy,
+                status: "warn",
+                rationale:
+                  "Platform Tools 35.0.2 predates the 36.0.2 reliability floor.",
+              },
             },
           };
         }
@@ -658,6 +676,7 @@ async function installTauriMock(page) {
               query_succeeded: true,
               client_version: "37.0.0",
               server_version: "37.0.0",
+              compatibility: platformToolsPolicy,
             },
             device_state_counts: { device: 1 },
             findings: [
@@ -797,6 +816,7 @@ async function installTauriMock(page) {
               environment: {
                 app_version: "0.1.0",
                 adb_version: "37.0.0",
+                adb_compatibility: platformToolsPolicy,
               },
               devices: [
                 { id: "device-01", state: "device", model: "Pixel QA" },

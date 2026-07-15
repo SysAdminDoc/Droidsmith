@@ -10,6 +10,7 @@ use serde::Serialize;
 use serde_json::Value;
 
 use crate::adb::device::DeviceState;
+use crate::adb::version_policy::PlatformToolsAssessment;
 use crate::adb::{self, health::AdbHealth};
 
 const MAX_JSONL_BYTES: u64 = 2 * 1024 * 1024;
@@ -29,6 +30,7 @@ pub struct EnvironmentInput {
     pub adb_available: bool,
     pub adb_source: String,
     pub adb_version: Option<String>,
+    pub adb_compatibility: PlatformToolsAssessment,
     pub adb_health: Option<AdbHealth>,
     pub devices: Vec<adb::Device>,
     pub collection_warnings: Vec<String>,
@@ -89,6 +91,7 @@ struct SupportEnvironment {
     adb_available: bool,
     adb_source: String,
     adb_version: Option<String>,
+    adb_compatibility: PlatformToolsAssessment,
     adb_health: Option<SupportAdbHealth>,
 }
 
@@ -287,6 +290,7 @@ pub fn build_preview(
                 .adb_version
                 .as_deref()
                 .map(|version| sanitize_text(version, &aliases)),
+            adb_compatibility: input.adb_compatibility,
             adb_health: health,
         },
         devices,
@@ -743,6 +747,7 @@ mod tests {
             adb_available: true,
             adb_source: "path".to_string(),
             adb_version: Some("37.0.0".to_string()),
+            adb_compatibility: crate::adb::version_policy::assess(Some("37.0.0")),
             adb_health: Some(AdbHealth::default()),
             devices: vec![adb::Device {
                 serial: "ZY224JQ9".to_string(),
@@ -807,6 +812,13 @@ mod tests {
         assert!(preview.content.contains("install_operation"));
         assert!(preview.content.contains("\"local_only\": true"));
         assert!(preview.content.contains("\"uploads_performed\": false"));
+        assert!(preview.content.contains("\"status\": \"supported\""));
+        assert!(preview
+            .content
+            .contains("\"recommended_version\": \"37.0.0\""));
+        assert!(preview
+            .content
+            .contains("\"policy_reviewed_on\": \"2026-07-15\""));
         fs::remove_dir_all(root).unwrap();
     }
 
