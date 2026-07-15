@@ -13,7 +13,9 @@
 #   * The unic-* crates are Unicode data tables pulled transitively by the
 #     webview/url stack.
 #
-# Re-audit and prune this list whenever the Tauri major version is bumped.
+# Owner, rationale, and absolute expiry metadata are enforced against this
+# exact list by release-policy.json. Re-audit and prune it whenever Tauri is
+# bumped or before the policy expires.
 [advisories]
 ignore = [
   "RUSTSEC-2024-0370", # proc-macro-error unmaintained (build-time transitive)

@@ -10,7 +10,9 @@ import { exit, stderr, stdout } from "node:process";
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const srcTauri = join(root, "src-tauri");
 
-const version = spawnSync("cargo", ["audit", "--version"], { encoding: "utf8" });
+const version = spawnSync("cargo", ["audit", "--version"], {
+  encoding: "utf8",
+});
 if (version.status !== 0) {
   stderr.write(
     "cargo-audit is not installed. Install the gate with:\n" +

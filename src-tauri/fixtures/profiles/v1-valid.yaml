@@ -1,0 +1,10 @@
+name: "Release gate profile fixture"
+version: "1"
+description: "Proves that the current profile schema remains loadable."
+device:
+  require_manufacturer: "Google"
+actions:
+  - kind: disable
+    package: com.android.bookmarkprovider
+    note: "Typed release-gate fixture"
+    user: 0

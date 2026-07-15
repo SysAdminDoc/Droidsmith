@@ -112,17 +112,20 @@ Droidsmith/
 ## Local verification
 
 ```bash
-npm run format:check
-npm run lint
-npm run typecheck
-npm test
-npm run security:audit
-npm run ui:smoke
-npm run release:smoke
+npm run release:check
 ```
 
-`npm run security:audit` runs `npm audit` plus the Rust dependency gate
-(`cargo audit --deny warnings`, which requires `cargo install cargo-audit`).
+`npm run release:check` is the authoritative local release-policy gate. It
+fails on frontend or Rust formatting/lint/type/test regressions, rendered-route
+smoke failures, npm/Rust advisories, unreviewed Cargo licenses/sources/bans or
+duplicate versions, invalid pack/quirk/profile YAML, version/resource drift,
+and missing production bundle artifacts. Install its Rust tools once with
+`cargo install --locked cargo-audit cargo-deny`; every temporary exception in
+`release-policy.json` names an owner, rationale, and absolute expiry date.
+
+The individual commands (`npm run format:check`, `npm run lint`,
+`npm run typecheck`, `npm test`, `npm run security:audit`, `npm run ui:smoke`,
+and `npm run release:smoke`) remain available for fast iteration.
 
 `npm run ui:smoke` starts Vite with mocked Tauri IPC and checks sidebar
 navigation, command palette focus, Apps action overlays, Debloat queue results,

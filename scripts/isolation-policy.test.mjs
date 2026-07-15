@@ -4,9 +4,15 @@ import test from "node:test";
 import { URL } from "node:url";
 import vm from "node:vm";
 
-const source = await readFile(new URL("../isolation/index.js", import.meta.url), "utf8");
+const source = await readFile(
+  new URL("../isolation/index.js", import.meta.url),
+  "utf8",
+);
 const tauriConfig = JSON.parse(
-  await readFile(new URL("../src-tauri/tauri.conf.json", import.meta.url), "utf8"),
+  await readFile(
+    new URL("../src-tauri/tauri.conf.json", import.meta.url),
+    "utf8",
+  ),
 );
 const tauriLib = await readFile(
   new URL("../src-tauri/src/lib.rs", import.meta.url),
@@ -58,7 +64,9 @@ test("every registered Rust command has an explicit isolation classification", (
   assert.ok(sensitiveBlock);
 
   const registered = new Set(
-    handlerBlock.match(/[a-z][a-z0-9_]*/gu)?.filter((name) => name !== "tauri") ?? [],
+    handlerBlock
+      .match(/[a-z][a-z0-9_]*/gu)
+      ?.filter((name) => name !== "tauri") ?? [],
   );
   const readOnly = new Set(
     [...readOnlyBlock.matchAll(/"([a-z][a-z0-9_]*)"/gu)].map(
@@ -168,6 +176,9 @@ test("allows only bounded native dialog purposes and file names", () => {
     { purpose: "arbitrary_write", suggested_name: "capture.png" },
     { purpose: "screenshot_save", suggested_name: "../capture.png" },
   ]) {
-    assert.equal(hook(message("select_host_path", payload)).cmd, blockedCommand);
+    assert.equal(
+      hook(message("select_host_path", payload)).cmd,
+      blockedCommand,
+    );
   }
 });

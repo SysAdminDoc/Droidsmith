@@ -4,7 +4,10 @@ import { spawnSync } from "node:child_process";
 import { env, execPath, platform, stdout } from "node:process";
 import { fileURLToPath } from "node:url";
 
-const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const repoRoot = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "..",
+);
 const tauriDir = path.join(repoRoot, "src-tauri");
 const packageJson = readJson(path.join(repoRoot, "package.json"));
 const tauriConfig = readJson(path.join(tauriDir, "tauri.conf.json"));
@@ -50,7 +53,9 @@ function run(command, args, options = {}) {
     throw result.error;
   }
   if (result.status !== 0) {
-    throw new Error(`${command} ${args.join(" ")} exited with ${result.status}`);
+    throw new Error(
+      `${command} ${args.join(" ")} exited with ${result.status}`,
+    );
   }
 }
 
@@ -62,8 +67,14 @@ function assert(condition, message) {
 
 function assertFile(filePath, label) {
   const stat = fs.statSync(filePath, { throwIfNoEntry: false });
-  assert(stat?.isFile(), `Missing ${label}: ${path.relative(repoRoot, filePath)}`);
-  assert(stat.size > 0, `${label} is empty: ${path.relative(repoRoot, filePath)}`);
+  assert(
+    stat?.isFile(),
+    `Missing ${label}: ${path.relative(repoRoot, filePath)}`,
+  );
+  assert(
+    stat.size > 0,
+    `${label} is empty: ${path.relative(repoRoot, filePath)}`,
+  );
 }
 
 function cleanGeneratedOutputs() {
@@ -88,19 +99,43 @@ function verifyFrontendDist() {
   const distDir = path.join(repoRoot, "dist");
   const assetsDir = path.join(distDir, "assets");
   assertFile(path.join(distDir, "index.html"), "frontend index");
-  assert(fs.statSync(assetsDir, { throwIfNoEntry: false })?.isDirectory(), "Missing dist/assets");
+  assert(
+    fs.statSync(assetsDir, { throwIfNoEntry: false })?.isDirectory(),
+    "Missing dist/assets",
+  );
 
   const assets = fs.readdirSync(assetsDir);
-  assert(assets.some((name) => name.endsWith(".js")), "Missing built JS asset");
-  assert(assets.some((name) => name.endsWith(".css")), "Missing built CSS asset");
+  assert(
+    assets.some((name) => name.endsWith(".js")),
+    "Missing built JS asset",
+  );
+  assert(
+    assets.some((name) => name.endsWith(".css")),
+    "Missing built CSS asset",
+  );
 }
 
 function verifyBundleMetadata() {
-  assert(packageJson.version === tauriConfig.version, "package.json and tauri.conf.json versions differ");
-  assert(tauriConfig.productName === "Droidsmith", "Unexpected Tauri productName");
-  assert(tauriConfig.identifier === "com.droidsmith.app", "Unexpected Tauri identifier");
-  assert(tauriConfig.bundle?.active === true, "Tauri bundling must stay active");
-  assert(tauriConfig.bundle?.targets === "all", "Tauri bundle targets must be all");
+  assert(
+    packageJson.version === tauriConfig.version,
+    "package.json and tauri.conf.json versions differ",
+  );
+  assert(
+    tauriConfig.productName === "Droidsmith",
+    "Unexpected Tauri productName",
+  );
+  assert(
+    tauriConfig.identifier === "com.droidsmith.app",
+    "Unexpected Tauri identifier",
+  );
+  assert(
+    tauriConfig.bundle?.active === true,
+    "Tauri bundling must stay active",
+  );
+  assert(
+    tauriConfig.bundle?.targets === "all",
+    "Tauri bundle targets must be all",
+  );
   assert(tauriConfig.bundle?.publisher, "Tauri bundle publisher is required");
 
   for (const icon of tauriConfig.bundle?.icon ?? []) {
@@ -109,26 +144,44 @@ function verifyBundleMetadata() {
 
   const externalBins = tauriConfig.bundle?.externalBin;
   if (externalBins === undefined) {
-    stdout.write("bundle.externalBin not configured; platform-tools sidecars remain blocked\n");
+    stdout.write(
+      "bundle.externalBin not configured; platform-tools sidecars remain blocked\n",
+    );
     return;
   }
 
-  assert(Array.isArray(externalBins), "bundle.externalBin must be an array when configured");
+  assert(
+    Array.isArray(externalBins),
+    "bundle.externalBin must be an array when configured",
+  );
   for (const bin of externalBins) {
     const resolved = path.resolve(tauriDir, bin);
     const parent = path.dirname(resolved);
     const stem = path.basename(resolved);
     const candidates = fs
       .readdirSync(parent, { withFileTypes: true })
-      .filter((entry) => entry.isFile() && (entry.name === stem || entry.name.startsWith(`${stem}-`)));
-    assert(candidates.length > 0, `Missing sidecar artifact for externalBin entry ${bin}`);
+      .filter(
+        (entry) =>
+          entry.isFile() &&
+          (entry.name === stem || entry.name.startsWith(`${stem}-`)),
+      );
+    assert(
+      candidates.length > 0,
+      `Missing sidecar artifact for externalBin entry ${bin}`,
+    );
   }
 }
 
 function verifyThirdPartyNotices() {
   const manifest = readJson(path.join(repoRoot, "third-party-notices.json"));
-  assert(manifest.schemaVersion === 1, "third-party-notices.json schemaVersion must be 1");
-  assert(Array.isArray(manifest.notices), "third-party-notices.json notices must be an array");
+  assert(
+    manifest.schemaVersion === 1,
+    "third-party-notices.json schemaVersion must be 1",
+  );
+  assert(
+    Array.isArray(manifest.notices),
+    "third-party-notices.json notices must be an array",
+  );
 
   const required = new Map([
     ["android-platform-tools-adb", "Apache-2.0"],
@@ -143,7 +196,10 @@ function verifyThirdPartyNotices() {
   for (const [id, license] of required) {
     const notice = byId.get(id);
     assert(notice, `Missing third-party notice entry: ${id}`);
-    assert(notice.license === license, `Unexpected license for ${id}: ${notice.license}`);
+    assert(
+      notice.license === license,
+      `Unexpected license for ${id}: ${notice.license}`,
+    );
     assert(Boolean(notice.source), `Missing source URL/path for ${id}`);
     assert(Boolean(notice.usage), `Missing usage note for ${id}`);
   }
@@ -154,11 +210,21 @@ function verifyArtifacts() {
   if (platform === "win32") {
     assertFile(path.join(releaseDir, "droidsmith.exe"), "release executable");
     assertFile(
-      path.join(releaseDir, "bundle", "msi", `Droidsmith_${packageJson.version}_x64_en-US.msi`),
+      path.join(
+        releaseDir,
+        "bundle",
+        "msi",
+        `Droidsmith_${packageJson.version}_x64_en-US.msi`,
+      ),
       "MSI installer",
     );
     assertFile(
-      path.join(releaseDir, "bundle", "nsis", `Droidsmith_${packageJson.version}_x64-setup.exe`),
+      path.join(
+        releaseDir,
+        "bundle",
+        "nsis",
+        `Droidsmith_${packageJson.version}_x64-setup.exe`,
+      ),
       "NSIS installer",
     );
     return;
@@ -169,7 +235,10 @@ function verifyArtifacts() {
   const bundledFiles = fs.existsSync(bundleDir) ? walkFiles(bundleDir) : [];
   assert(bundledFiles.length > 0, "Missing platform bundle artifacts");
   for (const filePath of bundledFiles) {
-    assertFile(filePath, `bundle artifact ${path.relative(bundleDir, filePath)}`);
+    assertFile(
+      filePath,
+      `bundle artifact ${path.relative(bundleDir, filePath)}`,
+    );
   }
 }
 

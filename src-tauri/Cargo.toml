@@ -41,6 +41,10 @@ name = "droidsmith-pack-lint"
 path = "src/bin/pack_lint.rs"
 
 [[bin]]
+name = "droidsmith-schema-lint"
+path = "src/bin/schema_lint.rs"
+
+[[bin]]
 name = "droidsmith-cli"
 path = "src/bin/droidsmith_cli.rs"
 

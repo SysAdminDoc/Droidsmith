@@ -48,23 +48,11 @@
       [],
     ],
     push_file: [
-      [
-        "target",
-        "path_grant",
-        "remote_path",
-        "operation_id",
-        "on_event",
-      ],
+      ["target", "path_grant", "remote_path", "operation_id", "on_event"],
       [],
     ],
     pull_file: [
-      [
-        "target",
-        "remote_path",
-        "path_grant",
-        "operation_id",
-        "on_event",
-      ],
+      ["target", "remote_path", "path_grant", "operation_id", "on_event"],
       [],
     ],
     set_permission: [
@@ -84,13 +72,7 @@
       [],
     ],
     extract_apk: [
-      [
-        "target",
-        "remote_path",
-        "path_grant",
-        "operation_id",
-        "on_event",
-      ],
+      ["target", "remote_path", "path_grant", "operation_id", "on_event"],
       [],
     ],
   });
@@ -221,10 +203,16 @@
   function validateNested(value, seen = new WeakSet(), depth = 0, key = "") {
     if (depth > 12) reject("payload_depth");
     if (typeof value === "string") {
-      const limit = key === "contents" ? MAX_LOGCAT_EXPORT_LENGTH : MAX_STRING_LENGTH;
-      if (value.length > limit || value.includes("\0")) reject("payload_string");
+      const limit =
+        key === "contents" ? MAX_LOGCAT_EXPORT_LENGTH : MAX_STRING_LENGTH;
+      if (value.length > limit || value.includes("\0"))
+        reject("payload_string");
       if (key === "path_grant") {
-        if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u.test(value)) {
+        if (
+          !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u.test(
+            value,
+          )
+        ) {
           reject("path_grant");
         }
       } else if (["local_path", "apk_path", "record_path"].includes(key)) {
@@ -238,7 +226,8 @@
       } else if (key === "permission") {
         if (!/^[A-Za-z0-9_.]{1,255}$/u.test(value)) reject("permission_name");
       } else if (key === "operation_id") {
-        if (!/^[a-z0-9][a-z0-9_.-]{0,127}$/u.test(value)) reject("operation_id");
+        if (!/^[a-z0-9][a-z0-9_.-]{0,127}$/u.test(value))
+          reject("operation_id");
       }
       return;
     }
@@ -266,7 +255,12 @@
   function validateRequest(command, request) {
     if (!isRecord(request)) reject(`${command}_request`);
     if (command === "pair_wireless") {
-      validateKeys(request, ["host", "port", "pairing_code"], [], "pair_request");
+      validateKeys(
+        request,
+        ["host", "port", "pairing_code"],
+        [],
+        "pair_request",
+      );
       validateWirelessHost(request.host, "pair_host");
       ensureInteger(request.port, "pair_port", 1);
       if (
@@ -328,10 +322,13 @@
     if (command === "recover_adb" || command === "wipe_diagnostics") {
       if (typeof payload.confirmed !== "boolean") reject("confirmation");
     }
-    if (["pair_wireless", "connect_wireless", "launch_scrcpy"].includes(command)) {
+    if (
+      ["pair_wireless", "connect_wireless", "launch_scrcpy"].includes(command)
+    ) {
       validateRequest(command, payload.request);
     }
-    if (command === "apply_action" && !isRecord(payload.plan)) reject("action_plan");
+    if (command === "apply_action" && !isRecord(payload.plan))
+      reject("action_plan");
     if (command === "set_permission" && typeof payload.grant !== "boolean") {
       reject("permission_grant");
     }
@@ -339,15 +336,21 @@
       validateKeys(
         payload.options,
         [],
-        ["allow_downgrade", "bypass_low_target_sdk_block", "override_confirmed"],
+        [
+          "allow_downgrade",
+          "bypass_low_target_sdk_block",
+          "override_confirmed",
+        ],
         "install_options",
       );
       for (const value of Object.values(payload.options)) {
         if (typeof value !== "boolean") reject("install_option");
       }
     }
-    if (command === "journal_undo") ensureInteger(payload.entry_id, "entry_id", 1);
-    if (command === "stop_scrcpy") ensureInteger(payload.session_id, "session_id", 1);
+    if (command === "journal_undo")
+      ensureInteger(payload.entry_id, "entry_id", 1);
+    if (command === "stop_scrcpy")
+      ensureInteger(payload.session_id, "session_id", 1);
   }
 
   function validateCommand(message) {
@@ -357,7 +360,12 @@
     if (READ_ONLY_COMMANDS.has(message.cmd)) return;
     const schema = SENSITIVE_COMMANDS[message.cmd];
     if (!schema) reject("command_not_allowed");
-    validateKeys(message.payload, schema[0], schema[1], `${message.cmd}_payload`);
+    validateKeys(
+      message.payload,
+      schema[0],
+      schema[1],
+      `${message.cmd}_payload`,
+    );
     validateSpecific(message.cmd, message.payload);
     validateNested(message.payload);
   }
@@ -368,7 +376,10 @@
     blocked.callback = message?.callback;
     blocked.error = message?.error;
     blocked.options = message?.options;
-    blocked.payload = Object.freeze({ code: "ipc_policy_rejected", reason: code });
+    blocked.payload = Object.freeze({
+      code: "ipc_policy_rejected",
+      reason: code,
+    });
     return blocked;
   }
 

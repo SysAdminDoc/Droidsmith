@@ -14,7 +14,9 @@ mod operations;
 /// types. Tauri-internal callers go through `crate::packs` as usual.
 pub mod packs;
 pub mod profile;
-mod quirks;
+/// Public for the read-only schema-lint binary; runtime callers still use the
+/// same bounded loader and validation path.
+pub mod quirks;
 mod scrcpy;
 mod support_bundle;
 pub mod time;
