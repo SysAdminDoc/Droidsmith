@@ -203,13 +203,14 @@ fn candidate_paths(env: &ResolverEnv) -> Vec<(PathBuf, ResolveSource)> {
 /// a verbose `adb version` cannot deadlock the child by filling the OS
 /// pipe buffer before we collect it.
 fn probe_version(path: &Path) -> Option<String> {
-    let mut child = Command::new(path)
+    let mut command = Command::new(path);
+    command
         .arg("version")
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::null())
-        .spawn()
-        .ok()?;
+        .stderr(std::process::Stdio::null());
+    crate::process_tree::configure(&mut command);
+    let mut child = command.spawn().ok()?;
 
     let mut stdout = child.stdout.take()?;
     let reader = std::thread::spawn(move || {
@@ -225,13 +226,15 @@ fn probe_version(path: &Path) -> Option<String> {
             Ok(Some(status)) => break Some(status),
             Ok(None) => {
                 if start.elapsed() > timeout {
-                    let _ = child.kill();
-                    let _ = child.wait();
+                    let _ = crate::process_tree::terminate(&mut child);
                     break None;
                 }
                 std::thread::sleep(Duration::from_millis(20));
             }
-            Err(_) => break None,
+            Err(_) => {
+                let _ = crate::process_tree::terminate(&mut child);
+                break None;
+            }
         }
     };
 

@@ -1486,16 +1486,17 @@ fn run_captured(
     use std::process::{Command, Stdio};
     use std::time::Instant;
 
-    let mut child = Command::new(program)
+    let mut command = Command::new(program);
+    command
         .args(args)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .map_err(|e| CommandError {
-            code: "spawn_failed",
-            message: format!("failed to run {}: {e}", program.display()),
-        })?;
+        .stderr(Stdio::piped());
+    crate::process_tree::configure(&mut command);
+    let mut child = command.spawn().map_err(|e| CommandError {
+        code: "spawn_failed",
+        message: format!("failed to run {}: {e}", program.display()),
+    })?;
 
     let mut stdout_pipe = child.stdout.take().unwrap();
     let mut stderr_pipe = child.stderr.take().unwrap();
@@ -1518,14 +1519,16 @@ fn run_captured(
             Ok(Some(status)) => break Some(status),
             Ok(None) => {
                 if start.elapsed() > timeout {
-                    let _ = child.kill();
-                    let _ = child.wait();
+                    let _ = crate::process_tree::terminate(&mut child);
                     timed_out = true;
                     break None;
                 }
                 std::thread::sleep(std::time::Duration::from_millis(50));
             }
-            Err(_) => break None,
+            Err(_) => {
+                let _ = crate::process_tree::terminate(&mut child);
+                break None;
+            }
         }
     };
 

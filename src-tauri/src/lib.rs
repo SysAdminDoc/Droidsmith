@@ -8,11 +8,12 @@ mod fs_util;
 mod host_path;
 mod install;
 pub mod journal;
-mod operations;
+pub mod operations;
 /// `packs` is `pub` so the `droidsmith-pack-lint` binary (which links
 /// against this crate as `droidsmith_lib`) can reach the loader + lint
 /// types. Tauri-internal callers go through `crate::packs` as usual.
 pub mod packs;
+mod process_tree;
 pub mod profile;
 /// Public for the read-only schema-lint binary; runtime callers still use the
 /// same bounded loader and validation path.

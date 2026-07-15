@@ -1,0 +1,37 @@
+[package]
+name = "droidsmith-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+rust-version = "1.81"
+license = "MIT"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+serde_json = "1"
+serde_yaml_ng = "0.10"
+droidsmith = { path = ".." }
+
+[[bin]]
+name = "adb_text"
+path = "fuzz_targets/adb_text.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "yaml_documents"
+path = "fuzz_targets/yaml_documents.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "journal_jsonl"
+path = "fuzz_targets/journal_jsonl.rs"
+test = false
+doc = false
+bench = false

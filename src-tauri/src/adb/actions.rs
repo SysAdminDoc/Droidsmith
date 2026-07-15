@@ -94,13 +94,14 @@ pub fn install_apk(
         "-r".to_string(),
         apk_path.to_string(),
     ]);
-    let mut child = Command::new(adb_path)
+    let mut command = Command::new(adb_path);
+    command
         .args(&args)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .map_err(TransportError::Spawn)?;
+        .stderr(Stdio::piped());
+    crate::process_tree::configure(&mut command);
+    let mut child = command.spawn().map_err(TransportError::Spawn)?;
 
     let mut stdout_pipe = child
         .stdout
@@ -128,13 +129,15 @@ pub fn install_apk(
             Ok(Some(status)) => break Some(status),
             Ok(None) => {
                 if start.elapsed() > timeout {
-                    let _ = child.kill();
-                    let _ = child.wait();
+                    let _ = crate::process_tree::terminate(&mut child);
                     break None;
                 }
                 std::thread::sleep(std::time::Duration::from_millis(100));
             }
-            Err(_) => break None,
+            Err(_) => {
+                let _ = crate::process_tree::terminate(&mut child);
+                break None;
+            }
         }
     };
 
@@ -188,13 +191,14 @@ pub fn extract_apk(
         remote_path.to_string(),
         local_path.to_string(),
     ]);
-    let mut child = Command::new(adb_path)
+    let mut command = Command::new(adb_path);
+    command
         .args(&args)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .map_err(TransportError::Spawn)?;
+        .stderr(Stdio::piped());
+    crate::process_tree::configure(&mut command);
+    let mut child = command.spawn().map_err(TransportError::Spawn)?;
 
     let mut stdout_pipe = child
         .stdout
@@ -222,13 +226,15 @@ pub fn extract_apk(
             Ok(Some(status)) => break Some(status),
             Ok(None) => {
                 if start.elapsed() > timeout {
-                    let _ = child.kill();
-                    let _ = child.wait();
+                    let _ = crate::process_tree::terminate(&mut child);
                     break None;
                 }
                 std::thread::sleep(std::time::Duration::from_millis(100));
             }
-            Err(_) => break None,
+            Err(_) => {
+                let _ = crate::process_tree::terminate(&mut child);
+                break None;
+            }
         }
     };
 

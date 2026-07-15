@@ -127,6 +127,12 @@ The individual commands (`npm run format:check`, `npm run lint`,
 `npm run typecheck`, `npm test`, `npm run security:audit`, `npm run ui:smoke`,
 and `npm run release:smoke`) remain available for fast iteration.
 
+Seeded optional fuzz targets for ADB/OEM text, YAML documents, and journal
+JSONL live under `src-tauri/fuzz`. On a supported Unix-like host with nightly
+Rust and `cargo-fuzz` installed, run them from `src-tauri` with
+`cargo fuzz run adb_text` (or `yaml_documents` / `journal_jsonl`); normal builds
+do not compile fuzz tooling.
+
 `npm run ui:smoke` starts Vite with mocked Tauri IPC and checks sidebar
 navigation, command palette focus, Apps action overlays, Debloat queue results,
 ADB health/recovery review, the redacted Diagnostics preview/save/wipe flow,

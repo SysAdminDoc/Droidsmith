@@ -1,0 +1,15 @@
+id: seed
+revision: 1
+name: Seed
+version: "1"
+description: Fuzz seed
+provenance:
+  source: local-seed
+  license: MIT
+targets:
+  manufacturer: [Google]
+  user_scope: owner
+packages:
+  - id: com.example.seed
+    removal: recommended
+    description: Seed package

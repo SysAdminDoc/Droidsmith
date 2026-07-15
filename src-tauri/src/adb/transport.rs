@@ -319,13 +319,14 @@ pub fn parse_devices_long(stdout: &str) -> Result<Vec<Device>, TransportError> {
 /// clock. Reads stdout AND stderr on worker threads to avoid the pipe-
 /// buffer deadlock fixed in the audit pass.
 fn run_capture(program: &Path, args: &[&str], timeout: Duration) -> Result<String, TransportError> {
-    let mut child = Command::new(program)
+    let mut command = Command::new(program);
+    command
         .args(args)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .map_err(TransportError::Spawn)?;
+        .stderr(Stdio::piped());
+    crate::process_tree::configure(&mut command);
+    let mut child = command.spawn().map_err(TransportError::Spawn)?;
 
     let mut stdout_pipe = child
         .stdout
@@ -353,13 +354,15 @@ fn run_capture(program: &Path, args: &[&str], timeout: Duration) -> Result<Strin
             Ok(Some(status)) => break Some(status),
             Ok(None) => {
                 if start.elapsed() > timeout {
-                    let _ = child.kill();
-                    let _ = child.wait();
+                    let _ = crate::process_tree::terminate(&mut child);
                     break None;
                 }
                 std::thread::sleep(Duration::from_millis(20));
             }
-            Err(_) => break None,
+            Err(_) => {
+                let _ = crate::process_tree::terminate(&mut child);
+                break None;
+            }
         }
     };
 

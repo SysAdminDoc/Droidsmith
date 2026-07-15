@@ -32,6 +32,13 @@ zip = { version = "=3.0.0", default-features = false, features = ["deflate-flate
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61", features = ["Win32_Storage_FileSystem"] }
 
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+[dev-dependencies]
+# 1.8 retains Droidsmith's Rust 1.81 floor; proptest 1.11 requires Rust 1.84.
+proptest = "=1.8.0"
+
 [[bin]]
 name = "droidsmith"
 path = "src/main.rs"
@@ -47,6 +54,11 @@ path = "src/bin/schema_lint.rs"
 [[bin]]
 name = "droidsmith-cli"
 path = "src/bin/droidsmith_cli.rs"
+
+[[test]]
+name = "fake_tool_contract"
+path = "tests/fake_tool_contract.rs"
+harness = false
 
 [features]
 default = ["custom-protocol"]

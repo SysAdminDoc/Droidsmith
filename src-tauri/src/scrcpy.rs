@@ -62,11 +62,14 @@ pub fn launch(
     started_at: String,
 ) -> Result<ScrcpySession, String> {
     let args = build_args(&request)?;
-    let child = Command::new(scrcpy_path)
+    let mut command = Command::new(scrcpy_path);
+    command
         .args(&args)
         .stdin(Stdio::null())
         .stdout(Stdio::null())
-        .stderr(Stdio::null())
+        .stderr(Stdio::null());
+    crate::process_tree::configure(&mut command);
+    let child = command
         .spawn()
         .map_err(|e| format!("failed to launch scrcpy: {e}"))?;
 
@@ -113,14 +116,8 @@ pub fn stop(session_id: u64) -> Result<ScrcpySession, String> {
         .ok_or_else(|| format!("scrcpy session {session_id} is not tracked"))?;
     refresh_status(managed)?;
     if managed.session.state == ScrcpySessionState::Running {
-        managed
-            .child
-            .kill()
+        let exit_status = crate::process_tree::terminate(&mut managed.child)
             .map_err(|e| format!("failed to stop scrcpy session {session_id}: {e}"))?;
-        let exit_status = managed
-            .child
-            .wait()
-            .map_err(|e| format!("failed to wait for scrcpy session {session_id}: {e}"))?;
         managed.session.state = ScrcpySessionState::Stopped;
         managed.session.exit_code = exit_status.code();
     }

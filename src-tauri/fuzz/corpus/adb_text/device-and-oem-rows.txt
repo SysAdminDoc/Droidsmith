@@ -1,0 +1,3 @@
+List of devices attached
+R58M123 device product:dm1q model:Galaxy_S23 device:dm1q transport_id:7
+bad-coloros-row-without-columns

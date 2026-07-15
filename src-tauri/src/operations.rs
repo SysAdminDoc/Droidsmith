@@ -458,16 +458,17 @@ fn execute_child(
     sink: &EventSink,
     capture_output: bool,
 ) -> Result<ProcessOutput, OperationError> {
-    let mut child = Command::new(program)
+    let mut command = Command::new(program);
+    command
         .args(args)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .map_err(|source| OperationError::Spawn {
-            program: program.display().to_string(),
-            source,
-        })?;
+        .stderr(Stdio::piped());
+    crate::process_tree::configure(&mut command);
+    let mut child = command.spawn().map_err(|source| OperationError::Spawn {
+        program: program.display().to_string(),
+        source,
+    })?;
 
     let stdout = child.stdout.take().expect("piped stdout must exist");
     let stderr = child.stderr.take().expect("piped stderr must exist");
@@ -491,14 +492,12 @@ fn execute_child(
     let mut termination = None;
     while termination.is_none() {
         if cancelled.load(Ordering::Acquire) {
-            let _ = child.kill();
-            let _ = child.wait();
+            let _ = crate::process_tree::terminate(&mut child);
             termination = Some((None, false, true));
             continue;
         }
         if started.elapsed() >= timeout {
-            let _ = child.kill();
-            let _ = child.wait();
+            let _ = crate::process_tree::terminate(&mut child);
             termination = Some((None, true, false));
             continue;
         }
@@ -520,8 +519,7 @@ fn execute_child(
                 std::thread::sleep(POLL_INTERVAL);
             }
             Err(error) => {
-                let _ = child.kill();
-                let _ = child.wait();
+                let _ = crate::process_tree::terminate(&mut child);
                 let _ = stdout_reader.join();
                 let _ = stderr_reader.join();
                 return Err(OperationError::Wait(error));

@@ -138,13 +138,14 @@ fn version_at_least(version: &str, required_major: u32) -> bool {
 /// Read one short protobuf-text discovery window. The command is intentionally
 /// killed after 900 ms because `mdns track-services` is a live stream.
 fn probe_wifi_v2(adb_path: &Path) -> Option<Vec<String>> {
-    let mut child = Command::new(adb_path)
+    let mut command = Command::new(adb_path);
+    command
         .args(["mdns", "track-services", "--proto-text"])
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .spawn()
-        .ok()?;
+        .stderr(Stdio::null());
+    crate::process_tree::configure(&mut command);
+    let mut child = command.spawn().ok()?;
     let mut stdout = child.stdout.take()?;
     let reader = std::thread::spawn(move || {
         let mut bytes = Vec::new();
@@ -158,8 +159,7 @@ fn probe_wifi_v2(adb_path: &Path) -> Option<Vec<String>> {
         }
         std::thread::sleep(Duration::from_millis(25));
     }
-    let _ = child.kill();
-    let _ = child.wait();
+    let _ = crate::process_tree::terminate(&mut child);
     let output = String::from_utf8_lossy(&reader.join().unwrap_or_default()).into_owned();
     Some(parse_wifi_v2_services(&output))
 }
