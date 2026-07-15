@@ -52,13 +52,6 @@ instead.
   Acceptance: A "Show in folder" action opens the OS file manager at the produced artifact via a path-scoped opener permission; attempts outside produced paths fail; no arbitrary renderer-driven open is possible.
   Complexity: S
 
-- [ ] P2 — Surface uninstalled-but-data-retained packages
-  Why: Completing the reversibility story means showing orphaned data left after uninstalls, which `pm list packages -u` exposes and which Droidsmith cannot currently list.
-  Evidence: `src-tauri/src/adb/packages.rs::list_packages`; ADB AppControl Mobile "data retained" listing
-  Touches: `src-tauri/src/adb/packages.rs`, `src-tauri/src/commands.rs`, `src/lib/tauri.ts`, `src/routes/Apps.tsx`
-  Acceptance: A filter/section lists packages present as data-only (`-u` minus installed), clearly labeled as uninstalled-with-data, with a guarded full-remove action that journals its outcome.
-  Complexity: S
-
 ### P3
 
 - [ ] P3 — Replace misleading documentation screenshots with deterministic native-state captures

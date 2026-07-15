@@ -40,6 +40,11 @@ pub struct AppPackage {
     /// True when Android 15+ has removed the APK/cache while retaining user
     /// data and installer metadata for a later unarchive request.
     pub archived: bool,
+    /// True when PackageManager still retains this package's user data for the
+    /// selected Android user (`pm list packages -u`) but it is neither
+    /// installed nor archived — an uninstalled-with-data remnant whose leftover
+    /// data can be fully purged.
+    pub retained: bool,
 }
 
 #[derive(specta::Type, Debug, Clone, PartialEq, Eq, Serialize)]
@@ -82,6 +87,7 @@ pub enum PackageFilter {
     Enabled,
     Disabled,
     Archived,
+    Retained,
 }
 
 /// Enumerate packages on `serial` for Android user `user_id`, applying
@@ -120,20 +126,25 @@ pub fn list_packages_with_capability(
         }
     }
 
-    if archive.supported {
-        let known_raw = t.shell_target(
-            target,
-            &[
-                "pm", "list", "packages", "--user", &user, "-u", "-f", "-U", "-i",
-            ],
-        )?;
-        let mut candidates = parse_pm_list(&known_raw, false);
-        candidates.retain(|candidate| {
-            !packages
-                .iter()
-                .any(|installed| installed.package == candidate.package)
-        });
-        let archived = archived_package_names(
+    // Packages PackageManager still tracks for this user but that aren't in the
+    // enabled/disabled set are either Android 15+ archived apps (APK removed,
+    // data + installer retained for unarchive) or uninstalled-with-data
+    // remnants. `-u` works on every Android version, so this pass runs
+    // unconditionally; archive probing only runs where archiving exists.
+    let known_raw = t.shell_target(
+        target,
+        &[
+            "pm", "list", "packages", "--user", &user, "-u", "-f", "-U", "-i",
+        ],
+    )?;
+    let mut candidates = parse_pm_list(&known_raw, false);
+    candidates.retain(|candidate| {
+        !packages
+            .iter()
+            .any(|installed| installed.package == candidate.package)
+    });
+    let archived = if archive.supported {
+        archived_package_names(
             t,
             target,
             user_id,
@@ -141,14 +152,18 @@ pub fn list_packages_with_capability(
                 .iter()
                 .map(|candidate| candidate.package.clone())
                 .collect::<Vec<_>>(),
-        )?;
-        for mut candidate in candidates {
-            if archived.contains(&candidate.package) {
-                candidate.archived = true;
-                candidate.enabled = false;
-                packages.push(candidate);
-            }
+        )?
+    } else {
+        HashSet::new()
+    };
+    for mut candidate in candidates {
+        candidate.enabled = false;
+        if archived.contains(&candidate.package) {
+            candidate.archived = true;
+        } else {
+            candidate.retained = true;
         }
+        packages.push(candidate);
     }
 
     let packages = packages
@@ -157,9 +172,10 @@ pub fn list_packages_with_capability(
             PackageFilter::All => true,
             PackageFilter::User => !p.system,
             PackageFilter::System => p.system,
-            PackageFilter::Enabled => p.enabled && !p.archived,
-            PackageFilter::Disabled => !p.enabled && !p.archived,
+            PackageFilter::Enabled => p.enabled && !p.archived && !p.retained,
+            PackageFilter::Disabled => !p.enabled && !p.archived && !p.retained,
             PackageFilter::Archived => p.archived,
+            PackageFilter::Retained => p.retained,
         })
         .collect();
     Ok(PackageListing { packages, archive })
@@ -378,6 +394,7 @@ fn parse_pm_line(line: &str, enabled: bool) -> Option<AppPackage> {
         uid,
         installer,
         archived: false,
+        retained: false,
     })
 }
 
@@ -486,6 +503,13 @@ package:/system/app/FacebookStub/FacebookStub.apk=com.facebook.appmanager uid:10
             ],
             Ok(DISABLED_FIXTURE.to_string()),
         );
+        mock.expect_shell(
+            "abc",
+            &[
+                "pm", "list", "packages", "--user", "0", "-u", "-f", "-U", "-i",
+            ],
+            Ok(String::new()),
+        );
 
         let v = list_packages(&mock, &target(), PackageFilter::All, 0).unwrap();
         assert_eq!(v.len(), 4);
@@ -539,15 +563,63 @@ package:/system/app/FacebookStub/FacebookStub.apk=com.facebook.appmanager uid:10
         let listing =
             list_packages_with_capability(&mock, &target(), PackageFilter::All, 0).unwrap();
         assert!(listing.archive.supported);
-        assert_eq!(listing.packages.len(), 2);
+        assert_eq!(listing.packages.len(), 3);
         assert!(listing
             .packages
             .iter()
-            .any(|package| package.package == "com.example.archived" && package.archived));
-        assert!(!listing
+            .any(|package| package.package == "com.example.archived"
+                && package.archived
+                && !package.retained));
+        assert!(listing
             .packages
             .iter()
-            .any(|package| package.package == "com.example.retained"));
+            .any(|package| package.package == "com.example.retained"
+                && package.retained
+                && !package.archived
+                && !package.enabled));
+    }
+
+    #[test]
+    fn retained_filter_surfaces_only_uninstalled_with_data_packages() {
+        let mock = MockTransport::new();
+        // API < 35: archiving unsupported, so every non-installed `-u` remnant
+        // is surfaced as retained-data rather than probed for archive state.
+        mock.expect_shell(
+            "abc",
+            &["getprop", "ro.build.version.sdk"],
+            Ok("34\n".to_string()),
+        );
+        mock.expect_shell(
+            "abc",
+            &[
+                "pm", "list", "packages", "--user", "0", "-e", "-f", "-U", "-i",
+            ],
+            Ok("package:/data/app/base.apk=com.example.installed\n".to_string()),
+        );
+        mock.expect_shell(
+            "abc",
+            &[
+                "pm", "list", "packages", "--user", "0", "-d", "-f", "-U", "-i",
+            ],
+            Ok(String::new()),
+        );
+        mock.expect_shell(
+            "abc",
+            &[
+                "pm", "list", "packages", "--user", "0", "-u", "-f", "-U", "-i",
+            ],
+            Ok("package:com.example.installed\npackage:com.example.ghost\n".to_string()),
+        );
+
+        let listing =
+            list_packages_with_capability(&mock, &target(), PackageFilter::Retained, 0).unwrap();
+        assert!(!listing.archive.supported);
+        assert_eq!(listing.packages.len(), 1);
+        let ghost = &listing.packages[0];
+        assert_eq!(ghost.package, "com.example.ghost");
+        assert!(ghost.retained);
+        assert!(!ghost.archived);
+        assert!(!ghost.enabled);
     }
 
     #[test]
@@ -566,6 +638,13 @@ package:/system/app/FacebookStub/FacebookStub.apk=com.facebook.appmanager uid:10
                 "pm", "list", "packages", "--user", "0", "-d", "-f", "-U", "-i",
             ],
             Ok(DISABLED_FIXTURE.to_string()),
+        );
+        mock.expect_shell(
+            "abc",
+            &[
+                "pm", "list", "packages", "--user", "0", "-u", "-f", "-U", "-i",
+            ],
+            Ok(String::new()),
         );
         let v = list_packages(&mock, &target(), PackageFilter::User, 0).unwrap();
         assert_eq!(v.len(), 1);
@@ -588,6 +667,13 @@ package:/system/app/FacebookStub/FacebookStub.apk=com.facebook.appmanager uid:10
                 "pm", "list", "packages", "--user", "0", "-d", "-f", "-U", "-i",
             ],
             Ok(DISABLED_FIXTURE.to_string()),
+        );
+        mock.expect_shell(
+            "abc",
+            &[
+                "pm", "list", "packages", "--user", "0", "-u", "-f", "-U", "-i",
+            ],
+            Ok(String::new()),
         );
         let v = list_packages(&mock, &target(), PackageFilter::Disabled, 0).unwrap();
         assert_eq!(v.len(), 1);

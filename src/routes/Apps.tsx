@@ -152,6 +152,7 @@ const FILTERS: { value: PackageFilter; labelKey: string }[] = [
   { value: "enabled", labelKey: "apps.filterEnabled" },
   { value: "disabled", labelKey: "apps.filterDisabled" },
   { value: "archived", labelKey: "apps.filterArchived" },
+  { value: "retained", labelKey: "apps.filterRetained" },
 ];
 
 export default function AppsRoute() {
@@ -1006,14 +1007,16 @@ export default function AppsRoute() {
       : [];
   const batchReady = selectedRows.length >= 2;
   const canBatchDisable =
-    batchReady && selectedRows.every((pkg) => pkg.enabled && !pkg.archived);
+    batchReady &&
+    selectedRows.every((pkg) => pkg.enabled && !pkg.archived && !pkg.retained);
   const canBatchEnable =
-    batchReady && selectedRows.every((pkg) => !pkg.enabled && !pkg.archived);
+    batchReady &&
+    selectedRows.every((pkg) => !pkg.enabled && !pkg.archived && !pkg.retained);
   const canBatchArchive =
     batchReady &&
     pkgState.kind === "ok" &&
     pkgState.archive.supported &&
-    selectedRows.every((pkg) => !pkg.system && !pkg.archived);
+    selectedRows.every((pkg) => !pkg.system && !pkg.archived && !pkg.retained);
   const canBatchUnarchive =
     batchReady && selectedRows.every((pkg) => pkg.archived);
 
@@ -1220,6 +1223,11 @@ export default function AppsRoute() {
                     tone="warning"
                   >
                     <p>{pkgState.archive.reason}</p>
+                  </StatePanel>
+                )}
+                {filter === "retained" && (
+                  <StatePanel title={t("apps.retainedLabel")} tone="info">
+                    <p>{t("apps.retainedBody")}</p>
                   </StatePanel>
                 )}
                 <BatchActionBar
@@ -1941,23 +1949,38 @@ function PackageTable({
                   <TableCell>
                     <Badge
                       tone={
-                        pkg.archived
-                          ? "warning"
-                          : pkg.enabled
-                            ? "success"
-                            : "danger"
+                        pkg.retained
+                          ? "neutral"
+                          : pkg.archived
+                            ? "warning"
+                            : pkg.enabled
+                              ? "success"
+                              : "danger"
                       }
                     >
-                      {pkg.archived
-                        ? t("apps.filterArchived")
-                        : pkg.enabled
-                          ? t("apps.filterEnabled")
-                          : t("apps.filterDisabled")}
+                      {pkg.retained
+                        ? t("apps.retainedLabel")
+                        : pkg.archived
+                          ? t("apps.filterArchived")
+                          : pkg.enabled
+                            ? t("apps.filterEnabled")
+                            : t("apps.filterDisabled")}
                     </Badge>
                   </TableCell>
                   <TableCell>
                     <div className="flex min-w-[10rem] flex-wrap gap-1.5">
-                      {pkg.archived ? (
+                      {pkg.retained ? (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="danger"
+                          onClick={() =>
+                            onAction(pkg.package, "uninstall_for_user")
+                          }
+                        >
+                          {t("apps.removeRetainedData")}
+                        </Button>
+                      ) : pkg.archived ? (
                         <Button
                           type="button"
                           size="sm"
@@ -1998,16 +2021,19 @@ function PackageTable({
                           {t("apps.enable")}
                         </Button>
                       )}
-                      {!pkg.archived && archiveSupported && !pkg.system && (
-                        <Button
-                          type="button"
-                          size="sm"
-                          onClick={() => onAction(pkg.package, "archive")}
-                        >
-                          {t("apps.archive")}
-                        </Button>
-                      )}
-                      {!pkg.archived && (
+                      {!pkg.archived &&
+                        !pkg.retained &&
+                        archiveSupported &&
+                        !pkg.system && (
+                          <Button
+                            type="button"
+                            size="sm"
+                            onClick={() => onAction(pkg.package, "archive")}
+                          >
+                            {t("apps.archive")}
+                          </Button>
+                        )}
+                      {!pkg.archived && !pkg.retained && (
                         <>
                           <Button
                             type="button"
@@ -2035,7 +2061,7 @@ function PackageTable({
                           </Button>
                         </>
                       )}
-                      {!pkg.archived && showLegacyExport && (
+                      {!pkg.archived && !pkg.retained && showLegacyExport && (
                         <Button
                           type="button"
                           size="sm"

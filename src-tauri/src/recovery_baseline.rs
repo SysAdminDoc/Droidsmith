@@ -558,6 +558,7 @@ mod tests {
             uid: Some(10_042),
             installer: Some("com.android.vending".to_string()),
             archived: false,
+            retained: false,
         }
     }
 

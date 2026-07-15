@@ -831,6 +831,13 @@ export type AppPackage = {
    * data and installer metadata for a later unarchive request.
    */
   archived: boolean;
+  /**
+   * True when PackageManager still retains this package's user data for the
+   * selected Android user (`pm list packages -u`) but it is neither
+   * installed nor archived — an uninstalled-with-data remnant whose leftover
+   * data can be fully purged.
+   */
+  retained: boolean;
 };
 export type AppPackageMetadata = {
   package: string;
@@ -1513,7 +1520,8 @@ export type PackageFilter =
   | "system"
   | "enabled"
   | "disabled"
-  | "archived";
+  | "archived"
+  | "retained";
 export type PackageListing = {
   packages: AppPackage[];
   archive: PackageArchiveCapability;

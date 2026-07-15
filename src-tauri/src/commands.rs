@@ -3604,6 +3604,7 @@ mod tests {
             uid: None,
             installer: None,
             archived: false,
+            retained: false,
         };
         let rows = profile_preview_rows(
             &profile,
