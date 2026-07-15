@@ -17,7 +17,7 @@ use crate::adb::transport::{ShellTransport, TransportError};
 const PAIRING_SERVICE: &str = "_adb-tls-pairing._tcp";
 const CONNECT_SERVICE: &str = "_adb-tls-connect._tcp";
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(specta::Type, Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct WirelessAdbService {
     pub name: String,
     pub service_type: String,
@@ -27,7 +27,7 @@ pub struct WirelessAdbService {
     pub endpoint: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(specta::Type, Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum WirelessServiceKind {
     Pairing,
@@ -35,14 +35,14 @@ pub enum WirelessServiceKind {
     Other,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(specta::Type, Debug, Clone, Deserialize)]
 pub struct WirelessPairRequest {
     pub host: String,
     pub port: u16,
     pub pairing_code: String,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(specta::Type, Debug, Clone, Deserialize)]
 pub struct WirelessConnectRequest {
     pub host: String,
     pub port: u16,
@@ -53,28 +53,28 @@ pub struct WirelessConnectRequest {
     pub legacy_tcp: bool,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(specta::Type, Debug, Clone, Serialize)]
 pub struct WirelessCommandResult {
     pub endpoint: String,
     pub stdout: String,
     pub transport_kind: Option<DeviceTransportKind>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(specta::Type, Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum WirelessFailureHintCode {
     VpnInterferenceLikely,
     MdnsInterferenceLikely,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(specta::Type, Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum WirelessEndpointKind {
     IpAddress,
     LocalName,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(specta::Type, Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct WirelessFailureDiagnostics {
     pub platform_tools_version: Option<String>,
     pub mdns_enabled: Option<bool>,
@@ -85,7 +85,7 @@ pub struct WirelessFailureDiagnostics {
     pub adb_error_kind: &'static str,
 }
 
-#[derive(Debug, Serialize, thiserror::Error)]
+#[derive(specta::Type, Debug, Serialize, thiserror::Error)]
 #[error("{message}")]
 pub struct WirelessCommandError {
     pub code: &'static str,

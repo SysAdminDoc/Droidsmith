@@ -20,14 +20,14 @@ const CAPTURE_TIMEOUT: Duration = Duration::from_secs(15 * 60);
 const MAX_REPORT_BYTES: u64 = 1024 * 1024 * 1024;
 const MAX_ZIP_ENTRIES: usize = 10_000;
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(specta::Type, Debug, Clone, Serialize)]
 pub struct BugreportCaptureResult {
     pub report: HostArtifact,
     pub sidecar: HostArtifact,
     pub captured_at: String,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(specta::Type, Debug, Clone, Serialize)]
 struct BugreportSidecar {
     schema_version: u32,
     captured_at: String,
@@ -40,7 +40,7 @@ struct BugreportSidecar {
     privacy: BugreportPrivacy,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(specta::Type, Debug, Clone, Serialize)]
 struct BugreportPrivacy {
     content_inspected: bool,
     content_redaction_performed: bool,

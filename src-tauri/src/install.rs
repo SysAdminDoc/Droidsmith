@@ -25,7 +25,7 @@ const INSTALL_TIMEOUT: Duration = Duration::from_secs(300);
 const TRANSFER_TIMEOUT: Duration = Duration::from_secs(300);
 const MAX_RAW_OUTPUT_CHARS: usize = 16 * 1024;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(specta::Type, Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum InstallSourceKind {
     Apk,
@@ -34,7 +34,7 @@ pub enum InstallSourceKind {
     Apkm,
 }
 
-#[derive(Debug, Clone, Copy, Default, Deserialize, Serialize)]
+#[derive(specta::Type, Debug, Clone, Copy, Default, Deserialize, Serialize)]
 pub struct InstallOptions {
     #[serde(default)]
     pub allow_downgrade: bool,
@@ -64,14 +64,14 @@ impl InstallOptions {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(specta::Type, Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SuggestedInstallOverride {
     AllowDowngrade,
     BypassLowTargetSdkBlock,
 }
 
-#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[derive(specta::Type, Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct InstallFailure {
     pub code: String,
     pub cause: String,
@@ -80,7 +80,7 @@ pub struct InstallFailure {
     pub raw_output: String,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(specta::Type, Debug, Clone, Serialize)]
 pub struct InstallPackageResult {
     pub succeeded: bool,
     pub source_kind: InstallSourceKind,
@@ -153,7 +153,7 @@ impl Drop for StagingGuard {
     }
 }
 
-#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
+#[derive(specta::Type, Debug, Clone, Copy, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 enum AuditOutcome {
     Pending,
@@ -162,7 +162,7 @@ enum AuditOutcome {
     Cancelled,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(specta::Type, Debug, Serialize)]
 struct InstallAuditRecord {
     schema_version: u32,
     operation_id: String,

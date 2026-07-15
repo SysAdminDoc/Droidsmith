@@ -17,7 +17,7 @@ const PROBE_TIMEOUT: Duration = Duration::from_secs(4);
 const ENCODER_PROBE_TIMEOUT: Duration = Duration::from_secs(15);
 const POLL_INTERVAL: Duration = Duration::from_millis(25);
 
-#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+#[derive(specta::Type, Debug, Clone, Deserialize, PartialEq, Eq)]
 pub struct LaunchScrcpyRequest {
     pub serial: String,
     pub target: DeviceTarget,
@@ -32,14 +32,14 @@ pub struct LaunchScrcpyRequest {
     pub show_touches: bool,
 }
 
-#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[derive(specta::Type, Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct ScrcpyVideoEncoder {
     pub codec: String,
     pub name: String,
     pub software: bool,
 }
 
-#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[derive(specta::Type, Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct ScrcpyCapabilities {
     pub path: String,
     pub version: String,
@@ -49,7 +49,7 @@ pub struct ScrcpyCapabilities {
     pub cache_hit: bool,
 }
 
-#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[derive(specta::Type, Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct ScrcpySession {
     pub id: u64,
     pub serial: String,
@@ -62,7 +62,7 @@ pub struct ScrcpySession {
     pub stderr_tail: String,
 }
 
-#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[derive(specta::Type, Debug, Clone, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum ScrcpySessionState {
     Running,
@@ -70,7 +70,7 @@ pub enum ScrcpySessionState {
     Stopped,
 }
 
-#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[derive(specta::Type, Debug, Clone, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum ScrcpyExitReason {
     UserStopped,

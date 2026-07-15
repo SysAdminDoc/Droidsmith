@@ -26,6 +26,7 @@ function main() {
     return;
   }
 
+  runNpm("bindings:check");
   runNpm("format:check");
   runNpm("lint");
   runNpm("typecheck");

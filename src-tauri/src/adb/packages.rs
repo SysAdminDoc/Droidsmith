@@ -19,7 +19,7 @@ use crate::adb::device::DeviceTarget;
 use crate::adb::transport::{AdbTransport, TransportError};
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(specta::Type, Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct AppPackage {
     /// Application package id, e.g. `com.android.chrome`.
     pub package: String,
@@ -55,7 +55,7 @@ impl AppPackage {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(specta::Type, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum PackageFilter {
     All,

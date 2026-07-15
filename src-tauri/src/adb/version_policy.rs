@@ -14,7 +14,7 @@ const POLICY_JSON: &str = include_str!(concat!(
     "/../platform-tools-policy.json"
 ));
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(specta::Type, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum PlatformToolsStatus {
     Supported,
@@ -22,7 +22,7 @@ pub enum PlatformToolsStatus {
     Blocked,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(specta::Type, Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct PlatformToolsAssessment {
     pub status: PlatformToolsStatus,
     pub rationale: String,
@@ -38,7 +38,7 @@ impl Default for PlatformToolsAssessment {
     }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(specta::Type, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct PlatformToolsPolicy {
     schema_version: u32,
@@ -50,7 +50,7 @@ struct PlatformToolsPolicy {
     known_bad_rules: Vec<KnownBadRule>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(specta::Type, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct KnownBadRule {
     version: String,

@@ -23,7 +23,7 @@ pub const RECOVERY_BASELINE_SCHEMA_VERSION: u32 = 1;
 pub const MAX_RECOVERY_BASELINE_BYTES: u64 = 1024 * 1024;
 pub const MAX_RECOVERY_BASELINE_PACKAGES: usize = 2_048;
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(specta::Type, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct RecoveryBaseline {
     pub format: String,
@@ -36,28 +36,28 @@ pub struct RecoveryBaseline {
     pub packages: Vec<BaselinePackage>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(specta::Type, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct BaselineDevice {
     pub identity_sha256: String,
     pub build_fingerprint: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(specta::Type, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct BaselinePack {
     pub id: String,
     pub revision: u32,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(specta::Type, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct BaselineActionInput {
     pub package: String,
     pub kind: ActionKind,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(specta::Type, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct BaselinePackage {
     pub package: String,
@@ -68,14 +68,14 @@ pub struct BaselinePackage {
     pub undo_plan: Option<BaselineUndoPlan>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(specta::Type, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct BaselineUndoPlan {
     pub kind: ActionKind,
     pub user_id: u32,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(specta::Type, Debug, Clone, Serialize)]
 pub struct RecoveryBaselineDiff {
     pub baseline: RecoveryBaseline,
     pub compatibility: BaselineCompatibility,
@@ -83,7 +83,7 @@ pub struct RecoveryBaselineDiff {
     pub plans: Vec<PlannedAction>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(specta::Type, Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct BaselineCompatibility {
     pub device_identity_matches: bool,
     pub build_fingerprint_matches: bool,
@@ -92,7 +92,7 @@ pub struct BaselineCompatibility {
     pub current_build_fingerprint: String,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(specta::Type, Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum BaselineDiffStatus {
     Ready,
@@ -100,7 +100,7 @@ pub enum BaselineDiffStatus {
     Skipped,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(specta::Type, Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct BaselineDiffRow {
     pub package: String,
     pub baseline_present: bool,

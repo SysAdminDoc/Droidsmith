@@ -39,7 +39,7 @@ use crate::quirks::{self, DeviceContext, Quirk};
 use crate::recovery_baseline::{self, BaselineActionInput, BaselinePack, RecoveryBaselineDiff};
 use crate::support_bundle;
 
-#[derive(Serialize)]
+#[derive(specta::Type, Serialize)]
 pub struct Heartbeat {
     /// Droidsmith app version (`CARGO_PKG_VERSION`).
     pub version: String,
@@ -55,7 +55,7 @@ pub struct Heartbeat {
     pub adb: adb::AdbResolution,
 }
 
-#[derive(Serialize, Clone)]
+#[derive(specta::Type, Serialize, Clone)]
 pub struct OsInfo {
     pub family: String,
     pub version: String,
@@ -78,6 +78,7 @@ fn cached_os_info() -> &'static OsInfo {
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn heartbeat(app: tauri::AppHandle) -> Heartbeat {
     let app_data_dir = app
         .path()
@@ -99,6 +100,7 @@ pub fn heartbeat(app: tauri::AppHandle) -> Heartbeat {
 /// contains state counts and redacted configuration presence only; it never
 /// persists device identifiers, USB instance IDs, environment values, or keys.
 #[tauri::command]
+#[specta::specta]
 pub async fn run_host_doctor() -> Result<crate::host_diagnostics::HostDoctorReport, CommandError> {
     spawn_blocking_operation(|| Ok(crate::host_diagnostics::scan())).await
 }
@@ -107,7 +109,7 @@ pub async fn run_host_doctor() -> Result<crate::host_diagnostics::HostDoctorRepo
 /// structured success-with-zero-devices + an `adb_resolved=false` flag
 /// rather than an Err, because "no adb installed" is a normal first-run
 /// state, not a runtime fault.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(specta::Type, Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct ListDevicesResult {
     pub adb_resolved: bool,
     pub adb_path: Option<String>,
@@ -115,6 +117,7 @@ pub struct ListDevicesResult {
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn list_devices() -> Result<ListDevicesResult, adb::TransportError> {
     let resolution = adb::locate_adb();
     let Some(path) = resolution.path.as_ref() else {
@@ -183,7 +186,7 @@ fn collect_devices(
     })
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(specta::Type, Debug, Clone, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum DeviceLifecycleEvent {
     Snapshot {
@@ -201,6 +204,7 @@ pub enum DeviceLifecycleEvent {
 /// and all routes subscribe to the renderer's shared external store instead
 /// of polling ADB independently.
 #[tauri::command]
+#[specta::specta]
 pub async fn watch_devices(
     operation_id: String,
     on_event: tauri::ipc::Channel<DeviceLifecycleEvent>,
@@ -286,7 +290,7 @@ const ADB_RECOVERY_STEPS: [&[&str]; 3] = [
     &["reconnect", "offline"],
 ];
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(specta::Type, Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum AdbRecoveryOutcome {
     Pending,
@@ -295,7 +299,7 @@ pub enum AdbRecoveryOutcome {
     Cancelled,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(specta::Type, Debug, Clone, Serialize)]
 pub struct AdbRecoveryRecord {
     pub schema_version: u32,
     pub operation_id: String,
@@ -310,7 +314,7 @@ pub struct AdbRecoveryRecord {
     pub failure: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(specta::Type, Debug, Clone, Serialize)]
 pub struct AdbRecoveryResult {
     pub record: AdbRecoveryRecord,
     pub record_path: String,
@@ -320,6 +324,7 @@ pub struct AdbRecoveryResult {
 /// a host-wide mutation, so the renderer must review the exact argv and send
 /// an explicit confirmation. A synced pending record lands before `kill-server`.
 #[tauri::command]
+#[specta::specta]
 pub async fn recover_adb(
     app: tauri::AppHandle,
     confirmed: bool,
@@ -470,6 +475,7 @@ fn diagnostic_text(value: &str) -> String {
 /// Build a bounded, redacted support snapshot entirely on the local machine.
 /// The payload deliberately excludes resolver paths and raw device targets.
 #[tauri::command]
+#[specta::specta]
 pub async fn preview_diagnostics(
     app: tauri::AppHandle,
 ) -> Result<support_bundle::SupportPreview, CommandError> {
@@ -484,6 +490,7 @@ pub async fn preview_diagnostics(
 /// the backend-owned native save dialog. No renderer-supplied bundle content is
 /// accepted, so the backend remains the sole redaction boundary.
 #[tauri::command]
+#[specta::specta]
 pub async fn save_diagnostics(
     app: tauri::AppHandle,
     grants: tauri::State<'_, PathGrantStore>,
@@ -535,6 +542,7 @@ pub async fn save_diagnostics(
 /// recovery records. Per-device journals are intentionally preserved because
 /// they back undo/recovery and are not disposable telemetry.
 #[tauri::command]
+#[specta::specta]
 pub async fn wipe_diagnostics(
     app: tauri::AppHandle,
     confirmed: bool,
@@ -624,7 +632,7 @@ fn recovery_operation_failure(error: &operations::OperationError) -> String {
     }
 }
 
-#[derive(Serialize)]
+#[derive(specta::Type, Serialize)]
 pub struct ListWirelessServicesResult {
     pub adb_resolved: bool,
     pub adb_path: Option<String>,
@@ -632,6 +640,7 @@ pub struct ListWirelessServicesResult {
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn list_wireless_services() -> Result<ListWirelessServicesResult, adb::TransportError> {
     let resolution = adb::locate_adb();
     let Some(path) = resolution.path.as_ref() else {
@@ -652,6 +661,7 @@ pub fn list_wireless_services() -> Result<ListWirelessServicesResult, adb::Trans
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn pair_wireless(
     request: adb::WirelessPairRequest,
 ) -> Result<adb::WirelessCommandResult, adb::WirelessCommandError> {
@@ -668,6 +678,7 @@ pub fn pair_wireless(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn connect_wireless(
     request: adb::WirelessConnectRequest,
 ) -> Result<adb::WirelessCommandResult, adb::WirelessCommandError> {
@@ -684,6 +695,7 @@ pub fn connect_wireless(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn list_packages(
     target: adb::DeviceTarget,
     filter: adb::PackageFilter,
@@ -703,6 +715,7 @@ pub fn list_packages(
 /// The domain service bounds concurrent pulls and validates a fresh APK
 /// size/timestamp before consulting its process-local cache.
 #[tauri::command]
+#[specta::specta]
 pub async fn get_package_metadata(
     target: adb::DeviceTarget,
     package: String,
@@ -733,6 +746,7 @@ pub async fn get_package_metadata(
 /// Enumerate Android users on a device so the renderer can offer an
 /// explicit `--user` target for package workflows.
 #[tauri::command]
+#[specta::specta]
 pub fn list_users(target: adb::DeviceTarget) -> Result<Vec<adb::AndroidUser>, adb::TransportError> {
     let resolution = adb::locate_adb();
     let path = resolution
@@ -748,6 +762,7 @@ pub fn list_users(target: adb::DeviceTarget) -> Result<Vec<adb::AndroidUser>, ad
 /// preview surface the confirmation dialog renders before the user
 /// commits.
 #[tauri::command]
+#[specta::specta]
 pub fn plan_action(
     mut request: actions::ActionRequest,
 ) -> Result<actions::PlannedAction, CommandError> {
@@ -775,7 +790,7 @@ pub fn plan_action(
 /// Generic Tauri-command error envelope so the JS side gets the same
 /// shape regardless of whether the underlying failure was a transport
 /// error or a filesystem error from the journal.
-#[derive(Debug, Serialize, thiserror::Error)]
+#[derive(specta::Type, Debug, Serialize, thiserror::Error)]
 #[error("{message}")]
 pub struct CommandError {
     /// Stable string code for client-side branching (e.g. "adb_not_found").
@@ -915,6 +930,7 @@ where
 /// lived, purpose-scoped, one-shot grant. Privileged commands accept only the
 /// opaque grant id, never a renderer-authored host path.
 #[tauri::command]
+#[specta::specta]
 pub async fn select_host_path(
     app: tauri::AppHandle,
     grants: tauri::State<'_, PathGrantStore>,
@@ -1017,7 +1033,7 @@ fn execute_journaled(
     })
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(specta::Type, Debug, Clone, Serialize)]
 pub struct ApplyActionResult {
     pub entry: JournalEntry,
     /// Raw output is returned only to the initiating view and is excluded from
@@ -1145,6 +1161,7 @@ fn validate_fastboot_key(key: &str) -> Result<(), CommandError> {
 /// Apply a previously-planned action and record it in the per-device
 /// journal. Returns the freshly-written journal entry.
 #[tauri::command]
+#[specta::specta]
 pub fn apply_action(
     app: tauri::AppHandle,
     mut plan: actions::PlannedAction,
@@ -1173,6 +1190,7 @@ pub fn apply_action(
 /// The renderer supplies requested intents, while the backend captures all
 /// device/package state and writes through a one-shot native path grant.
 #[tauri::command]
+#[specta::specta]
 pub fn export_recovery_baseline(
     target: adb::DeviceTarget,
     #[allow(non_snake_case)] userId: u32,
@@ -1199,6 +1217,7 @@ pub fn export_recovery_baseline(
 /// canonical but remain inert until the renderer shows the diff and explicitly
 /// submits individual plans through `apply_action`.
 #[tauri::command]
+#[specta::specta]
 pub fn inspect_recovery_baseline(
     target: adb::DeviceTarget,
     path_grant: String,
@@ -1224,6 +1243,7 @@ pub fn inspect_recovery_baseline(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn journal_list(
     app: tauri::AppHandle,
     serial: String,
@@ -1239,6 +1259,7 @@ pub fn journal_list(
 /// undo-entry. Fails if the original action is irreversible
 /// (unverified uninstall, clear-data, force-stop).
 #[tauri::command]
+#[specta::specta]
 pub fn journal_undo(
     app: tauri::AppHandle,
     target: adb::DeviceTarget,
@@ -1270,6 +1291,7 @@ pub fn journal_undo(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn get_device_info(target: adb::DeviceTarget) -> Result<adb::DeviceInfo, CommandError> {
     let transport = validated_transport(&target)?;
     Ok(adb::get_device_info(&transport, &target)?)
@@ -1279,6 +1301,7 @@ pub fn get_device_info(target: adb::DeviceTarget) -> Result<adb::DeviceInfo, Com
 /// stream progress/output through a Tauri channel. Mutations continue to use
 /// the reviewed audited executor.
 #[tauri::command]
+#[specta::specta]
 pub async fn shell_run(
     target: adb::DeviceTarget,
     argv: Vec<String>,
@@ -1320,6 +1343,7 @@ pub async fn shell_run(
 /// Cancel a registered background operation. The runner observes this flag,
 /// kills and reaps its child, and then emits a terminal cancellation event.
 #[tauri::command]
+#[specta::specta]
 pub fn cancel_operation(operation_id: String) -> bool {
     operations::cancel(&operation_id)
 }
@@ -1328,6 +1352,7 @@ pub fn cancel_operation(operation_id: String) -> bool {
 /// backend and surfaced as reconnect markers; the call completes only after
 /// cancellation or an unrecoverable spawn/wait failure.
 #[tauri::command]
+#[specta::specta]
 pub async fn stream_logcat(
     target: adb::DeviceTarget,
     operation_id: String,
@@ -1353,6 +1378,7 @@ pub async fn stream_logcat(
 /// Persist the renderer's bounded Logcat buffer through a one-shot path grant.
 /// The size limit keeps the IPC and host write bounded.
 #[tauri::command]
+#[specta::specta]
 pub async fn save_logcat_export(
     grants: tauri::State<'_, PathGrantStore>,
     path_grant: String,
@@ -1409,13 +1435,13 @@ fn classify_shell(argv: &[String]) -> ShellClassification {
     }
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(specta::Type, Debug, Clone, Deserialize)]
 pub struct PlanShellActionRequest {
     pub target: adb::DeviceTarget,
     pub argv: Vec<String>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(specta::Type, Debug, Clone, Serialize)]
 pub struct ShellActionPlan {
     pub mutating: bool,
     pub dangerous: bool,
@@ -1423,6 +1449,7 @@ pub struct ShellActionPlan {
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn plan_shell_action(request: PlanShellActionRequest) -> Result<ShellActionPlan, CommandError> {
     if !actions::valid_shell_argv(&request.argv) {
         return Err(CommandError {
@@ -1493,6 +1520,7 @@ fn is_allowed_device_control(argv: &[String]) -> bool {
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn apply_device_control(
     app: tauri::AppHandle,
     target: adb::DeviceTarget,
@@ -1538,6 +1566,7 @@ pub fn apply_device_control(
 
 /// List files in a remote directory on the device.
 #[tauri::command]
+#[specta::specta]
 pub fn list_remote_files(
     target: adb::DeviceTarget,
     remote_path: String,
@@ -1559,6 +1588,7 @@ pub fn list_remote_files(
 
 /// Push a local file to the device.
 #[tauri::command]
+#[specta::specta]
 pub async fn push_file(
     target: adb::DeviceTarget,
     grants: tauri::State<'_, PathGrantStore>,
@@ -1592,6 +1622,7 @@ pub async fn push_file(
 
 /// Pull a remote file from the device.
 #[tauri::command]
+#[specta::specta]
 pub async fn pull_file(
     target: adb::DeviceTarget,
     grants: tauri::State<'_, PathGrantStore>,
@@ -1629,7 +1660,7 @@ pub async fn pull_file(
     .await
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(specta::Type, Debug, Clone, Serialize)]
 pub struct RemoteListing {
     pub path: String,
     pub entries: Vec<RemoteFileEntry>,
@@ -1764,6 +1795,7 @@ fn run_adb_simple(
 
 /// Locate the fastboot binary on the system.
 #[tauri::command]
+#[specta::specta]
 pub fn locate_fastboot() -> Option<String> {
     which::which("fastboot")
         .ok()
@@ -1772,6 +1804,7 @@ pub fn locate_fastboot() -> Option<String> {
 
 /// List devices visible to fastboot.
 #[tauri::command]
+#[specta::specta]
 pub fn list_fastboot_devices() -> Result<Vec<FastbootDevice>, CommandError> {
     let fastboot_path = which::which("fastboot").map_err(|_| CommandError {
         code: "fastboot_not_found",
@@ -1785,6 +1818,7 @@ pub fn list_fastboot_devices() -> Result<Vec<FastbootDevice>, CommandError> {
 
 /// Query a fastboot variable.
 #[tauri::command]
+#[specta::specta]
 pub fn fastboot_getvar(serial: String, key: String) -> Result<String, CommandError> {
     validate_serial_arg(&serial)?;
     validate_fastboot_key(&key)?;
@@ -1863,6 +1897,7 @@ fn first_nonempty<'a>(a: &'a str, b: &'a str) -> &'a str {
 
 /// Get network connections from the device using `ss -tunp`.
 #[tauri::command]
+#[specta::specta]
 pub fn list_network_connections(
     target: adb::DeviceTarget,
 ) -> Result<Vec<NetworkConnection>, CommandError> {
@@ -1920,6 +1955,7 @@ fn validate_backup_target(local_path: &str) -> Result<PathBuf, CommandError> {
 /// Inspect the package's default APK export and deprecated data-backup
 /// capabilities. This is read-only and scoped to one Android user.
 #[tauri::command]
+#[specta::specta]
 pub fn preflight_package_backup(
     target: adb::DeviceTarget,
     package: String,
@@ -1933,6 +1969,7 @@ pub fn preflight_package_backup(
 /// Export every base/split APK plus a versioned evidence manifest to one
 /// atomically-installed ZIP. This is the dependable default package backup.
 #[tauri::command]
+#[specta::specta]
 pub async fn export_package_apks(
     target: adb::DeviceTarget,
     grants: tauri::State<'_, PathGrantStore>,
@@ -1966,6 +2003,7 @@ pub async fn export_package_apks(
 /// acknowledgement. The immutable target and one-shot native path grant are
 /// revalidated before the long-running ADB process begins.
 #[tauri::command]
+#[specta::specta]
 pub async fn capture_bugreport(
     target: adb::DeviceTarget,
     grants: tauri::State<'_, PathGrantStore>,
@@ -2003,6 +2041,7 @@ pub async fn capture_bugreport(
 /// uncompressed, structurally inspected, and packaged with a manifest. The
 /// result reports detected entries, never verified restorability.
 #[tauri::command]
+#[specta::specta]
 pub async fn backup_package(
     target: adb::DeviceTarget,
     grants: tauri::State<'_, PathGrantStore>,
@@ -2034,6 +2073,7 @@ pub async fn backup_package(
 
 /// List runtime permissions for a package.
 #[tauri::command]
+#[specta::specta]
 pub fn list_permissions(
     target: adb::DeviceTarget,
     package: String,
@@ -2046,6 +2086,7 @@ pub fn list_permissions(
 
 /// Grant or revoke a runtime permission.
 #[tauri::command]
+#[specta::specta]
 pub fn set_permission(
     app: tauri::AppHandle,
     target: adb::DeviceTarget,
@@ -2095,7 +2136,7 @@ pub fn set_permission(
     })
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(specta::Type, Debug, Clone, Serialize)]
 pub struct PermissionInfo {
     pub permission: String,
     pub granted: bool,
@@ -2138,6 +2179,7 @@ fn parse_permissions(stdout: &str) -> Vec<PermissionInfo> {
 /// Get process list from a device. Uses `ps -A -o PID,USER,VSZ,RSS,%CPU,NAME`
 /// for a structured snapshot.
 #[tauri::command]
+#[specta::specta]
 pub fn list_processes(target: adb::DeviceTarget) -> Result<Vec<ProcessInfo>, CommandError> {
     let transport = validated_transport(&target)?;
     let stdout = transport.shell_target(&target, &["ps", "-A", "-o", "PID,USER,VSZ,RSS,NAME"])?;
@@ -2146,6 +2188,7 @@ pub fn list_processes(target: adb::DeviceTarget) -> Result<Vec<ProcessInfo>, Com
 
 /// Take a screenshot on the device and pull it to a local path.
 #[tauri::command]
+#[specta::specta]
 pub fn take_screenshot(
     target: adb::DeviceTarget,
     grants: tauri::State<'_, PathGrantStore>,
@@ -2186,6 +2229,7 @@ fn unique_screenshot_remote() -> String {
 
 /// Locate the scrcpy binary on the system. Returns the path if found.
 #[tauri::command]
+#[specta::specta]
 pub fn locate_scrcpy() -> Option<String> {
     which::which("scrcpy").ok().map(|p| p.display().to_string())
 }
@@ -2195,6 +2239,7 @@ pub fn locate_scrcpy() -> Option<String> {
 /// immutable device target, so an upgraded/replaced executable is never
 /// trusted through stale capability data.
 #[tauri::command]
+#[specta::specta]
 pub async fn scrcpy_capabilities(
     target: adb::DeviceTarget,
 ) -> Result<crate::scrcpy::ScrcpyCapabilities, CommandError> {
@@ -2226,6 +2271,7 @@ pub async fn scrcpy_capabilities(
 /// Launch scrcpy for a device. Fire-and-forget: we spawn the process
 /// and track it so the renderer can poll or stop the session.
 #[tauri::command]
+#[specta::specta]
 pub fn launch_scrcpy(
     request: crate::scrcpy::LaunchScrcpyRequest,
     grants: tauri::State<'_, PathGrantStore>,
@@ -2279,6 +2325,7 @@ pub fn launch_scrcpy(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn scrcpy_session_status(
     session_id: u64,
 ) -> Result<crate::scrcpy::ScrcpySession, CommandError> {
@@ -2289,6 +2336,7 @@ pub fn scrcpy_session_status(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn stop_scrcpy(session_id: u64) -> Result<crate::scrcpy::ScrcpySession, CommandError> {
     crate::scrcpy::stop(session_id).map_err(|e| CommandError {
         code: "scrcpy_stop_failed",
@@ -2300,6 +2348,7 @@ pub fn stop_scrcpy(session_id: u64) -> Result<crate::scrcpy::ScrcpySession, Comm
 /// direct `adb install -r` path; APKS/XAPK/APKM archives are committed through
 /// an atomic PackageInstaller session.
 #[tauri::command]
+#[specta::specta]
 pub async fn install_apk(
     app: tauri::AppHandle,
     target: adb::DeviceTarget,
@@ -2346,6 +2395,7 @@ pub async fn install_apk(
 
 /// Pull an APK from the device to a local path.
 #[tauri::command]
+#[specta::specta]
 pub async fn extract_apk(
     target: adb::DeviceTarget,
     grants: tauri::State<'_, PathGrantStore>,
@@ -2385,7 +2435,7 @@ pub async fn extract_apk(
 /// List all debloat packs from the app's `packs/` resource directory.
 /// A bundled pack file that failed to load, with a stable code and a
 /// human-readable message the UI can show and the user can copy.
-#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[derive(specta::Type, Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct PackLoadError {
     /// File name (not full path — no host paths leak to the renderer).
     pub file: String,
@@ -2398,13 +2448,13 @@ pub struct PackLoadError {
 /// Result of enumerating bundled packs: the healthy packs plus per-file
 /// errors for any that failed. A broken file no longer disappears
 /// silently — it surfaces as an error the user can act on.
-#[derive(Debug, Clone, Serialize)]
+#[derive(specta::Type, Debug, Clone, Serialize)]
 pub struct PackListing {
     pub packs: Vec<crate::packs::PackCandidate>,
     pub errors: Vec<PackLoadError>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(specta::Type, Debug, Clone, Deserialize)]
 pub struct PlanPackRequest {
     pub target: adb::DeviceTarget,
     pub user_id: u32,
@@ -2415,7 +2465,7 @@ pub struct PlanPackRequest {
     pub override_compatibility: bool,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(specta::Type, Debug, Clone, Serialize)]
 pub struct PlannedPack {
     pub pack_id: String,
     pub revision: u32,
@@ -2533,6 +2583,7 @@ fn pack_context(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn list_packs(
     app: tauri::AppHandle,
     target: adb::DeviceTarget,
@@ -2558,6 +2609,7 @@ pub fn list_packs(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn plan_pack(
     app: tauri::AppHandle,
     request: PlanPackRequest,
@@ -3008,7 +3060,7 @@ packages:
 }
 
 /// Request shape for [`explain_failure`].
-#[derive(Debug, serde::Deserialize)]
+#[derive(specta::Type, Debug, serde::Deserialize)]
 pub struct ExplainFailureRequest {
     pub manufacturer: Option<String>,
     pub rom: Option<String>,
@@ -3021,6 +3073,7 @@ pub struct ExplainFailureRequest {
 /// Returns `Some(quirk)` if a rule applies, `None` if the raw error
 /// should be shown as-is.
 #[tauri::command]
+#[specta::specta]
 pub fn explain_failure(
     app: tauri::AppHandle,
     req: ExplainFailureRequest,

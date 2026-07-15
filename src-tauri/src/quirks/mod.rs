@@ -37,7 +37,7 @@ const MAX_QUIRKS_BYTES: u64 = 512 * 1024;
 const QUIRK_SCHEMA_MIGRATION: &str =
     "wrap the quirk list as version: \"1\" plus quirks: [...], then validate it with the bundled quirk loader";
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(specta::Type, Debug, Clone, Serialize, Deserialize)]
 pub struct QuirkDocument {
     /// Bump on every breaking change; this build accepts only v1 files.
     pub version: String,
@@ -46,14 +46,14 @@ pub struct QuirkDocument {
     pub quirks: Vec<Quirk>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(specta::Type, Debug, Deserialize)]
 #[serde(untagged)]
 enum QuirkFile {
     Document(QuirkDocument),
     Legacy(Vec<Quirk>),
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(specta::Type, Debug, Clone, Serialize, Deserialize)]
 pub struct Quirk {
     /// Stable id for cross-referencing in bug reports.
     pub id: String,
@@ -71,7 +71,7 @@ pub struct Quirk {
     pub mitigation: Option<Mitigation>,
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(specta::Type, Debug, Clone, Default, Serialize, Deserialize)]
 pub struct QuirkMatch {
     /// Substrings to look for in the failing command's stderr or
     /// stdout. ANY-match within the field; ALL-match across fields.
@@ -91,7 +91,7 @@ pub struct QuirkMatch {
     pub package_id: Vec<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(specta::Type, Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum Mitigation {
     /// Suggest re-running the action with a different `ActionKind`.

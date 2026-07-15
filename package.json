@@ -24,6 +24,8 @@
     "format:check": "prettier --check \"src/**/*.{ts,tsx,css,json}\" \"scripts/**/*.mjs\" \"isolation/**/*.js\" \"*.json\" \"*.config.ts\"",
     "format:write": "prettier --write \"src/**/*.{ts,tsx,css,json}\" \"scripts/**/*.mjs\" \"isolation/**/*.js\" \"*.json\" \"*.config.ts\"",
     "typecheck": "tsc --noEmit",
+    "bindings:generate": "node scripts/check-bindings.mjs --write",
+    "bindings:check": "node scripts/check-bindings.mjs",
     "test": "vitest run",
     "test:watch": "vitest"
   },

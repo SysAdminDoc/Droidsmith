@@ -11,7 +11,7 @@ const MAX_ACTIVE_GRANTS: usize = 64;
 
 /// A native-dialog purpose is also the authorization scope. Read grants can
 /// never reach write commands (or another read command), and vice versa.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Deserialize, Serialize)]
+#[derive(specta::Type, Debug, Clone, Copy, PartialEq, Eq, Hash, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum HostPathPurpose {
     DiagnosticsSave,
@@ -83,7 +83,7 @@ impl HostPathPurpose {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(specta::Type, Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct HostPathGrant {
     pub id: String,
     pub purpose: HostPathPurpose,

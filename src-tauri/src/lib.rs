@@ -41,28 +41,10 @@ use commands::{
     wipe_diagnostics,
 };
 
-#[cfg_attr(mobile, tauri::mobile_entry_point)]
-pub fn run() {
-    // Hook panics into a file log before we touch the Tauri runtime, so a
-    // panic during Tauri init still leaves a forensic trail.
-    let log_dir = diagnostics::fallback_log_dir();
-    diagnostics::install_panic_hook(log_dir.clone());
-
-    let builder = tauri::Builder::default()
-        .manage(host_path::PathGrantStore::default())
-        // Single-instance must be the FIRST plugin registered (Tauri
-        // requirement). A second launch focuses the existing window and
-        // exits instead of spawning a rival adb server.
-        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
-            use tauri::Manager;
-            if let Some(window) = app.get_webview_window("main") {
-                let _ = window.unminimize();
-                let _ = window.show();
-                let _ = window.set_focus();
-            }
-        }))
-        .plugin(tauri_plugin_dialog::init())
-        .invoke_handler(tauri::generate_handler![
+fn ipc_builder() -> tauri_specta::Builder<tauri::Wry> {
+    tauri_specta::Builder::<tauri::Wry>::new()
+        .error_handling(tauri_specta::ErrorHandlingMode::Throw)
+        .commands(tauri_specta::collect_commands![
             heartbeat,
             run_host_doctor,
             list_devices,
@@ -116,7 +98,89 @@ pub fn run() {
             locate_fastboot,
             list_fastboot_devices,
             fastboot_getvar,
-        ]);
+        ])
+}
+
+fn typescript_exporter() -> specta_typescript::Typescript {
+    // Droidsmith's u64 wire values are bounded counters, timestamps, and
+    // artifact sizes well below JavaScript's safe-integer ceiling. Preserve
+    // the existing JSON/TypeScript number contract explicitly.
+    specta_typescript::Typescript::default().bigint(specta_typescript::BigIntExportBehavior::Number)
+}
+
+pub fn export_typescript_bindings(path: &std::path::Path) -> Result<(), String> {
+    let raw = ipc_builder()
+        .export_str(typescript_exporter())
+        .map_err(|error| error.to_string())?;
+    let bindings = normalize_compatible_specta_output(raw)?;
+    std::fs::write(path, bindings).map_err(|error| error.to_string())
+}
+
+fn normalize_compatible_specta_output(raw: String) -> Result<String, String> {
+    // rc.21 is the final Tauri Specta v2 release compatible with Droidsmith's
+    // Rust 1.81 floor. Normalize two exporter bugs fixed on the Rust-2024 line:
+    // reserved command parameters and unused event scaffolding for zero events.
+    let types_marker = "/** user-defined types **/";
+    let globals_marker = "/** tauri-specta globals **/";
+    let types_at = raw
+        .find(types_marker)
+        .ok_or_else(|| "generated bindings are missing the types marker".to_string())?;
+    let globals_at = raw
+        .find(globals_marker)
+        .ok_or_else(|| "generated bindings are missing the globals marker".to_string())?;
+    let mut commands = raw[..types_at]
+        .replace(" package: string", " packageName: string")
+        .replace(", package, ", ", packageName, ")
+        .replace(", package }", ", packageName }");
+    // Tauri accepts camelCase argument keys, but Droidsmith's IPC isolation
+    // policy deliberately validates the Rust wire names. Keep generated
+    // function parameters idiomatic while preserving that audited boundary.
+    for (camel, wire) in [
+        ("suggestedName", "suggested_name"),
+        ("operationId", "operation_id"),
+        ("onEvent", "on_event"),
+        ("pathGrant", "path_grant"),
+        ("privacyConfirmed", "privacy_confirmed"),
+        ("remotePath", "remote_path"),
+        ("sessionId", "session_id"),
+        ("entryId", "entry_id"),
+        ("packageName", "package"),
+    ] {
+        commands = commands
+            .replace(&format!("{{ {camel},"), &format!("{{ {wire}: {camel},"))
+            .replace(&format!(", {camel},"), &format!(", {wire}: {camel},"))
+            .replace(&format!(", {camel} }}"), &format!(", {wire}: {camel} }}"))
+            .replace(&format!("{{ {camel} }}"), &format!("{{ {wire}: {camel} }}"));
+    }
+    let types = raw[types_at..globals_at].replace("export type TAURI_CHANNEL<TSend> = null\n", "");
+    Ok(format!(
+        "{commands}{types}{globals_marker}\n\nimport {{ invoke as TAURI_INVOKE, Channel as TAURI_CHANNEL }} from \"@tauri-apps/api/core\";\n"
+    ))
+}
+
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
+pub fn run() {
+    // Hook panics into a file log before we touch the Tauri runtime, so a
+    // panic during Tauri init still leaves a forensic trail.
+    let log_dir = diagnostics::fallback_log_dir();
+    diagnostics::install_panic_hook(log_dir.clone());
+
+    let ipc = ipc_builder();
+    let builder = tauri::Builder::default()
+        .manage(host_path::PathGrantStore::default())
+        // Single-instance must be the FIRST plugin registered (Tauri
+        // requirement). A second launch focuses the existing window and
+        // exits instead of spawning a rival adb server.
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            use tauri::Manager;
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.unminimize();
+                let _ = window.show();
+                let _ = window.set_focus();
+            }
+        }))
+        .plugin(tauri_plugin_dialog::init())
+        .invoke_handler(ipc.invoke_handler());
 
     let context = tauri::generate_context!();
     if let Err(e) = builder.run(context) {
@@ -133,5 +197,31 @@ pub fn run() {
             ),
         );
         std::process::exit(1);
+    }
+}
+
+#[cfg(test)]
+mod binding_tests {
+    use super::*;
+
+    #[test]
+    fn compatible_export_normalization_preserves_wire_keys() {
+        let raw = r#"export const commands = {
+  async getPackageMetadata(target: DeviceTarget, package: string, operationId: string) {
+    return await TAURI_INVOKE("get_package_metadata", { target, package, operationId });
+  }
+};
+/** user-defined types **/
+export type TAURI_CHANNEL<TSend> = null
+/** tauri-specta globals **/
+unused
+"#
+        .to_string();
+        let actual = normalize_compatible_specta_output(raw).unwrap();
+        assert!(!actual.contains("package: string"));
+        assert!(actual.contains("packageName: string"));
+        assert!(actual.contains("package: packageName"));
+        assert!(actual.contains("operation_id: operationId"));
+        assert!(!actual.contains("export type TAURI_CHANNEL"));
     }
 }

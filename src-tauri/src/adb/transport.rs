@@ -50,6 +50,17 @@ impl serde::Serialize for TransportError {
     }
 }
 
+// Transport errors serialize as a single user-facing string at the IPC
+// boundary; mirror that exact wire shape in generated TypeScript bindings.
+impl specta::Type for TransportError {
+    fn inline(
+        type_map: &mut specta::TypeCollection,
+        generics: specta::Generics,
+    ) -> specta::datatype::DataType {
+        <String as specta::Type>::inline(type_map, generics)
+    }
+}
+
 pub trait AdbTransport: Send + Sync {
     fn list_devices(&self) -> Result<Vec<Device>, TransportError>;
 

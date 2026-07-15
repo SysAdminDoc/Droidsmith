@@ -8,7 +8,7 @@ use sha2::{Digest, Sha256};
 
 /// Metadata returned to the renderer only after a host artifact has passed
 /// validation and been atomically installed at its final path.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(specta::Type, Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct HostArtifact {
     pub local_path: String,
     pub size_bytes: u64,

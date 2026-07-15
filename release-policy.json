@@ -4,10 +4,11 @@
     {
       "kind": "rust_advisories",
       "owner": "Droidsmith maintainers",
-      "rationale": "Unfixable transitive Tauri Linux GTK3/webview dependencies and one compile-time macro dependency; none are direct Droidsmith dependencies. Re-audit against the active Tauri release before expiry.",
+      "rationale": "Unfixable transitive Tauri Linux GTK3/webview dependencies and compile-time macro dependencies; none are direct Droidsmith dependencies. Specta's paste dependency is pinned to preserve the Rust 1.81 floor while the maintained next line requires edition 2024. Re-audit against active Tauri and Specta releases before expiry.",
       "expiresOn": "2026-10-15",
       "subjects": [
         "RUSTSEC-2024-0370",
+        "RUSTSEC-2024-0436",
         "RUSTSEC-2024-0411",
         "RUSTSEC-2024-0412",
         "RUSTSEC-2024-0413",

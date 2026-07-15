@@ -186,6 +186,12 @@ versions are never blocked. Both fetch scripts consume the same version,
 official archive URLs, and SHA-256 pins; the release gate rejects policy,
 runtime, script, or documentation drift.
 
+Rust commands and DTOs generate `src/lib/bindings.ts` through Tauri Specta.
+After changing an IPC signature, run `npm run bindings:generate`; the
+authoritative gate runs `npm run bindings:check` and rejects stale generated
+output. Keep renderer-only compatibility helpers in `src/lib/tauri.ts` instead
+of duplicating Rust wire records.
+
 The individual commands (`npm run format:check`, `npm run lint`,
 `npm run typecheck`, `npm test`, `npm run security:audit`, `npm run ui:smoke`,
 and `npm run release:smoke`) remain available for fast iteration.

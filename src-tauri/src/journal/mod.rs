@@ -70,7 +70,7 @@ where
     f(&mut journal)
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(specta::Type, Debug, Clone, Serialize, Deserialize)]
 pub struct JournalEntry {
     /// Monotonic per-file id. Unique within a journal file.
     pub id: u64,
@@ -91,7 +91,7 @@ pub struct JournalEntry {
     pub failure: Option<String>,
 }
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(specta::Type, Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum JournalOutcome {
     Pending,

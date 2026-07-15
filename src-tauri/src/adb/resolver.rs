@@ -21,7 +21,7 @@ use std::time::Duration;
 use serde::Serialize;
 
 /// Result of resolving the `adb` binary on this machine.
-#[derive(Debug, Serialize, Clone)]
+#[derive(specta::Type, Debug, Serialize, Clone)]
 pub struct AdbResolution {
     pub path: Option<String>,
     pub source: ResolveSource,
@@ -29,7 +29,7 @@ pub struct AdbResolution {
     pub compatibility: super::version_policy::PlatformToolsAssessment,
 }
 
-#[derive(Debug, Serialize, Clone, Copy, PartialEq, Eq)]
+#[derive(specta::Type, Debug, Serialize, Clone, Copy, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 #[allow(dead_code)] // `Bundled` is reserved for R-010 once bundle wiring lands.
 pub enum ResolveSource {

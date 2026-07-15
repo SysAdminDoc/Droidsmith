@@ -36,7 +36,7 @@ pub struct EnvironmentInput {
     pub collection_warnings: Vec<String>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(specta::Type, Debug, Clone, Serialize)]
 pub struct SupportPreview {
     pub generated_at: String,
     pub content: String,
@@ -47,21 +47,21 @@ pub struct SupportPreview {
     pub local_only: bool,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(specta::Type, Debug, Clone, Serialize)]
 pub struct WipeResult {
     pub files_removed: usize,
     pub bytes_removed: u64,
     pub device_journals_preserved: bool,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(specta::Type, Debug, Clone, Serialize)]
 pub struct SavedResult {
     pub path: String,
     pub byte_size: usize,
     pub generated_at: String,
 }
 
-#[derive(Serialize)]
+#[derive(specta::Type, Serialize)]
 struct SupportBundle {
     schema_version: u32,
     generated_at: String,
@@ -73,14 +73,14 @@ struct SupportBundle {
     collection_warnings: Vec<String>,
 }
 
-#[derive(Serialize)]
+#[derive(specta::Type, Serialize)]
 struct PrivacySummary {
     local_only: bool,
     uploads_performed: bool,
     redactions: [&'static str; 5],
 }
 
-#[derive(Serialize)]
+#[derive(specta::Type, Serialize)]
 struct SupportEnvironment {
     app_version: String,
     tauri_version: String,
@@ -95,7 +95,7 @@ struct SupportEnvironment {
     adb_health: Option<SupportAdbHealth>,
 }
 
-#[derive(Serialize)]
+#[derive(specta::Type, Serialize)]
 struct SupportAdbHealth {
     server_status_supported: bool,
     client_version: Option<String>,
@@ -112,7 +112,7 @@ struct SupportAdbHealth {
     warning: Option<String>,
 }
 
-#[derive(Serialize)]
+#[derive(specta::Type, Serialize)]
 struct SupportDevice {
     id: String,
     state: String,
@@ -123,7 +123,7 @@ struct SupportDevice {
     transport_kind: crate::adb::DeviceTransportKind,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(specta::Type, Debug, Clone, Serialize)]
 struct SupportFailure {
     source: &'static str,
     device_id: Option<String>,
@@ -134,7 +134,7 @@ struct SupportFailure {
     failure: Option<String>,
 }
 
-#[derive(Serialize)]
+#[derive(specta::Type, Serialize)]
 struct CrashExcerpt {
     slot: String,
     lines: Vec<String>,

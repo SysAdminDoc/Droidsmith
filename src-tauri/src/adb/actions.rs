@@ -19,7 +19,7 @@ use serde::{Deserialize, Serialize};
 use crate::adb::device::{valid_serial, DeviceTarget};
 use crate::adb::transport::{validate_device_target, AdbTransport, TransportError};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(specta::Type, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ActionKind {
     /// `pm disable-user --user 0 <pkg>` — reversible with `pm enable`.
@@ -47,7 +47,7 @@ pub enum ActionKind {
     Shell,
 }
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(specta::Type, Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ConfirmationSource {
     #[default]
@@ -63,7 +63,7 @@ pub enum ConfirmationSource {
     RecoveryBaseline,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(specta::Type, Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ActionContext {
     #[serde(default)]
     pub confirmation_source: ConfirmationSource,
@@ -297,7 +297,7 @@ impl ActionKind {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(specta::Type, Debug, Clone, Serialize, Deserialize)]
 pub struct ActionRequest {
     pub serial: String,
     /// Immutable live target captured from `list_devices`. Legacy journal
@@ -321,7 +321,7 @@ pub struct ActionRequest {
     pub context: ActionContext,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(specta::Type, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PackActionContext {
     pub pack_id: String,
     pub revision: u32,
@@ -334,7 +334,7 @@ pub struct PackActionContext {
 /// Synthesised plan. The `args` field is exactly what the action will
 /// pass to `adb shell` — no further interpolation happens at apply
 /// time. `description` is human-readable for the confirmation dialog.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(specta::Type, Debug, Clone, Serialize, Deserialize)]
 pub struct PlannedAction {
     pub request: ActionRequest,
     pub args: Vec<String>,
@@ -349,7 +349,7 @@ pub struct PlannedAction {
 
 /// Applied action — the journal record. `stdout`/`stderr` are kept so
 /// support tickets can include the raw response.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(specta::Type, Debug, Clone, Serialize, Deserialize)]
 pub struct AppliedAction {
     pub plan: PlannedAction,
     pub stdout: String,

@@ -11,7 +11,7 @@ use crate::adb::device::DeviceTarget;
 use crate::adb::transport::{AdbTransport, TransportError};
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(specta::Type, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AndroidUser {
     /// Numeric user id passed to `pm --user`.
     pub id: u32,

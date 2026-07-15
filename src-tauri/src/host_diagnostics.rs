@@ -30,7 +30,7 @@ const ANDROID_USB_VENDORS: &[&str] = &[
     "2d95", "04e8",
 ];
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(specta::Type, Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum FindingSeverity {
     Info,
@@ -38,7 +38,7 @@ pub enum FindingSeverity {
     Error,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(specta::Type, Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct HostFinding {
     pub code: &'static str,
     pub severity: FindingSeverity,
@@ -49,7 +49,7 @@ pub struct HostFinding {
     pub official_url: &'static str,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(specta::Type, Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct HostDoctorAdb {
     pub resolved: bool,
     pub source: adb::resolver::ResolveSource,
@@ -60,7 +60,7 @@ pub struct HostDoctorAdb {
     pub compatibility: PlatformToolsAssessment,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(specta::Type, Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct HostDoctorReport {
     pub scanned_at: String,
     pub platform: &'static str,

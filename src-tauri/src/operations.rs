@@ -19,7 +19,7 @@ const CAPTURE_LIMIT_BYTES: usize = 1024 * 1024;
 const POLL_INTERVAL: Duration = Duration::from_millis(40);
 const PROGRESS_INTERVAL: Duration = Duration::from_millis(500);
 
-#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
+#[derive(specta::Type, Debug, Clone, Copy, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum OperationEventKind {
     Started,
@@ -30,7 +30,7 @@ pub enum OperationEventKind {
     Cancelled,
 }
 
-#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[derive(specta::Type, Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct OperationEvent {
     pub operation_id: String,
     pub kind: OperationEventKind,

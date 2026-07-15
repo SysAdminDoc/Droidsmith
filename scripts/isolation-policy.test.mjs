@@ -53,7 +53,7 @@ test("production config enables isolation with a strict CSP", () => {
 
 test("every registered Rust command has an explicit isolation classification", () => {
   const handlerBlock = tauriLib.match(
-    /invoke_handler\(tauri::generate_handler!\[([\s\S]*?)\]\)/u,
+    /tauri_specta::collect_commands!\[([\s\S]*?)\]\)/u,
   )?.[1];
   const readOnlyBlock = source.match(
     /READ_ONLY_COMMANDS = new Set\(\[([\s\S]*?)\]\);/u,

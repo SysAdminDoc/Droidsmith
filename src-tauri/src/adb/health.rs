@@ -10,7 +10,7 @@ use serde::Serialize;
 use crate::adb::transport::ShellTransport;
 use crate::adb::version_policy::{self, PlatformToolsAssessment};
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
+#[derive(specta::Type, Debug, Clone, Default, PartialEq, Eq, Serialize)]
 pub struct AdbHealth {
     pub server_status_supported: bool,
     pub client_version: Option<String>,
@@ -28,7 +28,7 @@ pub struct AdbHealth {
     pub platform_tools: PlatformToolsAssessment,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
+#[derive(specta::Type, Debug, Clone, Default, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum WifiV2State {
     Supported,

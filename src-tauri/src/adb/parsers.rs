@@ -1,6 +1,6 @@
 use serde::Serialize;
 
-#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[derive(specta::Type, Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct RemoteFileEntry {
     pub name: String,
     pub is_dir: bool,
@@ -10,7 +10,7 @@ pub struct RemoteFileEntry {
     pub parse_error: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[derive(specta::Type, Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct FastbootDevice {
     pub serial: String,
     pub mode: String,
@@ -19,7 +19,7 @@ pub struct FastbootDevice {
     pub parse_error: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[derive(specta::Type, Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct NetworkConnection {
     pub state: String,
     pub protocol: String,
@@ -30,7 +30,7 @@ pub struct NetworkConnection {
     pub parse_error: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[derive(specta::Type, Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct ProcessInfo {
     pub pid: u32,
     pub user: String,

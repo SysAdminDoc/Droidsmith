@@ -24,7 +24,7 @@ const MAX_APK_PARTS: usize = 64;
 const MAX_TAR_ENTRIES: usize = 100_000;
 const TAR_BLOCK_BYTES: usize = 512;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(specta::Type, Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum BackupCapability {
     ApkExport,
@@ -33,7 +33,7 @@ pub enum BackupCapability {
     LegacyDataUnknown,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(specta::Type, Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct LegacyEligibilityEvidence {
     pub device_sdk: Option<u32>,
     pub target_sdk: Option<u32>,
@@ -42,7 +42,7 @@ pub struct LegacyEligibilityEvidence {
     pub reason: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(specta::Type, Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct PackageBackupPreflight {
     pub package: String,
     pub android_user: u32,
@@ -52,27 +52,27 @@ pub struct PackageBackupPreflight {
     pub evidence: LegacyEligibilityEvidence,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(specta::Type, Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ExportMode {
     ApkExport,
     LegacyData,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(specta::Type, Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum LegacyContent {
     AppDataEntriesDetected,
     NoAppDataEntries,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(specta::Type, Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct HashedDeviceIdentity {
     pub device_identity_sha256: String,
     pub build_identity_sha256: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(specta::Type, Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct ExportedArtifact {
     pub name: String,
     pub role: String,
@@ -80,7 +80,7 @@ pub struct ExportedArtifact {
     pub sha256: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(specta::Type, Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct PackageExportManifest {
     pub format: &'static str,
     pub schema_version: u32,
@@ -94,7 +94,7 @@ pub struct PackageExportManifest {
     pub artifacts: Vec<ExportedArtifact>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(specta::Type, Debug, Clone, Serialize)]
 pub struct PackageExportResult {
     pub artifact: HostArtifact,
     pub manifest: PackageExportManifest,

@@ -39,7 +39,7 @@ const ENTRY_FLAG_COMPLEX: u16 = 0x0001;
 const TYPE_REFERENCE: u8 = 0x01;
 const TYPE_STRING: u8 = 0x03;
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
+#[derive(specta::Type, Debug, Clone, Default, PartialEq, Eq, Serialize)]
 pub struct AppPackageMetadata {
     pub package: String,
     pub label: Option<String>,

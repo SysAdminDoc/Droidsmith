@@ -56,7 +56,7 @@ const MAX_PACK_BYTES: u64 = 512 * 1024;
 const PACK_SCHEMA_MIGRATION: &str =
     "convert the file to the v1 pack schema in src-tauri/src/packs/mod.rs, set version: \"1\", then run droidsmith-pack-lint";
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(specta::Type, Debug, Clone, Serialize, Deserialize)]
 pub struct Pack {
     /// Stable machine identifier; never derived from the display name.
     #[serde(default)]
@@ -86,13 +86,13 @@ pub struct Pack {
     pub provenance: PackProvenance,
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(specta::Type, Debug, Clone, Default, Serialize, Deserialize)]
 pub struct PackProvenance {
     pub source: String,
     pub license: String,
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(specta::Type, Debug, Clone, Default, Serialize, Deserialize)]
 pub struct PackTargets {
     /// Manufacturer strings as reported by `ro.product.manufacturer`.
     #[serde(default)]
@@ -118,7 +118,7 @@ pub struct PackTargets {
     pub user_scope: UserScope,
 }
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(specta::Type, Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum UserScope {
     #[default]
@@ -128,7 +128,7 @@ pub enum UserScope {
     Any,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(specta::Type, Debug, Clone, Serialize, Deserialize)]
 pub struct PackEntry {
     /// Android package identifier.
     pub id: String,
@@ -151,7 +151,7 @@ pub struct PackEntry {
     pub labels: Vec<String>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(specta::Type, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum RemovalLevel {
     Recommended,
@@ -171,7 +171,7 @@ pub struct DevicePackContext {
     pub installed_packages: HashSet<String>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(specta::Type, Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum CompatibilityStatus {
     Compatible,
@@ -179,7 +179,7 @@ pub enum CompatibilityStatus {
     Mismatch,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(specta::Type, Debug, Clone, Serialize)]
 pub struct CompatibilityCheck {
     pub field: String,
     pub status: CompatibilityStatus,
@@ -187,7 +187,7 @@ pub struct CompatibilityCheck {
     pub actual: Option<String>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(specta::Type, Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum PackEntryStatus {
     Ready,
@@ -195,14 +195,14 @@ pub enum PackEntryStatus {
     Unsupported,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(specta::Type, Debug, Clone, Serialize)]
 pub struct PackEntryAssessment {
     pub id: String,
     pub status: PackEntryStatus,
     pub detail: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(specta::Type, Debug, Clone, Serialize)]
 pub struct PackAssessment {
     pub status: CompatibilityStatus,
     pub override_required: bool,
@@ -210,7 +210,7 @@ pub struct PackAssessment {
     pub entries: Vec<PackEntryAssessment>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(specta::Type, Debug, Clone, Serialize)]
 pub struct PackCandidate {
     pub pack: Pack,
     pub assessment: PackAssessment,

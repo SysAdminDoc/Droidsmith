@@ -36,7 +36,7 @@ const MAX_PROFILE_BYTES: u64 = 256 * 1024;
 const PROFILE_SCHEMA_MIGRATION: &str =
     "convert the file to the v1 profile schema in src-tauri/src/profile.rs, set version: \"1\", then rerun the CLI profile lint/load path";
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(specta::Type, Debug, Clone, Serialize, Deserialize)]
 pub struct Profile {
     pub name: String,
     pub version: String,
@@ -47,7 +47,7 @@ pub struct Profile {
     pub actions: Vec<ProfileAction>,
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(specta::Type, Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ProfileDeviceMatch {
     /// Optional substring the device serial must start with. Empty
     /// string disables the check.
@@ -58,7 +58,7 @@ pub struct ProfileDeviceMatch {
     pub require_manufacturer: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(specta::Type, Debug, Clone, Serialize, Deserialize)]
 pub struct ProfileAction {
     pub kind: ActionKind,
     pub package: String,

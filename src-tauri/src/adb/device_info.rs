@@ -8,7 +8,7 @@ use serde::Serialize;
 use crate::adb::device::DeviceTarget;
 use crate::adb::transport::{AdbTransport, TransportError};
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(specta::Type, Debug, Clone, Serialize)]
 pub struct DeviceInfo {
     pub serial: String,
     pub model: Option<String>,
@@ -23,14 +23,14 @@ pub struct DeviceInfo {
     pub wifi_ip: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(specta::Type, Debug, Clone, Serialize)]
 pub struct BatteryInfo {
     pub level: Option<u8>,
     pub status: Option<String>,
     pub temperature: Option<f32>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(specta::Type, Debug, Clone, Serialize)]
 pub struct StorageInfo {
     pub total_kb: Option<u64>,
     pub used_kb: Option<u64>,

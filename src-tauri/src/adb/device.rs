@@ -8,7 +8,7 @@ use std::time::{Duration, Instant};
 use serde::{Deserialize, Serialize};
 
 /// A single connected device, as seen by `adb devices -l`.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(specta::Type, Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Device {
     /// Hardware serial or `host:port` for TCP/wireless devices. Stable
     /// per device; survives reboots over USB.
@@ -39,7 +39,9 @@ pub struct Device {
     pub wireless: bool,
 }
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(
+    specta::Type, Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize,
+)]
 #[serde(rename_all = "snake_case")]
 pub enum DeviceTransportKind {
     Usb,
@@ -69,7 +71,7 @@ impl DeviceTransportKind {
 /// The serial remains useful for display/journal partitioning, but execution
 /// prefers `transport_id` and verifies this generation plus the advertised
 /// metadata immediately before talking to the device.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(specta::Type, Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DeviceTarget {
     pub serial: String,
     pub transport_id: Option<u32>,
@@ -254,7 +256,7 @@ pub fn observe_connection_generations(devices: &mut [Device]) {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(specta::Type, Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum DeviceState {
     /// `device` — fully authorized.
