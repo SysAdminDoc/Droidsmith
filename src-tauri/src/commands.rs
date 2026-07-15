@@ -25,6 +25,7 @@ use crate::adb::parsers::{
 };
 use crate::adb::transport::AdbTransport;
 use crate::adb::{self, actions};
+use crate::backup;
 use crate::fs_util::{ArtifactError, ArtifactKind, HostArtifact, StagedArtifact};
 use crate::host_path::{
     validate_suggested_file_name, HostPathGrant, HostPathPurpose, PathGrantError, PathGrantStore,
@@ -814,6 +815,15 @@ impl From<install::InstallError> for CommandError {
             },
             install::InstallError::Io(error) => Self::from(error),
             install::InstallError::Operation(error) => Self::from(error),
+        }
+    }
+}
+
+impl From<backup::BackupError> for CommandError {
+    fn from(error: backup::BackupError) -> Self {
+        Self {
+            code: error.code(),
+            message: error.to_string(),
         }
     }
 }
@@ -1793,19 +1803,6 @@ pub fn list_network_connections(
     Ok(parse_ss_output(&stdout))
 }
 
-#[derive(Debug, Clone, Serialize)]
-pub struct BackupPackageResult {
-    pub local_path: String,
-    pub stdout: String,
-    pub size_bytes: Option<u64>,
-    pub sha256: String,
-    pub empty: bool,
-    /// True when the artifact is non-empty but only large enough to hold
-    /// the `.ab` header — i.e. `adb backup` excluded the app's data
-    /// (targetSDK 31+/Android 12 deprecation). The UI warns on this.
-    pub header_only: bool,
-}
-
 fn validate_backup_target(local_path: &str) -> Result<PathBuf, CommandError> {
     let trimmed = local_path.trim();
     if trimmed.is_empty() {
@@ -1850,73 +1847,82 @@ fn validate_backup_target(local_path: &str) -> Result<PathBuf, CommandError> {
     Ok(path)
 }
 
-/// Backup a package's data using `adb backup`. The user must confirm
-/// on the device screen. Returns the adb output and local artifact metadata.
+/// Inspect the package's default APK export and deprecated data-backup
+/// capabilities. This is read-only and scoped to one Android user.
+#[tauri::command]
+pub fn preflight_package_backup(
+    target: adb::DeviceTarget,
+    package: String,
+    #[allow(non_snake_case)] userId: u32,
+) -> Result<backup::PackageBackupPreflight, CommandError> {
+    let transport = validated_transport(&target)?;
+    validate_package_arg(&package)?;
+    Ok(backup::preflight(&transport, &target, &package, userId)?)
+}
+
+/// Export every base/split APK plus a versioned evidence manifest to one
+/// atomically-installed ZIP. This is the dependable default package backup.
+#[tauri::command]
+pub async fn export_package_apks(
+    target: adb::DeviceTarget,
+    grants: tauri::State<'_, PathGrantStore>,
+    package: String,
+    #[allow(non_snake_case)] userId: u32,
+    path_grant: String,
+    operation_id: String,
+    on_event: tauri::ipc::Channel<OperationEvent>,
+) -> Result<backup::PackageExportResult, CommandError> {
+    let (transport, _) = privileged_transport(&target)?;
+    validate_package_arg(&package)?;
+    let granted_path = grants.consume(&path_grant, HostPathPurpose::PackageExportSave)?;
+    let output_target = validate_backup_target(&granted_path.display().to_string())?;
+    let preflight = backup::preflight(&transport, &target, &package, userId)?;
+    let adb_path = transport.adb_path.clone();
+    let sink = operations::channel_sink(on_event);
+    spawn_blocking_operation(move || {
+        Ok(backup::export_apks(
+            &adb_path,
+            &target,
+            &output_target,
+            preflight,
+            &operation_id,
+            sink,
+        )?)
+    })
+    .await
+}
+
+/// Advanced-only deprecated `adb backup` path. The produced `.ab` is forced
+/// uncompressed, structurally inspected, and packaged with a manifest. The
+/// result reports detected entries, never verified restorability.
 #[tauri::command]
 pub async fn backup_package(
     target: adb::DeviceTarget,
     grants: tauri::State<'_, PathGrantStore>,
     package: String,
+    #[allow(non_snake_case)] userId: u32,
     path_grant: String,
     operation_id: String,
     on_event: tauri::ipc::Channel<OperationEvent>,
-) -> Result<BackupPackageResult, CommandError> {
+) -> Result<backup::PackageExportResult, CommandError> {
     let (transport, _) = privileged_transport(&target)?;
     validate_package_arg(&package)?;
     let granted_path = grants.consume(&path_grant, HostPathPurpose::BackupSave)?;
     let output_target = validate_backup_target(&granted_path.display().to_string())?;
-    let timeout = std::time::Duration::from_secs(300);
-    let selector = target.adb_selector();
+    let preflight = backup::preflight(&transport, &target, &package, userId)?;
     let adb_path = transport.adb_path.clone();
     let sink = operations::channel_sink(on_event);
     spawn_blocking_operation(move || {
-        let staged = StagedArtifact::new(&output_target)?;
-        let mut args = selector;
-        args.extend([
-            "backup".to_string(),
-            "-f".to_string(),
-            staged.path().display().to_string(),
-            "-apk".to_string(),
-            package,
-        ]);
-        let output = operations::run_process(
+        Ok(backup::export_legacy_data(
             &adb_path,
-            &args,
-            timeout,
+            &target,
+            &output_target,
+            preflight,
             &operation_id,
-            "Backing up package",
             sink,
-        )?;
-        let stdout = completed_adb_output(output, "adb backup")?;
-        let artifact = staged.commit(ArtifactKind::AndroidBackup)?;
-        let size_bytes = Some(artifact.size_bytes);
-        let (empty, header_only) = classify_backup_size(size_bytes);
-        Ok(BackupPackageResult {
-            local_path: artifact.local_path,
-            stdout,
-            size_bytes,
-            sha256: artifact.sha256,
-            empty,
-            header_only,
-        })
+        )?)
     })
     .await
-}
-
-/// A `.ab` archive of an app that targets SDK 31+ (Android 12) contains
-/// only the ~24-byte "ANDROID BACKUP" header with no payload, because
-/// `adb backup` is deprecated and excludes such apps' private data. Treat
-/// any non-zero artifact at or below this size as header-only so the UI
-/// warns instead of claiming a real backup.
-const BACKUP_HEADER_ONLY_MAX_BYTES: u64 = 512;
-
-/// Returns `(empty, header_only)` for a produced backup artifact size.
-fn classify_backup_size(size_bytes: Option<u64>) -> (bool, bool) {
-    match size_bytes {
-        None | Some(0) => (true, false),
-        Some(size) if size <= BACKUP_HEADER_ONLY_MAX_BYTES => (false, true),
-        Some(_) => (false, false),
-    }
 }
 
 /// List runtime permissions for a package.
@@ -2505,8 +2511,8 @@ fn iso_now() -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        accepted_transport_override, append_host_operation, classify_backup_size, classify_shell,
-        diagnostic_text, is_allowed_device_control, load_runtime_packs, pack_error_to_load_error,
+        accepted_transport_override, append_host_operation, classify_shell, diagnostic_text,
+        is_allowed_device_control, load_runtime_packs, pack_error_to_load_error,
         parse_fastboot_getvar, unique_screenshot_remote, validate_backup_target,
         validate_remote_path, AdbRecoveryOutcome, AdbRecoveryRecord, ProcessOutput,
         ShellClassification,
@@ -2726,19 +2732,6 @@ packages:
         assert!(packs.is_empty());
         assert_eq!(errors.len(), 2);
         assert!(errors.iter().all(|error| error.code == "pack_duplicate_id"));
-    }
-
-    #[test]
-    fn backup_size_classification() {
-        // Missing or zero → empty.
-        assert_eq!(classify_backup_size(None), (true, false));
-        assert_eq!(classify_backup_size(Some(0)), (true, false));
-        // Bare .ab header (targetSDK 31+ apps) → header-only warning.
-        assert_eq!(classify_backup_size(Some(24)), (false, true));
-        assert_eq!(classify_backup_size(Some(512)), (false, true));
-        // Real payload → a genuine backup.
-        assert_eq!(classify_backup_size(Some(513)), (false, false));
-        assert_eq!(classify_backup_size(Some(4096)), (false, false));
     }
 
     #[test]

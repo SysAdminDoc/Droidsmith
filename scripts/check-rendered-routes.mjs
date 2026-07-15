@@ -188,6 +188,24 @@ async function runDesktopFlow(browser) {
   await page.getByRole("button", { name: /Apps/ }).click();
   await page.getByText("com.example.app").waitFor();
   await page.getByText("com.android.settings").waitFor();
+  const exampleAppRow = page
+    .getByRole("row")
+    .filter({ hasText: "com.example.app" });
+  await exampleAppRow.getByRole("button", { name: "Export APKs" }).click();
+  await page.getByText("APK export verified", { exact: true }).waitFor();
+  await page.getByText(/Exported and hashed 2 base\/split APK files/).waitFor();
+  await page.getByRole("button", { name: "Dismiss", exact: true }).click();
+  await page.getByRole("button", { name: "Show advanced data export" }).click();
+  await exampleAppRow.getByRole("button", { name: "Legacy data…" }).click();
+  await page
+    .getByText("Review deprecated data export", { exact: true })
+    .waitFor();
+  await page.getByRole("button", { name: "Continue legacy export" }).click();
+  await page.getByText("Legacy archive inspected", { exact: true }).waitFor();
+  await page
+    .getByText(/Restore compatibility and completeness are not verified/)
+    .waitFor();
+  await page.getByRole("button", { name: "Dismiss", exact: true }).click();
   await page.evaluate(() => window.__DROIDSMITH_MOCK_HOTPLUG__(false));
   await page.getByText("No authorized devices", { exact: true }).waitFor();
   await page.getByText("com.example.app").waitFor({ state: "hidden" });
@@ -588,6 +606,14 @@ async function installTauriMock(page) {
               id: "123e4567-e89b-42d3-a456-426614174005",
               local_path: "C:/Users/QA/Desktop/imported-recovery.json",
             },
+            package_export_save: {
+              id: "123e4567-e89b-42d3-a456-426614174006",
+              local_path: "C:/Users/QA/Desktop/com.example.app.apks.zip",
+            },
+            backup_save: {
+              id: "123e4567-e89b-42d3-a456-426614174007",
+              local_path: "C:/Users/QA/Desktop/com.example.app.legacy-data.zip",
+            },
           };
           const selection = selections[args.purpose];
           if (!selection) {
@@ -766,6 +792,50 @@ async function installTauriMock(page) {
         }
         if (cmd === "list_packages") {
           return filterPackages(packages, args.filter ?? "all");
+        }
+        if (cmd === "preflight_package_backup") {
+          return {
+            package: args.package,
+            android_user: args.userId,
+            default_capability: "apk_export",
+            legacy_capability: "legacy_data_eligible",
+            apk_paths: [
+              "/data/app/com.example/base.apk",
+              "/data/app/com.example/split_config.en.apk",
+            ],
+            evidence: {
+              device_sdk: 35,
+              target_sdk: 30,
+              debuggable: false,
+              allow_backup: true,
+              reason:
+                "Package targets an API below the Android 12 exclusion threshold.",
+            },
+          };
+        }
+        if (cmd === "export_package_apks") {
+          if (args.path_grant !== "123e4567-e89b-42d3-a456-426614174006") {
+            throw new Error("APK export did not consume its scoped path grant");
+          }
+          return packageExportResult(
+            "apk_export",
+            "C:/Users/QA/Desktop/com.example.app.apks.zip",
+            null,
+            2,
+          );
+        }
+        if (cmd === "backup_package") {
+          if (args.path_grant !== "123e4567-e89b-42d3-a456-426614174007") {
+            throw new Error(
+              "Legacy export did not consume its scoped path grant",
+            );
+          }
+          return packageExportResult(
+            "legacy_data",
+            "C:/Users/QA/Desktop/com.example.app.legacy-data.zip",
+            "app_data_entries_detected",
+            1,
+          );
         }
         if (cmd === "export_recovery_baseline") {
           if (args.path_grant !== "123e4567-e89b-42d3-a456-426614174004") {
@@ -1186,6 +1256,48 @@ async function installTauriMock(page) {
       if (filter === "enabled") return items.filter((item) => item.enabled);
       if (filter === "disabled") return items.filter((item) => !item.enabled);
       return items;
+    }
+
+    function packageExportResult(
+      mode,
+      localPath,
+      legacyContent,
+      artifactCount,
+    ) {
+      return {
+        artifact: {
+          local_path: localPath,
+          size_bytes: 8192,
+          sha256: "d".repeat(64),
+        },
+        manifest: {
+          format: "droidsmith_package_export",
+          schema_version: 1,
+          created_at: "2026-07-15T09:00:00Z",
+          mode,
+          package: "com.example.app",
+          android_user: 0,
+          device: {
+            device_identity_sha256: "e".repeat(64),
+            build_identity_sha256: "f".repeat(64),
+          },
+          eligibility: {
+            device_sdk: 35,
+            target_sdk: 30,
+            debuggable: false,
+            allow_backup: true,
+            reason:
+              "Package targets an API below the Android 12 exclusion threshold.",
+          },
+          legacy_content: legacyContent,
+          artifacts: Array.from({ length: artifactCount }, (_, index) => ({
+            name: index === 0 ? "base.apk" : `split-${index}.apk`,
+            role: mode === "apk_export" ? "apk" : "legacy_android_backup",
+            size_bytes: 4096,
+            sha256: String(index + 1).repeat(64),
+          })),
+        },
+      };
     }
 
     function planFor(request) {

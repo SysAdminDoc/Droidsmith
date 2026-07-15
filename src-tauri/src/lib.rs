@@ -2,6 +2,7 @@
 /// this crate as `droidsmith_lib`) can reach the transport and action
 /// types. The Tauri runtime still goes through `crate::adb`.
 pub mod adb;
+mod backup;
 mod commands;
 mod diagnostics;
 mod fs_util;
@@ -25,14 +26,15 @@ pub mod time;
 
 use commands::{
     apply_action, apply_device_control, backup_package, cancel_operation, connect_wireless,
-    explain_failure, export_recovery_baseline, extract_apk, fastboot_getvar, get_device_info,
-    heartbeat, inspect_recovery_baseline, install_apk, journal_list, journal_undo, launch_scrcpy,
-    list_devices, list_fastboot_devices, list_network_connections, list_packages, list_packs,
-    list_permissions, list_processes, list_remote_files, list_users, list_wireless_services,
-    locate_fastboot, locate_scrcpy, pair_wireless, plan_action, plan_pack, plan_shell_action,
-    preview_diagnostics, pull_file, push_file, recover_adb, save_diagnostics, save_logcat_export,
-    scrcpy_session_status, select_host_path, set_permission, shell_run, stop_scrcpy, stream_logcat,
-    take_screenshot, watch_devices, wipe_diagnostics,
+    explain_failure, export_package_apks, export_recovery_baseline, extract_apk, fastboot_getvar,
+    get_device_info, heartbeat, inspect_recovery_baseline, install_apk, journal_list, journal_undo,
+    launch_scrcpy, list_devices, list_fastboot_devices, list_network_connections, list_packages,
+    list_packs, list_permissions, list_processes, list_remote_files, list_users,
+    list_wireless_services, locate_fastboot, locate_scrcpy, pair_wireless, plan_action, plan_pack,
+    plan_shell_action, preflight_package_backup, preview_diagnostics, pull_file, push_file,
+    recover_adb, save_diagnostics, save_logcat_export, scrcpy_session_status, select_host_path,
+    set_permission, shell_run, stop_scrcpy, stream_logcat, take_screenshot, watch_devices,
+    wipe_diagnostics,
 };
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -86,6 +88,8 @@ pub fn run() {
             list_remote_files,
             push_file,
             pull_file,
+            preflight_package_backup,
+            export_package_apks,
             backup_package,
             list_network_connections,
             list_permissions,

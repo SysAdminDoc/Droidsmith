@@ -16,6 +16,7 @@ const MAX_ACTIVE_GRANTS: usize = 64;
 pub enum HostPathPurpose {
     DiagnosticsSave,
     LogcatSave,
+    PackageExportSave,
     BackupSave,
     ScreenshotSave,
     PullSave,
@@ -32,6 +33,7 @@ impl HostPathPurpose {
             self,
             Self::DiagnosticsSave
                 | Self::LogcatSave
+                | Self::PackageExportSave
                 | Self::BackupSave
                 | Self::ScreenshotSave
                 | Self::PullSave
@@ -44,7 +46,8 @@ impl HostPathPurpose {
         match self {
             Self::DiagnosticsSave => "Save Droidsmith support bundle",
             Self::LogcatSave => "Export Logcat",
-            Self::BackupSave => "Save Android backup",
+            Self::PackageExportSave => "Export package APKs",
+            Self::BackupSave => "Save advanced legacy data export",
             Self::ScreenshotSave => "Save screenshot",
             Self::PullSave => "Save device file",
             Self::ExtractApkSave => "Save extracted APK",
@@ -59,7 +62,8 @@ impl HostPathPurpose {
         match self {
             Self::DiagnosticsSave => Some(("JSON", &["json"])),
             Self::LogcatSave => Some(("Logcat", &["log", "txt"])),
-            Self::BackupSave => Some(("Android backup", &["ab"])),
+            Self::PackageExportSave => Some(("Droidsmith package export", &["zip"])),
+            Self::BackupSave => Some(("Droidsmith legacy data export", &["zip"])),
             Self::ScreenshotSave => Some(("PNG", &["png"])),
             Self::ExtractApkSave => Some(("APK", &["apk"])),
             Self::RecoveryBaselineSave | Self::RecoveryBaselineOpen => {

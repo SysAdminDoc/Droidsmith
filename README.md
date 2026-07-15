@@ -15,9 +15,9 @@ root, without a closed-source binary, without paywalled features.
 Functional early desktop build. The Tauri shell builds and runs; shipped routes
 cover device readiness, wireless ADB pairing/connect, package inventory and
 actions, atomic APK/APKS/XAPK/APKM installation with guarded failure remedies,
-package backups, audited permission/device-control mutations, reviewed shell
+hashed base/split APK export, audited permission/device-control mutations, reviewed shell
 mutations, journal undo, debloat queue recovery, scrcpy launch and session
-supervision, cancellable background shell/backup/file operations, incremental
+supervision, cancellable background shell/export/file operations, incremental
 Logcat streaming and export, live cross-route device hot-plug updates, ADB
 server/mDNS/Wi-Fi 2.0 health with audited guided recovery, provenance-classified
 USB/TLS/legacy/unknown transports with fail-closed unsafe-TCP acknowledgement,
@@ -32,6 +32,15 @@ when PackageManager proves its APK remains retained for that Android user;
 user-installed `/data/app` packages and unknown/OEM states remain explicitly
 irreversible. Recovery uses `install-existing`, restores the prior enabled state,
 and verifies the result before linking the undo journal row.
+
+Package export defaults to a ZIP containing every base/split APK plus a
+versioned manifest with artifact hashes and hashed device/build identity. The
+deprecated `adb backup` path is hidden under Advanced, preflights target SDK,
+debuggable, and `allowBackup` evidence when OEM output exposes it, and emits an
+uncompressed `.ab` inside a manifest-bearing ZIP only after strict header/TAR
+validation. Detected data entries are not a promise of completeness or future
+restore compatibility; Droidsmith does not present `adb restore` as a reliable
+recovery path.
 
 Current blockers are tracked separately in [Roadmap_Blocked.md](Roadmap_Blocked.md):
 signed release pipeline, bundled platform-tools wiring, UAD-NG redistribution,

@@ -593,6 +593,7 @@ export async function callPreviewDiagnostics(): Promise<SupportPreview> {
 export type HostPathPurpose =
   | "diagnostics_save"
   | "logcat_save"
+  | "package_export_save"
   | "backup_save"
   | "screenshot_save"
   | "pull_save"
@@ -746,14 +747,53 @@ export async function callListNetworkConnections(
   return invoke<NetworkConnection[]>("list_network_connections", { target });
 }
 
-export type BackupPackageResult = {
-  local_path: string;
-  stdout: string;
-  size_bytes: number | null;
-  sha256: string;
-  empty: boolean;
-  /** Non-empty but header-only: `adb backup` excluded the app's data. */
-  header_only: boolean;
+export type BackupCapability =
+  | "apk_export"
+  | "legacy_data_eligible"
+  | "legacy_data_blocked"
+  | "legacy_data_unknown";
+
+export type LegacyEligibilityEvidence = {
+  device_sdk: number | null;
+  target_sdk: number | null;
+  debuggable: boolean | null;
+  allow_backup: boolean | null;
+  reason: string;
+};
+
+export type PackageBackupPreflight = {
+  package: string;
+  android_user: number;
+  default_capability: "apk_export";
+  legacy_capability: BackupCapability;
+  apk_paths: string[];
+  evidence: LegacyEligibilityEvidence;
+};
+
+export type PackageExportManifest = {
+  format: "droidsmith_package_export";
+  schema_version: 1;
+  created_at: string;
+  mode: "apk_export" | "legacy_data";
+  package: string;
+  android_user: number;
+  device: {
+    device_identity_sha256: string;
+    build_identity_sha256: string | null;
+  };
+  eligibility: LegacyEligibilityEvidence;
+  legacy_content: "app_data_entries_detected" | "no_app_data_entries" | null;
+  artifacts: Array<{
+    name: string;
+    role: string;
+    size_bytes: number;
+    sha256: string;
+  }>;
+};
+
+export type PackageExportResult = {
+  artifact: HostArtifact;
+  manifest: PackageExportManifest;
 };
 
 export type HostArtifact = {
@@ -763,16 +803,44 @@ export type HostArtifact = {
   sha256: string;
 };
 
+export async function callPreflightPackageBackup(
+  target: DeviceTarget,
+  pkg: string,
+  userId: number,
+): Promise<PackageBackupPreflight> {
+  return invoke<PackageBackupPreflight>("preflight_package_backup", {
+    target,
+    package: pkg,
+    userId,
+  });
+}
+
+export async function callExportPackageApks(
+  target: DeviceTarget,
+  pkg: string,
+  userId: number,
+  pathGrant: string,
+  options?: OperationOptions,
+): Promise<PackageExportResult> {
+  return invokeOperation<PackageExportResult>(
+    "export_package_apks",
+    { target, package: pkg, userId, path_grant: pathGrant },
+    "package-export",
+    options,
+  );
+}
+
 export async function callBackupPackage(
   target: DeviceTarget,
   pkg: string,
+  userId: number,
   pathGrant: string,
   options?: OperationOptions,
-): Promise<BackupPackageResult> {
-  return invokeOperation<BackupPackageResult>(
+): Promise<PackageExportResult> {
+  return invokeOperation<PackageExportResult>(
     "backup_package",
-    { target, package: pkg, path_grant: pathGrant },
-    "backup",
+    { target, package: pkg, userId, path_grant: pathGrant },
+    "legacy-backup",
     options,
   );
 }

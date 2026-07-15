@@ -21,7 +21,7 @@ pub enum ArtifactKind {
     AnyFile,
     Png,
     Apk,
-    AndroidBackup,
+    Zip,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -165,7 +165,7 @@ impl Drop for StagedArtifact {
     }
 }
 
-fn validate_artifact(
+pub(crate) fn validate_artifact(
     path: &Path,
     size_bytes: u64,
     kind: ArtifactKind,
@@ -189,7 +189,7 @@ fn validate_artifact(
                 && header.get(12..16) == Some(b"IHDR".as_slice())
         }
         ArtifactKind::Apk => size_bytes >= 30 && header.starts_with(b"PK\x03\x04"),
-        ArtifactKind::AndroidBackup => header.starts_with(b"ANDROID BACKUP\n"),
+        ArtifactKind::Zip => size_bytes >= 30 && header.starts_with(b"PK\x03\x04"),
     };
     if valid {
         Ok(())
@@ -200,13 +200,13 @@ fn validate_artifact(
                 ArtifactKind::AnyFile => "file",
                 ArtifactKind::Png => "PNG",
                 ArtifactKind::Apk => "APK/ZIP",
-                ArtifactKind::AndroidBackup => "Android backup",
+                ArtifactKind::Zip => "ZIP",
             }
         )))
     }
 }
 
-fn sha256_file(path: &Path) -> std::io::Result<String> {
+pub(crate) fn sha256_file(path: &Path) -> std::io::Result<String> {
     let mut file = File::open(path)?;
     let mut hasher = Sha256::new();
     let mut buffer = [0_u8; 64 * 1024];
@@ -421,9 +421,9 @@ mod tests {
                 ArtifactKind::Apk,
             ),
             (
-                "package.ab",
-                b"ANDROID BACKUP\n5\n0\nnone\nbody".as_slice(),
-                ArtifactKind::AndroidBackup,
+                "bundle.zip",
+                b"PK\x03\x04abcdefghijklmnopqrstuvwxyz".as_slice(),
+                ArtifactKind::Zip,
             ),
         ] {
             let destination = dir.join(name);

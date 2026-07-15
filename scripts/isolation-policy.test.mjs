@@ -222,6 +222,24 @@ test("allows bounded recovery baseline export and read-only inspection", () => {
   assert.equal(hook(invalid).cmd, blockedCommand);
 });
 
+test("allows scoped package exports and rejects malformed Android users", () => {
+  for (const cmd of ["export_package_apks", "backup_package"]) {
+    const valid = message(cmd, {
+      target,
+      package: "com.example.app",
+      userId: 10,
+      path_grant: pathGrant,
+      operation_id: `${cmd}-123`,
+      on_event: 99,
+    });
+    assert.equal(hook(valid), valid);
+    assert.equal(
+      hook(message(cmd, { ...valid.payload, userId: -1 })).cmd,
+      blockedCommand,
+    );
+  }
+});
+
 test("allows only bounded native dialog purposes and file names", () => {
   const valid = message("select_host_path", {
     purpose: "screenshot_save",
@@ -233,6 +251,11 @@ test("allows only bounded native dialog purposes and file names", () => {
     suggested_name: null,
   });
   assert.equal(hook(recovery), recovery);
+  const packageExport = message("select_host_path", {
+    purpose: "package_export_save",
+    suggested_name: "com.example.app.apks.zip",
+  });
+  assert.equal(hook(packageExport), packageExport);
 
   for (const payload of [
     { purpose: "arbitrary_write", suggested_name: "capture.png" },

@@ -5,6 +5,7 @@ import {
   callApplyAction,
   callBackupPackage,
   callCancelOperation,
+  callExportPackageApks,
   callExportRecoveryBaseline,
   callInspectRecoveryBaseline,
   callInstallApk,
@@ -14,6 +15,7 @@ import {
   callListPermissions,
   callListUsers,
   callPlanAction,
+  callPreflightPackageBackup,
   callSelectHostPath,
   callSetPermission,
   deviceTarget,
@@ -28,6 +30,7 @@ import {
   type InstallPackageResult,
   type PackageFilter,
   type OperationEvent,
+  type PackageBackupPreflight,
   type PermissionInfo,
   type PlannedAction,
   type RecoveryBaselineDiff,
@@ -39,9 +42,10 @@ import {
 import { formatDateTime } from "../lib/i18n";
 
 import {
-  backupDefaultFileName,
-  backupDisplayState,
+  canRunLegacyExport,
   formatBackupSize,
+  packageExportDefaultFileName,
+  packageExportDisplayState,
 } from "./appsBackup";
 import { journalEntryStatus, type JournalEntryStatus } from "./appsJournal";
 import { useFocusTrap } from "../lib/useFocusTrap";
@@ -89,6 +93,11 @@ type BackupNotice = {
   showLimitations?: boolean;
   operationId?: string;
   progress?: string;
+  evidence?: PackageBackupPreflight["evidence"];
+  pendingLegacy?: {
+    package: string;
+    preflight: PackageBackupPreflight;
+  };
 };
 
 type InstallState =
@@ -150,6 +159,7 @@ export default function AppsRoute() {
   const [search, setSearch] = useState("");
   const [inspectedPkg, setInspectedPkg] = useState<string | null>(null);
   const [backupNotice, setBackupNotice] = useState<BackupNotice | null>(null);
+  const [showAdvancedBackups, setShowAdvancedBackups] = useState(false);
   const [installState, setInstallState] = useState<InstallState>({
     kind: "idle",
   });
@@ -320,113 +330,154 @@ export default function AppsRoute() {
     [authorizedTarget, selectedDevice, selectedUser, usersReady],
   );
 
-  const startBackup = useCallback(
-    async (pkg: string) => {
+  const runPackageExport = useCallback(
+    async (
+      pkg: string,
+      mode: "apk_export" | "legacy_data",
+      inspected?: PackageBackupPreflight,
+    ) => {
       if (!selectedDevice || !authorizedTarget || !usersReady) return;
       let startedOperationId: string | null = null;
       let startedGeneration: number | null = null;
-      setBackupNotice({
-        title: t("apps.backupChooseDestination"),
-        message: t("apps.backupLimitations"),
-        tone: "info",
-      });
       try {
+        const preflight =
+          inspected ??
+          (await callPreflightPackageBackup(
+            authorizedTarget,
+            pkg,
+            selectedUser,
+          ));
+        if (mode === "legacy_data" && !canRunLegacyExport(preflight)) {
+          setBackupNotice({
+            title: t("apps.legacyBlockedTitle"),
+            message: preflight.evidence.reason,
+            tone: "warning",
+            evidence: preflight.evidence,
+            showLimitations: true,
+          });
+          return;
+        }
+
         const pathGrant = await callSelectHostPath(
-          "backup_save",
-          backupDefaultFileName(pkg),
+          mode === "apk_export" ? "package_export_save" : "backup_save",
+          packageExportDefaultFileName(pkg, mode),
         );
         if (!pathGrant) {
           setBackupNotice({
-            title: t("apps.backupCancelledTitle"),
-            message: t("apps.backupCancelled"),
+            title: t("apps.exportCancelledTitle"),
+            message: t("apps.exportCancelled"),
             tone: "neutral",
           });
           return;
         }
 
-        setBackupNotice({
-          title: t("apps.backupRunningTitle", { package: pkg }),
-          message: t("apps.backupLimitations"),
-          tone: "info",
-          path: pathGrant.local_path,
-        });
-
-        const operationId = newOperationId("backup");
+        const operationId = newOperationId(
+          mode === "apk_export" ? "package-export" : "legacy-backup",
+        );
         const generation = backupGenerationRef.current + 1;
         startedOperationId = operationId;
         startedGeneration = generation;
         backupGenerationRef.current = generation;
         activeBackupRef.current = operationId;
-        setBackupNotice((previous) =>
-          previous
-            ? {
-                ...previous,
-                operationId,
-                progress: t("apps.backupStarting"),
-              }
-            : previous,
-        );
+        setBackupNotice({
+          title:
+            mode === "apk_export"
+              ? t("apps.apkExportRunningTitle", { package: pkg })
+              : t("apps.legacyRunningTitle", { package: pkg }),
+          message:
+            mode === "apk_export"
+              ? t("apps.apkExportRunningBody", {
+                  count: preflight.apk_paths.length,
+                })
+              : t("apps.legacyLimitations"),
+          tone: "info",
+          path: pathGrant.local_path,
+          operationId,
+          progress: t("apps.exportStarting"),
+          evidence: preflight.evidence,
+          showLimitations: mode === "legacy_data",
+        });
 
-        const result = await callBackupPackage(
-          authorizedTarget,
-          pkg,
-          pathGrant.id,
-          {
-            operationId,
-            onEvent: (event: OperationEvent) => {
-              if (
-                activeBackupRef.current !== operationId ||
-                backupGenerationRef.current !== generation
-              )
-                return;
-              setBackupNotice((previous) => {
-                if (!previous || previous.operationId !== operationId)
-                  return previous;
-                if (event.kind === "progress") {
-                  return {
-                    ...previous,
-                    progress: t("apps.backupProgress", {
+        const options = {
+          operationId,
+          onEvent: (event: OperationEvent) => {
+            if (
+              activeBackupRef.current !== operationId ||
+              backupGenerationRef.current !== generation
+            )
+              return;
+            setBackupNotice((previous) => {
+              if (!previous || previous.operationId !== operationId)
+                return previous;
+              if (event.kind === "progress") {
+                return {
+                  ...previous,
+                  progress:
+                    event.message ??
+                    t("apps.exportProgress", {
                       seconds: Math.max(
                         1,
                         Math.round((event.elapsed_ms ?? 0) / 1000),
                       ),
                     }),
-                  };
-                }
-                if (event.kind === "output" && event.chunk) {
-                  return {
-                    ...previous,
-                    output: `${previous.output ?? ""}${event.chunk}`.slice(
-                      -64 * 1024,
-                    ),
-                  };
-                }
-                return previous;
-              });
-            },
+                };
+              }
+              if (event.kind === "output" && event.chunk) {
+                return {
+                  ...previous,
+                  output: `${previous.output ?? ""}${event.chunk}`.slice(
+                    -64 * 1024,
+                  ),
+                };
+              }
+              return previous;
+            });
           },
-        );
+        };
+        const result =
+          mode === "apk_export"
+            ? await callExportPackageApks(
+                authorizedTarget,
+                pkg,
+                selectedUser,
+                pathGrant.id,
+                options,
+              )
+            : await callBackupPackage(
+                authorizedTarget,
+                pkg,
+                selectedUser,
+                pathGrant.id,
+                options,
+              );
         if (backupGenerationRef.current !== generation) return;
         activeBackupRef.current = null;
-        const displayState = backupDisplayState(result);
+        const displayState = packageExportDisplayState(result);
         const titleByState: Record<typeof displayState, string> = {
-          empty: t("apps.backupEmptyTitle"),
-          header_only: t("apps.backupHeaderOnlyTitle"),
-          saved: t("apps.backupSavedTitle"),
+          apk_exported: t("apps.apkExportSavedTitle"),
+          legacy_entries_detected: t("apps.legacyInspectedTitle"),
+          legacy_no_data: t("apps.legacyNoDataTitle"),
         };
         const messageByState: Record<typeof displayState, string> = {
-          empty: t("apps.backupEmptyBody"),
-          header_only: t("apps.backupHeaderOnlyBody"),
-          saved: t("apps.backupSaved", { file: result.local_path }),
+          apk_exported: t("apps.apkExportSaved", {
+            file: result.artifact.local_path,
+            count: result.manifest.artifacts.length,
+          }),
+          legacy_entries_detected: t("apps.legacyEntriesDetected", {
+            file: result.artifact.local_path,
+          }),
+          legacy_no_data: t("apps.legacyNoDataBody", {
+            file: result.artifact.local_path,
+          }),
         };
         setBackupNotice({
           title: titleByState[displayState],
           message: messageByState[displayState],
-          tone: displayState === "saved" ? "success" : "warning",
-          path: result.local_path,
-          output: result.stdout,
-          sizeBytes: result.size_bytes,
-          showLimitations: true,
+          tone: displayState === "apk_exported" ? "success" : "warning",
+          path: result.artifact.local_path,
+          sizeBytes: result.artifact.size_bytes,
+          showLimitations: mode === "legacy_data",
+          evidence: result.manifest.eligibility,
         });
       } catch (e) {
         if (
@@ -437,15 +488,51 @@ export default function AppsRoute() {
           return;
         activeBackupRef.current = null;
         setBackupNotice({
-          title: t("apps.backupFailedTitle"),
-          message: t("apps.backupFailed", {
+          title: t("apps.exportFailedTitle"),
+          message: t("apps.exportFailed", {
             message: e instanceof Error ? e.message : String(e),
           }),
           tone: "danger",
         });
       }
     },
-    [authorizedTarget, selectedDevice, t, usersReady],
+    [authorizedTarget, selectedDevice, selectedUser, t, usersReady],
+  );
+
+  const inspectLegacyExport = useCallback(
+    async (pkg: string) => {
+      if (!authorizedTarget || !usersReady) return;
+      try {
+        const preflight = await callPreflightPackageBackup(
+          authorizedTarget,
+          pkg,
+          selectedUser,
+        );
+        const runnable = canRunLegacyExport(preflight);
+        setBackupNotice({
+          title: runnable
+            ? t("apps.legacyReviewTitle")
+            : t("apps.legacyBlockedTitle"),
+          message: preflight.evidence.reason,
+          tone:
+            preflight.legacy_capability === "legacy_data_eligible"
+              ? "info"
+              : "warning",
+          evidence: preflight.evidence,
+          showLimitations: true,
+          pendingLegacy: runnable ? { package: pkg, preflight } : undefined,
+        });
+      } catch (error) {
+        setBackupNotice({
+          title: t("apps.exportFailedTitle"),
+          message: t("apps.exportFailed", {
+            message: error instanceof Error ? error.message : String(error),
+          }),
+          tone: "danger",
+        });
+      }
+    },
+    [authorizedTarget, selectedUser, t, usersReady],
   );
 
   const cancelBackup = useCallback(async () => {
@@ -892,6 +979,17 @@ export default function AppsRoute() {
                   </select>
                 </label>
               )}
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                aria-pressed={showAdvancedBackups}
+                onClick={() => setShowAdvancedBackups((visible) => !visible)}
+              >
+                {showAdvancedBackups
+                  ? t("apps.hideAdvancedBackup")
+                  : t("apps.showAdvancedBackup")}
+              </Button>
               <div className="flex-1" />
               <FieldInput
                 type="text"
@@ -920,7 +1018,9 @@ export default function AppsRoute() {
                 totalCount={pkgState.packages.length}
                 onAction={startAction}
                 onInspect={setInspectedPkg}
-                onBackup={(pkg) => void startBackup(pkg)}
+                onExport={(pkg) => void runPackageExport(pkg, "apk_export")}
+                onLegacyExport={(pkg) => void inspectLegacyExport(pkg)}
+                showLegacyExport={showAdvancedBackups}
               />
             )}
 
@@ -947,6 +1047,13 @@ export default function AppsRoute() {
             notice={backupNotice}
             onDismiss={() => setBackupNotice(null)}
             onCancel={() => void cancelBackup()}
+            onContinueLegacy={(pending) =>
+              void runPackageExport(
+                pending.package,
+                "legacy_data",
+                pending.preflight,
+              )
+            }
           />
         )}
 
@@ -1189,10 +1296,14 @@ function BackupStatePanel({
   notice,
   onDismiss,
   onCancel,
+  onContinueLegacy,
 }: {
   notice: BackupNotice;
   onDismiss: () => void;
   onCancel: () => void;
+  onContinueLegacy: (
+    pending: NonNullable<BackupNotice["pendingLegacy"]>,
+  ) => void;
 }) {
   const { t } = useTranslation();
   const formattedSize =
@@ -1209,6 +1320,20 @@ function BackupStatePanel({
           <Button type="button" size="sm" variant="danger" onClick={onCancel}>
             {t("common.cancel")}
           </Button>
+        ) : notice.pendingLegacy ? (
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" size="sm" variant="ghost" onClick={onDismiss}>
+              {t("common.cancel")}
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="primary"
+              onClick={() => onContinueLegacy(notice.pendingLegacy!)}
+            >
+              {t("apps.continueLegacyExport")}
+            </Button>
+          </div>
         ) : (
           <Button type="button" size="sm" variant="ghost" onClick={onDismiss}>
             {t("common.dismiss")}
@@ -1224,8 +1349,34 @@ function BackupStatePanel({
       )}
       {notice.showLimitations && (
         <p className="mt-2 text-xs leading-5 text-anvil-400">
-          {t("apps.backupLimitations")}
+          {t("apps.legacyLimitations")}
         </p>
+      )}
+      {notice.evidence && (
+        <dl className="mt-3 grid gap-2 text-xs sm:grid-cols-[8rem_minmax(0,1fr)]">
+          <dt className="font-medium text-anvil-400">{t("apps.deviceApi")}</dt>
+          <dd className="font-mono text-anvil-100">
+            {notice.evidence.device_sdk ?? t("common.notReported")}
+          </dd>
+          <dt className="font-medium text-anvil-400">{t("apps.targetApi")}</dt>
+          <dd className="font-mono text-anvil-100">
+            {notice.evidence.target_sdk ?? t("common.notReported")}
+          </dd>
+          <dt className="font-medium text-anvil-400">
+            {t("apps.allowBackup")}
+          </dt>
+          <dd className="font-mono text-anvil-100">
+            {notice.evidence.allow_backup === null
+              ? t("common.notReported")
+              : String(notice.evidence.allow_backup)}
+          </dd>
+          <dt className="font-medium text-anvil-400">{t("apps.debuggable")}</dt>
+          <dd className="font-mono text-anvil-100">
+            {notice.evidence.debuggable === null
+              ? t("common.notReported")
+              : String(notice.evidence.debuggable)}
+          </dd>
+        </dl>
       )}
       {(notice.path || formattedSize !== undefined) && (
         <dl className="mt-3 grid gap-2 text-xs sm:grid-cols-[8rem_minmax(0,1fr)]">
@@ -1362,13 +1513,17 @@ function PackageTable({
   totalCount,
   onAction,
   onInspect,
-  onBackup,
+  onExport,
+  onLegacyExport,
+  showLegacyExport,
 }: {
   packages: AppPackage[];
   totalCount: number;
   onAction: (pkg: string, kind: ActionKind) => void;
   onInspect: (pkg: string) => void;
-  onBackup: (pkg: string) => void;
+  onExport: (pkg: string) => void;
+  onLegacyExport: (pkg: string) => void;
+  showLegacyExport: boolean;
 }) {
   const { t } = useTranslation();
 
@@ -1498,10 +1653,20 @@ function PackageTable({
                         type="button"
                         size="sm"
                         variant="ghost"
-                        onClick={() => onBackup(pkg.package)}
+                        onClick={() => onExport(pkg.package)}
                       >
-                        {t("apps.backup")}
+                        {t("apps.exportApks")}
                       </Button>
+                      {showLegacyExport && (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => onLegacyExport(pkg.package)}
+                        >
+                          {t("apps.legacyData")}
+                        </Button>
+                      )}
                     </div>
                   </TableCell>
                 </tr>

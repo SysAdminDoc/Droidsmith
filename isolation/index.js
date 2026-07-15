@@ -15,6 +15,7 @@
     "list_wireless_services",
     "get_device_info",
     "list_packages",
+    "preflight_package_backup",
     "list_users",
     "list_packs",
     "plan_pack",
@@ -49,7 +50,11 @@
     inspect_recovery_baseline: [["target", "path_grant"], []],
     journal_undo: [["target", "entry_id"], []],
     backup_package: [
-      ["target", "package", "path_grant", "operation_id", "on_event"],
+      ["target", "package", "userId", "path_grant", "operation_id", "on_event"],
+      [],
+    ],
+    export_package_apks: [
+      ["target", "package", "userId", "path_grant", "operation_id", "on_event"],
       [],
     ],
     push_file: [
@@ -96,6 +101,7 @@
   const PATH_PURPOSES = new Set([
     "diagnostics_save",
     "logcat_save",
+    "package_export_save",
     "backup_save",
     "screenshot_save",
     "pull_save",
