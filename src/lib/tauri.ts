@@ -12,6 +12,9 @@ import {
   type ApplyActionResult as GeneratedApplyActionResult,
   type BaselineActionInput,
   type BaselinePack,
+  type BatchActionItemResult as GeneratedBatchActionItemResult,
+  type BatchActionPlan as GeneratedBatchActionPlan,
+  type BatchActionResult as GeneratedBatchActionResult,
   type BugreportCaptureResult,
   type Device,
   type DeviceInfo,
@@ -86,6 +89,7 @@ export type ActionContext = RequiredFields<
   | "shell_argv"
   | "transport_override"
   | "restore_enabled_state"
+  | "batch_id"
 >;
 export type ActionRequest = Omit<
   GeneratedActionRequest,
@@ -116,6 +120,18 @@ export type JournalEntry = Omit<
 };
 export type ApplyActionResult = Omit<GeneratedApplyActionResult, "entry"> & {
   entry: JournalEntry;
+};
+export type BatchActionPlan = Omit<GeneratedBatchActionPlan, "plans"> & {
+  plans: PlannedAction[];
+};
+export type BatchActionItemResult = Omit<
+  GeneratedBatchActionItemResult,
+  "entry"
+> & {
+  entry: JournalEntry | null;
+};
+export type BatchActionResult = Omit<GeneratedBatchActionResult, "items"> & {
+  items: BatchActionItemResult[];
 };
 export type PackEntry = RequiredFields<
   GeneratedPackEntry,
@@ -482,10 +498,26 @@ export async function callPlanAction(
   return rendererRecord(await commands.planAction(request));
 }
 
+export async function callPlanActionBatch(
+  requests: ActionRequest[],
+): Promise<BatchActionPlan> {
+  return rendererRecord(
+    await commands.planActionBatch(requests),
+  ) as BatchActionPlan;
+}
+
 export async function callApplyAction(
   plan: PlannedAction,
 ): Promise<ApplyActionResult> {
   return rendererRecord(await commands.applyAction(plan));
+}
+
+export async function callApplyActionBatch(
+  batch: BatchActionPlan,
+): Promise<BatchActionResult> {
+  return rendererRecord(
+    await commands.applyActionBatch(batch),
+  ) as BatchActionResult;
 }
 
 export async function callExportRecoveryBaseline(
@@ -522,6 +554,15 @@ export async function callJournalUndo(
   entryId: number,
 ): Promise<JournalEntry> {
   return rendererRecord(await commands.journalUndo(target, entryId));
+}
+
+export async function callJournalUndoBatch(
+  target: DeviceTarget,
+  batchId: string,
+): Promise<BatchActionResult> {
+  return rendererRecord(
+    await commands.journalUndoBatch(target, batchId),
+  ) as BatchActionResult;
 }
 
 export async function callListNetworkConnections(

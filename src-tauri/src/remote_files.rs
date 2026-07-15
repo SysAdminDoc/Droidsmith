@@ -183,6 +183,7 @@ pub fn action_plan(
             shell_argv: plan.argv.clone(),
             transport_override,
             restore_enabled_state: None,
+            batch_id: None,
         },
     });
     action.description = plan.description.clone();

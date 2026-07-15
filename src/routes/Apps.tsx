@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 
 import {
   callApplyAction,
+  callApplyActionBatch,
   callBackupPackage,
   callCancelOperation,
   callExportPackageApks,
@@ -12,10 +13,12 @@ import {
   callInstallApk,
   callJournalList,
   callJournalUndo,
+  callJournalUndoBatch,
   callListPackagesWithCapability,
   callListPermissions,
   callListUsers,
   callPlanAction,
+  callPlanActionBatch,
   callPreflightPackageBackup,
   callSelectHostPath,
   callSetPermission,
@@ -25,6 +28,9 @@ import {
   type AndroidUser,
   type AppPackage,
   type AppPackageMetadata,
+  type BatchActionItemResult,
+  type BatchActionPlan,
+  type BatchActionResult,
   type Device,
   type DeviceTarget,
   type JournalEntry,
@@ -81,7 +87,9 @@ type ActionState =
   | { kind: "idle" }
   | { kind: "confirming"; plan: PlannedAction }
   | { kind: "applying"; plan: PlannedAction }
-  | { kind: "success"; message: string }
+  | { kind: "confirming_batch"; plan: BatchActionPlan }
+  | { kind: "applying_batch"; plan: BatchActionPlan }
+  | { kind: "success"; message: string; details?: string[] }
   | { kind: "error"; message: string };
 
 type JournalState =
@@ -167,6 +175,8 @@ export default function AppsRoute() {
     kind: "idle",
   });
   const [undoingEntryId, setUndoingEntryId] = useState<number | null>(null);
+  const [undoingBatchId, setUndoingBatchId] = useState<string | null>(null);
+  const [selectedPackages, setSelectedPackages] = useState<string[]>([]);
   const [search, setSearch] = useState("");
   const [inspectedPkg, setInspectedPkg] = useState<string | null>(null);
   const [backupNotice, setBackupNotice] = useState<BackupNotice | null>(null);
@@ -359,6 +369,15 @@ export default function AppsRoute() {
     else setJournalState({ kind: "idle" });
   }, [selectedSerial, loadJournal]);
 
+  useEffect(() => {
+    if (pkgState.kind !== "ok") return;
+    const available = new Set(pkgState.packages.map((pkg) => pkg.package));
+    setSelectedPackages((previous) => {
+      const next = previous.filter((pkg) => available.has(pkg));
+      return next.length === previous.length ? previous : next;
+    });
+  }, [pkgState]);
+
   const startAction = useCallback(
     async (pkg: string, kind: ActionKind) => {
       if (!selectedDevice || !authorizedTarget || !usersReady) return;
@@ -379,6 +398,42 @@ export default function AppsRoute() {
       }
     },
     [authorizedTarget, selectedDevice, selectedUser, usersReady],
+  );
+
+  const startBatchAction = useCallback(
+    async (kind: ActionKind) => {
+      if (
+        !selectedDevice ||
+        !authorizedTarget ||
+        !usersReady ||
+        selectedPackages.length < 2
+      )
+        return;
+      try {
+        const plan = await callPlanActionBatch(
+          [...selectedPackages].sort().map((pkg) => ({
+            serial: selectedDevice.serial,
+            target: authorizedTarget,
+            package: pkg,
+            kind,
+            user_id: selectedUser,
+          })),
+        );
+        setActionState({ kind: "confirming_batch", plan });
+      } catch (error) {
+        setActionState({
+          kind: "error",
+          message: error instanceof Error ? error.message : String(error),
+        });
+      }
+    },
+    [
+      authorizedTarget,
+      selectedDevice,
+      selectedPackages,
+      selectedUser,
+      usersReady,
+    ],
   );
 
   const runPackageExport = useCallback(
@@ -722,15 +777,34 @@ export default function AppsRoute() {
   }, [installState, runInstall, t]);
 
   const confirmAction = useCallback(async () => {
-    if (actionState.kind !== "confirming") return;
-    const { plan } = actionState;
-    setActionState({ kind: "applying", plan });
     try {
-      await callApplyAction(plan);
-      setActionState({
-        kind: "success",
-        message: t("apps.planCompleted", { description: plan.description }),
-      });
+      if (actionState.kind === "confirming_batch") {
+        const plan = actionState.plan;
+        setActionState({ kind: "applying_batch", plan });
+        const result = await callApplyActionBatch(plan);
+        const failures = batchFailures(result);
+        setSelectedPackages(failures.map((item) => item.package));
+        setActionState({
+          kind: "success",
+          message: t("apps.batchCompleted", {
+            succeeded: result.items.length - failures.length,
+            failed: failures.length,
+          }),
+          details: failures.map(
+            (item) => `${item.package}: ${item.error ?? t("common.unknown")}`,
+          ),
+        });
+      } else if (actionState.kind === "confirming") {
+        const plan = actionState.plan;
+        setActionState({ kind: "applying", plan });
+        await callApplyAction(plan);
+        setActionState({
+          kind: "success",
+          message: t("apps.planCompleted", { description: plan.description }),
+        });
+      } else {
+        return;
+      }
       void loadPackages();
       void loadJournal();
     } catch (e) {
@@ -742,8 +816,18 @@ export default function AppsRoute() {
   }, [actionState, loadJournal, loadPackages, t]);
 
   const exportActionBaseline = useCallback(async () => {
-    if (actionState.kind !== "confirming" || !authorizedTarget) return;
-    const { plan } = actionState;
+    if (
+      (actionState.kind !== "confirming" &&
+        actionState.kind !== "confirming_batch") ||
+      !authorizedTarget
+    )
+      return;
+    const plans =
+      actionState.kind === "confirming"
+        ? [actionState.plan]
+        : actionState.plan.plans;
+    const first = plans[0];
+    if (!first) return;
     setRecoveryState({
       kind: "busy",
       message: t("apps.recoveryExporting"),
@@ -751,7 +835,9 @@ export default function AppsRoute() {
     try {
       const selected = await callSelectHostPath(
         "recovery_baseline_save",
-        recoveryFileName(plan.request.package),
+        plans.length === 1
+          ? recoveryFileName(first.request.package)
+          : recoveryBatchFileName(plans.length),
       );
       if (!selected) {
         setRecoveryState({ kind: "idle" });
@@ -759,12 +845,15 @@ export default function AppsRoute() {
       }
       const artifact = await callExportRecoveryBaseline(
         authorizedTarget,
-        plan.request.user_id,
-        [{ package: plan.request.package, kind: plan.request.kind }],
-        plan.request.pack_context
+        first.request.user_id,
+        plans.map((plan) => ({
+          package: plan.request.package,
+          kind: plan.request.kind,
+        })),
+        first.request.pack_context
           ? {
-              id: plan.request.pack_context.pack_id,
-              revision: plan.request.pack_context.revision,
+              id: first.request.pack_context.pack_id,
+              revision: first.request.pack_context.revision,
             }
           : null,
         selected.id,
@@ -862,6 +951,43 @@ export default function AppsRoute() {
     ],
   );
 
+  const undoJournalBatch = useCallback(
+    async (batchId: string) => {
+      if (!selectedDevice || !authorizedTarget || !usersReady) return;
+      setUndoingBatchId(batchId);
+      try {
+        const result = await callJournalUndoBatch(authorizedTarget, batchId);
+        const failures = batchFailures(result);
+        setActionState({
+          kind: "success",
+          message: t("apps.batchUndoCompleted", {
+            succeeded: result.items.length - failures.length,
+            failed: failures.length,
+          }),
+          details: failures.map(
+            (item) => `${item.package}: ${item.error ?? t("common.unknown")}`,
+          ),
+        });
+        await Promise.all([loadPackages(), loadJournal()]);
+      } catch (error) {
+        setActionState({
+          kind: "error",
+          message: error instanceof Error ? error.message : String(error),
+        });
+      } finally {
+        setUndoingBatchId(null);
+      }
+    },
+    [
+      authorizedTarget,
+      loadJournal,
+      loadPackages,
+      selectedDevice,
+      t,
+      usersReady,
+    ],
+  );
+
   const filteredPackages =
     pkgState.kind === "ok"
       ? pkgState.packages.filter((p) =>
@@ -873,6 +999,23 @@ export default function AppsRoute() {
             : true,
         )
       : [];
+  const selectedPackageSet = new Set(selectedPackages);
+  const selectedRows =
+    pkgState.kind === "ok"
+      ? pkgState.packages.filter((pkg) => selectedPackageSet.has(pkg.package))
+      : [];
+  const batchReady = selectedRows.length >= 2;
+  const canBatchDisable =
+    batchReady && selectedRows.every((pkg) => pkg.enabled && !pkg.archived);
+  const canBatchEnable =
+    batchReady && selectedRows.every((pkg) => !pkg.enabled && !pkg.archived);
+  const canBatchArchive =
+    batchReady &&
+    pkgState.kind === "ok" &&
+    pkgState.archive.supported &&
+    selectedRows.every((pkg) => !pkg.system && !pkg.archived);
+  const canBatchUnarchive =
+    batchReady && selectedRows.every((pkg) => pkg.archived);
 
   return (
     <>
@@ -977,6 +1120,7 @@ export default function AppsRoute() {
               setSelectedSerial(device.serial);
               setSelectedTransportId(device.transport_id);
               setActionState({ kind: "idle" });
+              setSelectedPackages([]);
               setInspectedPkg(null);
               setBackupNotice(null);
               setInstallState({ kind: "idle" });
@@ -1010,6 +1154,7 @@ export default function AppsRoute() {
                 onChange={(f) => {
                   setFilter(f);
                   setSearch("");
+                  setSelectedPackages([]);
                 }}
               />
               {users.length > 1 && (
@@ -1019,6 +1164,7 @@ export default function AppsRoute() {
                     value={selectedUser}
                     onChange={(e) => {
                       setSelectedUser(Number(e.target.value));
+                      setSelectedPackages([]);
                       setRecoveryState({ kind: "idle" });
                     }}
                     aria-label={t("apps.userLabel")}
@@ -1076,11 +1222,39 @@ export default function AppsRoute() {
                     <p>{pkgState.archive.reason}</p>
                   </StatePanel>
                 )}
+                <BatchActionBar
+                  selectedCount={selectedRows.length}
+                  canDisable={canBatchDisable}
+                  canEnable={canBatchEnable}
+                  canArchive={canBatchArchive}
+                  canUnarchive={canBatchUnarchive}
+                  onClear={() => setSelectedPackages([])}
+                  onAction={(kind) => void startBatchAction(kind)}
+                />
                 <PackageTable
                   packages={filteredPackages}
                   metadata={packageMetadata}
                   totalCount={pkgState.packages.length}
                   archiveSupported={pkgState.archive.supported}
+                  selectedPackages={selectedPackageSet}
+                  onToggleSelected={(pkg) =>
+                    setSelectedPackages((previous) =>
+                      previous.includes(pkg)
+                        ? previous.filter((candidate) => candidate !== pkg)
+                        : [...previous, pkg],
+                    )
+                  }
+                  onToggleAll={() => {
+                    const visible = filteredPackages.map((pkg) => pkg.package);
+                    const allVisibleSelected = visible.every((pkg) =>
+                      selectedPackageSet.has(pkg),
+                    );
+                    setSelectedPackages((previous) =>
+                      allVisibleSelected
+                        ? previous.filter((pkg) => !visible.includes(pkg))
+                        : [...new Set([...previous, ...visible])],
+                    );
+                  }}
                   onMetadataRequest={requestPackageMetadata}
                   onAction={startAction}
                   onInspect={setInspectedPkg}
@@ -1094,8 +1268,10 @@ export default function AppsRoute() {
             <JournalPanel
               state={journalState}
               undoingEntryId={undoingEntryId}
+              undoingBatchId={undoingBatchId}
               onRefresh={() => void loadJournal()}
               onUndo={(entry) => void undoJournalEntry(entry)}
+              onUndoBatch={(batchId) => void undoJournalBatch(batchId)}
             />
           </>
         )}
@@ -1575,11 +1751,86 @@ function FilterChips({
   );
 }
 
+function BatchActionBar({
+  selectedCount,
+  canDisable,
+  canEnable,
+  canArchive,
+  canUnarchive,
+  onClear,
+  onAction,
+}: {
+  selectedCount: number;
+  canDisable: boolean;
+  canEnable: boolean;
+  canArchive: boolean;
+  canUnarchive: boolean;
+  onClear: () => void;
+  onAction: (kind: ActionKind) => void;
+}) {
+  const { t } = useTranslation();
+  if (selectedCount === 0) return null;
+  return (
+    <Card className="flex flex-col gap-3 border-circuit-300/20 bg-circuit-950/10 p-4 sm:flex-row sm:items-center sm:justify-between">
+      <div>
+        <p className="text-sm font-semibold text-anvil-50">
+          {t("apps.batchSelected", { count: selectedCount })}
+        </p>
+        <p className="mt-1 text-xs text-anvil-400">
+          {selectedCount < 2
+            ? t("apps.batchSelectMore")
+            : t("apps.batchReviewBody")}
+        </p>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <Button
+          type="button"
+          size="sm"
+          onClick={() => onAction("disable")}
+          disabled={!canDisable}
+        >
+          {t("apps.batchDisable")}
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          onClick={() => onAction("enable")}
+          disabled={!canEnable}
+        >
+          {t("apps.batchEnable")}
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          onClick={() => onAction("archive")}
+          disabled={!canArchive}
+        >
+          {t("apps.batchArchive")}
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          onClick={() => onAction("request_unarchive")}
+          disabled={!canUnarchive}
+        >
+          {t("apps.batchUnarchive")}
+        </Button>
+        <Button type="button" size="sm" variant="ghost" onClick={onClear}>
+          {t("apps.batchClear")}
+        </Button>
+      </div>
+    </Card>
+  );
+}
+
 function PackageTable({
   packages,
   metadata,
   totalCount,
   archiveSupported,
+  selectedPackages,
+  onToggleSelected,
+  onToggleAll,
   onMetadataRequest,
   onAction,
   onInspect,
@@ -1591,6 +1842,9 @@ function PackageTable({
   metadata: Record<string, AppPackageMetadata | null>;
   totalCount: number;
   archiveSupported: boolean;
+  selectedPackages: Set<string>;
+  onToggleSelected: (pkg: string) => void;
+  onToggleAll: () => void;
   onMetadataRequest: (pkg: string) => void;
   onAction: (pkg: string, kind: ActionKind) => void;
   onInspect: (pkg: string) => void;
@@ -1599,6 +1853,9 @@ function PackageTable({
   showLegacyExport: boolean;
 }) {
   const { t } = useTranslation();
+  const allVisibleSelected =
+    packages.length > 0 &&
+    packages.every((pkg) => selectedPackages.has(pkg.package));
 
   return (
     <Card className="overflow-hidden p-0">
@@ -1634,6 +1891,16 @@ function PackageTable({
           <table className="min-w-full text-sm">
             <thead className="bg-white/[0.04]">
               <tr>
+                <TableHeaderCell>
+                  <input
+                    type="checkbox"
+                    checked={allVisibleSelected}
+                    onChange={onToggleAll}
+                    disabled={packages.length === 0}
+                    aria-label={t("apps.selectAllPackages")}
+                    className="h-4 w-4 accent-circuit-400"
+                  />
+                </TableHeaderCell>
                 <TableHeaderCell>{t("apps.package")}</TableHeaderCell>
                 <TableHeaderCell>{t("apps.type")}</TableHeaderCell>
                 <TableHeaderCell>{t("devices.state")}</TableHeaderCell>
@@ -1646,6 +1913,17 @@ function PackageTable({
                   key={pkg.package}
                   className="bg-anvil-950/20 transition hover:bg-white/[0.035]"
                 >
+                  <TableCell>
+                    <input
+                      type="checkbox"
+                      checked={selectedPackages.has(pkg.package)}
+                      onChange={() => onToggleSelected(pkg.package)}
+                      aria-label={t("apps.selectPackage", {
+                        package: pkg.package,
+                      })}
+                      className="h-4 w-4 accent-circuit-400"
+                    />
+                  </TableCell>
                   <TableCell>
                     <PackageIdentity
                       pkg={pkg}
@@ -1872,13 +2150,17 @@ function initials(label: string): string {
 function JournalPanel({
   state,
   undoingEntryId,
+  undoingBatchId,
   onRefresh,
   onUndo,
+  onUndoBatch,
 }: {
   state: JournalState;
   undoingEntryId: number | null;
+  undoingBatchId: string | null;
   onRefresh: () => void;
   onUndo: (entry: JournalEntry) => void;
+  onUndoBatch: (batchId: string) => void;
 }) {
   const { t, i18n } = useTranslation();
 
@@ -1886,7 +2168,7 @@ function JournalPanel({
 
   const entries =
     state.kind === "ok"
-      ? [...state.entries].sort((a, b) => b.id - a.id).slice(0, 8)
+      ? [...state.entries].sort((a, b) => b.id - a.id).slice(0, 16)
       : [];
 
   return (
@@ -1972,6 +2254,24 @@ function JournalPanel({
                   )?.outcome,
                 );
                 const request = entry.applied.plan.request;
+                const batchId = request.context?.batch_id ?? null;
+                const batchUndoableEntries = batchId
+                  ? state.entries.filter(
+                      (candidate) =>
+                        candidate.undoes === null &&
+                        candidate.applied.plan.request.context?.batch_id ===
+                          batchId &&
+                        journalEntryStatus(
+                          candidate,
+                          state.entries.find(
+                            (undo) => undo.id === candidate.undone_by,
+                          )?.outcome,
+                        ) === "undoable",
+                    )
+                  : [];
+                const batchUndoAnchor = Math.max(
+                  ...batchUndoableEntries.map((candidate) => candidate.id),
+                );
                 return (
                   <tr
                     key={entry.id}
@@ -2006,6 +2306,19 @@ function JournalPanel({
                               request.context?.confirmation_source ?? "legacy",
                           })}
                         </p>
+                        {batchId && (
+                          <p className="mt-1 font-mono text-[10px] text-circuit-200">
+                            {t("apps.journalBatchMeta", {
+                              id: batchId,
+                              count: state.entries.filter(
+                                (candidate) =>
+                                  candidate.undoes === null &&
+                                  candidate.applied.plan.request.context
+                                    ?.batch_id === batchId,
+                              ).length,
+                            })}
+                          </p>
+                        )}
                         {(entry.applied.before_state ||
                           entry.applied.after_state) && (
                           <p className="mt-1 text-[10px] text-anvil-500">
@@ -2039,7 +2352,25 @@ function JournalPanel({
                       </pre>
                     </TableCell>
                     <TableCell>
-                      {status === "undoable" ? (
+                      {batchId && batchUndoAnchor === entry.id ? (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="primary"
+                          onClick={() => onUndoBatch(batchId)}
+                          disabled={undoingBatchId === batchId}
+                        >
+                          {undoingBatchId === batchId
+                            ? t("apps.journalUndoingBatch")
+                            : t("apps.journalUndoBatch", {
+                                count: batchUndoableEntries.length,
+                              })}
+                        </Button>
+                      ) : batchId ? (
+                        <span className="text-xs text-anvil-500">
+                          {t("apps.journalBatchMember")}
+                        </span>
+                      ) : status === "undoable" ? (
                         <Button
                           type="button"
                           size="sm"
@@ -2144,8 +2475,9 @@ function ActionOverlay({
   onDismiss: () => void;
 }) {
   const { t } = useTranslation();
-  const confirming = state.kind === "confirming";
-  const applying = state.kind === "applying";
+  const confirming =
+    state.kind === "confirming" || state.kind === "confirming_batch";
+  const applying = state.kind === "applying" || state.kind === "applying_batch";
   const trapRef = useFocusTrap<HTMLDivElement>(confirming || applying);
 
   useEffect(() => {
@@ -2163,11 +2495,12 @@ function ActionOverlay({
 
   if (state.kind === "idle") return null;
 
-  if (state.kind === "confirming") {
-    const portableBaselineSupported = ![
-      "archive",
-      "request_unarchive",
-    ].includes(state.plan.request.kind);
+  if (state.kind === "confirming" || state.kind === "confirming_batch") {
+    const plans = state.kind === "confirming" ? [state.plan] : state.plan.plans;
+    const description = state.plan.description;
+    const portableBaselineSupported = plans.every(
+      (plan) => !["archive", "request_unarchive"].includes(plan.request.kind),
+    );
     return (
       <div
         ref={trapRef}
@@ -2190,16 +2523,22 @@ function ActionOverlay({
             id="confirm-dialog-description"
             className="mt-3 text-sm leading-6 text-anvil-200"
           >
-            {state.plan.description}
+            {description}
           </p>
-          <div className="mt-3 rounded-md border border-white/10 bg-white/[0.04] p-3">
+          <div className="mt-3 max-h-56 space-y-2 overflow-y-auto rounded-md border border-white/10 bg-white/[0.04] p-3">
             <p className="text-xs font-medium text-anvil-400">
-              {t("apps.commandPreview")}
+              {plans.length === 1
+                ? t("apps.commandPreview")
+                : t("apps.batchCommandPreview", { count: plans.length })}
             </p>
-            <code className="mt-1 block font-mono text-xs text-anvil-100">
-              adb -s {state.plan.request.serial} shell{" "}
-              {state.plan.args.join(" ")}
-            </code>
+            {plans.map((plan) => (
+              <code
+                key={plan.incident_id}
+                className="block break-all font-mono text-xs text-anvil-100"
+              >
+                adb -s {plan.request.serial} shell {plan.args.join(" ")}
+              </code>
+            ))}
           </div>
           {baselineFeedback && (
             <p
@@ -2234,7 +2573,7 @@ function ActionOverlay({
     );
   }
 
-  if (state.kind === "applying") {
+  if (state.kind === "applying" || state.kind === "applying_batch") {
     return (
       <div
         ref={trapRef}
@@ -2279,6 +2618,15 @@ function ActionOverlay({
         }
       >
         <p>{state.message}</p>
+        {state.details && state.details.length > 0 && (
+          <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-anvil-200">
+            {state.details.map((detail) => (
+              <li key={detail} className="break-words font-mono text-xs">
+                {detail}
+              </li>
+            ))}
+          </ul>
+        )}
       </StatePanel>
     );
   }
@@ -2483,6 +2831,18 @@ function recoveryFileName(packageName: string): string {
   const date = new Date().toISOString().slice(0, 10);
   const safePackage = packageName.replace(/[^A-Za-z0-9_.-]/g, "_");
   return `droidsmith-recovery-${date}-${safePackage}.json`;
+}
+
+function recoveryBatchFileName(count: number): string {
+  const date = new Date().toISOString().slice(0, 10);
+  return `droidsmith-recovery-${date}-batch-${count}-packages.json`;
+}
+
+// A batch item with a non-null `error` failed at the device; successful items
+// carry a journal entry and no error. Callers use this to report per-package
+// failures without aborting the surviving inverses.
+function batchFailures(result: BatchActionResult): BatchActionItemResult[] {
+  return result.items.filter((item) => item.error != null);
 }
 
 function PermissionsPanel({

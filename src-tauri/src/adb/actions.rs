@@ -86,6 +86,11 @@ pub struct ActionContext {
     /// its `install-existing` inverse.
     #[serde(default)]
     pub restore_enabled_state: Option<bool>,
+    /// Backend-issued identifier shared by every item in one reviewed batch.
+    /// The renderer may display this value but cannot assign it through the
+    /// single-action planner/apply boundary.
+    #[serde(default)]
+    pub batch_id: Option<String>,
 }
 
 /// Install an APK on a device using `adb install`. The APK path is a
@@ -612,6 +617,14 @@ pub fn apply(
     } else {
         capture_state(transport, &plan.request)
     };
+    if plan.request.context.batch_id.is_some()
+        && !verified_batch_transition(plan.request.kind, &before_state, &after_state)
+    {
+        return Err(TransportError::Parse(format!(
+            "batch action {:?} did not complete a reversible state transition: {before_state} -> {after_state}",
+            plan.request.kind
+        )));
+    }
     if plan.request.kind == ActionKind::RestoreExistingForUser {
         let expected = if plan.request.context.restore_enabled_state == Some(true) {
             "preinstalled_enabled"
@@ -633,6 +646,33 @@ pub fn apply(
         after_state,
         applied_at: now_iso.to_string(),
     })
+}
+
+pub fn reversible_batch_before_state(kind: ActionKind, state: &str) -> bool {
+    match kind {
+        ActionKind::Disable => state.ends_with("_enabled"),
+        ActionKind::Enable => state.ends_with("_disabled"),
+        ActionKind::Archive => {
+            matches!(state, "user_installed_enabled" | "user_installed_disabled")
+        }
+        ActionKind::RequestUnarchive => state == "archived",
+        _ => false,
+    }
+}
+
+fn verified_batch_transition(kind: ActionKind, before: &str, after: &str) -> bool {
+    if !reversible_batch_before_state(kind, before) {
+        return false;
+    }
+    match kind {
+        ActionKind::Disable => after.ends_with("_disabled"),
+        ActionKind::Enable => after.ends_with("_enabled"),
+        ActionKind::Archive => after == "archived",
+        ActionKind::RequestUnarchive => {
+            matches!(after, "user_installed_enabled" | "user_installed_disabled")
+        }
+        _ => false,
+    }
 }
 
 pub fn capture_state(transport: &dyn AdbTransport, request: &ActionRequest) -> String {
@@ -887,6 +927,13 @@ pub fn validate_plan(plan: &PlannedAction) -> Result<(), TransportError> {
             "action plan is missing its confirmation source".to_string(),
         ));
     }
+    if let Some(batch_id) = plan.request.context.batch_id.as_deref() {
+        if !valid_batch_id(batch_id) {
+            return Err(TransportError::Parse(
+                "action plan has an invalid batch id".to_string(),
+            ));
+        }
+    }
     if plan.request.kind != ActionKind::Shell
         && !crate::adb::packages::valid_package_name(&plan.request.package)
     {
@@ -953,6 +1000,14 @@ pub fn validate_plan(plan: &PlannedAction) -> Result<(), TransportError> {
         ));
     }
     Ok(())
+}
+
+pub fn valid_batch_id(batch_id: &str) -> bool {
+    batch_id.starts_with("batch-")
+        && batch_id.len() <= 96
+        && batch_id
+            .chars()
+            .all(|character| character.is_ascii_alphanumeric() || character == '-')
 }
 
 pub fn valid_permission(permission: &str) -> bool {
@@ -1257,6 +1312,7 @@ mod tests {
                 shell_argv: Vec::new(),
                 transport_override: None,
                 restore_enabled_state: None,
+                batch_id: None,
             },
         });
         assert_eq!(
@@ -1291,6 +1347,7 @@ mod tests {
                 ],
                 transport_override: None,
                 restore_enabled_state: None,
+                batch_id: None,
             },
         });
         assert_eq!(shell.args, shell.request.context.shell_argv);
@@ -1339,6 +1396,7 @@ mod tests {
                     shell_argv: Vec::new(),
                     transport_override: None,
                     restore_enabled_state: None,
+                    batch_id: None,
                 },
             }),
             "2026-07-14T12:00:00Z",
@@ -1529,6 +1587,7 @@ mod tests {
                     ],
                     transport_override: None,
                     restore_enabled_state: None,
+                    batch_id: None,
                 },
             }),
             "2026-07-14T12:00:00Z",

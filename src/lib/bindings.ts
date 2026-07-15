@@ -172,6 +172,15 @@ export const commands = {
   async planAction(request: ActionRequest): Promise<PlannedAction> {
     return await TAURI_INVOKE("plan_action", { request });
   },
+  /**
+   * Build one reviewed, reversible package-action plan for multiple packages.
+   * Every item is bound to the same immutable device target, Android user, and
+   * action kind; destructive or conditionally-reversible kinds stay on the
+   * single-item path.
+   */
+  async planActionBatch(requests: ActionRequest[]): Promise<BatchActionPlan> {
+    return await TAURI_INVOKE("plan_action_batch", { requests });
+  },
   async planShellAction(
     request: PlanShellActionRequest,
   ): Promise<ShellActionPlan> {
@@ -183,6 +192,9 @@ export const commands = {
    */
   async applyAction(plan: PlannedAction): Promise<ApplyActionResult> {
     return await TAURI_INVOKE("apply_action", { plan });
+  },
+  async applyActionBatch(batch: BatchActionPlan): Promise<BatchActionResult> {
+    return await TAURI_INVOKE("apply_action_batch", { batch });
   },
   /**
    * Export a redacted package snapshot before a reviewed destructive batch.
@@ -576,6 +588,18 @@ export const commands = {
     return await TAURI_INVOKE("journal_undo", { target, entry_id: entryId });
   },
   /**
+   * Undo every still-active successful item from one backend-issued batch.
+   * Reversibility is proven for the complete remaining set before the first
+   * inverse runs; device-level failures are then reported per package without
+   * hiding successful inverses.
+   */
+  async journalUndoBatch(
+    target: DeviceTarget,
+    batchId: string,
+  ): Promise<BatchActionResult> {
+    return await TAURI_INVOKE("journal_undo_batch", { target, batchId });
+  },
+  /**
    * Load quirks from the bundled resource directory and match against the
    * failure context.
    * Returns `Some(quirk)` if a rule applies, `None` if the raw error
@@ -624,6 +648,12 @@ export type ActionContext = {
    * its `install-existing` inverse.
    */
   restore_enabled_state?: boolean | null;
+  /**
+   * Backend-issued identifier shared by every item in one reviewed batch.
+   * The renderer may display this value but cannot assign it through the
+   * single-action planner/apply boundary.
+   */
+  batch_id?: string | null;
 };
 export type ActionKind =
   /**
@@ -869,6 +899,17 @@ export type BaselinePackage = {
   undo_plan: BaselineUndoPlan | null;
 };
 export type BaselineUndoPlan = { kind: ActionKind; user_id: number };
+export type BatchActionItemResult = {
+  package: string;
+  entry: JournalEntry | null;
+  stdout: string;
+  error: string | null;
+};
+export type BatchActionPlan = { plans: PlannedAction[]; description: string };
+export type BatchActionResult = {
+  batch_id: string;
+  items: BatchActionItemResult[];
+};
 export type BatteryInfo = {
   level: number | null;
   status: string | null;

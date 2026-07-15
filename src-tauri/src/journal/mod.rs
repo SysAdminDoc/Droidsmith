@@ -578,6 +578,20 @@ pub fn undo_request_for(journal: &Journal, entry_id: u64) -> Option<ActionReques
             None
         };
     match original_kind {
+        crate::adb::actions::ActionKind::Disable
+            if entry.applied.plan.request.context.batch_id.is_some()
+                && !(entry.applied.before_state.ends_with("_enabled")
+                    && entry.applied.after_state.ends_with("_disabled")) =>
+        {
+            return None;
+        }
+        crate::adb::actions::ActionKind::Enable
+            if entry.applied.plan.request.context.batch_id.is_some()
+                && !(entry.applied.before_state.ends_with("_disabled")
+                    && entry.applied.after_state.ends_with("_enabled")) =>
+        {
+            return None;
+        }
         crate::adb::actions::ActionKind::GrantPermission
             if entry.applied.before_state != "revoked"
                 || entry.applied.after_state != "granted" =>
@@ -843,6 +857,7 @@ mod tests {
                     shell_argv: Vec::new(),
                     transport_override: None,
                     restore_enabled_state: None,
+                    batch_id: None,
                 },
             }),
             stdout: String::new(),
@@ -1072,6 +1087,7 @@ mod tests {
                 shell_argv: vec!["rm".into(), "/sdcard/private.txt".into()],
                 transport_override: None,
                 restore_enabled_state: None,
+                batch_id: None,
             },
         });
         let result = journal.execute(plan, None, "2026-07-14T12:00:00Z", |_| {

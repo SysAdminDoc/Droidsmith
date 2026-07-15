@@ -8,10 +8,11 @@
 //! - Return types are `Serialize` and live in a domain module.
 //! - No business logic inline — it goes to `adb`, `diagnostics`, etc.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Mutex, OnceLock};
 
 use serde::{Deserialize, Serialize};
@@ -979,6 +980,86 @@ pub fn plan_action(
     Ok(actions::plan(request))
 }
 
+/// Build one reviewed, reversible package-action plan for multiple packages.
+/// Every item is bound to the same immutable device target, Android user, and
+/// action kind; destructive or conditionally-reversible kinds stay on the
+/// single-item path.
+#[tauri::command]
+#[specta::specta]
+pub fn plan_action_batch(
+    requests: Vec<actions::ActionRequest>,
+) -> Result<BatchActionPlan, CommandError> {
+    if !(2..=MAX_ACTION_BATCH_ITEMS).contains(&requests.len()) {
+        return Err(CommandError {
+            code: "invalid_action_batch",
+            message: format!(
+                "a package batch must contain between 2 and {MAX_ACTION_BATCH_ITEMS} items"
+            ),
+        });
+    }
+    let first = requests.first().expect("length checked");
+    if !matches!(
+        first.kind,
+        actions::ActionKind::Disable
+            | actions::ActionKind::Enable
+            | actions::ActionKind::Archive
+            | actions::ActionKind::RequestUnarchive
+    ) {
+        return Err(CommandError {
+            code: "invalid_action_kind",
+            message: "batch actions must have a losslessly reversible inverse".to_string(),
+        });
+    }
+    let target = first.target.clone();
+    let serial = first.serial.clone();
+    let user_id = first.user_id;
+    let kind = first.kind;
+    let mut packages = HashSet::with_capacity(requests.len());
+    let mut plans = Vec::with_capacity(requests.len());
+    for mut request in requests {
+        if request.serial != serial
+            || request.target != target
+            || request.user_id != user_id
+            || request.kind != kind
+        {
+            return Err(CommandError {
+                code: "mixed_action_batch",
+                message: "every batch item must use the same device target, Android user, and action kind"
+                    .to_string(),
+            });
+        }
+        validate_package_arg(&request.package)?;
+        if !packages.insert(request.package.clone()) {
+            return Err(CommandError {
+                code: "duplicate_batch_package",
+                message: format!(
+                    "package {} appears more than once in the batch",
+                    request.package
+                ),
+            });
+        }
+        request.pack_context = None;
+        request.context = actions::ActionContext {
+            confirmation_source: actions::ConfirmationSource::AppsPreview,
+            ..Default::default()
+        };
+        plans.push(actions::plan(request));
+    }
+    let description = batch_action_description(kind, plans.len(), user_id);
+    Ok(BatchActionPlan { plans, description })
+}
+
+fn batch_action_description(kind: actions::ActionKind, count: usize, user_id: u32) -> String {
+    let action = match kind {
+        actions::ActionKind::Disable => "Disable",
+        actions::ActionKind::Enable => "Enable",
+        actions::ActionKind::Archive => "Archive",
+        actions::ActionKind::RequestUnarchive => "Request unarchive for",
+        _ => "Apply action to",
+    };
+    format!("{action} {count} packages for Android user {user_id}")
+}
+
 /// Generic Tauri-command error envelope so the JS side gets the same
 /// shape regardless of whether the underlying failure was a transport
 /// error or a filesystem error from the journal.
@@ -1225,13 +1306,15 @@ fn validate_serial_arg(serial: &str) -> Result<(), CommandError> {
 
 fn execute_journaled(
     journal: &mut Journal,
-    transport: &adb::ShellTransport,
+    transport: &dyn AdbTransport,
     mut plan: actions::PlannedAction,
     undoes: Option<u64>,
 ) -> Result<ApplyActionResult, CommandError> {
     actions::validate_plan(&plan)?;
     adb::validate_device_target(transport, &plan.request.target)?;
-    plan.before_state = actions::capture_state(transport, &plan.request);
+    if plan.before_state.is_empty() {
+        plan.before_state = actions::capture_state(transport, &plan.request);
+    }
     let started_at = iso_now();
     let entry = journal
         .execute(plan, undoes, &started_at, |plan| {
@@ -1314,6 +1397,28 @@ pub struct ApplyActionResult {
     /// Raw output is returned only to the initiating view and is excluded from
     /// the persisted journal, which carries the redacted/bounded copy.
     pub stdout: String,
+}
+
+const MAX_ACTION_BATCH_ITEMS: usize = 100;
+
+#[derive(specta::Type, Debug, Clone, Serialize, Deserialize)]
+pub struct BatchActionPlan {
+    pub plans: Vec<actions::PlannedAction>,
+    pub description: String,
+}
+
+#[derive(specta::Type, Debug, Clone, Serialize)]
+pub struct BatchActionItemResult {
+    pub package: String,
+    pub entry: Option<JournalEntry>,
+    pub stdout: String,
+    pub error: Option<String>,
+}
+
+#[derive(specta::Type, Debug, Clone, Serialize)]
+pub struct BatchActionResult {
+    pub batch_id: String,
+    pub items: Vec<BatchActionItemResult>,
 }
 
 fn validated_transport_with_device(
@@ -1417,6 +1522,12 @@ pub fn apply_action(
     app: tauri::AppHandle,
     mut plan: actions::PlannedAction,
 ) -> Result<ApplyActionResult, CommandError> {
+    if plan.request.context.batch_id.is_some() {
+        return Err(CommandError {
+            code: "batch_command_required",
+            message: "backend-issued batch plans must use the batch apply command".to_string(),
+        });
+    }
     if plan.request.kind == actions::ActionKind::RestoreExistingForUser {
         return Err(CommandError {
             code: "journal_undo_required",
@@ -1435,6 +1546,148 @@ pub fn apply_action(
         execute_journaled(journal, &transport, plan, None)
     })?;
     Ok(result)
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn apply_action_batch(
+    app: tauri::AppHandle,
+    mut batch: BatchActionPlan,
+) -> Result<BatchActionResult, CommandError> {
+    validate_action_batch_plan(&batch)?;
+    let first = batch.plans.first().expect("validated non-empty batch");
+    let target = first.request.target.clone();
+    let serial = first.request.serial.clone();
+    let (transport, transport_override) = privileged_transport(&target)?;
+    let batch_id = next_batch_id();
+    for plan in &mut batch.plans {
+        plan.request.context.transport_override = transport_override;
+        plan.request.context.batch_id = Some(batch_id.clone());
+    }
+
+    let dir = journal_dir(&app)?;
+    let items = journal::with_journal(&dir, &serial, |journal| {
+        execute_batch_plans(journal, &transport, batch.plans, None)
+    })?;
+    Ok(BatchActionResult { batch_id, items })
+}
+
+fn validate_action_batch_plan(batch: &BatchActionPlan) -> Result<(), CommandError> {
+    if !(2..=MAX_ACTION_BATCH_ITEMS).contains(&batch.plans.len()) {
+        return Err(CommandError {
+            code: "invalid_action_batch",
+            message: format!(
+                "a package batch must contain between 2 and {MAX_ACTION_BATCH_ITEMS} items"
+            ),
+        });
+    }
+    let first = batch.plans.first().expect("length checked");
+    let target = &first.request.target;
+    let serial = &first.request.serial;
+    let user_id = first.request.user_id;
+    let kind = first.request.kind;
+    if !matches!(
+        kind,
+        actions::ActionKind::Disable
+            | actions::ActionKind::Enable
+            | actions::ActionKind::Archive
+            | actions::ActionKind::RequestUnarchive
+    ) || batch.description != batch_action_description(kind, batch.plans.len(), user_id)
+    {
+        return Err(CommandError {
+            code: "invalid_action_batch",
+            message: "batch metadata does not match its canonical action plans".to_string(),
+        });
+    }
+    let mut packages = HashSet::with_capacity(batch.plans.len());
+    for plan in &batch.plans {
+        actions::validate_plan(plan)?;
+        if &plan.request.serial != serial
+            || &plan.request.target != target
+            || plan.request.user_id != user_id
+            || plan.request.kind != kind
+            || plan.request.pack_context.is_some()
+            || plan.request.context.confirmation_source != actions::ConfirmationSource::AppsPreview
+            || plan.request.context.batch_id.is_some()
+            || !plan.before_state.is_empty()
+            || !packages.insert(plan.request.package.clone())
+        {
+            return Err(CommandError {
+                code: "mixed_action_batch",
+                message: "batch plans must be unique, renderer-reviewed, and bound to one target/user/action"
+                    .to_string(),
+            });
+        }
+    }
+    Ok(())
+}
+
+fn execute_batch_plans(
+    journal: &mut Journal,
+    transport: &dyn AdbTransport,
+    plans: Vec<actions::PlannedAction>,
+    undo_ids: Option<Vec<u64>>,
+) -> Result<Vec<BatchActionItemResult>, CommandError> {
+    if let Some(ids) = undo_ids.as_ref() {
+        if ids.len() != plans.len() {
+            return Err(CommandError {
+                code: "invalid_action_batch",
+                message: "batch undo ids do not match their inverse plans".to_string(),
+            });
+        }
+    }
+    let mut items = Vec::with_capacity(plans.len());
+    for (index, mut plan) in plans.into_iter().enumerate() {
+        let package = plan.request.package.clone();
+        let before_state = actions::capture_state(transport, &plan.request);
+        if !actions::reversible_batch_before_state(plan.request.kind, &before_state) {
+            items.push(BatchActionItemResult {
+                package,
+                entry: None,
+                stdout: String::new(),
+                error: Some(format!(
+                    "verified package state {before_state} is not a reversible starting state for {:?}",
+                    plan.request.kind
+                )),
+            });
+            continue;
+        }
+        plan.before_state = before_state;
+        let incident_id = plan.incident_id.clone();
+        let undoes = undo_ids.as_ref().map(|ids| ids[index]);
+        match execute_journaled(journal, transport, plan, undoes) {
+            Ok(result) => items.push(BatchActionItemResult {
+                package,
+                entry: Some(result.entry),
+                stdout: result.stdout,
+                error: None,
+            }),
+            Err(error) if error.code == "package_action_failed" => {
+                let entry = journal
+                    .entries()
+                    .iter()
+                    .rev()
+                    .find(|entry| entry.applied.plan.incident_id == incident_id)
+                    .cloned();
+                items.push(BatchActionItemResult {
+                    package,
+                    entry,
+                    stdout: String::new(),
+                    error: Some(error.message),
+                });
+            }
+            Err(error) => return Err(error),
+        }
+    }
+    Ok(items)
+}
+
+fn next_batch_id() -> String {
+    static NEXT: AtomicU64 = AtomicU64::new(1);
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |duration| duration.as_nanos());
+    format!("batch-{nanos:x}-{:x}", NEXT.fetch_add(1, Ordering::Relaxed))
 }
 
 /// Export a redacted package snapshot before a reviewed destructive batch.
@@ -1539,6 +1792,79 @@ pub fn journal_undo(
         execute_journaled(journal, &transport, plan, Some(entry_id)).map(|result| result.entry)
     })?;
     Ok(entry)
+}
+
+/// Undo every still-active successful item from one backend-issued batch.
+/// Reversibility is proven for the complete remaining set before the first
+/// inverse runs; device-level failures are then reported per package without
+/// hiding successful inverses.
+#[tauri::command]
+#[specta::specta]
+pub fn journal_undo_batch(
+    app: tauri::AppHandle,
+    target: adb::DeviceTarget,
+    batch_id: String,
+) -> Result<BatchActionResult, CommandError> {
+    if !actions::valid_batch_id(&batch_id) {
+        return Err(CommandError {
+            code: "invalid_batch_id",
+            message: "batch id is malformed".to_string(),
+        });
+    }
+    let serial = target.serial.clone();
+    validate_serial_arg(&serial)?;
+    let (transport, transport_override) = privileged_transport(&target)?;
+    let dir = journal_dir(&app)?;
+    let items = journal::with_journal(&dir, &serial, |journal| {
+        let originals = journal
+            .entries()
+            .iter()
+            .filter(|entry| {
+                entry.undoes.is_none()
+                    && entry.outcome == journal::JournalOutcome::Succeeded
+                    && entry.applied.plan.request.context.batch_id.as_deref()
+                        == Some(batch_id.as_str())
+            })
+            .cloned()
+            .collect::<Vec<_>>();
+        if originals.is_empty() {
+            return Err(CommandError {
+                code: "batch_not_found",
+                message: format!("no successful journal entries belong to {batch_id}"),
+            });
+        }
+
+        let remaining = originals
+            .into_iter()
+            .filter(|entry| entry.undone_by.is_none())
+            .collect::<Vec<_>>();
+        if remaining.is_empty() {
+            return Err(CommandError {
+                code: "batch_already_undone",
+                message: format!("every successful item in {batch_id} is already undone"),
+            });
+        }
+
+        let mut plans = Vec::with_capacity(remaining.len());
+        let mut ids = Vec::with_capacity(remaining.len());
+        for entry in remaining {
+            let mut request = journal::undo_request_for(journal, entry.id).ok_or(CommandError {
+                code: "batch_not_reversible",
+                message: format!(
+                    "journal entry {} in {batch_id} cannot be safely reversed as part of the batch",
+                    entry.id
+                ),
+            })?;
+            request.serial = serial.clone();
+            request.target = target.clone();
+            request.context.transport_override = transport_override;
+            request.context.batch_id = Some(batch_id.clone());
+            plans.push(actions::plan(request));
+            ids.push(entry.id);
+        }
+        execute_batch_plans(journal, &transport, plans, Some(ids))
+    })?;
+    Ok(BatchActionResult { batch_id, items })
 }
 
 #[tauri::command]
@@ -1739,6 +2065,7 @@ pub fn plan_shell_action(request: PlanShellActionRequest) -> Result<ShellActionP
             shell_argv: request.argv,
             transport_override,
             restore_enabled_state: None,
+            batch_id: None,
         },
     });
     Ok(ShellActionPlan {
@@ -1807,6 +2134,7 @@ pub fn apply_device_control(
             shell_argv: argv,
             transport_override,
             restore_enabled_state: None,
+            batch_id: None,
         },
     });
     let dir = journal_dir(&app)?;
@@ -1920,6 +2248,7 @@ pub async fn push_file(
             shell_argv: vec!["droidsmith-file-push".to_string(), remote.clone()],
             transport_override,
             restore_enabled_state: None,
+            batch_id: None,
         },
     });
     plan.description = format!("Push a native-selected local file to {remote:?}");
@@ -2481,6 +2810,7 @@ pub fn set_permission(
             shell_argv: Vec::new(),
             transport_override,
             restore_enabled_state: None,
+            batch_id: None,
         },
     });
     let dir = journal_dir(&app)?;
@@ -3078,12 +3408,156 @@ fn iso_now() -> String {
 mod tests {
     use super::{
         accepted_transport_override, append_host_operation, classify_shell, diagnostic_text,
-        is_allowed_device_control, load_runtime_packs, pack_error_to_load_error,
-        parse_fastboot_getvar, profile_preview_rows, unique_screenshot_remote,
-        validate_backup_target, validate_remote_path, AdbRecoveryOutcome, AdbRecoveryRecord,
-        ProcessOutput, ProfilePreviewStatus, ShellClassification,
+        execute_batch_plans, is_allowed_device_control, load_runtime_packs,
+        pack_error_to_load_error, parse_fastboot_getvar, plan_action_batch, profile_preview_rows,
+        unique_screenshot_remote, validate_action_batch_plan, validate_backup_target,
+        validate_remote_path, AdbRecoveryOutcome, AdbRecoveryRecord, ProcessOutput,
+        ProfilePreviewStatus, ShellClassification,
     };
-    use crate::adb::{actions::ActionKind, AppPackage, DeviceTarget, DeviceTransportKind};
+    use crate::adb::device::DeviceState;
+    use crate::adb::transport::MockTransport;
+    use crate::adb::{
+        actions::{ActionKind, ActionRequest},
+        AppPackage, Device, DeviceTarget, DeviceTransportKind,
+    };
+
+    fn batch_device() -> Device {
+        Device {
+            serial: "batch-device".to_string(),
+            state: DeviceState::Device,
+            model: Some("Pixel".to_string()),
+            product: Some("pixel".to_string()),
+            device: Some("husky".to_string()),
+            build_fingerprint: Some("google/husky/build".to_string()),
+            transport_id: Some(9),
+            connection_generation: 10,
+            transport_kind: DeviceTransportKind::Usb,
+            wireless: false,
+        }
+    }
+
+    fn batch_request(package: &str, kind: ActionKind) -> ActionRequest {
+        let device = batch_device();
+        ActionRequest {
+            serial: device.serial.clone(),
+            target: device.target(),
+            package: package.to_string(),
+            kind,
+            user_id: 0,
+            pack_context: None,
+            context: Default::default(),
+        }
+    }
+
+    #[test]
+    fn batch_planner_rejects_mixed_or_duplicate_targets() {
+        let duplicate = plan_action_batch(vec![
+            batch_request("com.example.one", ActionKind::Disable),
+            batch_request("com.example.one", ActionKind::Disable),
+        ])
+        .unwrap_err();
+        assert_eq!(duplicate.code, "duplicate_batch_package");
+
+        let mixed = plan_action_batch(vec![
+            batch_request("com.example.one", ActionKind::Disable),
+            batch_request("com.example.two", ActionKind::Enable),
+        ])
+        .unwrap_err();
+        assert_eq!(mixed.code, "mixed_action_batch");
+
+        let irreversible = plan_action_batch(vec![
+            batch_request("com.example.one", ActionKind::ClearData),
+            batch_request("com.example.two", ActionKind::ClearData),
+        ])
+        .unwrap_err();
+        assert_eq!(irreversible.code, "invalid_action_kind");
+    }
+
+    #[test]
+    fn batch_executor_continues_after_a_package_failure() {
+        let mut batch = plan_action_batch(vec![
+            batch_request("com.example.ok", ActionKind::Disable),
+            batch_request("com.example.fail", ActionKind::Disable),
+        ])
+        .unwrap();
+        assert!(validate_action_batch_plan(&batch).is_ok());
+        for plan in &mut batch.plans {
+            plan.request.context.batch_id = Some("batch-test-1".to_string());
+        }
+
+        let device = batch_device();
+        let mock = MockTransport::new().with_devices(vec![device]);
+        for package in ["com.example.ok", "com.example.fail"] {
+            mock.expect_shell(
+                "batch-device",
+                &["pm", "list", "packages", "--user", "0", "-d", package],
+                Ok(String::new()),
+            );
+            mock.expect_shell(
+                "batch-device",
+                &["pm", "list", "packages", "--user", "0", package],
+                Ok(format!("package:{package}\n")),
+            );
+            mock.expect_shell(
+                "batch-device",
+                &["pm", "list", "users"],
+                Ok("Users:\n  UserInfo{0:Owner:c13} running (current)\n".to_string()),
+            );
+            mock.expect_shell(
+                "batch-device",
+                &["am", "get-current-user"],
+                Ok("0\n".to_string()),
+            );
+        }
+        mock.expect_shell(
+            "batch-device",
+            &["pm", "disable-user", "--user", "0", "com.example.ok"],
+            Ok("Package com.example.ok new state: disabled-user\n".to_string()),
+        );
+        mock.expect_shell(
+            "batch-device",
+            &[
+                "pm",
+                "list",
+                "packages",
+                "--user",
+                "0",
+                "-d",
+                "com.example.ok",
+            ],
+            Ok("package:com.example.ok\n".to_string()),
+        );
+        mock.expect_shell(
+            "batch-device",
+            &["pm", "disable-user", "--user", "0", "com.example.fail"],
+            Ok("Failure [PACKAGE_NOT_FOUND]\n".to_string()),
+        );
+
+        let dir = std::env::temp_dir().join(format!(
+            "droidsmith-batch-test-{}-{}",
+            std::process::id(),
+            crate::time::iso_utc_now().replace([':', '.'], "-")
+        ));
+        let mut journal = crate::journal::Journal::open(&dir, "batch-device").unwrap();
+        let items = execute_batch_plans(&mut journal, &mock, batch.plans, None).unwrap();
+        assert_eq!(items.len(), 2);
+        assert!(items[0].error.is_none());
+        assert!(items[1].error.is_some());
+        assert_eq!(journal.entries().len(), 2);
+        assert_eq!(
+            journal.entries()[0].outcome,
+            crate::journal::JournalOutcome::Succeeded
+        );
+        assert_eq!(
+            journal.entries()[1].outcome,
+            crate::journal::JournalOutcome::Failed
+        );
+        assert!(journal.entries().iter().all(|entry| {
+            entry.applied.plan.request.context.batch_id.as_deref() == Some("batch-test-1")
+        }));
+        drop(journal);
+        let _ = std::fs::remove_dir_all(dir);
+    }
 
     #[test]
     fn profile_preview_reports_ready_matching_and_missing_rows_without_mutation() {
