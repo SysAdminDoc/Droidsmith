@@ -26,6 +26,7 @@ import { useAuthorizedDevices } from "../lib/useAuthorizedDevices";
 
 import {
   queueStats,
+  snapshotJournalPackageState,
   snapshotPackage,
   verifyDisabled,
   type DisableVerification,
@@ -224,21 +225,6 @@ export default function DebloatRoute() {
     });
   }, []);
 
-  const readPackageSnapshot = useCallback(
-    async (packageId: string): Promise<PackageSnapshot> => {
-      if (!selectedDevice || !usersReady) {
-        throw new Error("Android user discovery has not completed");
-      }
-      const packages = await callListPackages(
-        deviceTarget(selectedDevice),
-        "all",
-        selectedUser,
-      );
-      return snapshotPackage(packages, packageId);
-    },
-    [selectedDevice, selectedUser, usersReady],
-  );
-
   const verificationMessage = useCallback(
     (result: DisableVerification): string | null => {
       if (result === "ok") return null;
@@ -257,6 +243,14 @@ export default function DebloatRoute() {
     ) => {
       if (!selectedDevice || !usersReady) return;
       cancelRequestedRef.current = false;
+      // One baseline listing supplies presence and system metadata for the
+      // whole batch. Successful mutations use the backend's targeted journal
+      // probes below, avoiding two complete package listings per queue row.
+      const initialPackages = await callListPackages(
+        deviceTarget(selectedDevice),
+        "all",
+        selectedUser,
+      );
       let queue = rows;
       const plansByPackage = new Map(
         plans.map((plan) => [plan.request.package, plan]),
@@ -297,7 +291,8 @@ export default function DebloatRoute() {
         }));
         commitQueue({ currentPackage: row.entry.id });
 
-        let before: PackageSnapshot | null = null;
+        const baseline = snapshotPackage(initialPackages, row.entry.id);
+        let before: PackageSnapshot | null = baseline;
         let after: PackageSnapshot | null = null;
         let journal: JournalEntry | null = null;
         let error: string | null = null;
@@ -310,17 +305,19 @@ export default function DebloatRoute() {
               support?.detail ?? t("debloat.entryUnavailableForPlan"),
             );
           }
-          before = await readPackageSnapshot(row.entry.id);
           journal = (await callApplyAction(plan)).entry;
-          after = await readPackageSnapshot(row.entry.id);
+          before =
+            snapshotJournalPackageState(
+              journal.applied.before_state,
+              baseline.system,
+            ) ?? baseline;
+          after = snapshotJournalPackageState(
+            journal.applied.after_state,
+            baseline.system,
+          );
           error = verificationMessage(verifyDisabled(after));
         } catch (e) {
           error = e instanceof Error ? e.message : String(e);
-          try {
-            after = await readPackageSnapshot(row.entry.id);
-          } catch {
-            // Preserve the original apply error; missing after-state is visible as null.
-          }
         }
 
         queue = patchQueueRow(queue, row.entry.id, (current) => ({
@@ -332,6 +329,37 @@ export default function DebloatRoute() {
           error,
         }));
         commitQueue({ currentPackage: row.entry.id });
+      }
+
+      // If an apply or its targeted verification probe failed, recover all
+      // missing after-states with one batch listing. A successfully journaled
+      // action can become verified here; operation failures retain their
+      // original error even if the package state is now observable.
+      if (queue.some((row) => row.status === "failed" && row.after === null)) {
+        try {
+          const recoveredPackages = await callListPackages(
+            deviceTarget(selectedDevice),
+            "all",
+            selectedUser,
+          );
+          queue = queue.map((row) => {
+            if (row.status !== "failed" || row.after !== null) return row;
+            const recovered = snapshotPackage(recoveredPackages, row.entry.id);
+            if (row.journalId === null) return { ...row, after: recovered };
+            const verificationError = verificationMessage(
+              verifyDisabled(recovered),
+            );
+            return {
+              ...row,
+              status: verificationError ? "failed" : "verified",
+              after: recovered,
+              error: verificationError,
+            };
+          });
+          commitQueue({ currentPackage: null });
+        } catch {
+          // The original per-row error and null after-state remain visible.
+        }
       }
 
       const cancelled = cancelRequestedRef.current;
@@ -356,7 +384,7 @@ export default function DebloatRoute() {
         overrideAccepted,
       });
     },
-    [readPackageSnapshot, selectedDevice, t, usersReady, verificationMessage],
+    [selectedDevice, selectedUser, t, usersReady, verificationMessage],
   );
 
   const applyPack = useCallback(async () => {

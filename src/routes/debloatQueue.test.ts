@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   queueStats,
+  snapshotJournalPackageState,
   snapshotPackage,
   verifyDisabled,
   type QueueStatus,
@@ -44,6 +45,26 @@ describe("debloat queue helpers", () => {
     expect(verifyDisabled(snapshotPackage(packages, "com.missing"))).toBe(
       "missing",
     );
+    expect(verifyDisabled(null)).toBe("unknown");
+  });
+
+  it("uses targeted journal states without another full package listing", () => {
+    expect(snapshotJournalPackageState("installed_enabled", true)).toEqual({
+      present: true,
+      enabled: true,
+      system: true,
+    });
+    expect(snapshotJournalPackageState("installed_disabled", false)).toEqual({
+      present: true,
+      enabled: false,
+      system: false,
+    });
+    expect(snapshotJournalPackageState("not_installed", true)).toEqual({
+      present: false,
+      enabled: null,
+      system: null,
+    });
+    expect(snapshotJournalPackageState("unknown", true)).toBeNull();
   });
 
   it("summarizes terminal queue states for progress and retry controls", () => {

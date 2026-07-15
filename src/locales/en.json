@@ -545,7 +545,8 @@
     },
     "verify": {
       "missing": "Package disappeared after apply; expected it to remain installed and disabled.",
-      "still_enabled": "Package is still enabled after apply."
+      "still_enabled": "Package is still enabled after apply.",
+      "unknown": "Package state could not be verified after apply."
     }
   },
   "mirror": {
