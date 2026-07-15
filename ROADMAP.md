@@ -38,13 +38,6 @@ instead.
   Acceptance: Pack/quirk schema (still v1-compatible or explicitly migrated) carries optional risk level + human description; Debloat renders risk badges and filters by description text; a high-risk item requires acknowledgement before it enters the queue.
   Complexity: M
 
-- [ ] P2 — Ship unsigned multi-platform distribution: Linux bundles + winget/Scoop manifests + checksums
-  Why: Only signed sidecar/updater work is blocked; unsigned Linux packaging and manifest publishing are actionable now and are how OSS desktop tools reach users without certs.
-  Evidence: Tauri v2 distribute docs; winget default-`upgrade_code` collision (tauri-apps/tauri#14968); project no-signing policy
-  Touches: `src-tauri/tauri.conf.json` (bundle targets), `scripts/check-production-bundle.mjs`, new manifest files, release checksum step
-  Acceptance: `tauri build` emits AppImage/deb/rpm on Linux; repo ships a winget manifest with a non-colliding product/upgrade code and a Scoop manifest with SHA-256 `hash`; every release attaches a checksums file (optionally sigstore-signed locally); release:smoke validates the new artifacts.
-  Complexity: M
-
 ### P3
 
 - [ ] P3 — Replace misleading documentation screenshots with deterministic native-state captures
