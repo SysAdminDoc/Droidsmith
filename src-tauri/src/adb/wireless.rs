@@ -382,8 +382,22 @@ fn valid_host(host: &str) -> bool {
 }
 
 fn parse_endpoint(endpoint: &str) -> Option<(String, u16)> {
-    let (host, raw_port) = endpoint.rsplit_once(':')?;
-    let host = host.trim_matches(|c| c == '[' || c == ']');
+    // A bracketed IPv6 endpoint (`[fe80::1]:5555`) is the only unambiguous way
+    // to carry an IPv6 literal with a port, so parse the bracket form directly.
+    let (host, raw_port) = if let Some(rest) = endpoint.strip_prefix('[') {
+        let (host, raw_port) = rest.split_once("]:")?;
+        if host.contains('[') || host.contains(']') {
+            return None;
+        }
+        (host, raw_port)
+    } else if endpoint.matches(':').count() > 1 {
+        // A bare (unbracketed) IPv6 literal has no unambiguous host/port split;
+        // `rsplit_once(':')` would treat a trailing address group as the port.
+        // Reject it rather than surface a corrupted host and port for display.
+        return None;
+    } else {
+        endpoint.rsplit_once(':')?
+    };
     if !valid_host(host) {
         return None;
     }
@@ -456,6 +470,30 @@ adb-bad _adb-tls-connect._tcp no-port
         assert!(validated_endpoint("192.168.1.42", 0).is_err());
         // A leading '-' host would reach `adb connect`/`adb pair` as a flag.
         assert!(validated_endpoint("-oProxyCommand", 37099).is_err());
+    }
+
+    #[test]
+    fn parse_endpoint_handles_ipv4_hostname_and_bracketed_ipv6() {
+        assert_eq!(
+            parse_endpoint("192.168.1.42:5555"),
+            Some(("192.168.1.42".to_string(), 5555))
+        );
+        assert_eq!(
+            parse_endpoint("device.local:38899"),
+            Some(("device.local".to_string(), 38899))
+        );
+        assert_eq!(
+            parse_endpoint("[fe80::1]:5555"),
+            Some(("fe80::1".to_string(), 5555))
+        );
+        // A bare IPv6 literal is ambiguous and must not have an address group
+        // mis-read as the port.
+        assert_eq!(parse_endpoint("fe80::1:5555"), None);
+        assert_eq!(parse_endpoint("fe80::1"), None);
+        // Malformed bracket forms and zero ports are rejected.
+        assert_eq!(parse_endpoint("[fe80::1]:0"), None);
+        assert_eq!(parse_endpoint("[fe80::1]"), None);
+        assert_eq!(parse_endpoint("[fe80::1:5555"), None);
     }
 
     #[test]
