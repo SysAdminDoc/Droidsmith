@@ -26,6 +26,7 @@ use crate::adb::parsers::{
 use crate::adb::transport::AdbTransport;
 use crate::adb::{self, actions};
 use crate::backup;
+use crate::bugreport;
 use crate::fs_util::{ArtifactError, ArtifactKind, HostArtifact, StagedArtifact};
 use crate::host_path::{
     validate_suggested_file_name, HostPathGrant, HostPathPurpose, PathGrantError, PathGrantStore,
@@ -616,6 +617,9 @@ fn recovery_operation_failure(error: &operations::OperationError) -> String {
         operations::OperationError::Timeout(duration) => {
             format!("adb recovery step timed out after {duration:?}")
         }
+        operations::OperationError::OutputTooLarge(limit) => {
+            format!("adb recovery output exceeded {limit} bytes")
+        }
     }
 }
 
@@ -803,6 +807,7 @@ impl From<operations::OperationError> for CommandError {
             operations::OperationError::Wait(_) => "process_wait_failed",
             operations::OperationError::Cancelled => "operation_cancelled",
             operations::OperationError::Timeout(_) => "operation_timeout",
+            operations::OperationError::OutputTooLarge(_) => "operation_output_too_large",
         };
         Self {
             code,
@@ -830,6 +835,15 @@ impl From<install::InstallError> for CommandError {
 
 impl From<backup::BackupError> for CommandError {
     fn from(error: backup::BackupError) -> Self {
+        Self {
+            code: error.code(),
+            message: error.to_string(),
+        }
+    }
+}
+
+impl From<bugreport::BugreportError> for CommandError {
+    fn from(error: bugreport::BugreportError) -> Self {
         Self {
             code: error.code(),
             message: error.to_string(),
@@ -1894,6 +1908,43 @@ pub async fn export_package_apks(
             &target,
             &output_target,
             preflight,
+            &operation_id,
+            sink,
+        )?)
+    })
+    .await
+}
+
+/// Capture an opaque Android bugreport only after a dedicated privacy
+/// acknowledgement. The immutable target and one-shot native path grant are
+/// revalidated before the long-running ADB process begins.
+#[tauri::command]
+pub async fn capture_bugreport(
+    target: adb::DeviceTarget,
+    grants: tauri::State<'_, PathGrantStore>,
+    path_grant: String,
+    privacy_confirmed: bool,
+    operation_id: String,
+    on_event: tauri::ipc::Channel<OperationEvent>,
+) -> Result<bugreport::BugreportCaptureResult, CommandError> {
+    if !privacy_confirmed {
+        return Err(CommandError {
+            code: "bugreport_privacy_confirmation_required",
+            message: "review and acknowledge the bugreport privacy warning before capture"
+                .to_string(),
+        });
+    }
+    let (transport, _) = privileged_transport(&target)?;
+    let destination = grants.consume(&path_grant, HostPathPurpose::BugreportSave)?;
+    let platform_tools_version = adb::locate_adb().version;
+    let adb_path = transport.adb_path;
+    let sink = operations::channel_sink(on_event);
+    spawn_blocking_operation(move || {
+        Ok(bugreport::capture(
+            &adb_path,
+            &target,
+            &destination,
+            platform_tools_version,
             &operation_id,
             sink,
         )?)

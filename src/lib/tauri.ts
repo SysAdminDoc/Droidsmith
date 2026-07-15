@@ -643,6 +643,7 @@ export async function callPreviewDiagnostics(): Promise<SupportPreview> {
 
 export type HostPathPurpose =
   | "diagnostics_save"
+  | "bugreport_save"
   | "logcat_save"
   | "package_export_save"
   | "backup_save"
@@ -854,6 +855,12 @@ export type HostArtifact = {
   sha256: string;
 };
 
+export type BugreportCaptureResult = {
+  report: HostArtifact;
+  sidecar: HostArtifact;
+  captured_at: string;
+};
+
 export async function callPreflightPackageBackup(
   target: DeviceTarget,
   pkg: string,
@@ -892,6 +899,24 @@ export async function callBackupPackage(
     "backup_package",
     { target, package: pkg, userId, path_grant: pathGrant },
     "legacy-backup",
+    options,
+  );
+}
+
+export async function callCaptureBugreport(
+  target: DeviceTarget,
+  pathGrant: string,
+  privacyConfirmed: boolean,
+  options?: OperationOptions,
+): Promise<BugreportCaptureResult> {
+  return invokeOperation<BugreportCaptureResult>(
+    "capture_bugreport",
+    {
+      target,
+      path_grant: pathGrant,
+      privacy_confirmed: privacyConfirmed,
+    },
+    "bugreport",
     options,
   );
 }

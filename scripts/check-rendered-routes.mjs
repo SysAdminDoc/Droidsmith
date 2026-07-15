@@ -101,6 +101,26 @@ async function runDesktopFlow(browser) {
   await page
     .getByText(/Saved .* support bundle to .*droidsmith-support\.json/)
     .waitFor();
+  await diagnosticsDialog
+    .getByRole("button", { name: "Review privacy warning" })
+    .click();
+  await diagnosticsDialog
+    .getByText(/dumpsys and dumpstate output, Logcat history, screenshots/)
+    .waitFor();
+  await diagnosticsDialog
+    .getByRole("checkbox", {
+      name: /I understand the likely contents/,
+    })
+    .check();
+  await diagnosticsDialog
+    .getByRole("button", { name: "Choose destination and capture" })
+    .click();
+  await diagnosticsDialog
+    .getByText("Sensitive bugreport saved locally", { exact: true })
+    .waitFor();
+  await diagnosticsDialog
+    .getByText(/droidsmith-bugreport-2026-07-15\.zip\.metadata\.json/)
+    .waitFor();
   await page
     .getByRole("button", { name: "Wipe local diagnostic history" })
     .click();
@@ -615,6 +635,11 @@ async function installTauriMock(page) {
               id: "123e4567-e89b-42d3-a456-426614174001",
               local_path: "C:/Users/QA/Desktop/droidsmith-support.json",
             },
+            bugreport_save: {
+              id: "123e4567-e89b-42d3-a456-426614174008",
+              local_path:
+                "C:/Users/QA/Desktop/droidsmith-bugreport-2026-07-15.zip",
+            },
             install_open: {
               id: "123e4567-e89b-42d3-a456-426614174002",
               local_path: "C:/Users/QA/Downloads/sample.apks",
@@ -853,6 +878,37 @@ async function installTauriMock(page) {
             path: "C:/Users/QA/Desktop/droidsmith-support.json",
             byte_size: 1024,
             generated_at: "2026-07-14T18:02:01Z",
+          };
+        }
+        if (cmd === "capture_bugreport") {
+          if (
+            args.path_grant !== "123e4567-e89b-42d3-a456-426614174008" ||
+            args.privacy_confirmed !== true ||
+            args.target.transport_id !== 7
+          ) {
+            throw new Error(
+              "Bugreport capture did not preserve its grant, consent, and immutable target",
+            );
+          }
+          emitChannel(args.on_event, {
+            operation_id: args.operation_id,
+            kind: "started",
+            message: "Capturing sensitive Android bugreport",
+          });
+          return {
+            report: {
+              local_path:
+                "C:/Users/QA/Desktop/droidsmith-bugreport-2026-07-15.zip",
+              size_bytes: 12_582_912,
+              sha256: "a".repeat(64),
+            },
+            sidecar: {
+              local_path:
+                "C:/Users/QA/Desktop/droidsmith-bugreport-2026-07-15.zip.metadata.json",
+              size_bytes: 512,
+              sha256: "b".repeat(64),
+            },
+            captured_at: "2026-07-15T10:15:00Z",
           };
         }
         if (cmd === "wipe_diagnostics") {

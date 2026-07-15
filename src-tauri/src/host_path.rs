@@ -15,6 +15,7 @@ const MAX_ACTIVE_GRANTS: usize = 64;
 #[serde(rename_all = "snake_case")]
 pub enum HostPathPurpose {
     DiagnosticsSave,
+    BugreportSave,
     LogcatSave,
     PackageExportSave,
     BackupSave,
@@ -32,6 +33,7 @@ impl HostPathPurpose {
         matches!(
             self,
             Self::DiagnosticsSave
+                | Self::BugreportSave
                 | Self::LogcatSave
                 | Self::PackageExportSave
                 | Self::BackupSave
@@ -45,6 +47,7 @@ impl HostPathPurpose {
     pub const fn dialog_title(self) -> &'static str {
         match self {
             Self::DiagnosticsSave => "Save Droidsmith support bundle",
+            Self::BugreportSave => "Save sensitive Android bugreport",
             Self::LogcatSave => "Export Logcat",
             Self::PackageExportSave => "Export package APKs",
             Self::BackupSave => "Save advanced legacy data export",
@@ -61,6 +64,7 @@ impl HostPathPurpose {
     pub const fn filter(self) -> Option<(&'static str, &'static [&'static str])> {
         match self {
             Self::DiagnosticsSave => Some(("JSON", &["json"])),
+            Self::BugreportSave => Some(("Android bugreport", &["zip"])),
             Self::LogcatSave => Some(("Logcat", &["log", "txt"])),
             Self::PackageExportSave => Some(("Droidsmith package export", &["zip"])),
             Self::BackupSave => Some(("Droidsmith legacy data export", &["zip"])),

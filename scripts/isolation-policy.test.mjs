@@ -240,6 +240,26 @@ test("allows scoped package exports and rejects malformed Android users", () => 
   }
 });
 
+test("requires explicit privacy confirmation for bugreport capture", () => {
+  const valid = message("capture_bugreport", {
+    target,
+    path_grant: pathGrant,
+    privacy_confirmed: true,
+    operation_id: "bugreport-123",
+    on_event: 99,
+  });
+  assert.equal(hook(valid), valid);
+  assert.equal(
+    hook(
+      message("capture_bugreport", {
+        ...valid.payload,
+        privacy_confirmed: false,
+      }),
+    ).cmd,
+    blockedCommand,
+  );
+});
+
 test("allows only bounded native dialog purposes and file names", () => {
   const valid = message("select_host_path", {
     purpose: "screenshot_save",
@@ -256,6 +276,11 @@ test("allows only bounded native dialog purposes and file names", () => {
     suggested_name: "com.example.app.apks.zip",
   });
   assert.equal(hook(packageExport), packageExport);
+  const bugreport = message("select_host_path", {
+    purpose: "bugreport_save",
+    suggested_name: "droidsmith-bugreport-2026-07-15.zip",
+  });
+  assert.equal(hook(bugreport), bugreport);
 
   for (const payload of [
     { purpose: "arbitrary_write", suggested_name: "capture.png" },

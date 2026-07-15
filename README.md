@@ -25,7 +25,10 @@ read-only host connection diagnostics for ADB/tool/USB/driver/udev state,
 portable pre-change recovery baselines with read-only OTA drift review, and fastboot
 inspection. A local-only Diagnostics center previews and saves redacted support
 bundles with tool/OS/ADB health, failed-operation records, and crash excerpts;
-it never uploads data and can wipe disposable local diagnostic history.
+it never uploads data and can wipe disposable local diagnostic history. For
+deeper device failures, users can separately acknowledge a sensitive-data
+warning and capture an atomic Android bugreport ZIP plus a redacted hash
+sidecar; Droidsmith never scans, opens, attaches, or uploads the report.
 
 Per-user removal now records package provenance and post-state immediately
 around the mutation. A preinstalled system app is undoable from Activity only

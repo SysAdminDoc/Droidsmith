@@ -101,6 +101,8 @@ pub enum OperationError {
     Cancelled,
     #[error("operation timed out after {0:?}")]
     Timeout(Duration),
+    #[error("operation output exceeded the {0}-byte limit")]
+    OutputTooLarge(u64),
 }
 
 fn registry() -> &'static Mutex<HashMap<String, Arc<AtomicBool>>> {
@@ -192,7 +194,7 @@ impl RegisteredOperation {
             &self.operation_id,
             &self.cancellation.registration.cancelled,
             &self.sink,
-            true,
+            ChildOptions::captured(),
         )
     }
 
@@ -264,6 +266,42 @@ pub fn run_process(
     label: &str,
     sink: EventSink,
 ) -> Result<ProcessOutput, OperationError> {
+    run_process_inner(program, args, timeout, operation_id, label, sink, None)
+}
+
+/// Run a cancellable process while enforcing a live size ceiling on one
+/// producer-owned output file. The child tree is terminated as soon as the
+/// observed file grows beyond the budget, preventing an export from consuming
+/// unbounded host storage before post-run validation.
+pub fn run_process_with_file_budget(
+    program: &Path,
+    args: &[String],
+    timeout: Duration,
+    operation_id: &str,
+    label: &str,
+    sink: EventSink,
+    file_budget: (&Path, u64),
+) -> Result<ProcessOutput, OperationError> {
+    run_process_inner(
+        program,
+        args,
+        timeout,
+        operation_id,
+        label,
+        sink,
+        Some(file_budget),
+    )
+}
+
+fn run_process_inner(
+    program: &Path,
+    args: &[String],
+    timeout: Duration,
+    operation_id: &str,
+    label: &str,
+    sink: EventSink,
+    file_budget: Option<(&Path, u64)>,
+) -> Result<ProcessOutput, OperationError> {
     let registration = Registration::new(operation_id)?;
     sink(OperationEvent::status(
         operation_id,
@@ -277,7 +315,10 @@ pub fn run_process(
         operation_id,
         &registration.cancelled,
         &sink,
-        true,
+        ChildOptions {
+            capture_output: true,
+            file_budget,
+        },
     );
     match &result {
         Ok(output) => {
@@ -345,7 +386,7 @@ pub(crate) fn run_registered_sequence(
             operation_id,
             &cancellation.registration.cancelled,
             &sink,
-            true,
+            ChildOptions::captured(),
         ) {
             Ok(output) => {
                 let success = output.success();
@@ -414,7 +455,7 @@ pub fn stream_logcat(
             operation_id,
             &registration.cancelled,
             &sink,
-            false,
+            ChildOptions::streamed(),
         );
         if matches!(result, Err(OperationError::Cancelled)) {
             sink(OperationEvent::status(
@@ -449,6 +490,28 @@ pub fn stream_logcat(
     }
 }
 
+#[derive(Clone, Copy)]
+struct ChildOptions<'a> {
+    capture_output: bool,
+    file_budget: Option<(&'a Path, u64)>,
+}
+
+impl ChildOptions<'_> {
+    const fn captured() -> Self {
+        Self {
+            capture_output: true,
+            file_budget: None,
+        }
+    }
+
+    const fn streamed() -> Self {
+        Self {
+            capture_output: false,
+            file_budget: None,
+        }
+    }
+}
+
 fn execute_child(
     program: &Path,
     args: &[String],
@@ -456,7 +519,7 @@ fn execute_child(
     operation_id: &str,
     cancelled: &Arc<AtomicBool>,
     sink: &EventSink,
-    capture_output: bool,
+    options: ChildOptions<'_>,
 ) -> Result<ProcessOutput, OperationError> {
     let mut command = Command::new(program);
     command
@@ -477,19 +540,20 @@ fn execute_child(
         operation_id.to_string(),
         "stdout",
         Arc::clone(sink),
-        capture_output,
+        options.capture_output,
     );
     let stderr_reader = read_stream(
         stderr,
         operation_id.to_string(),
         "stderr",
         Arc::clone(sink),
-        capture_output,
+        options.capture_output,
     );
 
     let started = Instant::now();
     let mut last_progress = started;
     let mut termination = None;
+    let mut output_too_large = None;
     while termination.is_none() {
         if cancelled.load(Ordering::Acquire) {
             let _ = crate::process_tree::terminate(&mut child);
@@ -500,6 +564,14 @@ fn execute_child(
             let _ = crate::process_tree::terminate(&mut child);
             termination = Some((None, true, false));
             continue;
+        }
+        if let Some((path, max_bytes)) = options.file_budget {
+            if std::fs::metadata(path).is_ok_and(|metadata| metadata.len() > max_bytes) {
+                let _ = crate::process_tree::terminate(&mut child);
+                output_too_large = Some(max_bytes);
+                termination = Some((None, false, false));
+                continue;
+            }
         }
         match child.try_wait() {
             Ok(Some(status)) => termination = Some((status.code(), false, false)),
@@ -535,6 +607,9 @@ fn execute_child(
     }
     if timed_out {
         return Err(OperationError::Timeout(timeout));
+    }
+    if let Some(max_bytes) = output_too_large {
+        return Err(OperationError::OutputTooLarge(max_bytes));
     }
     Ok(ProcessOutput {
         stdout,

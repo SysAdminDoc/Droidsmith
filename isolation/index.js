@@ -58,6 +58,10 @@
       ["target", "package", "userId", "path_grant", "operation_id", "on_event"],
       [],
     ],
+    capture_bugreport: [
+      ["target", "path_grant", "privacy_confirmed", "operation_id", "on_event"],
+      [],
+    ],
     push_file: [
       ["target", "path_grant", "remote_path", "operation_id", "on_event"],
       [],
@@ -101,6 +105,7 @@
   ]);
   const PATH_PURPOSES = new Set([
     "diagnostics_save",
+    "bugreport_save",
     "logcat_save",
     "package_export_save",
     "backup_save",
@@ -355,6 +360,9 @@
     }
     if (command === "recover_adb" || command === "wipe_diagnostics") {
       if (typeof payload.confirmed !== "boolean") reject("confirmation");
+    }
+    if (command === "capture_bugreport" && payload.privacy_confirmed !== true) {
+      reject("bugreport_privacy_confirmation");
     }
     if (
       ["pair_wireless", "connect_wireless", "launch_scrcpy"].includes(command)

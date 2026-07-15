@@ -59,6 +59,25 @@ pub struct StagedArtifact {
 
 impl StagedArtifact {
     pub fn new(final_path: &Path) -> Result<Self, ArtifactError> {
+        Self::new_with_suffix(final_path, "")
+    }
+
+    /// Allocate a sibling staging file with a producer-required terminal
+    /// suffix. Some tools, notably `adb bugreport`, select their output format
+    /// from the destination extension and would append `.zip` to a generic
+    /// `.partial` path.
+    pub fn new_with_suffix(final_path: &Path, suffix: &str) -> Result<Self, ArtifactError> {
+        if !suffix.is_empty()
+            && (!suffix.starts_with('.')
+                || suffix.len() > 16
+                || suffix
+                    .bytes()
+                    .any(|byte| !byte.is_ascii_alphanumeric() && byte != b'.'))
+        {
+            return Err(ArtifactError::Invalid(
+                "staging suffix must be a short extension".to_string(),
+            ));
+        }
         if final_path.is_dir() {
             return Err(ArtifactError::Invalid(format!(
                 "destination is a directory: {}",
@@ -87,7 +106,10 @@ impl StagedArtifact {
         static COUNTER: AtomicU64 = AtomicU64::new(0);
         for _ in 0..64 {
             let sequence = COUNTER.fetch_add(1, Ordering::Relaxed);
-            let stage_name = format!(".droidsmith-{}-{sequence}.partial", std::process::id());
+            let stage_name = format!(
+                ".droidsmith-{}-{sequence}.partial{suffix}",
+                std::process::id()
+            );
             let stage_path = parent.join(stage_name);
             match OpenOptions::new()
                 .write(true)
