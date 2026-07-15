@@ -60,10 +60,16 @@ export default function LogcatRoute() {
   const [streamError, setStreamError] = useState<string | null>(null);
   const [reconnecting, setReconnecting] = useState(false);
   const [exportMessage, setExportMessage] = useState<string | null>(null);
+  const [announcement, setAnnouncement] = useState("");
+  const [announcementRevision, setAnnouncementRevision] = useState(0);
   const operationRef = useRef<string | null>(null);
   const partialLineRef = useRef("");
   const generationRef = useRef(0);
   const outputRef = useRef<HTMLDivElement>(null);
+  const queueLogAnnouncement = useCallback(() => {
+    setAnnouncement("");
+    setAnnouncementRevision((revision) => revision + 1);
+  }, []);
 
   const startTailing = useCallback(() => {
     if (!authorizedTarget || operationRef.current) return;
@@ -86,6 +92,7 @@ export default function LogcatRoute() {
         return;
       if (event.kind === "output" && event.stream === "stdout") {
         appendLogcatChunk(event.chunk ?? "", partialLineRef, setLines);
+        queueLogAnnouncement();
         setReconnecting(false);
         return;
       }
@@ -96,6 +103,7 @@ export default function LogcatRoute() {
             `--- ${event.message ?? "Logcat disconnected; reconnecting"} (attempt ${event.attempt ?? "?"}) ---`,
           ),
         ]);
+        queueLogAnnouncement();
         setReconnecting(true);
       }
     };
@@ -125,7 +133,7 @@ export default function LogcatRoute() {
           setReconnecting(false);
         }
       });
-  }, [authorizedTarget]);
+  }, [authorizedTarget, queueLogAnnouncement]);
 
   const stopTailing = useCallback(() => {
     const operationId = operationRef.current;
@@ -175,6 +183,16 @@ export default function LogcatRoute() {
       return false;
     return true;
   });
+
+  useEffect(() => {
+    if (announcementRevision === 0) return;
+    const timer = window.setTimeout(() => {
+      setAnnouncement(
+        t("logcat.updatedAnnouncement", { count: filteredLines.length }),
+      );
+    }, 750);
+    return () => window.clearTimeout(timer);
+  }, [announcementRevision, filteredLines.length, t]);
 
   const exportLog = useCallback(async () => {
     if (lines.length === 0) return;
@@ -363,6 +381,7 @@ export default function LogcatRoute() {
                   onClick={() => {
                     partialLineRef.current = "";
                     setLines([]);
+                    setAnnouncement(t("logcat.clearedAnnouncement"));
                   }}
                 >
                   {t("logcat.clear")}
@@ -393,7 +412,7 @@ export default function LogcatRoute() {
                 ref={outputRef}
                 className="h-[32rem] overflow-y-auto bg-[#0c0d12] p-3 font-mono text-[11px] leading-5"
                 role="log"
-                aria-live="polite"
+                aria-live="off"
                 aria-label={t("logcat.outputLabel")}
               >
                 {filteredLines.length === 0 && !tailing && (
@@ -410,6 +429,14 @@ export default function LogcatRoute() {
                   </div>
                 ))}
               </div>
+              <p
+                className="sr-only"
+                role="status"
+                aria-live="polite"
+                aria-atomic="true"
+              >
+                {announcement}
+              </p>
             </Card>
           </>
         )}

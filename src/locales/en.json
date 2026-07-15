@@ -8,7 +8,8 @@
     "gettingStarted": "Getting started guide",
     "guide": "Guide",
     "sidebarLabel": "Application sidebar",
-    "primaryNav": "Primary navigation"
+    "primaryNav": "Primary navigation",
+    "routeChanged": "{{route}} workspace loaded"
   },
   "language": {
     "label": "Language",
@@ -94,6 +95,7 @@
     "scanning": "Scanning...",
     "connected": "Connected devices",
     "selectHint": "Select a device to view its dashboard. Review state and transport before launching any action.",
+    "selectDeviceLabel": "Select {{device}}",
     "noDevices": "No Android devices found",
     "noAdb": "ADB is not available yet",
     "adbResolved": "ADB resolved",
@@ -690,7 +692,10 @@
     "textSearchLabel": "Filter log lines by text",
     "outputLabel": "Logcat output",
     "startHint": "Press Start tail to begin capturing logs.",
-    "waiting": "Waiting for log output..."
+    "waiting": "Waiting for log output...",
+    "updatedAnnouncement_one": "Logcat updated; {{count}} visible line.",
+    "updatedAnnouncement_other": "Logcat updated; {{count}} visible lines.",
+    "clearedAnnouncement": "Logcat output cleared."
   },
   "fastboot": {
     "title": "Fastboot",

@@ -8,7 +8,8 @@
     "gettingStarted": "Руководство по началу работы",
     "guide": "Гид",
     "sidebarLabel": "Боковая панель приложения",
-    "primaryNav": "Основная навигация"
+    "primaryNav": "Основная навигация",
+    "routeChanged": "Рабочая область {{route}} загружена"
   },
   "language": {
     "label": "Язык",
@@ -94,6 +95,7 @@
     "scanning": "Сканирование...",
     "connected": "Подключенные устройства",
     "selectHint": "Выберите устройство, чтобы открыть его панель. Проверьте состояние и транспорт перед запуском действий.",
+    "selectDeviceLabel": "Выбрать {{device}}",
     "noDevices": "Android-устройства не найдены",
     "noAdb": "ADB пока недоступен",
     "adbResolved": "ADB найден",
@@ -690,7 +692,10 @@
     "textSearchLabel": "Фильтр строк лога по тексту",
     "outputLabel": "Вывод Logcat",
     "startHint": "Нажмите Start tail, чтобы начать захват логов.",
-    "waiting": "Ожидание вывода логов..."
+    "waiting": "Ожидание вывода логов...",
+    "updatedAnnouncement_one": "Logcat обновлён; видна {{count}} строка.",
+    "updatedAnnouncement_other": "Logcat обновлён; видно {{count}} строк.",
+    "clearedAnnouncement": "Вывод Logcat очищен."
   },
   "fastboot": {
     "title": "Fastboot",

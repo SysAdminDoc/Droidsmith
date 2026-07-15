@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ChangeEvent, ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -115,6 +115,10 @@ export default function App() {
   const [active, setActive] = useState<NavItem["id"]>(NAV_ITEMS[0].id);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [showDiagnostics, setShowDiagnostics] = useState(false);
+  const [routeAnnouncement, setRouteAnnouncement] = useState<
+    NavItem["id"] | null
+  >(null);
+  const mainRef = useRef<HTMLElement>(null);
   const palette = useCommandPalette();
 
   const paletteItems: PaletteItem[] = useMemo(
@@ -158,6 +162,11 @@ export default function App() {
   }, []);
 
   const activeItem = NAV_ITEMS.find((i) => i.id === active) ?? NAV_ITEMS[0];
+  const activateRoute = useCallback((route: NavItem["id"]) => {
+    setActive(route);
+    setRouteAnnouncement(route);
+    setTimeout(() => mainRef.current?.focus(), 0);
+  }, []);
 
   return (
     <div className="min-h-full overflow-hidden bg-[#08090d] text-anvil-100">
@@ -194,7 +203,7 @@ export default function App() {
                 label={t(item.labelKey)}
                 description={t(item.descriptionKey)}
                 active={active === item.id}
-                onActivate={() => setActive(item.id)}
+                onActivate={() => activateRoute(item.id)}
               />
             ))}
           </nav>
@@ -222,11 +231,29 @@ export default function App() {
         </aside>
 
         <main
+          ref={mainRef}
           id="main-content"
+          tabIndex={-1}
+          aria-label={t(activeItem.labelKey)}
           className="min-w-0 flex-1 overflow-auto px-4 py-5 sm:px-6 lg:px-8 lg:py-8"
         >
           <div className="mx-auto max-w-7xl">{activeItem.render()}</div>
         </main>
+      </div>
+      <div
+        className="sr-only"
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
+      >
+        {routeAnnouncement
+          ? t("app.routeChanged", {
+              route: t(
+                NAV_ITEMS.find((item) => item.id === routeAnnouncement)
+                  ?.labelKey ?? NAV_ITEMS[0].labelKey,
+              ),
+            })
+          : ""}
       </div>
       {showOnboarding && (
         <OnboardingModal onDismiss={() => setShowOnboarding(false)} />
@@ -241,7 +268,7 @@ export default function App() {
         onSelect={(item) => {
           if (item.id.startsWith("nav:")) {
             const navId = item.id.slice(4) as NavItem["id"];
-            setActive(navId);
+            activateRoute(navId);
           }
         }}
       />

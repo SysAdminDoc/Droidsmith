@@ -16,6 +16,7 @@ import {
   useAuthorizedDevices,
   useTransportAuthorization,
 } from "../lib/useAuthorizedDevices";
+import { formatDateTime } from "../lib/i18n";
 
 import {
   DEFAULT_MIRROR_PRESET,
@@ -538,7 +539,7 @@ function SessionPanel({
   session: ScrcpySession;
   tone: "success" | "warning";
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const running = session.state === "running";
   return (
     <StatePanel
@@ -556,7 +557,10 @@ function SessionPanel({
       </p>
       <p className="mt-2 text-xs text-anvil-400">
         {t("mirror.sessionStarted", {
-          time: formatSessionTime(session.started_at),
+          time: formatDateTime(
+            session.started_at,
+            i18n.resolvedLanguage ?? i18n.language,
+          ),
         })}
       </p>
       <pre className="mt-3 overflow-auto rounded-md border border-white/10 bg-black/30 p-3 font-mono text-xs leading-5 text-anvil-200">
@@ -569,13 +573,4 @@ function SessionPanel({
 function parsePositiveInt(value: string): number | null {
   const parsed = Number.parseInt(value.trim(), 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
-}
-
-function formatSessionTime(value: string): string {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return new Intl.DateTimeFormat(undefined, {
-    dateStyle: "short",
-    timeStyle: "short",
-  }).format(date);
 }

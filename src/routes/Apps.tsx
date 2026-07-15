@@ -36,6 +36,7 @@ import {
   useAuthorizedDevices,
   useTransportAuthorization,
 } from "../lib/useAuthorizedDevices";
+import { formatDateTime } from "../lib/i18n";
 
 import {
   backupDefaultFileName,
@@ -1524,7 +1525,7 @@ function JournalPanel({
   onRefresh: () => void;
   onUndo: (entry: JournalEntry) => void;
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
 
   if (state.kind === "idle") return null;
 
@@ -1627,7 +1628,10 @@ function JournalPanel({
                           #{entry.id}
                         </code>
                         <p className="mt-1 text-[11px] text-anvil-500">
-                          {formatJournalTime(entry.applied.applied_at)}
+                          {formatDateTime(
+                            entry.applied.applied_at,
+                            i18n.resolvedLanguage ?? i18n.language,
+                          )}
                         </p>
                       </div>
                     </TableCell>
@@ -1761,15 +1765,6 @@ function journalStatusLabel(
   }
 }
 
-function formatJournalTime(value: string): string {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return new Intl.DateTimeFormat(undefined, {
-    dateStyle: "short",
-    timeStyle: "short",
-  }).format(date);
-}
-
 function summarizeJournalOutput(output: string): string {
   const trimmed = output.trim();
   if (trimmed.length <= 180) return trimmed;
@@ -1795,7 +1790,8 @@ function ActionOverlay({
 }) {
   const { t } = useTranslation();
   const confirming = state.kind === "confirming";
-  const trapRef = useFocusTrap<HTMLDivElement>(confirming);
+  const applying = state.kind === "applying";
+  const trapRef = useFocusTrap<HTMLDivElement>(confirming || applying);
 
   useEffect(() => {
     if (!confirming) return;
@@ -1805,6 +1801,10 @@ function ActionOverlay({
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, [confirming, onCancel]);
+
+  useEffect(() => {
+    if (applying) trapRef.current?.focus();
+  }, [applying, trapRef]);
 
   if (state.kind === "idle") return null;
 
@@ -1875,12 +1875,27 @@ function ActionOverlay({
 
   if (state.kind === "applying") {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 px-4 backdrop-blur-sm">
-        <Card className="w-full max-w-lg p-6" role="status">
-          <h3 className="text-sm font-semibold text-anvil-50">
+      <div
+        ref={trapRef}
+        tabIndex={-1}
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 px-4 outline-none backdrop-blur-sm"
+        role="dialog"
+        aria-modal="true"
+        aria-busy="true"
+        aria-labelledby="applying-dialog-title"
+        aria-describedby="applying-dialog-description"
+      >
+        <Card className="w-full max-w-lg p-6">
+          <h3
+            id="applying-dialog-title"
+            className="text-sm font-semibold text-anvil-50"
+          >
             {t("apps.applyingChange")}
           </h3>
-          <p className="mt-2 text-xs text-anvil-400">
+          <p
+            id="applying-dialog-description"
+            className="mt-2 text-xs text-anvil-400"
+          >
             {state.plan.description}
           </p>
           <div className="mt-4 h-2 overflow-hidden rounded-sm bg-white/[0.08]">

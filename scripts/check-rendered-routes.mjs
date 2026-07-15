@@ -49,6 +49,10 @@ async function runDesktopFlow(browser) {
 
   await page.getByRole("heading", { name: "Droidsmith" }).waitFor();
   await page.getByText("ADB lifecycle health", { exact: true }).waitFor();
+  await page.getByRole("button", { name: "Select Pixel QA" }).waitFor();
+  if ((await page.locator("tr[role='button']").count()) !== 0) {
+    throw new Error("Device table rows must retain native table semantics");
+  }
   await page.getByRole("button", { name: "Review recovery" }).click();
   await page
     .getByRole("dialog", { name: "Review ADB restart and reconnect" })
@@ -101,6 +105,7 @@ async function runDesktopFlow(browser) {
   for (const route of ["Devices", "Apps", "Debloat", "Console"]) {
     await page.getByRole("button", { name: new RegExp(route) }).click();
     await page.getByRole("heading", { name: route, exact: true }).waitFor();
+    await assertMainFocused(page, route);
   }
 
   await page.getByLabel("ADB shell command").fill("getprop ro.product.model");
@@ -156,12 +161,22 @@ async function runDesktopFlow(browser) {
 
   await page.getByRole("button", { name: /Logcat/ }).click();
   await page.getByRole("heading", { name: "Logcat", exact: true }).waitFor();
+  await assertMainFocused(page, "Logcat");
   await page.getByRole("button", { name: "Start tail" }).click();
   await page.getByText(/I\/QA\(\s*123\): first part complete/).waitFor();
   await page
     .getByText(/Logcat disconnected; reconnecting \(attempt 2\)/)
     .waitFor();
   await page.getByText(/W\/QA\(\s*123\): after reconnect/).waitFor();
+  const logOutput = page.getByRole("log", { name: "Logcat output" });
+  if ((await logOutput.getAttribute("aria-live")) !== "off") {
+    throw new Error("Logcat output must not announce every appended line");
+  }
+  await page.waitForFunction(() =>
+    Array.from(document.querySelectorAll("[role='status']")).some((element) =>
+      /Logcat updated; \d+ visible lines?\./.test(element.textContent ?? ""),
+    ),
+  );
   await assertNoHorizontalOverflow(page, "desktop Logcat stream");
   await page.screenshot({
     path: path.join(screenshotDir, "desktop-logcat-stream.png"),
@@ -225,16 +240,64 @@ async function runDesktopFlow(browser) {
     .getByText(/Portable recovery evidence saved to .*droidsmith-recovery/)
     .waitFor();
   await page.getByRole("button", { name: "Cancel" }).click();
+  await assertFocusedButton(page, "Disable");
   await page
     .getByRole("button", { name: "Close recovery baseline", exact: true })
+    .click();
+
+  await page
+    .getByRole("row")
+    .filter({ hasText: "com.example.app" })
+    .getByRole("button", { name: "Disable" })
+    .click();
+  await page.getByRole("alertdialog").waitFor();
+  await page.getByRole("button", { name: "Apply change" }).click();
+  await page
+    .getByRole("dialog", { name: "Applying change" })
+    .waitFor({ state: "visible" });
+  await page.getByText("Action completed", { exact: true }).waitFor();
+  await page
+    .getByRole("status")
+    .filter({
+      has: page.getByRole("heading", { name: "Action completed", exact: true }),
+    })
+    .getByRole("button", { name: "Dismiss", exact: true })
     .click();
 
   await page.getByRole("button", { name: "Commands", exact: true }).click();
   await page.getByRole("dialog", { name: "Command palette" }).waitFor();
   await assertFocusedLabel(page, "Command palette search");
-  await page.getByLabel("Command palette search").fill("debloat");
-  await page.getByRole("option", { name: /Debloat/ }).click();
+  const paletteInput = page.getByRole("combobox", {
+    name: "Command palette search",
+  });
+  const controlledListbox = await paletteInput.getAttribute("aria-controls");
+  if (
+    !controlledListbox ||
+    (await page.locator(`#${controlledListbox}`).count()) !== 1
+  ) {
+    throw new Error("Command palette combobox does not control its listbox");
+  }
+  const firstActiveOption = await paletteInput.getAttribute(
+    "aria-activedescendant",
+  );
+  await paletteInput.press("ArrowDown");
+  const secondActiveOption = await paletteInput.getAttribute(
+    "aria-activedescendant",
+  );
+  if (!firstActiveOption || firstActiveOption === secondActiveOption) {
+    throw new Error("Command palette did not expose its active option");
+  }
+  await paletteInput.fill("debloat");
+  await page.waitForFunction(
+    (selector) =>
+      document
+        .querySelector(selector)
+        ?.getAttribute("aria-activedescendant") === "command-palette-option-0",
+    '[role="combobox"]',
+  );
+  await paletteInput.press("Enter");
   await page.getByRole("heading", { name: "Debloat", exact: true }).waitFor();
+  await assertMainFocused(page, "Debloat");
 
   await page.getByRole("button", { name: /QA Debloat Pack/ }).click();
   await page.getByRole("heading", { name: "Compatibility checks" }).waitFor();
@@ -257,6 +320,13 @@ async function runDesktopFlow(browser) {
     path: path.join(screenshotDir, "desktop-debloat-queue.png"),
     fullPage: false,
   });
+
+  await page.getByLabel("Language").selectOption("ru");
+  await page.waitForFunction(
+    () =>
+      document.documentElement.lang === "ru" &&
+      document.documentElement.dir === "ltr",
+  );
 
   assertNoConsoleErrors(errors, "desktop route smoke");
   await page.close();
@@ -331,6 +401,47 @@ async function assertTabMovesFocus(page, label) {
   }
 }
 
+async function assertMainFocused(page, route) {
+  try {
+    await page.waitForFunction(
+      (expected) => {
+        const active = document.activeElement;
+        return (
+          active?.tagName === "MAIN" &&
+          active.getAttribute("aria-label") === expected
+        );
+      },
+      route,
+      { timeout: 3_000 },
+    );
+  } catch {
+    const focusState = await page.evaluate(() => ({
+      activeTag: document.activeElement?.tagName,
+      activeLabel: document.activeElement?.getAttribute("aria-label"),
+      activeText: document.activeElement?.textContent?.trim().slice(0, 80),
+      mainLabel: document.querySelector("main")?.getAttribute("aria-label"),
+      paletteDialogs: document.querySelectorAll(
+        "[role='dialog'][aria-labelledby='command-palette-title']",
+      ).length,
+      activeConnected: document.activeElement?.isConnected,
+    }));
+    throw new Error(
+      `${route} route did not move focus to main: ${JSON.stringify(focusState)}`,
+    );
+  }
+}
+
+async function assertFocusedButton(page, name) {
+  await page.waitForFunction((expected) => {
+    const active = document.activeElement;
+    return (
+      active?.getAttribute("role") === null &&
+      active?.tagName === "BUTTON" &&
+      active.textContent?.trim() === expected
+    );
+  }, name);
+}
+
 async function assertNoHorizontalOverflow(page, label) {
   const offenders = await page
     .locator(
@@ -340,6 +451,7 @@ async function assertNoHorizontalOverflow(page, label) {
       elements.flatMap((element) => {
         if (!(element instanceof HTMLElement)) return [];
         if (element.closest(".overflow-x-auto")) return [];
+        if (element.closest(".sr-only")) return [];
         const rect = element.getBoundingClientRect();
         if (rect.width < 1 || rect.height < 1) return [];
         const style = getComputedStyle(element);
@@ -934,6 +1046,7 @@ async function installTauriMock(page) {
           if (request.package === "com.example.fail") {
             throw new Error("OEM policy blocked this package");
           }
+          await new Promise((resolve) => window.setTimeout(resolve, 150));
           const pkg = packages.find((item) => item.package === request.package);
           if (pkg && request.kind === "disable") pkg.enabled = false;
           if (pkg && request.kind === "enable") pkg.enabled = true;

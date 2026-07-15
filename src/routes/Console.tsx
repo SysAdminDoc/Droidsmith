@@ -485,7 +485,6 @@ export default function ConsoleRoute() {
                 onKeyDown={handleKeyDown}
                 placeholder={t("console.placeholder")}
                 disabled={running}
-                autoFocus
                 aria-label={t("console.commandLabel")}
                 className="h-8 flex-1 bg-transparent font-mono text-sm text-anvil-50 outline-none placeholder:text-anvil-600"
               />

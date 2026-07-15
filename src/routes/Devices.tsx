@@ -29,6 +29,7 @@ import {
   type SerializedDeviceState,
 } from "../lib/tauri";
 import { useFocusTrap } from "../lib/useFocusTrap";
+import { formatDateTime } from "../lib/i18n";
 import { useTransportAuthorization } from "../lib/useAuthorizedDevices";
 import {
   restartDeviceLifecycle,
@@ -375,7 +376,7 @@ function AdbHealthPanel({
   watching: boolean;
   onReviewRecovery: () => void;
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   return (
     <Card className="mb-4 p-5" aria-labelledby="adb-health-title">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -401,7 +402,10 @@ function AdbHealthPanel({
           <p className="mt-1 text-xs leading-5 text-anvil-400">
             {observedAt
               ? t("devices.health.observed", {
-                  time: new Date(observedAt).toLocaleString(),
+                  time: formatDateTime(
+                    observedAt,
+                    i18n.resolvedLanguage ?? i18n.language,
+                  ),
                 })
               : t("devices.health.probing")}
           </p>
@@ -721,35 +725,35 @@ function DeviceTable({
               return (
                 <tr
                   key={`${device.transport_id ?? device.serial}:${device.connection_generation}`}
-                  role={isDevice ? "button" : undefined}
-                  tabIndex={isDevice ? 0 : undefined}
-                  onClick={isDevice ? () => onSelect(device) : undefined}
-                  onKeyDown={
-                    isDevice
-                      ? (e) => {
-                          if (e.key === "Enter" || e.key === " ") {
-                            e.preventDefault();
-                            onSelect(device);
-                          }
-                        }
-                      : undefined
-                  }
                   title={!isDevice ? t("devices.mustAuthorize") : undefined}
                   className={[
                     "transition",
                     isDevice
-                      ? "cursor-pointer hover:bg-white/[0.055] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-circuit-300 focus-visible:outline-none"
+                      ? "hover:bg-white/[0.055]"
                       : "bg-anvil-950/20 opacity-75",
                     isSelected ? "bg-circuit-300/[0.06]" : "",
                   ].join(" ")}
                 >
                   <TableCell>
-                    <div className="flex min-w-[13rem] items-center gap-2">
+                    <button
+                      type="button"
+                      disabled={!isDevice}
+                      aria-pressed={isDevice ? isSelected : undefined}
+                      aria-label={
+                        isDevice
+                          ? t("devices.selectDeviceLabel", {
+                              device: device.model ?? device.serial,
+                            })
+                          : undefined
+                      }
+                      onClick={() => onSelect(device)}
+                      className="flex min-w-[13rem] items-center gap-2 rounded-sm text-left disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-circuit-300 focus-visible:ring-offset-2 focus-visible:ring-offset-anvil-900"
+                    >
                       <code className="font-mono text-xs text-anvil-50">
                         {device.serial}
                       </code>
                       <TransportBadge kind={device.transport_kind} />
-                    </div>
+                    </button>
                   </TableCell>
                   <TableCell>
                     <Badge tone={deviceStateTone(device.state)}>

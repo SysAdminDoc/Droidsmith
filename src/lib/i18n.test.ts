@@ -2,8 +2,12 @@ import { describe, expect, it } from "vitest";
 
 import { NAV_ITEMS } from "../App";
 import {
+  applyDocumentLanguage,
   detectInitialLanguage,
+  formatDateTime,
+  formatNumber,
   LANGUAGE_STORAGE_KEY,
+  languageMetadata,
   persistLanguage,
   readStoredLanguage,
 } from "./i18n";
@@ -49,6 +53,24 @@ describe("i18n resources", () => {
 
     expect(readStoredLanguage(storage)).toBe("ru");
     expect(storage.getItem(LANGUAGE_STORAGE_KEY)).toBe("ru");
+  });
+
+  it("propagates normalized language metadata to the document root", () => {
+    const root = { lang: "", dir: "" };
+
+    applyDocumentLanguage("ru-RU", root);
+
+    expect(root).toEqual({ lang: "ru", dir: "ltr" });
+    expect(languageMetadata("unsupported").locale).toBe("en-US");
+  });
+
+  it("formats dates and numbers with the selected locale", () => {
+    expect(formatNumber(1234, "en")).toBe("1,234");
+    expect(formatNumber(1234, "ru")).toMatch(/^1\s234$/u);
+    expect(formatDateTime("not-a-date", "ru")).toBe("not-a-date");
+    expect(formatDateTime("2026-06-29T10:05:00Z", "ru")).not.toBe(
+      formatDateTime("2026-06-29T10:05:00Z", "en"),
+    );
   });
 });
 

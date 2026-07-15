@@ -26,6 +26,7 @@ export function CommandPalette({
   const [activeIndex, setActiveIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const trapRef = useFocusTrap<HTMLDivElement>(open);
+  const listboxId = "command-palette-results";
 
   const filtered = useMemo(() => {
     if (!query.trim()) return items;
@@ -62,8 +63,9 @@ export function CommandPalette({
         e.preventDefault();
         setActiveIndex((prev) => Math.max(prev - 1, 0));
       } else if (e.key === "Enter" && filtered[activeIndex]) {
-        onSelect(filtered[activeIndex]!);
+        e.preventDefault();
         onClose();
+        onSelect(filtered[activeIndex]!);
       }
     },
     [filtered, activeIndex, onClose, onSelect],
@@ -138,11 +140,25 @@ export function CommandPalette({
             onChange={(e) => setQuery(e.target.value)}
             placeholder={t("palette.searchPlaceholder")}
             aria-label={t("palette.searchLabel")}
+            role="combobox"
+            aria-autocomplete="list"
+            aria-expanded="true"
+            aria-controls={listboxId}
+            aria-activedescendant={
+              filtered[activeIndex]
+                ? `command-palette-option-${activeIndex}`
+                : undefined
+            }
             className="h-8 flex-1 bg-transparent text-sm text-anvil-50 outline-none placeholder:text-anvil-500"
           />
         </div>
 
-        <div className="max-h-80 overflow-y-auto py-2" role="listbox">
+        <div
+          id={listboxId}
+          className="max-h-80 overflow-y-auto py-2"
+          role="listbox"
+          aria-labelledby="command-palette-title"
+        >
           {filtered.length === 0 && (
             <div className="px-4 py-7 text-center">
               <p className="text-sm font-medium text-anvil-200">
@@ -157,11 +173,13 @@ export function CommandPalette({
             <button
               key={item.id}
               type="button"
+              id={`command-palette-option-${index}`}
               role="option"
+              tabIndex={-1}
               aria-selected={index === activeIndex}
               onClick={() => {
-                onSelect(item);
                 onClose();
+                onSelect(item);
               }}
               onMouseEnter={() => setActiveIndex(index)}
               className={cn(

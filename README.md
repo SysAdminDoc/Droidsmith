@@ -163,7 +163,9 @@ Rust and `cargo-fuzz` installed, run them from `src-tauri` with
 do not compile fuzz tooling.
 
 `npm run ui:smoke` starts Vite with mocked Tauri IPC and checks sidebar
-navigation, command palette focus, Apps action overlays, Debloat queue results,
+navigation and route focus, command-palette combobox/listbox semantics, modal
+focus trapping/restoration, native table semantics, batched Logcat announcements,
+document locale propagation, Apps action overlays, Debloat queue results,
 ADB health/recovery review, the redacted Diagnostics preview/save/wipe flow,
 the split-package install and explicit override-confirmation flow, cross-route
 disconnect/reconnect behavior, incremental Logcat reconnect/cancel behavior,
@@ -176,9 +178,11 @@ installer artifacts are missing.
 
 Locale files live in `src/locales/<code>.json`. Keep each locale's key tree
 identical, add new supported language codes in `src/lib/i18n.ts`, and include
-language selector labels under `language.*`. Run `npm test -- src/lib/i18n.test.ts`
-before submitting translation changes; it checks English/Russian parity and
-navigation key coverage.
+language selector labels plus locale/direction metadata under `language.*` and
+`SUPPORTED_LANGUAGES`. Dates, numbers, document language, and document direction
+derive from that metadata. Run `npm test -- src/lib/i18n.test.ts` before
+submitting translation changes; it checks English/Russian parity, navigation
+key coverage, and locale-sensitive formatting.
 
 ## Getting involved
 
