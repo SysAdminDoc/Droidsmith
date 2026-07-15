@@ -71,8 +71,18 @@ async function runDesktopFlow(browser) {
   });
   await page.getByRole("button", { name: "Close", exact: true }).click();
   await page.getByRole("button", { name: "Diagnostics", exact: true }).click();
-  await page.getByRole("dialog", { name: "Diagnostics center" }).waitFor();
+  const diagnosticsDialog = page.getByRole("dialog", {
+    name: "Diagnostics center",
+  });
+  await diagnosticsDialog.waitFor();
   await page.getByText("Nothing is uploaded", { exact: true }).waitFor();
+  await diagnosticsDialog
+    .getByRole("button", { name: "Run connection doctor" })
+    .click();
+  await diagnosticsDialog
+    .getByText("Custom ADB server configuration is active", { exact: true })
+    .waitFor();
+  await diagnosticsDialog.getByText(/value redacted/).waitFor();
   const diagnosticsPreview = page.getByLabel("Redacted bundle preview");
   await diagnosticsPreview.waitFor();
   const diagnosticsValue = await diagnosticsPreview.inputValue();
@@ -635,6 +645,48 @@ async function installTauriMock(page) {
               source: "path",
               version: "35.0.2",
             },
+          };
+        }
+        if (cmd === "run_host_doctor") {
+          return {
+            scanned_at: "2026-07-15T10:00:00Z",
+            platform: "windows",
+            adb: {
+              resolved: true,
+              source: "path",
+              version: "37.0.0",
+              query_succeeded: true,
+              client_version: "37.0.0",
+              server_version: "37.0.0",
+            },
+            device_state_counts: { device: 1 },
+            findings: [
+              {
+                code: "adb_ready",
+                severity: "info",
+                title: "ADB executable is ready",
+                summary:
+                  "Droidsmith resolved ADB and completed transport enumeration.",
+                evidence: ["Platform Tools version: 37.0.0"],
+                remediation: ["Keep Platform Tools current."],
+                official_url:
+                  "https://developer.android.com/tools/releases/platform-tools",
+              },
+              {
+                code: "server_config_override",
+                severity: "warning",
+                title: "Custom ADB server configuration is active",
+                summary:
+                  "An environment variable overrides the default ADB server.",
+                evidence: ["ADB_SERVER_SOCKET is set (value redacted)"],
+                remediation: ["Review the named environment variable."],
+                official_url: "https://developer.android.com/tools/adb",
+              },
+            ],
+            privacy: [
+              "No changes were made.",
+              "Device serials and environment values were not retained.",
+            ],
           };
         }
         if (cmd === "list_devices") {

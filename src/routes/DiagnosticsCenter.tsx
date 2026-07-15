@@ -11,6 +11,7 @@ import {
 } from "../lib/tauri";
 import { useFocusTrap } from "../lib/useFocusTrap";
 import { Badge, Button, SkeletonLine, StatePanel } from "./common";
+import HostDoctor from "./HostDoctor";
 
 type PreviewState =
   | { kind: "loading" }
@@ -146,6 +147,10 @@ export default function DiagnosticsCenter({
           <p className="mt-1 text-xs leading-5 text-anvil-300">
             {t("diagnostics.noUploadBody")}
           </p>
+        </div>
+
+        <div className="mt-5">
+          <HostDoctor />
         </div>
 
         {state.kind === "loading" && (

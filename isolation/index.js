@@ -10,6 +10,7 @@
 
   const READ_ONLY_COMMANDS = new Set([
     "heartbeat",
+    "run_host_doctor",
     "list_devices",
     "preview_diagnostics",
     "list_wireless_services",

@@ -93,6 +93,14 @@ pub fn heartbeat(app: tauri::AppHandle) -> Heartbeat {
     }
 }
 
+/// Run a bounded, non-elevated, read-only host connection scan. The report
+/// contains state counts and redacted configuration presence only; it never
+/// persists device identifiers, USB instance IDs, environment values, or keys.
+#[tauri::command]
+pub async fn run_host_doctor() -> Result<crate::host_diagnostics::HostDoctorReport, CommandError> {
+    spawn_blocking_operation(|| Ok(crate::host_diagnostics::scan())).await
+}
+
 /// Outcome envelope for `list_devices`. We surface adb-not-found as a
 /// structured success-with-zero-devices + an `adb_resolved=false` flag
 /// rather than an Err, because "no adb installed" is a normal first-run

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { Badge, Button, Card } from "./common";
+import HostDoctor from "./HostDoctor";
 
 type Step = {
   titleKey: string;
@@ -73,7 +74,7 @@ export default function OnboardingTour({
   const isLast = step === STEPS.length - 1;
 
   return (
-    <Card className="mx-auto max-w-2xl p-6">
+    <Card className="mx-auto max-h-[94vh] max-w-2xl overflow-y-auto p-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <h2
@@ -153,6 +154,10 @@ export default function OnboardingTour({
             {t("onboarding.next")}
           </Button>
         )}
+      </div>
+
+      <div className="mt-6 border-t border-white/10 pt-6">
+        <HostDoctor />
       </div>
     </Card>
   );

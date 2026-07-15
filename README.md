@@ -21,6 +21,7 @@ supervision, cancellable background shell/export/file operations, incremental
 Logcat streaming and export, live cross-route device hot-plug updates, ADB
 server/mDNS/Wi-Fi 2.0 health with audited guided recovery, provenance-classified
 USB/TLS/legacy/unknown transports with fail-closed unsafe-TCP acknowledgement,
+read-only host connection diagnostics for ADB/tool/USB/driver/udev state,
 portable pre-change recovery baselines with read-only OTA drift review, and fastboot
 inspection. A local-only Diagnostics center previews and saves redacted support
 bundles with tool/OS/ADB health, failed-operation records, and crash excerpts;

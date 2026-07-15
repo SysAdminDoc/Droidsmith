@@ -150,6 +150,39 @@ export type AdbHealth = {
   warning: string | null;
 };
 
+export type HostFinding = {
+  code: string;
+  severity: "info" | "warning" | "error";
+  title: string;
+  summary: string;
+  evidence: string[];
+  remediation: string[];
+  official_url: string;
+};
+
+export type HostDoctorReport = {
+  scanned_at: string;
+  platform: "windows" | "linux" | "macos" | "other";
+  adb: {
+    resolved: boolean;
+    source:
+      | "path"
+      | "android_home"
+      | "android_studio"
+      | "homebrew"
+      | "distro_package"
+      | "bundled"
+      | "not_found";
+    version: string | null;
+    query_succeeded: boolean;
+    client_version: string | null;
+    server_version: string | null;
+  };
+  device_state_counts: Record<string, number>;
+  findings: HostFinding[];
+  privacy: string[];
+};
+
 export type DeviceLifecycleEvent =
   | {
       kind: "snapshot";
@@ -557,6 +590,10 @@ export function inTauri(): boolean {
 
 export async function callHeartbeat(): Promise<Heartbeat> {
   return invoke<Heartbeat>("heartbeat");
+}
+
+export async function callRunHostDoctor(): Promise<HostDoctorReport> {
+  return invoke<HostDoctorReport>("run_host_doctor");
 }
 
 export async function callListDevices(): Promise<ListDevicesResult> {

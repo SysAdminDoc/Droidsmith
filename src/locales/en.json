@@ -124,12 +124,8 @@
     "allowUsbDebugging": "Allow USB debugging",
     "noDevicesStep2Suffix": "prompt on-device.",
     "noDevicesStep3": "Or use the Wireless tab for Wi-Fi pairing.",
-    "linuxPermsBody": "One or more devices report no permissions. On Linux, add a udev rule for your device's USB vendor ID:",
-    "linuxPermsReplace": "Replace",
-    "linuxPermsExamples": "with your device's vendor ID, for example",
-    "forGoogle": "for Google or",
-    "forSamsung": "for Samsung.",
-    "reconnect": "Then unplug and reconnect.",
+    "linuxPermsBody": "One or more devices report no permissions. Avoid world-writable 0666 rules; use the distribution's device-access group and maintained Android udev rules.",
+    "linuxPermsDoctor": "Run the connection doctor below to check group membership and udev-rule coverage, then follow its official setup link.",
     "scanningBridge": "Scanning bridge",
     "waitingForAdb": "Waiting for ADB",
     "serial": "Serial",
@@ -731,6 +727,52 @@
     "queryHint": "Press Query vars to read device information.",
     "queryAllFailed": "Couldn't read any fastboot variables. The device may have left fastboot mode, or the bootloader rejected the query. Reconnect and try again.",
     "queryNoValues": "The query completed but the device reported no values for these variables."
+  },
+  "hostDoctor": {
+    "title": "Host connection doctor",
+    "readOnly": "Read-only",
+    "description": "Check Platform Tools, ADB server configuration, anonymized transport states, and bounded Windows/Linux USB prerequisites without changing the host or device.",
+    "run": "Run connection doctor",
+    "scanning": "Scanning host...",
+    "idle": "No scan has run. The doctor does not install drivers, edit rules, restart ADB, or retain serials and keys.",
+    "failed": "Connection doctor failed",
+    "adbVersion": "ADB {{version}}",
+    "adbUnverified": "ADB unverified",
+    "scanned": "Scanned {{date}}",
+    "privacy": "Privacy and side-effect contract",
+    "officialGuidance": "Open official guidance",
+    "findings": {
+      "adb_missing": { "title": "ADB was not found" },
+      "adb_unrunnable": {
+        "title": "ADB was found but could not enumerate transports"
+      },
+      "adb_version_unknown": { "title": "ADB version could not be verified" },
+      "adb_ready": { "title": "ADB executable is ready" },
+      "unauthorized": {
+        "title": "Android is waiting for USB debugging authorization"
+      },
+      "offline": { "title": "ADB transports are offline" },
+      "no_permissions": { "title": "Linux cannot open the Android USB device" },
+      "usb_visible_adb_missing": {
+        "title": "Android USB hardware is visible but absent from ADB"
+      },
+      "no_usb_transport": { "title": "No Android USB transport was detected" },
+      "windows_driver_missing": {
+        "title": "Windows has no recognized ADB interface"
+      },
+      "linux_access_incomplete": {
+        "title": "Linux Android USB access is incomplete"
+      },
+      "server_config_override": {
+        "title": "Custom ADB server configuration is active"
+      },
+      "client_server_mismatch": {
+        "title": "ADB client and server versions differ"
+      },
+      "server_status_unavailable": {
+        "title": "ADB server details are unavailable"
+      }
+    }
   },
   "onboarding": {
     "title": "Getting started",

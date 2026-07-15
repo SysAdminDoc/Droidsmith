@@ -51,6 +51,7 @@ import {
   TransportBadge,
   TransportTrustNotice,
 } from "./common";
+import HostDoctor from "./HostDoctor";
 import { ADB_RECOVERY_COMMANDS, formatAdbDiagnostics } from "./adbHealth";
 
 type State = SharedDevicesState;
@@ -290,6 +291,10 @@ export default function DevicesRoute() {
           />
         )}
 
+        <div className="mt-4">
+          <HostDoctor />
+        </div>
+
         {state.kind === "ok" &&
           state.value.devices.some(
             (d) => typeof d.state === "string" && d.state === "unauthorized",
@@ -309,15 +314,7 @@ export default function DevicesRoute() {
           ) && (
             <StatePanel title={t("devices.linuxPerms")} tone="danger">
               <p>{t("devices.linuxPermsBody")}</p>
-              <pre className="mt-2 rounded-md border border-white/10 bg-white/[0.04] p-3 font-mono text-xs text-anvil-200">
-                {`echo 'SUBSYSTEM=="usb", ATTR{idVendor}=="XXXX", MODE="0666"' | sudo tee /etc/udev/rules.d/51-android.rules\nsudo udevadm control --reload-rules && sudo udevadm trigger`}
-              </pre>
-              <p className="mt-2">
-                {t("devices.linuxPermsReplace")} <code>XXXX</code>{" "}
-                {t("devices.linuxPermsExamples")} <code>18d1</code>{" "}
-                {t("devices.forGoogle")} <code>04e8</code>{" "}
-                {t("devices.forSamsung")} {t("devices.reconnect")}
-              </p>
+              <p className="mt-2">{t("devices.linuxPermsDoctor")}</p>
             </StatePanel>
           )}
       </section>

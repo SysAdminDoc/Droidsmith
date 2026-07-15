@@ -1,0 +1,151 @@
+import { useId, useState } from "react";
+import { useTranslation } from "react-i18next";
+
+import {
+  callRunHostDoctor,
+  type HostDoctorReport,
+  type HostFinding,
+} from "../lib/tauri";
+import { formatDateTime } from "../lib/i18n";
+import { Badge, Button, Card, StatePanel } from "./common";
+
+type DoctorState =
+  | { kind: "idle" }
+  | { kind: "loading" }
+  | { kind: "result"; report: HostDoctorReport }
+  | { kind: "error"; message: string };
+
+export default function HostDoctor() {
+  const { t, i18n } = useTranslation();
+  const titleId = useId();
+  const [state, setState] = useState<DoctorState>({ kind: "idle" });
+
+  const run = async () => {
+    setState({ kind: "loading" });
+    try {
+      setState({ kind: "result", report: await callRunHostDoctor() });
+    } catch (error) {
+      setState({
+        kind: "error",
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
+  };
+
+  return (
+    <Card className="p-5" aria-labelledby={titleId}>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 id={titleId} className="text-sm font-semibold text-anvil-50">
+              {t("hostDoctor.title")}
+            </h3>
+            <Badge tone="success">{t("hostDoctor.readOnly")}</Badge>
+          </div>
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-anvil-300">
+            {t("hostDoctor.description")}
+          </p>
+        </div>
+        <Button
+          type="button"
+          size="sm"
+          variant="primary"
+          disabled={state.kind === "loading"}
+          onClick={() => void run()}
+        >
+          {state.kind === "loading"
+            ? t("hostDoctor.scanning")
+            : t("hostDoctor.run")}
+        </Button>
+      </div>
+
+      {state.kind === "idle" && (
+        <p className="mt-3 text-xs leading-5 text-anvil-400">
+          {t("hostDoctor.idle")}
+        </p>
+      )}
+      {state.kind === "error" && (
+        <div className="mt-4">
+          <StatePanel title={t("hostDoctor.failed")} tone="danger">
+            <p>{state.message}</p>
+          </StatePanel>
+        </div>
+      )}
+      {state.kind === "result" && (
+        <div className="mt-4 space-y-3">
+          <div className="flex flex-wrap gap-2 text-xs text-anvil-400">
+            <Badge
+              tone={state.report.adb.query_succeeded ? "success" : "warning"}
+            >
+              {state.report.adb.version
+                ? t("hostDoctor.adbVersion", {
+                    version: state.report.adb.version,
+                  })
+                : t("hostDoctor.adbUnverified")}
+            </Badge>
+            <Badge tone="neutral">{state.report.platform}</Badge>
+            <span>
+              {t("hostDoctor.scanned", {
+                date: formatDateTime(state.report.scanned_at, i18n.language),
+              })}
+            </span>
+          </div>
+
+          {state.report.findings.map((finding) => (
+            <Finding key={finding.code} finding={finding} />
+          ))}
+
+          <details className="rounded-md border border-white/10 bg-white/[0.025] p-3 text-xs text-anvil-400">
+            <summary className="cursor-pointer font-medium text-anvil-200">
+              {t("hostDoctor.privacy")}
+            </summary>
+            <ul className="mt-2 list-disc space-y-1 pl-5">
+              {state.report.privacy.map((item) => (
+                <li key={item}>{item}</li>
+              ))}
+            </ul>
+          </details>
+        </div>
+      )}
+    </Card>
+  );
+}
+
+function Finding({ finding }: { finding: HostFinding }) {
+  const { t } = useTranslation();
+  const tone =
+    finding.severity === "error"
+      ? "danger"
+      : finding.severity === "warning"
+        ? "warning"
+        : "info";
+  const title = t(`hostDoctor.findings.${finding.code}.title`, {
+    defaultValue: finding.title,
+  });
+
+  return (
+    <StatePanel title={title} tone={tone}>
+      <p>{finding.summary}</p>
+      {finding.evidence.length > 0 && (
+        <ul className="mt-2 list-disc space-y-1 pl-5 font-mono text-xs text-anvil-300">
+          {finding.evidence.map((item) => (
+            <li key={item}>{item}</li>
+          ))}
+        </ul>
+      )}
+      <ol className="mt-3 list-decimal space-y-1 pl-5">
+        {finding.remediation.map((item) => (
+          <li key={item}>{item}</li>
+        ))}
+      </ol>
+      <a
+        href={finding.official_url}
+        target="_blank"
+        rel="noreferrer"
+        className="mt-3 inline-flex text-xs font-medium text-circuit-200 underline decoration-circuit-300/40 underline-offset-4 hover:text-circuit-100"
+      >
+        {t("hostDoctor.officialGuidance")}
+      </a>
+    </StatePanel>
+  );
+}

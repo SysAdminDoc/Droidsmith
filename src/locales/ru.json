@@ -124,12 +124,8 @@
     "allowUsbDebugging": "Allow USB debugging",
     "noDevicesStep2Suffix": "на устройстве.",
     "noDevicesStep3": "Или используйте вкладку Wireless для пары по Wi-Fi.",
-    "linuxPermsBody": "Одно или несколько устройств сообщают no permissions. В Linux добавьте udev-правило для USB vendor ID устройства:",
-    "linuxPermsReplace": "Замените",
-    "linuxPermsExamples": "на vendor ID устройства, например",
-    "forGoogle": "для Google или",
-    "forSamsung": "для Samsung.",
-    "reconnect": "Затем отключите и подключите устройство заново.",
+    "linuxPermsBody": "Одно или несколько устройств сообщают no permissions. Не используйте общедоступные правила 0666; настройте группу доступа устройства и поддерживаемые Android udev rules вашего дистрибутива.",
+    "linuxPermsDoctor": "Запустите диагностику подключения ниже, чтобы проверить членство в группе и udev rules, затем откройте официальную инструкцию.",
     "scanningBridge": "Сканирование моста",
     "waitingForAdb": "Ожидание ADB",
     "serial": "Serial",
@@ -731,6 +727,50 @@
     "queryHint": "Нажмите Query vars, чтобы прочитать информацию устройства.",
     "queryAllFailed": "Не удалось прочитать ни одной переменной fastboot. Устройство могло выйти из режима fastboot, или загрузчик отклонил запрос. Переподключите и повторите.",
     "queryNoValues": "Запрос выполнен, но устройство не вернуло значений для этих переменных."
+  },
+  "hostDoctor": {
+    "title": "Диагностика подключения хоста",
+    "readOnly": "Только чтение",
+    "description": "Проверяет Platform Tools, конфигурацию ADB server, обезличенные состояния transport и ограниченные USB prerequisites Windows/Linux без изменений хоста или устройства.",
+    "run": "Запустить диагностику",
+    "scanning": "Сканирование хоста...",
+    "idle": "Сканирование еще не запускалось. Диагностика не устанавливает драйверы, не меняет rules, не перезапускает ADB и не сохраняет serials или keys.",
+    "failed": "Диагностика подключения не удалась",
+    "adbVersion": "ADB {{version}}",
+    "adbUnverified": "ADB не проверен",
+    "scanned": "Сканирование: {{date}}",
+    "privacy": "Контракт приватности и отсутствия изменений",
+    "officialGuidance": "Открыть официальную инструкцию",
+    "findings": {
+      "adb_missing": { "title": "ADB не найден" },
+      "adb_unrunnable": {
+        "title": "ADB найден, но не может перечислить transports"
+      },
+      "adb_version_unknown": { "title": "Версию ADB не удалось проверить" },
+      "adb_ready": { "title": "Исполняемый файл ADB готов" },
+      "unauthorized": { "title": "Android ожидает авторизации USB debugging" },
+      "offline": { "title": "ADB transports находятся offline" },
+      "no_permissions": {
+        "title": "Linux не может открыть Android USB device"
+      },
+      "usb_visible_adb_missing": {
+        "title": "Android USB виден ОС, но отсутствует в ADB"
+      },
+      "no_usb_transport": { "title": "Android USB transport не обнаружен" },
+      "windows_driver_missing": {
+        "title": "Windows не распознает ADB interface"
+      },
+      "linux_access_incomplete": {
+        "title": "Доступ Linux к Android USB настроен не полностью"
+      },
+      "server_config_override": {
+        "title": "Активна пользовательская конфигурация ADB server"
+      },
+      "client_server_mismatch": {
+        "title": "Версии ADB client и server различаются"
+      },
+      "server_status_unavailable": { "title": "Детали ADB server недоступны" }
+    }
   },
   "onboarding": {
     "title": "Начало работы",
