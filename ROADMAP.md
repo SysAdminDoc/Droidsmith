@@ -67,10 +67,6 @@ instead.
 
 ## Audit-Deferred Items
 
-- [ ] P3 — Differentiate success vs failure tone for inline device-control messages
-  Why: Screenshot, density, and pull results render as identical faint `text-xs` spans, so a "Saved" and a "Failed" look the same; these confirm real device mutations and should read as success/error states.
-  Where: `src/routes/Devices.tsx`
-
 ## Research-Driven Additions
 
 ### P0

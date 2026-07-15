@@ -1067,6 +1067,17 @@ function formatStateLabel(state: SerializedDeviceState): string {
   return label.charAt(0).toUpperCase() + label.slice(1);
 }
 
+type StatusTone = "neutral" | "success" | "danger";
+type StatusMessage = { text: string; tone: StatusTone } | null;
+
+// Inline device-control results confirm real mutations, so a success and a
+// failure must not read as the same faint line.
+function statusToneClass(tone: StatusTone): string {
+  if (tone === "success") return "text-emerald-200";
+  if (tone === "danger") return "text-red-200";
+  return "text-anvil-300";
+}
+
 const REMOTE_BUTTONS: { id: string; labelKey: string; keycode: number }[] = [
   { id: "Home", labelKey: "devices.controls.remoteHome", keycode: 3 },
   { id: "Back", labelKey: "devices.controls.remoteBack", keycode: 4 },
@@ -1092,10 +1103,10 @@ function DeviceControls({ target }: { target: DeviceTarget }) {
   const operationTarget = authorizedTarget ?? target;
   const serial = target.serial;
   const [lastKey, setLastKey] = useState<string | null>(null);
-  const [screenshotMsg, setScreenshotMsg] = useState<string | null>(null);
+  const [screenshotMsg, setScreenshotMsg] = useState<StatusMessage>(null);
   const [screenshotPath, setScreenshotPath] = useState<string | null>(null);
   const [density, setDensity] = useState("");
-  const [displayMsg, setDisplayMsg] = useState<string | null>(null);
+  const [displayMsg, setDisplayMsg] = useState<StatusMessage>(null);
 
   const sendKey = useCallback(
     async (keycode: number, label: string) => {
@@ -1124,19 +1135,24 @@ function DeviceControls({ target }: { target: DeviceTarget }) {
         return;
       }
       setScreenshotPath(null);
-      setScreenshotMsg(t("devices.controls.capturing"));
+      setScreenshotMsg({
+        text: t("devices.controls.capturing"),
+        tone: "neutral",
+      });
       const artifact = await callTakeScreenshot(operationTarget, pathGrant.id);
-      setScreenshotMsg(
-        t("devices.controls.savedTo", { path: artifact.local_path }),
-      );
+      setScreenshotMsg({
+        text: t("devices.controls.savedTo", { path: artifact.local_path }),
+        tone: "success",
+      });
       setScreenshotPath(artifact.local_path);
     } catch (e) {
       setScreenshotPath(null);
-      setScreenshotMsg(
-        t("devices.controls.failed", {
+      setScreenshotMsg({
+        tone: "danger",
+        text: t("devices.controls.failed", {
           message: e instanceof Error ? e.message : String(e),
         }),
-      );
+      });
     }
   }, [operationTarget, serial, t]);
 
@@ -1148,28 +1164,34 @@ function DeviceControls({ target }: { target: DeviceTarget }) {
         "density",
         density.trim(),
       ]);
-      setDisplayMsg(
-        t("devices.controls.densitySet", { value: density.trim() }),
-      );
+      setDisplayMsg({
+        text: t("devices.controls.densitySet", { value: density.trim() }),
+        tone: "success",
+      });
     } catch (e) {
-      setDisplayMsg(
-        t("devices.controls.failed", {
+      setDisplayMsg({
+        tone: "danger",
+        text: t("devices.controls.failed", {
           message: e instanceof Error ? e.message : String(e),
         }),
-      );
+      });
     }
   }, [operationTarget, density, t]);
 
   const resetDensity = useCallback(async () => {
     try {
       await callApplyDeviceControl(operationTarget, ["wm", "density", "reset"]);
-      setDisplayMsg(t("devices.controls.densityReset"));
+      setDisplayMsg({
+        text: t("devices.controls.densityReset"),
+        tone: "success",
+      });
     } catch (e) {
-      setDisplayMsg(
-        t("devices.controls.failed", {
+      setDisplayMsg({
+        tone: "danger",
+        text: t("devices.controls.failed", {
           message: e instanceof Error ? e.message : String(e),
         }),
-      );
+      });
     }
   }, [operationTarget, t]);
 
@@ -1183,17 +1205,19 @@ function DeviceControls({ target }: { target: DeviceTarget }) {
           "ui_night_mode",
           enable ? "2" : "1",
         ]);
-        setDisplayMsg(
-          enable
+        setDisplayMsg({
+          text: enable
             ? t("devices.controls.forceDarkEnabled")
             : t("devices.controls.forceDarkDisabled"),
-        );
+          tone: "success",
+        });
       } catch (e) {
-        setDisplayMsg(
-          t("devices.controls.failed", {
+        setDisplayMsg({
+          tone: "danger",
+          text: t("devices.controls.failed", {
             message: e instanceof Error ? e.message : String(e),
           }),
-        );
+        });
       }
     },
     [operationTarget, t],
@@ -1256,7 +1280,11 @@ function DeviceControls({ target }: { target: DeviceTarget }) {
                 {t("devices.controls.capture")}
               </Button>
               {screenshotMsg && (
-                <span className="text-xs text-anvil-300">{screenshotMsg}</span>
+                <span
+                  className={`text-xs ${statusToneClass(screenshotMsg.tone)}`}
+                >
+                  {screenshotMsg.text}
+                </span>
               )}
               {screenshotPath && <RevealInFolderButton path={screenshotPath} />}
             </div>
@@ -1316,7 +1344,9 @@ function DeviceControls({ target }: { target: DeviceTarget }) {
               </div>
             </div>
             {displayMsg && (
-              <p className="mt-3 text-xs text-anvil-300">{displayMsg}</p>
+              <p className={`mt-3 text-xs ${statusToneClass(displayMsg.tone)}`}>
+                {displayMsg.text}
+              </p>
             )}
           </Card>
         </div>
@@ -1580,7 +1610,7 @@ function FileManager({ target }: { target: DeviceTarget }) {
   const [reviewBusy, setReviewBusy] = useState(false);
   const [operationMessage, setOperationMessage] = useState<string | null>(null);
   const [fileOperationId, setFileOperationId] = useState<string | null>(null);
-  const [pullMsg, setPullMsg] = useState<string | null>(null);
+  const [pullMsg, setPullMsg] = useState<StatusMessage>(null);
   const [pullPath, setPullPath] = useState<string | null>(null);
   const [pullOperationId, setPullOperationId] = useState<string | null>(null);
   const pullOperationRef = useRef<string | null>(null);
@@ -1655,7 +1685,10 @@ function FileManager({ target }: { target: DeviceTarget }) {
           return;
         }
         setPullPath(null);
-        setPullMsg(t("devices.controls.pulling", { name: entry.name }));
+        setPullMsg({
+          text: t("devices.controls.pulling", { name: entry.name }),
+          tone: "neutral",
+        });
         const remoteFull =
           currentPath === "/"
             ? `/${entry.name}`
@@ -1674,27 +1707,29 @@ function FileManager({ target }: { target: DeviceTarget }) {
             )
               return;
             if (event.kind === "progress") {
-              setPullMsg(
-                t("devices.controls.pullProgress", {
+              setPullMsg({
+                tone: "neutral",
+                text: t("devices.controls.pullProgress", {
                   name: entry.name,
                   seconds: Math.max(
                     1,
                     Math.round((event.elapsed_ms ?? 0) / 1000),
                   ),
                 }),
-              );
+              });
             }
           },
         });
         if (pullGenerationRef.current !== generation) return;
         pullOperationRef.current = null;
         setPullOperationId(null);
-        setPullMsg(
-          t("devices.controls.savedName", {
+        setPullMsg({
+          tone: "success",
+          text: t("devices.controls.savedName", {
             name: entry.name,
             path: artifact.local_path,
           }),
-        );
+        });
         setPullPath(artifact.local_path);
       } catch (e) {
         if (
@@ -1706,11 +1741,12 @@ function FileManager({ target }: { target: DeviceTarget }) {
         pullOperationRef.current = null;
         setPullOperationId(null);
         setPullPath(null);
-        setPullMsg(
-          t("devices.controls.failed", {
+        setPullMsg({
+          tone: "danger",
+          text: t("devices.controls.failed", {
             message: e instanceof Error ? e.message : String(e),
           }),
-        );
+        });
       }
     },
     [target, currentPath, t],
@@ -1719,7 +1755,10 @@ function FileManager({ target }: { target: DeviceTarget }) {
   const cancelPull = useCallback(async () => {
     const operationId = pullOperationRef.current;
     if (!operationId) return;
-    setPullMsg(t("devices.controls.pullCancelling"));
+    setPullMsg({
+      text: t("devices.controls.pullCancelling"),
+      tone: "neutral",
+    });
     await callCancelOperation(operationId);
   }, [t]);
 
@@ -2169,7 +2208,9 @@ function FileManager({ target }: { target: DeviceTarget }) {
             </div>
             {pullMsg && (
               <div className="flex items-center justify-between gap-3 border-t border-white/10 px-4 py-2">
-                <p className="text-xs text-anvil-300">{pullMsg}</p>
+                <p className={`text-xs ${statusToneClass(pullMsg.tone)}`}>
+                  {pullMsg.text}
+                </p>
                 {pullOperationId ? (
                   <Button
                     type="button"
