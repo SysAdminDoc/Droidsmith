@@ -75,10 +75,6 @@ instead.
   Why: `formatBattery`/`formatStorage`/`formatBytes` return a hard-coded English "Unknown" for null values, bypassing i18n.
   Where: `src/routes/Devices.tsx`
 
-- [ ] P3 — Evict terminated scrcpy sessions from the supervisor map
-  Why: `reap_locked` only runs on `launch`, so exited/stopped sessions linger in the session `HashMap` until the next launch (self-healing but unbounded if the user never launches again).
-  Where: `src-tauri/src/scrcpy.rs`
-
 - [ ] P3 — Give non-selectable device states a clear label and guidance
   Why: Devices reported with a non-unit `{ other }` state render a capitalized `Other (…)` badge with no explanatory prompt, unlike the `unauthorized`/`no_permissions` paths.
   Where: `src/routes/Devices.tsx`

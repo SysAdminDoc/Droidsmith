@@ -308,7 +308,7 @@ pub fn launch(
     let mut guard = sessions()
         .lock()
         .map_err(|_| "scrcpy session supervisor lock poisoned".to_string())?;
-    reap_locked(&mut guard);
+    reap_locked(&mut guard, None);
     guard.insert(
         session.id,
         ManagedScrcpySession {
@@ -324,11 +324,18 @@ pub fn status(session_id: u64) -> Result<ScrcpySession, String> {
     let mut guard = sessions()
         .lock()
         .map_err(|_| "scrcpy session supervisor lock poisoned".to_string())?;
-    let managed = guard
-        .get_mut(&session_id)
-        .ok_or_else(|| format!("scrcpy session {session_id} is not tracked"))?;
-    refresh_status(managed)?;
-    Ok(managed.session.clone())
+    let session = {
+        let managed = guard
+            .get_mut(&session_id)
+            .ok_or_else(|| format!("scrcpy session {session_id} is not tracked"))?;
+        refresh_status(managed)?;
+        managed.session.clone()
+    };
+    // Evict other terminated sessions so the map does not grow unbounded when a
+    // long-lived renderer polls one session but never launches another. The
+    // queried session is preserved so this poll still observes its final state.
+    reap_locked(&mut guard, Some(session_id));
+    Ok(session)
 }
 
 pub fn stop(session_id: u64) -> Result<ScrcpySession, String> {
@@ -348,7 +355,10 @@ pub fn stop(session_id: u64) -> Result<ScrcpySession, String> {
         managed.stderr.wait_for_eof();
         managed.session.stderr_tail = managed.stderr.snapshot();
     }
-    Ok(managed.session.clone())
+    let session = managed.session.clone();
+    // Drop any other terminated sessions now that we hold the lock.
+    reap_locked(&mut guard, Some(session_id));
+    Ok(session)
 }
 
 fn refresh_status(managed: &mut ManagedScrcpySession) -> Result<(), String> {
@@ -374,11 +384,15 @@ fn refresh_status(managed: &mut ManagedScrcpySession) -> Result<(), String> {
     Ok(())
 }
 
-fn reap_locked(sessions: &mut HashMap<u64, ManagedScrcpySession>) {
-    for managed in sessions.values_mut() {
-        let _ = refresh_status(managed);
+fn reap_locked(sessions: &mut HashMap<u64, ManagedScrcpySession>, keep: Option<u64>) {
+    for (id, managed) in sessions.iter_mut() {
+        if Some(*id) != keep {
+            let _ = refresh_status(managed);
+        }
     }
-    sessions.retain(|_, managed| managed.session.state == ScrcpySessionState::Running);
+    sessions.retain(|id, managed| {
+        Some(*id) == keep || managed.session.state == ScrcpySessionState::Running
+    });
 }
 
 pub fn build_args(
