@@ -487,6 +487,7 @@
       "disable": "Disable",
       "enable": "Enable",
       "uninstall_for_user": "Uninstall for user",
+      "restore_existing_for_user": "Restore retained system app",
       "clear_data": "Clear data",
       "force_stop": "Force stop",
       "grant_permission": "Grant permission",

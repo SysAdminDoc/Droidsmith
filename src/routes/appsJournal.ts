@@ -35,5 +35,12 @@ export function journalEntryStatus(
       ? "undoable"
       : "irreversible";
   }
+  if (kind === "uninstall_for_user") {
+    return (entry.applied.before_state === "preinstalled_enabled" ||
+      entry.applied.before_state === "preinstalled_disabled") &&
+      entry.applied.after_state === "retained_preinstalled"
+      ? "undoable"
+      : "irreversible";
+  }
   return kind === "disable" || kind === "enable" ? "undoable" : "irreversible";
 }

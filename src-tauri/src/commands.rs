@@ -1069,6 +1069,13 @@ pub fn apply_action(
     app: tauri::AppHandle,
     mut plan: actions::PlannedAction,
 ) -> Result<ApplyActionResult, CommandError> {
+    if plan.request.kind == actions::ActionKind::RestoreExistingForUser {
+        return Err(CommandError {
+            code: "journal_undo_required",
+            message: "install-existing recovery can only run from a verified journal undo"
+                .to_string(),
+        });
+    }
     let (transport, transport_override) = privileged_transport(&plan.request.target)?;
     plan.request.context.transport_override = transport_override;
 
@@ -1150,7 +1157,7 @@ pub fn journal_list(
 
 /// Undo entry `entry_id` in `serial`'s journal. Returns the new
 /// undo-entry. Fails if the original action is irreversible
-/// (uninstall, clear-data, force-stop).
+/// (unverified uninstall, clear-data, force-stop).
 #[tauri::command]
 pub fn journal_undo(
     app: tauri::AppHandle,
@@ -1373,6 +1380,7 @@ pub fn plan_shell_action(request: PlanShellActionRequest) -> Result<ShellActionP
             permission: None,
             shell_argv: request.argv,
             transport_override,
+            restore_enabled_state: None,
         },
     });
     Ok(ShellActionPlan {
@@ -1439,6 +1447,7 @@ pub fn apply_device_control(
             permission: None,
             shell_argv: argv,
             transport_override,
+            restore_enabled_state: None,
         },
     });
     let dir = journal_dir(&app)?;
@@ -1964,6 +1973,7 @@ pub fn set_permission(
             permission: Some(permission),
             shell_argv: Vec::new(),
             transport_override,
+            restore_enabled_state: None,
         },
     });
     let dir = journal_dir(&app)?;

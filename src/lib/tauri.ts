@@ -329,6 +329,7 @@ export type ActionKind =
   | "disable"
   | "enable"
   | "uninstall_for_user"
+  | "restore_existing_for_user"
   | "clear_data"
   | "force_stop"
   | "grant_permission"
@@ -352,6 +353,7 @@ export type ActionContext = {
   permission: string | null;
   shell_argv: string[];
   transport_override: DeviceTransportKind | null;
+  restore_enabled_state: boolean | null;
 };
 
 export type ActionRequest = {

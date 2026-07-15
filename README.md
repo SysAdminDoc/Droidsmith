@@ -26,6 +26,13 @@ inspection. A local-only Diagnostics center previews and saves redacted support
 bundles with tool/OS/ADB health, failed-operation records, and crash excerpts;
 it never uploads data and can wipe disposable local diagnostic history.
 
+Per-user removal now records package provenance and post-state immediately
+around the mutation. A preinstalled system app is undoable from Activity only
+when PackageManager proves its APK remains retained for that Android user;
+user-installed `/data/app` packages and unknown/OEM states remain explicitly
+irreversible. Recovery uses `install-existing`, restores the prior enabled state,
+and verifies the result before linking the undo journal row.
+
 Current blockers are tracked separately in [Roadmap_Blocked.md](Roadmap_Blocked.md):
 signed release pipeline, bundled platform-tools wiring, UAD-NG redistribution,
 crash-log upload infrastructure, and the future plugin API/marketplace.
@@ -99,9 +106,10 @@ recovery; it excludes the raw serial, APK paths, UIDs, and installer metadata.
 Use **Inspect recovery baseline** in Apps after a host reinstall or OTA update.
 Import is read-only: Droidsmith shows identity/build/user compatibility, packages
 already matching, and every skipped mismatch before enabling the separate apply
-button. Only reviewed enable/disable recovery plans use the existing journaled
-action executor; irreversible historical actions are never presented as safely
-undoable.
+button. Only reviewed enable/disable recovery plans use the portable baseline;
+eligible retained-system-app recovery is deliberately limited to the same-device
+Activity journal. User-installed and unverified historical removals are never
+presented as safely undoable.
 
 The headless CLI exposes the same schema and diff engine:
 

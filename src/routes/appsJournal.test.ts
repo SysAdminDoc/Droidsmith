@@ -91,6 +91,18 @@ describe("journalEntryStatus", () => {
     expect(journalEntryStatus(entry("force_stop"))).toBe("irreversible");
   });
 
+  it("offers undo only for a verified retained preinstalled package", () => {
+    const eligible = entry("uninstall_for_user");
+    eligible.applied.before_state = "preinstalled_enabled";
+    eligible.applied.after_state = "retained_preinstalled";
+    expect(journalEntryStatus(eligible)).toBe("undoable");
+
+    const userInstalled = entry("uninstall_for_user");
+    userInstalled.applied.before_state = "user_installed_enabled";
+    userInstalled.applied.after_state = "not_installed";
+    expect(journalEntryStatus(userInstalled)).toBe("irreversible");
+  });
+
   it("surfaces pending, failed, and interrupted operation records", () => {
     expect(
       journalEntryStatus({ ...entry("disable"), outcome: "pending" }),

@@ -37,6 +37,13 @@ pub struct AppPackage {
     pub installer: Option<String>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PackagePresence {
+    Installed { enabled: bool, system: bool },
+    Retained { system: bool },
+    Missing,
+}
+
 impl AppPackage {
     /// Convenience filter: matches Android's "Show system" toggle in
     /// the Settings → Apps screen. Kept ahead of the renderer-side
@@ -102,6 +109,50 @@ pub fn list_packages(
             PackageFilter::Disabled => !p.enabled,
         })
         .collect())
+}
+
+/// Inspect one package for one Android user, including packages removed for
+/// that user but retained by PackageManager (`pm list packages -u`). System
+/// provenance is derived from the reported APK path and therefore fails
+/// closed when an OEM omits `-f` output.
+pub fn inspect_package_presence(
+    t: &dyn AdbTransport,
+    target: &DeviceTarget,
+    user_id: u32,
+    package: &str,
+) -> Result<PackagePresence, TransportError> {
+    let user = user_id.to_string();
+    for (enabled, state_flag) in [(false, "-d"), (true, "-e")] {
+        let raw = t.shell_target(
+            target,
+            &[
+                "pm", "list", "packages", "--user", &user, state_flag, "-f", package,
+            ],
+        )?;
+        if let Some(entry) = parse_pm_list(&raw, enabled)
+            .into_iter()
+            .find(|entry| entry.package == package)
+        {
+            return Ok(PackagePresence::Installed {
+                enabled,
+                system: entry.system,
+            });
+        }
+    }
+
+    let retained = t.shell_target(
+        target,
+        &[
+            "pm", "list", "packages", "--user", &user, "-u", "-f", package,
+        ],
+    )?;
+    Ok(parse_pm_list(&retained, false)
+        .into_iter()
+        .find(|entry| entry.package == package)
+        .map(|entry| PackagePresence::Retained {
+            system: entry.system,
+        })
+        .unwrap_or(PackagePresence::Missing))
 }
 
 /// Parse the output of `pm list packages -f -U -i [-e|-d]`.
@@ -335,5 +386,86 @@ package:/system/app/FacebookStub/FacebookStub.apk=com.facebook.appmanager uid:10
         assert!(is_system_path("/system_ext/app/X.apk"));
         assert!(!is_system_path("/data/app/X.apk"));
         assert!(!is_system_path(""));
+    }
+
+    #[test]
+    fn package_presence_distinguishes_retained_system_from_missing() {
+        let mock = MockTransport::new();
+        for flag in ["-d", "-e"] {
+            mock.expect_shell(
+                "abc",
+                &[
+                    "pm",
+                    "list",
+                    "packages",
+                    "--user",
+                    "10",
+                    flag,
+                    "-f",
+                    "com.system.old",
+                ],
+                Ok(String::new()),
+            );
+        }
+        mock.expect_shell(
+            "abc",
+            &[
+                "pm",
+                "list",
+                "packages",
+                "--user",
+                "10",
+                "-u",
+                "-f",
+                "com.system.old",
+            ],
+            Ok("package:/system/app/Old/Old.apk=com.system.old\n".into()),
+        );
+
+        assert_eq!(
+            inspect_package_presence(&mock, &target(), 10, "com.system.old").unwrap(),
+            PackagePresence::Retained { system: true }
+        );
+    }
+
+    #[test]
+    fn package_presence_preserves_installed_provenance_and_enabled_state() {
+        let mock = MockTransport::new();
+        mock.expect_shell(
+            "abc",
+            &[
+                "pm",
+                "list",
+                "packages",
+                "--user",
+                "0",
+                "-d",
+                "-f",
+                "com.example.foo",
+            ],
+            Ok(String::new()),
+        );
+        mock.expect_shell(
+            "abc",
+            &[
+                "pm",
+                "list",
+                "packages",
+                "--user",
+                "0",
+                "-e",
+                "-f",
+                "com.example.foo",
+            ],
+            Ok("package:/data/app/com.example.foo/base.apk=com.example.foo\n".into()),
+        );
+
+        assert_eq!(
+            inspect_package_presence(&mock, &target(), 0, "com.example.foo").unwrap(),
+            PackagePresence::Installed {
+                enabled: true,
+                system: false,
+            }
+        );
     }
 }

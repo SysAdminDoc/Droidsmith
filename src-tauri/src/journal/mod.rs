@@ -564,6 +564,19 @@ pub fn undo_request_for(journal: &Journal, entry_id: u64) -> Option<ActionReques
         return None; // already undone
     }
     let original_kind = entry.applied.plan.request.kind;
+    let restore_enabled_state =
+        if original_kind == crate::adb::actions::ActionKind::UninstallForUser {
+            match (
+                entry.applied.before_state.as_str(),
+                entry.applied.after_state.as_str(),
+            ) {
+                ("preinstalled_enabled", "retained_preinstalled") => Some(true),
+                ("preinstalled_disabled", "retained_preinstalled") => Some(false),
+                _ => return None,
+            }
+        } else {
+            None
+        };
     match original_kind {
         crate::adb::actions::ActionKind::GrantPermission
             if entry.applied.before_state != "revoked"
@@ -592,6 +605,7 @@ pub fn undo_request_for(journal: &Journal, entry_id: u64) -> Option<ActionReques
         pack_context: entry.applied.plan.request.pack_context.clone(),
         context: crate::adb::actions::ActionContext {
             confirmation_source: crate::adb::actions::ConfirmationSource::JournalUndo,
+            restore_enabled_state,
             ..entry.applied.plan.request.context.clone()
         },
     })
@@ -758,12 +772,21 @@ mod tests {
     }
 
     #[test]
-    fn undo_request_returns_none_for_irreversible() {
+    fn uninstall_undo_requires_verified_retained_preinstalled_state() {
         let dir = fresh_tmp_dir("irr");
         let mut j = Journal::open(&dir, "abc").unwrap();
         j.record(fake_applied("abc", "com.foo", ActionKind::UninstallForUser))
             .unwrap();
         assert!(undo_request_for(&j, 1).is_none());
+
+        let mut eligible = fake_applied("abc", "com.system", ActionKind::UninstallForUser);
+        eligible.before_state = "preinstalled_disabled".into();
+        eligible.after_state = "retained_preinstalled".into();
+        j.record(eligible).unwrap();
+        let request = undo_request_for(&j, 2).unwrap();
+        assert_eq!(request.kind, ActionKind::RestoreExistingForUser);
+        assert_eq!(request.user_id, 0);
+        assert_eq!(request.context.restore_enabled_state, Some(false));
     }
 
     #[test]
@@ -782,6 +805,7 @@ mod tests {
                     permission: Some("android.permission.CAMERA".into()),
                     shell_argv: Vec::new(),
                     transport_override: None,
+                    restore_enabled_state: None,
                 },
             }),
             stdout: String::new(),
@@ -1010,6 +1034,7 @@ mod tests {
                 permission: None,
                 shell_argv: vec!["rm".into(), "/sdcard/private.txt".into()],
                 transport_override: None,
+                restore_enabled_state: None,
             },
         });
         let result = journal.execute(plan, None, "2026-07-14T12:00:00Z", |_| {

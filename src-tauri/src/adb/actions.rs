@@ -30,6 +30,10 @@ pub enum ActionKind {
     /// current user; the APK remains in `/system/` (system apps) but
     /// is removed from `/data/app/` (user apps).
     UninstallForUser,
+    /// Backend-only inverse for a verified retained system package.
+    /// `cmd package install-existing` is followed by an explicit restoration
+    /// and verification of the prior enabled state.
+    RestoreExistingForUser,
     /// `pm clear <pkg>` — wipes the package's data and cache.
     ClearData,
     /// `am force-stop <pkg>` — non-destructive; included for symmetry.
@@ -71,6 +75,10 @@ pub struct ActionContext {
     /// explicit renderer acknowledgement for an unauthenticated transport.
     #[serde(default)]
     pub transport_override: Option<super::DeviceTransportKind>,
+    /// Backend-only state carried from a verified uninstall journal row into
+    /// its `install-existing` inverse.
+    #[serde(default)]
+    pub restore_enabled_state: Option<bool>,
 }
 
 /// Install an APK on a device using `adb install`. The APK path is a
@@ -263,10 +271,9 @@ pub fn extract_apk(
 }
 
 impl ActionKind {
-    /// True for actions that the journal can losslessly undo by issuing
-    /// the inverse `ActionKind` on the same package. `UninstallForUser`
-    /// and `ClearData` cannot be losslessly undone — undo from the
-    /// journal will surface that explicitly.
+    /// True for actions that are unconditionally reversible. An
+    /// `UninstallForUser` becomes reversible only after its journal row proves
+    /// a retained preinstalled package, so it remains false here.
     ///
     /// Kept alongside `inverse` for symmetry; the renderer will use
     /// this to disable the "Undo" button on irreversible rows.
@@ -284,7 +291,8 @@ impl ActionKind {
             Self::Enable => Some(Self::Disable),
             Self::GrantPermission => Some(Self::RevokePermission),
             Self::RevokePermission => Some(Self::GrantPermission),
-            Self::UninstallForUser | Self::ClearData | Self::ForceStop | Self::Shell => None,
+            Self::UninstallForUser => Some(Self::RestoreExistingForUser),
+            Self::RestoreExistingForUser | Self::ClearData | Self::ForceStop | Self::Shell => None,
         }
     }
 }
@@ -432,6 +440,14 @@ fn synth_args(r: &ActionRequest) -> Vec<String> {
             user,
             r.package.clone(),
         ],
+        ActionKind::RestoreExistingForUser => vec![
+            "cmd".into(),
+            "package".into(),
+            "install-existing".into(),
+            "--user".into(),
+            user,
+            r.package.clone(),
+        ],
         ActionKind::ClearData => vec![
             "pm".into(),
             "clear".into(),
@@ -468,7 +484,11 @@ fn describe(r: &ActionRequest) -> String {
         ActionKind::Disable => format!("Disable {} for user {u}", r.package),
         ActionKind::Enable => format!("Re-enable {} for user {u}", r.package),
         ActionKind::UninstallForUser => format!(
-            "Uninstall {} for user {u} (system APK preserved on /system)",
+            "Remove {} for user {u}; undo is offered only if PackageManager verifies a retained preinstalled APK",
+            r.package
+        ),
+        ActionKind::RestoreExistingForUser => format!(
+            "Restore retained preinstalled package {} for user {u} and restore its prior enabled state",
             r.package
         ),
         ActionKind::ClearData => format!("Clear data and cache for {} (user {u})", r.package),
@@ -516,18 +536,28 @@ pub fn apply(
     } else {
         plan.before_state.clone()
     };
-    let argv: Vec<&str> = plan.args.iter().map(String::as_str).collect();
-    let stdout = transport.shell_target(&plan.request.target, &argv)?;
+    let stdout = if plan.request.kind == ActionKind::RestoreExistingForUser {
+        restore_existing_for_user(transport, &plan.request, &plan.args, &before_state)?
+    } else {
+        let argv: Vec<&str> = plan.args.iter().map(String::as_str).collect();
+        checked_package_command(transport, &plan.request.target, &argv)?
+    };
     // `pm disable-user --user 0 com.foo` prints "Package com.foo new
     // state: disabled" on success and "Failure [...]" on failure. We
     // surface the raw text and let UI / journal layers decide.
-    if let Some(err) = pm_failure_marker(&stdout) {
-        return Err(TransportError::Exit {
-            code: 1,
-            stderr: err.to_string(),
-        });
-    }
     let after_state = capture_state(transport, &plan.request);
+    if plan.request.kind == ActionKind::RestoreExistingForUser {
+        let expected = if plan.request.context.restore_enabled_state == Some(true) {
+            "preinstalled_enabled"
+        } else {
+            "preinstalled_disabled"
+        };
+        if after_state != expected {
+            return Err(TransportError::Parse(format!(
+                "install-existing did not restore the verified package state: expected {expected}, got {after_state}"
+            )));
+        }
+    }
     let audit_stdout = redact_journal_text(&plan.request, &stdout);
     Ok(AppliedAction {
         plan,
@@ -543,10 +573,12 @@ pub fn capture_state(transport: &dyn AdbTransport, request: &ActionRequest) -> S
     match request.kind {
         ActionKind::Disable
         | ActionKind::Enable
-        | ActionKind::UninstallForUser
         | ActionKind::ClearData
         | ActionKind::ForceStop => {
             package_state(transport, request).unwrap_or_else(|_| "unknown".to_string())
+        }
+        ActionKind::UninstallForUser | ActionKind::RestoreExistingForUser => {
+            removal_state(transport, request).unwrap_or_else(|_| "unknown".to_string())
         }
         ActionKind::GrantPermission | ActionKind::RevokePermission => transport
             .shell_target(&request.target, &["dumpsys", "package", &request.package])
@@ -565,6 +597,97 @@ pub fn capture_state(transport: &dyn AdbTransport, request: &ActionRequest) -> S
         }
         ActionKind::Shell => "not_captured".to_string(),
     }
+}
+
+fn removal_state(
+    transport: &dyn AdbTransport,
+    request: &ActionRequest,
+) -> Result<String, TransportError> {
+    use crate::adb::packages::PackagePresence;
+
+    Ok(match crate::adb::packages::inspect_package_presence(
+        transport,
+        &request.target,
+        request.user_id,
+        &request.package,
+    )? {
+        PackagePresence::Installed {
+            enabled: true,
+            system: true,
+        } => "preinstalled_enabled",
+        PackagePresence::Installed {
+            enabled: false,
+            system: true,
+        } => "preinstalled_disabled",
+        PackagePresence::Installed {
+            enabled: true,
+            system: false,
+        } => "user_installed_enabled",
+        PackagePresence::Installed {
+            enabled: false,
+            system: false,
+        } => "user_installed_disabled",
+        PackagePresence::Retained { system: true } => "retained_preinstalled",
+        PackagePresence::Retained { system: false } => "retained_unclassified",
+        PackagePresence::Missing => "not_installed",
+    }
+    .to_string())
+}
+
+fn checked_package_command(
+    transport: &dyn AdbTransport,
+    target: &DeviceTarget,
+    argv: &[&str],
+) -> Result<String, TransportError> {
+    let output = transport.shell_target(target, argv)?;
+    if let Some(error) = pm_failure_marker(&output) {
+        return Err(TransportError::Exit {
+            code: 1,
+            stderr: error.to_string(),
+        });
+    }
+    Ok(output)
+}
+
+fn restore_existing_for_user(
+    transport: &dyn AdbTransport,
+    request: &ActionRequest,
+    install_args: &[String],
+    before_state: &str,
+) -> Result<String, TransportError> {
+    let mut output = String::new();
+    match before_state {
+        "retained_preinstalled" => {
+            let argv: Vec<&str> = install_args.iter().map(String::as_str).collect();
+            output.push_str(&checked_package_command(transport, &request.target, &argv)?);
+        }
+        "preinstalled_enabled" | "preinstalled_disabled" => {
+            output.push_str("Package was already restored; reconciling enabled state.\n");
+        }
+        state => {
+            return Err(TransportError::Parse(format!(
+                "refusing install-existing because the package is not a retained preinstalled package ({state})"
+            )));
+        }
+    }
+
+    let user = request.user_id.to_string();
+    let enabled = request.context.restore_enabled_state.ok_or_else(|| {
+        TransportError::Parse("install-existing is missing the verified prior enabled state".into())
+    })?;
+    let state_args = [
+        "pm",
+        if enabled { "enable" } else { "disable-user" },
+        "--user",
+        &user,
+        &request.package,
+    ];
+    output.push_str(&checked_package_command(
+        transport,
+        &request.target,
+        &state_args,
+    )?);
+    Ok(output)
 }
 
 fn package_state(
@@ -677,7 +800,10 @@ pub fn validate_plan(plan: &PlannedAction) -> Result<(), TransportError> {
                 .permission
                 .as_deref()
                 .unwrap_or_default();
-            if !valid_permission(permission) || !plan.request.context.shell_argv.is_empty() {
+            if !valid_permission(permission)
+                || !plan.request.context.shell_argv.is_empty()
+                || plan.request.context.restore_enabled_state.is_some()
+            {
                 return Err(TransportError::Parse(
                     "permission action has invalid canonical context".to_string(),
                 ));
@@ -687,14 +813,27 @@ pub fn validate_plan(plan: &PlannedAction) -> Result<(), TransportError> {
             if !plan.request.package.is_empty()
                 || plan.request.context.permission.is_some()
                 || !valid_shell_argv(&plan.request.context.shell_argv)
+                || plan.request.context.restore_enabled_state.is_some()
             {
                 return Err(TransportError::Parse(
                     "shell action has invalid canonical context".to_string(),
                 ));
             }
         }
+        ActionKind::RestoreExistingForUser => {
+            if plan.request.context.confirmation_source != ConfirmationSource::JournalUndo
+                || plan.request.context.permission.is_some()
+                || !plan.request.context.shell_argv.is_empty()
+                || plan.request.context.restore_enabled_state.is_none()
+            {
+                return Err(TransportError::Parse(
+                    "install-existing action is not a verified journal inverse".to_string(),
+                ));
+            }
+        }
         _ if plan.request.context.permission.is_some()
-            || !plan.request.context.shell_argv.is_empty() =>
+            || !plan.request.context.shell_argv.is_empty()
+            || plan.request.context.restore_enabled_state.is_some() =>
         {
             return Err(TransportError::Parse(
                 "package action has unexpected canonical context".to_string(),
@@ -955,7 +1094,10 @@ mod tests {
         assert!(ActionKind::Disable.is_reversible());
         assert!(ActionKind::Enable.is_reversible());
         assert!(!ActionKind::UninstallForUser.is_reversible());
-        assert!(ActionKind::UninstallForUser.inverse().is_none());
+        assert_eq!(
+            ActionKind::UninstallForUser.inverse(),
+            Some(ActionKind::RestoreExistingForUser)
+        );
         assert_eq!(
             ActionKind::GrantPermission.inverse(),
             Some(ActionKind::RevokePermission)
@@ -977,6 +1119,7 @@ mod tests {
                 permission: Some("android.permission.CAMERA".into()),
                 shell_argv: Vec::new(),
                 transport_override: None,
+                restore_enabled_state: None,
             },
         });
         assert_eq!(
@@ -1010,6 +1153,7 @@ mod tests {
                     "1".into(),
                 ],
                 transport_override: None,
+                restore_enabled_state: None,
             },
         });
         assert_eq!(shell.args, shell.request.context.shell_argv);
@@ -1057,6 +1201,7 @@ mod tests {
                     permission: Some("android.permission.CAMERA".into()),
                     shell_argv: Vec::new(),
                     transport_override: None,
+                    restore_enabled_state: None,
                 },
             }),
             "2026-07-14T12:00:00Z",
@@ -1095,6 +1240,7 @@ mod tests {
                         "secret".into(),
                     ],
                     transport_override: None,
+                    restore_enabled_state: None,
                 },
             }),
             "2026-07-14T12:00:00Z",
@@ -1156,6 +1302,190 @@ mod tests {
             }
             other => panic!("expected Exit, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn uninstall_records_only_verified_retained_system_recovery_state() {
+        let mock = MockTransport::new().with_devices(vec![device("abc")]);
+        expect_owner(&mock);
+        mock.expect_shell(
+            "abc",
+            &[
+                "pm",
+                "list",
+                "packages",
+                "--user",
+                "0",
+                "-d",
+                "-f",
+                "com.system",
+            ],
+            Ok(String::new()),
+        );
+        mock.expect_shell(
+            "abc",
+            &[
+                "pm",
+                "list",
+                "packages",
+                "--user",
+                "0",
+                "-e",
+                "-f",
+                "com.system",
+            ],
+            Ok("package:/system/app/System/System.apk=com.system\n".into()),
+        );
+        mock.expect_shell(
+            "abc",
+            &["pm", "uninstall", "--user", "0", "com.system"],
+            Ok("Success\n".into()),
+        );
+        for flag in ["-d", "-e"] {
+            mock.expect_shell(
+                "abc",
+                &[
+                    "pm",
+                    "list",
+                    "packages",
+                    "--user",
+                    "0",
+                    flag,
+                    "-f",
+                    "com.system",
+                ],
+                Ok(String::new()),
+            );
+        }
+        mock.expect_shell(
+            "abc",
+            &[
+                "pm",
+                "list",
+                "packages",
+                "--user",
+                "0",
+                "-u",
+                "-f",
+                "com.system",
+            ],
+            Ok("package:/system/app/System/System.apk=com.system\n".into()),
+        );
+
+        let applied = apply(
+            &mock,
+            plan(ActionRequest {
+                serial: "abc".into(),
+                target: target("abc"),
+                package: "com.system".into(),
+                kind: ActionKind::UninstallForUser,
+                user_id: 0,
+                pack_context: None,
+                context: ActionContext::default(),
+            }),
+            "2026-07-15T12:00:00Z",
+        )
+        .unwrap();
+
+        assert_eq!(applied.before_state, "preinstalled_enabled");
+        assert_eq!(applied.after_state, "retained_preinstalled");
+    }
+
+    #[test]
+    fn restore_existing_reconciles_and_verifies_prior_disabled_state() {
+        let mock = MockTransport::new().with_devices(vec![device("abc")]);
+        mock.expect_shell(
+            "abc",
+            &["pm", "list", "users"],
+            Ok("Users:\n  UserInfo{0:Owner:c13} running (current)\n  UserInfo{10:Work:30} running\n".into()),
+        );
+        mock.expect_shell("abc", &["am", "get-current-user"], Ok("0\n".into()));
+        mock.expect_shell(
+            "abc",
+            &[
+                "cmd",
+                "package",
+                "install-existing",
+                "--user",
+                "10",
+                "com.system",
+            ],
+            Ok("Package com.system installed for user: 10\n".into()),
+        );
+        mock.expect_shell(
+            "abc",
+            &["pm", "disable-user", "--user", "10", "com.system"],
+            Ok("Package com.system new state: disabled-user\n".into()),
+        );
+        mock.expect_shell(
+            "abc",
+            &[
+                "pm",
+                "list",
+                "packages",
+                "--user",
+                "10",
+                "-d",
+                "-f",
+                "com.system",
+            ],
+            Ok("package:/product/app/System/System.apk=com.system\n".into()),
+        );
+        let mut restore = plan(ActionRequest {
+            serial: "abc".into(),
+            target: target("abc"),
+            package: "com.system".into(),
+            kind: ActionKind::RestoreExistingForUser,
+            user_id: 10,
+            pack_context: None,
+            context: ActionContext {
+                confirmation_source: ConfirmationSource::JournalUndo,
+                restore_enabled_state: Some(false),
+                ..Default::default()
+            },
+        });
+        restore.before_state = "retained_preinstalled".into();
+
+        let applied = apply(&mock, restore, "2026-07-15T12:05:00Z").unwrap();
+        assert_eq!(applied.after_state, "preinstalled_disabled");
+        assert!(applied.display_stdout.contains("installed for user"));
+    }
+
+    #[test]
+    fn restore_existing_surfaces_unsupported_oem_command_without_claiming_success() {
+        let mock = MockTransport::new().with_devices(vec![device("abc")]);
+        expect_owner(&mock);
+        mock.expect_shell(
+            "abc",
+            &[
+                "cmd",
+                "package",
+                "install-existing",
+                "--user",
+                "0",
+                "com.system",
+            ],
+            Ok("Error: unknown command 'install-existing'\n".into()),
+        );
+        let mut restore = plan(ActionRequest {
+            serial: "abc".into(),
+            target: target("abc"),
+            package: "com.system".into(),
+            kind: ActionKind::RestoreExistingForUser,
+            user_id: 0,
+            pack_context: None,
+            context: ActionContext {
+                confirmation_source: ConfirmationSource::JournalUndo,
+                restore_enabled_state: Some(true),
+                ..Default::default()
+            },
+        });
+        restore.before_state = "retained_preinstalled".into();
+
+        assert!(matches!(
+            apply(&mock, restore, "2026-07-15T12:10:00Z"),
+            Err(TransportError::Exit { .. })
+        ));
     }
 
     #[test]
