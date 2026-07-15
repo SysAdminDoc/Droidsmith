@@ -16,6 +16,7 @@ const MAX_ACTIVE_GRANTS: usize = 64;
 pub enum HostPathPurpose {
     DiagnosticsSave,
     BugreportSave,
+    ScrcpyRecordSave,
     LogcatSave,
     PackageExportSave,
     BackupSave,
@@ -34,6 +35,7 @@ impl HostPathPurpose {
             self,
             Self::DiagnosticsSave
                 | Self::BugreportSave
+                | Self::ScrcpyRecordSave
                 | Self::LogcatSave
                 | Self::PackageExportSave
                 | Self::BackupSave
@@ -48,6 +50,7 @@ impl HostPathPurpose {
         match self {
             Self::DiagnosticsSave => "Save Droidsmith support bundle",
             Self::BugreportSave => "Save sensitive Android bugreport",
+            Self::ScrcpyRecordSave => "Save scrcpy recording",
             Self::LogcatSave => "Export Logcat",
             Self::PackageExportSave => "Export package APKs",
             Self::BackupSave => "Save advanced legacy data export",
@@ -65,6 +68,7 @@ impl HostPathPurpose {
         match self {
             Self::DiagnosticsSave => Some(("JSON", &["json"])),
             Self::BugreportSave => Some(("Android bugreport", &["zip"])),
+            Self::ScrcpyRecordSave => Some(("scrcpy recording", &["mp4", "mkv"])),
             Self::LogcatSave => Some(("Logcat", &["log", "txt"])),
             Self::PackageExportSave => Some(("Droidsmith package export", &["zip"])),
             Self::BackupSave => Some(("Droidsmith legacy data export", &["zip"])),

@@ -5,7 +5,6 @@ export type MirrorPreset = {
   bitRate: string;
   noAudio: boolean;
   recording: boolean;
-  recordPath: string;
   keyboardMode: KeyboardMode;
   turnScreenOff: boolean;
   stayAwake: boolean;
@@ -17,7 +16,6 @@ export const DEFAULT_MIRROR_PRESET: MirrorPreset = {
   bitRate: "8M",
   noAudio: false,
   recording: false,
-  recordPath: "",
   keyboardMode: "default",
   turnScreenOff: false,
   stayAwake: false,
@@ -26,11 +24,37 @@ export const DEFAULT_MIRROR_PRESET: MirrorPreset = {
 
 export function normalizePreset(value: Partial<MirrorPreset>): MirrorPreset {
   return {
-    ...DEFAULT_MIRROR_PRESET,
-    ...value,
+    maxSize:
+      typeof value.maxSize === "string"
+        ? value.maxSize
+        : DEFAULT_MIRROR_PRESET.maxSize,
+    bitRate:
+      typeof value.bitRate === "string"
+        ? value.bitRate
+        : DEFAULT_MIRROR_PRESET.bitRate,
+    noAudio:
+      typeof value.noAudio === "boolean"
+        ? value.noAudio
+        : DEFAULT_MIRROR_PRESET.noAudio,
+    recording:
+      typeof value.recording === "boolean"
+        ? value.recording
+        : DEFAULT_MIRROR_PRESET.recording,
     keyboardMode: isKeyboardMode(value.keyboardMode)
       ? value.keyboardMode
       : DEFAULT_MIRROR_PRESET.keyboardMode,
+    turnScreenOff:
+      typeof value.turnScreenOff === "boolean"
+        ? value.turnScreenOff
+        : DEFAULT_MIRROR_PRESET.turnScreenOff,
+    stayAwake:
+      typeof value.stayAwake === "boolean"
+        ? value.stayAwake
+        : DEFAULT_MIRROR_PRESET.stayAwake,
+    showTouches:
+      typeof value.showTouches === "boolean"
+        ? value.showTouches
+        : DEFAULT_MIRROR_PRESET.showTouches,
   };
 }
 

@@ -644,6 +644,7 @@ export async function callPreviewDiagnostics(): Promise<SupportPreview> {
 export type HostPathPurpose =
   | "diagnostics_save"
   | "bugreport_save"
+  | "scrcpy_record_save"
   | "logcat_save"
   | "package_export_save"
   | "backup_save"
@@ -1022,7 +1023,6 @@ export type LaunchScrcpyOptions = {
   max_size?: number | null;
   bit_rate?: string | null;
   no_audio: boolean;
-  record_path?: string | null;
   keyboard_mode?: string | null;
   turn_screen_off: boolean;
   stay_awake: boolean;
@@ -1043,8 +1043,12 @@ export type ScrcpySession = {
 
 export async function callLaunchScrcpy(
   opts: LaunchScrcpyOptions,
+  pathGrant?: string,
 ): Promise<ScrcpySession> {
-  return invoke<ScrcpySession>("launch_scrcpy", { request: opts });
+  return invoke<ScrcpySession>("launch_scrcpy", {
+    request: opts,
+    path_grant: pathGrant ?? null,
+  });
 }
 
 export async function callScrcpySessionStatus(

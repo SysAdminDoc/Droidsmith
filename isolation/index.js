@@ -75,7 +75,7 @@
       [],
     ],
     take_screenshot: [["target", "path_grant"], []],
-    launch_scrcpy: [["request"], []],
+    launch_scrcpy: [["request"], ["path_grant"]],
     stop_scrcpy: [["session_id"], []],
     shell_run: [["target", "argv", "operation_id", "on_event"], []],
     stream_logcat: [["target", "operation_id", "on_event"], []],
@@ -106,6 +106,7 @@
   const PATH_PURPOSES = new Set([
     "diagnostics_save",
     "bugreport_save",
+    "scrcpy_record_save",
     "logcat_save",
     "package_export_save",
     "backup_save",
@@ -246,7 +247,7 @@
         ) {
           reject("path_grant");
         }
-      } else if (["local_path", "apk_path", "record_path"].includes(key)) {
+      } else if (["local_path", "apk_path"].includes(key)) {
         validateLocalPath(value);
       } else if (key === "remote_path") {
         validateRemotePath(value);
@@ -325,7 +326,7 @@
           "stay_awake",
           "show_touches",
         ],
-        ["max_size", "bit_rate", "record_path", "keyboard_mode"],
+        ["max_size", "bit_rate", "keyboard_mode"],
         "scrcpy_request",
       );
       ensureIdentifier(request.serial, "scrcpy_serial");

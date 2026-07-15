@@ -5,6 +5,7 @@ import {
   callLaunchScrcpy,
   callLocateScrcpy,
   callScrcpySessionStatus,
+  callSelectHostPath,
   callStopScrcpy,
   deviceTarget,
   inTauri,
@@ -172,21 +173,30 @@ export default function MirrorRoute() {
       return;
     setSession({ kind: "launching" });
     try {
-      const next = await callLaunchScrcpy({
-        serial: selectedTarget.serial,
-        target: authorizedTarget,
-        max_size: parsePositiveInt(preset.maxSize),
-        bit_rate: preset.bitRate.trim() || null,
-        no_audio: preset.noAudio,
-        record_path:
-          preset.recording && preset.recordPath.trim()
-            ? preset.recordPath.trim()
-            : null,
-        keyboard_mode: preset.keyboardMode,
-        turn_screen_off: preset.turnScreenOff,
-        stay_awake: preset.stayAwake,
-        show_touches: preset.showTouches,
-      });
+      const recordingGrant = preset.recording
+        ? await callSelectHostPath(
+            "scrcpy_record_save",
+            `droidsmith-recording-${new Date().toISOString().slice(0, 10)}.mp4`,
+          )
+        : null;
+      if (preset.recording && !recordingGrant) {
+        setSession({ kind: "idle" });
+        return;
+      }
+      const next = await callLaunchScrcpy(
+        {
+          serial: selectedTarget.serial,
+          target: authorizedTarget,
+          max_size: parsePositiveInt(preset.maxSize),
+          bit_rate: preset.bitRate.trim() || null,
+          no_audio: preset.noAudio,
+          keyboard_mode: preset.keyboardMode,
+          turn_screen_off: preset.turnScreenOff,
+          stay_awake: preset.stayAwake,
+          show_touches: preset.showTouches,
+        },
+        recordingGrant?.id,
+      );
       setSession({ kind: "running", session: next });
     } catch (e) {
       setSession({
@@ -292,6 +302,7 @@ export default function MirrorRoute() {
                           : "secondary"
                       }
                       size="sm"
+                      disabled={session.kind === "launching"}
                       onClick={() => setSelectedTarget(deviceTarget(d))}
                     >
                       {d.model ?? d.serial}
@@ -440,23 +451,9 @@ export default function MirrorRoute() {
                 </div>
 
                 {preset.recording && (
-                  <label className="mt-4 grid gap-1.5">
-                    <span className="text-xs font-medium text-anvil-400">
-                      {t("mirror.outputFile")}
-                    </span>
-                    <FieldInput
-                      type="text"
-                      value={preset.recordPath}
-                      onChange={(e) =>
-                        setPreset((prev) => ({
-                          ...prev,
-                          recordPath: e.target.value,
-                        }))
-                      }
-                      placeholder="recording.mp4"
-                      className="font-mono"
-                    />
-                  </label>
+                  <p className="mt-4 rounded-md border border-circuit-300/20 bg-circuit-300/10 p-3 text-xs leading-5 text-anvil-300">
+                    {t("mirror.recordDestinationHint")}
+                  </p>
                 )}
 
                 <div className="mt-5 flex flex-wrap items-center gap-3">

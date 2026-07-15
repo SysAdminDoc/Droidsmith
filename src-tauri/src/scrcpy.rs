@@ -15,7 +15,6 @@ pub struct LaunchScrcpyRequest {
     pub max_size: Option<u32>,
     pub bit_rate: Option<String>,
     pub no_audio: bool,
-    pub record_path: Option<String>,
     pub keyboard_mode: Option<String>,
     pub turn_screen_off: bool,
     pub stay_awake: bool,
@@ -59,9 +58,10 @@ fn next_session_id() -> u64 {
 pub fn launch(
     scrcpy_path: &Path,
     request: LaunchScrcpyRequest,
+    record_path: Option<&Path>,
     started_at: String,
 ) -> Result<ScrcpySession, String> {
-    let args = build_args(&request)?;
+    let args = build_args(&request, record_path)?;
     let mut command = Command::new(scrcpy_path);
     command
         .args(&args)
@@ -146,7 +146,10 @@ fn reap_locked(sessions: &mut HashMap<u64, ManagedScrcpySession>) {
     sessions.retain(|_, managed| managed.session.state == ScrcpySessionState::Running);
 }
 
-pub fn build_args(request: &LaunchScrcpyRequest) -> Result<Vec<String>, String> {
+pub fn build_args(
+    request: &LaunchScrcpyRequest,
+    record_path: Option<&Path>,
+) -> Result<Vec<String>, String> {
     let mut args = vec!["-s".to_string(), request.serial.clone()];
     if let Some(max_size) = request.max_size.filter(|value| *value > 0) {
         args.push("--max-size".to_string());
@@ -164,21 +167,16 @@ pub fn build_args(request: &LaunchScrcpyRequest) -> Result<Vec<String>, String> 
     if request.no_audio {
         args.push("--no-audio".to_string());
     }
-    if let Some(record_path) = request
-        .record_path
-        .as_deref()
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-    {
-        // A leading '-' would be parsed by scrcpy as an option flag rather
-        // than the recording filename.
-        if record_path.starts_with('-') {
-            return Err(format!(
-                "scrcpy recording path must not start with '-': {record_path}"
-            ));
+    if let Some(record_path) = record_path {
+        let extension = record_path
+            .extension()
+            .and_then(|value| value.to_str())
+            .unwrap_or_default();
+        if !matches!(extension.to_ascii_lowercase().as_str(), "mp4" | "mkv") {
+            return Err("scrcpy recording must use the .mp4 or .mkv extension".to_string());
         }
         args.push("--record".to_string());
-        args.push(record_path.to_string());
+        args.push(record_path.display().to_string());
     }
     if let Some(mode) = request
         .keyboard_mode
@@ -209,6 +207,7 @@ pub fn build_args(request: &LaunchScrcpyRequest) -> Result<Vec<String>, String> 
 mod tests {
     use super::{build_args, LaunchScrcpyRequest};
     use crate::adb::DeviceTarget;
+    use std::path::Path;
 
     fn request() -> LaunchScrcpyRequest {
         LaunchScrcpyRequest {
@@ -227,7 +226,6 @@ mod tests {
             max_size: Some(1280),
             bit_rate: Some("12M".to_string()),
             no_audio: true,
-            record_path: Some("session.mp4".to_string()),
             keyboard_mode: Some("uhid".to_string()),
             turn_screen_off: true,
             stay_awake: true,
@@ -237,7 +235,7 @@ mod tests {
 
     #[test]
     fn builds_documented_scrcpy_session_args() {
-        let args = build_args(&request()).unwrap();
+        let args = build_args(&request(), Some(Path::new("session.mp4"))).unwrap();
         assert_eq!(
             args,
             vec![
@@ -262,17 +260,15 @@ mod tests {
     fn rejects_unknown_keyboard_modes() {
         let mut req = request();
         req.keyboard_mode = Some("surprise".to_string());
-        assert!(build_args(&req)
+        assert!(build_args(&req, None)
             .unwrap_err()
             .contains("unsupported scrcpy keyboard mode"));
     }
 
     #[test]
-    fn rejects_record_path_that_looks_like_a_flag() {
-        let mut req = request();
-        req.record_path = Some("--version".to_string());
-        assert!(build_args(&req)
+    fn rejects_unsupported_recording_extensions() {
+        assert!(build_args(&request(), Some(Path::new("session.txt")))
             .unwrap_err()
-            .contains("must not start with"));
+            .contains(".mp4 or .mkv"));
     }
 }

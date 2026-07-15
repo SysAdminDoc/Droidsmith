@@ -662,6 +662,7 @@
     "stayAwake": "Keep device awake",
     "showTouches": "Show touches",
     "outputFile": "Output file",
+    "recordDestinationHint": "When you launch, a native save dialog will choose the .mp4 or .mkv recording destination. Presets never retain host paths.",
     "savePreset": "Save preset",
     "resetPreset": "Reset",
     "presetSaved": "Preset saved for {{serial}}.",

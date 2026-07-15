@@ -189,6 +189,30 @@ test("requires an explicit legacy TCP classification on wireless connect", () =>
   assert.equal(hook(missing).cmd, blockedCommand);
 });
 
+test("accepts only a one-shot grant for optional scrcpy recording", () => {
+  const request = {
+    serial: target.serial,
+    target,
+    max_size: 1280,
+    bit_rate: "8M",
+    no_audio: false,
+    keyboard_mode: "uhid",
+    turn_screen_off: false,
+    stay_awake: true,
+    show_touches: false,
+  };
+  const valid = message("launch_scrcpy", { request, path_grant: pathGrant });
+  assert.equal(hook(valid), valid);
+  assert.equal(
+    hook(
+      message("launch_scrcpy", {
+        request: { ...request, record_path: "C:/arbitrary/output.mp4" },
+      }),
+    ).cmd,
+    blockedCommand,
+  );
+});
+
 test("allows bounded multiline Logcat exports", () => {
   const valid = message("save_logcat_export", {
     path_grant: pathGrant,
@@ -281,6 +305,11 @@ test("allows only bounded native dialog purposes and file names", () => {
     suggested_name: "droidsmith-bugreport-2026-07-15.zip",
   });
   assert.equal(hook(bugreport), bugreport);
+  const recording = message("select_host_path", {
+    purpose: "scrcpy_record_save",
+    suggested_name: "droidsmith-recording-2026-07-15.mp4",
+  });
+  assert.equal(hook(recording), recording);
 
   for (const payload of [
     { purpose: "arbitrary_write", suggested_name: "capture.png" },

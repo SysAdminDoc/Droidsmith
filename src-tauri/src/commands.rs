@@ -2148,6 +2148,8 @@ pub fn locate_scrcpy() -> Option<String> {
 #[tauri::command]
 pub fn launch_scrcpy(
     request: crate::scrcpy::LaunchScrcpyRequest,
+    grants: tauri::State<'_, PathGrantStore>,
+    path_grant: Option<String>,
 ) -> Result<crate::scrcpy::ScrcpySession, CommandError> {
     validate_serial_arg(&request.serial)?;
     if request.target.serial != request.serial {
@@ -2172,9 +2174,15 @@ pub fn launch_scrcpy(
         code: "scrcpy_not_found",
         message: "scrcpy binary not found on PATH".to_string(),
     })?;
-    crate::scrcpy::launch(&scrcpy_path, request, iso_now()).map_err(|e| CommandError {
-        code: "scrcpy_spawn_failed",
-        message: e,
+    let record_path = path_grant
+        .as_deref()
+        .map(|grant| grants.consume(grant, HostPathPurpose::ScrcpyRecordSave))
+        .transpose()?;
+    crate::scrcpy::launch(&scrcpy_path, request, record_path.as_deref(), iso_now()).map_err(|e| {
+        CommandError {
+            code: "scrcpy_spawn_failed",
+            message: e,
+        }
     })
 }
 

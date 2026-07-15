@@ -4,6 +4,7 @@ import {
   DEFAULT_MIRROR_PRESET,
   normalizePreset,
   presetStorageKey,
+  type MirrorPreset,
 } from "./mirrorPresets";
 
 describe("mirror presets", () => {
@@ -20,6 +21,16 @@ describe("mirror presets", () => {
     expect(normalizePreset({ keyboardMode: "bad" as never }).keyboardMode).toBe(
       "default",
     );
+  });
+
+  it("drops legacy renderer-authored recording paths", () => {
+    const migrated = normalizePreset({
+      recording: true,
+      recordPath: "C:/legacy/arbitrary.mp4",
+    } as Partial<MirrorPreset> & { recordPath: string });
+
+    expect(migrated.recording).toBe(true);
+    expect(migrated).not.toHaveProperty("recordPath");
   });
 
   it("scopes saved presets to each device serial", () => {

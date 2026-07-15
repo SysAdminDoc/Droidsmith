@@ -371,6 +371,20 @@ async function runDesktopFlow(browser) {
     fullPage: false,
   });
 
+  await page.getByRole("button", { name: /Mirror/ }).click();
+  await page.getByRole("heading", { name: "Mirror", exact: true }).waitFor();
+  await page.getByRole("checkbox", { name: "Record session" }).check();
+  await page
+    .getByText(/native save dialog will choose the .mp4 or .mkv/)
+    .waitFor();
+  await page.getByRole("button", { name: "Launch mirror" }).click();
+  await page.getByText("Mirror session running", { exact: true }).waitFor();
+  await page
+    .getByText(/--record C:\/Users\/QA\/Desktop\/droidsmith-recording/)
+    .waitFor();
+  await page.getByRole("button", { name: "Stop session" }).click();
+  await page.getByText("Mirror session ended", { exact: true }).waitFor();
+
   await page.getByLabel("Language").selectOption("ru");
   await page.waitForFunction(
     () =>
@@ -639,6 +653,11 @@ async function installTauriMock(page) {
               id: "123e4567-e89b-42d3-a456-426614174008",
               local_path:
                 "C:/Users/QA/Desktop/droidsmith-bugreport-2026-07-15.zip",
+            },
+            scrcpy_record_save: {
+              id: "123e4567-e89b-42d3-a456-426614174009",
+              local_path:
+                "C:/Users/QA/Desktop/droidsmith-recording-2026-07-15.mp4",
             },
             install_open: {
               id: "123e4567-e89b-42d3-a456-426614174002",
@@ -1348,7 +1367,54 @@ async function installTauriMock(page) {
             skipped: [],
           };
         }
-        if (cmd === "locate_scrcpy" || cmd === "locate_fastboot") return null;
+        if (cmd === "locate_scrcpy") return "C:/Tools/scrcpy.exe";
+        if (cmd === "launch_scrcpy") {
+          if (
+            args.path_grant !== "123e4567-e89b-42d3-a456-426614174009" ||
+            "record_path" in args.request
+          ) {
+            throw new Error(
+              "Mirror recording bypassed the one-shot native save grant",
+            );
+          }
+          return {
+            id: 301,
+            serial: args.request.serial,
+            pid: 4242,
+            args: [
+              "-s",
+              args.request.serial,
+              "--record",
+              "C:/Users/QA/Desktop/droidsmith-recording-2026-07-15.mp4",
+            ],
+            started_at: "2026-07-15T11:00:00Z",
+            state: "running",
+            exit_code: null,
+          };
+        }
+        if (cmd === "scrcpy_session_status") {
+          return {
+            id: args.session_id,
+            serial: "QA123",
+            pid: 4242,
+            args: ["-s", "QA123"],
+            started_at: "2026-07-15T11:00:00Z",
+            state: "running",
+            exit_code: null,
+          };
+        }
+        if (cmd === "stop_scrcpy") {
+          return {
+            id: args.session_id,
+            serial: "QA123",
+            pid: 4242,
+            args: ["-s", "QA123"],
+            started_at: "2026-07-15T11:00:00Z",
+            state: "stopped",
+            exit_code: 0,
+          };
+        }
+        if (cmd === "locate_fastboot") return null;
         if (cmd === "list_fastboot_devices") return [];
         if (cmd === "list_permissions") return [];
         throw new Error(`Unhandled mocked command: ${cmd}`);
