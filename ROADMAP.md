@@ -75,10 +75,6 @@ instead.
   Why: `formatBattery`/`formatStorage`/`formatBytes` return a hard-coded English "Unknown" for null values, bypassing i18n.
   Where: `src/routes/Devices.tsx`
 
-- [ ] P3 — Query device storage with an explicit block size
-  Why: `device_info` storage parsing reads `df` output whose units depend on the busybox/toybox variant; passing `df -k` (as `list_remote_files` now does) makes the KB assumption deterministic.
-  Where: `src-tauri/src/adb/device_info.rs`, `src-tauri/src/commands.rs`
-
 - [ ] P3 — Evict terminated scrcpy sessions from the supervisor map
   Why: `reap_locked` only runs on `launch`, so exited/stopped sessions linger in the session `HashMap` until the next launch (self-healing but unbounded if the user never launches again).
   Where: `src-tauri/src/scrcpy.rs`

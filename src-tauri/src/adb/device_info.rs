@@ -48,8 +48,10 @@ pub fn get_device_info(
             .unwrap_or_default(),
     );
     let storage = parse_df(
+        // `-k` pins 1K-block units so `parse_df`'s KB interpretation is
+        // deterministic regardless of the busybox/toybox default block size.
         &transport
-            .shell_target(target, &["df", "/data"])
+            .shell_target(target, &["df", "-k", "/data"])
             .unwrap_or_default(),
     );
     let wifi_ip = get_prop(&props, "dhcp.wlan0.ipaddress")
@@ -149,7 +151,7 @@ fn battery_status_label(code: &str) -> String {
 }
 
 fn parse_df(stdout: &str) -> Option<StorageInfo> {
-    // `df /data` output varies by Android version. Common format:
+    // `df -k /data` reports 1K-block units on every Android variant. Format:
     //   Filesystem  1K-blocks  Used  Available  Use%  Mounted on
     //   /dev/...    123456     78900  44556      64%   /data
     for line in stdout.lines().skip(1) {
