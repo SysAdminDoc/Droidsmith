@@ -598,9 +598,17 @@ export type BackupPackageResult = {
   local_path: string;
   stdout: string;
   size_bytes: number | null;
+  sha256: string;
   empty: boolean;
   /** Non-empty but header-only: `adb backup` excluded the app's data. */
   header_only: boolean;
+};
+
+export type HostArtifact = {
+  /** Canonical host path installed only after validation succeeds. */
+  local_path: string;
+  size_bytes: number;
+  sha256: string;
 };
 
 export async function callBackupPackage(
@@ -646,8 +654,8 @@ export async function callPullFile(
   remotePath: string,
   localPath: string,
   options?: OperationOptions,
-): Promise<string> {
-  return invokeOperation<string>(
+): Promise<HostArtifact> {
+  return invokeOperation<HostArtifact>(
     "pull_file",
     { target, remote_path: remotePath, local_path: localPath },
     "pull",
@@ -701,8 +709,11 @@ export async function callListProcesses(
 export async function callTakeScreenshot(
   target: DeviceTarget,
   localPath: string,
-): Promise<string> {
-  return invoke<string>("take_screenshot", { target, local_path: localPath });
+): Promise<HostArtifact> {
+  return invoke<HostArtifact>("take_screenshot", {
+    target,
+    local_path: localPath,
+  });
 }
 
 export async function callLocateScrcpy(): Promise<string | null> {
@@ -876,8 +887,8 @@ export async function callExtractApk(
   remotePath: string,
   localPath: string,
   options?: OperationOptions,
-): Promise<string> {
-  return invokeOperation<string>(
+): Promise<HostArtifact> {
+  return invokeOperation<HostArtifact>(
     "extract_apk",
     { target, remote_path: remotePath, local_path: localPath },
     "extract",

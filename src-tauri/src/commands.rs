@@ -25,6 +25,7 @@ use crate::adb::parsers::{
 };
 use crate::adb::transport::AdbTransport;
 use crate::adb::{self, actions};
+use crate::fs_util::{ArtifactError, ArtifactKind, HostArtifact, StagedArtifact};
 use crate::install;
 use crate::journal::{self, Journal, JournalEntry};
 use crate::operations::{self, OperationEvent};
@@ -751,6 +752,15 @@ impl From<std::io::Error> for CommandError {
     }
 }
 
+impl From<ArtifactError> for CommandError {
+    fn from(error: ArtifactError) -> Self {
+        Self {
+            code: error.code(),
+            message: error.to_string(),
+        }
+    }
+}
+
 impl From<operations::OperationError> for CommandError {
     fn from(error: operations::OperationError) -> Self {
         let code = match &error {
@@ -1372,17 +1382,22 @@ pub async fn pull_file(
     local_path: String,
     operation_id: String,
     on_event: tauri::ipc::Channel<OperationEvent>,
-) -> Result<String, CommandError> {
+) -> Result<HostArtifact, CommandError> {
     let transport = validated_transport(&target)?;
-    let validated_path = validate_local_path(&local_path)?;
+    let output_target = validate_local_path(&local_path)?;
     let remote = validate_remote_path(&remote_path)?;
-    let local_arg = validated_path.display().to_string();
     let timeout = std::time::Duration::from_secs(120);
-    let mut args = target.adb_selector();
-    args.extend(["pull".to_string(), remote, local_arg]);
+    let selector = target.adb_selector();
     let adb_path = transport.adb_path.clone();
     let sink = operations::channel_sink(on_event);
     spawn_blocking_operation(move || {
+        let staged = StagedArtifact::new(&output_target)?;
+        let mut args = selector;
+        args.extend([
+            "pull".to_string(),
+            remote,
+            staged.path().display().to_string(),
+        ]);
         let output = operations::run_process(
             &adb_path,
             &args,
@@ -1391,7 +1406,8 @@ pub async fn pull_file(
             "Pulling file from device",
             sink,
         )?;
-        completed_adb_output(output, "adb pull")
+        completed_adb_output(output, "adb pull")?;
+        Ok(staged.commit(ArtifactKind::AnyFile)?)
     })
     .await
 }
@@ -1642,6 +1658,7 @@ pub struct BackupPackageResult {
     pub local_path: String,
     pub stdout: String,
     pub size_bytes: Option<u64>,
+    pub sha256: String,
     pub empty: bool,
     /// True when the artifact is non-empty but only large enough to hold
     /// the `.ab` header — i.e. `adb backup` excluded the app's data
@@ -1707,18 +1724,19 @@ pub async fn backup_package(
     validate_package_arg(&package)?;
     let output_target = validate_backup_target(&local_path)?;
     let timeout = std::time::Duration::from_secs(300);
-    let target_arg = output_target.display().to_string();
-    let mut args = target.adb_selector();
-    args.extend([
-        "backup".to_string(),
-        "-f".to_string(),
-        target_arg,
-        "-apk".to_string(),
-        package,
-    ]);
+    let selector = target.adb_selector();
     let adb_path = transport.adb_path.clone();
     let sink = operations::channel_sink(on_event);
     spawn_blocking_operation(move || {
+        let staged = StagedArtifact::new(&output_target)?;
+        let mut args = selector;
+        args.extend([
+            "backup".to_string(),
+            "-f".to_string(),
+            staged.path().display().to_string(),
+            "-apk".to_string(),
+            package,
+        ]);
         let output = operations::run_process(
             &adb_path,
             &args,
@@ -1728,14 +1746,14 @@ pub async fn backup_package(
             sink,
         )?;
         let stdout = completed_adb_output(output, "adb backup")?;
-        let size_bytes = std::fs::metadata(&output_target)
-            .ok()
-            .map(|metadata| metadata.len());
+        let artifact = staged.commit(ArtifactKind::AndroidBackup)?;
+        let size_bytes = Some(artifact.size_bytes);
         let (empty, header_only) = classify_backup_size(size_bytes);
         Ok(BackupPackageResult {
-            local_path: output_target.display().to_string(),
+            local_path: artifact.local_path,
             stdout,
             size_bytes,
+            sha256: artifact.sha256,
             empty,
             header_only,
         })
@@ -1874,20 +1892,24 @@ pub fn list_processes(target: adb::DeviceTarget) -> Result<Vec<ProcessInfo>, Com
 pub fn take_screenshot(
     target: adb::DeviceTarget,
     local_path: String,
-) -> Result<String, CommandError> {
+) -> Result<HostArtifact, CommandError> {
     let transport = validated_transport(&target)?;
-    let validated_path = validate_local_path(&local_path)?;
+    let output_target = validate_local_path(&local_path)?;
+    let staged = StagedArtifact::new(&output_target)?;
     // Unique device-side temp so concurrent captures (multiple devices or
     // rapid clicks) never clobber each other's PNG mid-pull.
     let remote = unique_screenshot_remote();
-    let local_arg = validated_path.display().to_string();
-    transport.shell_target(&target, &["screencap", "-p", &remote])?;
-    let pulled = actions::extract_apk(&transport.adb_path, &target, &remote, &local_arg);
+    if let Err(error) = transport.shell_target(&target, &["screencap", "-p", &remote]) {
+        let _ = transport.shell_target(&target, &["rm", "-f", &remote]);
+        return Err(error.into());
+    }
+    let stage_arg = staged.path().display().to_string();
+    let pulled = actions::extract_apk(&transport.adb_path, &target, &remote, &stage_arg);
     // Always remove the device temp, even when the pull failed, so a
     // partial capture never leaks onto /sdcard.
     let _ = transport.shell_target(&target, &["rm", "-f", &remote]);
     pulled?;
-    Ok(local_arg)
+    Ok(staged.commit(ArtifactKind::Png)?)
 }
 
 /// Build a per-capture unique `/sdcard` path. Uses the process id plus a
@@ -2004,16 +2026,21 @@ pub async fn extract_apk(
     local_path: String,
     operation_id: String,
     on_event: tauri::ipc::Channel<OperationEvent>,
-) -> Result<String, CommandError> {
+) -> Result<HostArtifact, CommandError> {
     let transport = validated_transport(&target)?;
-    let validated_path = validate_local_path(&local_path)?;
+    let output_target = validate_local_path(&local_path)?;
     let remote = validate_remote_path(&remote_path)?;
-    let local_arg = validated_path.display().to_string();
-    let mut args = target.adb_selector();
-    args.extend(["pull".to_string(), remote, local_arg]);
+    let selector = target.adb_selector();
     let adb_path = transport.adb_path.clone();
     let sink = operations::channel_sink(on_event);
     spawn_blocking_operation(move || {
+        let staged = StagedArtifact::new(&output_target)?;
+        let mut args = selector;
+        args.extend([
+            "pull".to_string(),
+            remote,
+            staged.path().display().to_string(),
+        ]);
         let output = operations::run_process(
             &adb_path,
             &args,
@@ -2022,7 +2049,8 @@ pub async fn extract_apk(
             "Extracting APK",
             sink,
         )?;
-        completed_adb_output(output, "adb pull")
+        completed_adb_output(output, "adb pull")?;
+        Ok(staged.commit(ArtifactKind::Apk)?)
     })
     .await
 }

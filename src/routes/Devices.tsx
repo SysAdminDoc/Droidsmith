@@ -1040,8 +1040,10 @@ function DeviceControls({ target }: { target: DeviceTarget }) {
         return;
       }
       setScreenshotMsg(t("devices.controls.capturing"));
-      await callTakeScreenshot(target, localPath);
-      setScreenshotMsg(t("devices.controls.savedTo", { path: localPath }));
+      const artifact = await callTakeScreenshot(target, localPath);
+      setScreenshotMsg(
+        t("devices.controls.savedTo", { path: artifact.local_path }),
+      );
     } catch (e) {
       setScreenshotMsg(
         t("devices.controls.failed", {
@@ -1527,7 +1529,7 @@ function FileManager({ target }: { target: DeviceTarget }) {
         pullGenerationRef.current = generation;
         pullOperationRef.current = operationId;
         setPullOperationId(operationId);
-        await callPullFile(target, remoteFull, localPath, {
+        const artifact = await callPullFile(target, remoteFull, localPath, {
           operationId,
           onEvent: (event: OperationEvent) => {
             if (
@@ -1554,7 +1556,7 @@ function FileManager({ target }: { target: DeviceTarget }) {
         setPullMsg(
           t("devices.controls.savedName", {
             name: entry.name,
-            path: localPath,
+            path: artifact.local_path,
           }),
         );
       } catch (e) {

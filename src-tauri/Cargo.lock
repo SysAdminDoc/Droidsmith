@@ -882,12 +882,14 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_yaml_ng",
+ "sha2",
  "tauri",
  "tauri-build",
  "tauri-plugin-dialog",
  "tauri-plugin-single-instance",
  "thiserror 2.0.18",
  "which",
+ "windows-sys 0.61.2",
  "zip",
 ]
 
