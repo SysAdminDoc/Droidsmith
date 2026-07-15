@@ -94,6 +94,8 @@ ADB front end, but it has hard limits that an open project can fix:
 - **ADB shell transport** — typed Rust wrappers around the platform-tools
   `adb` binary, with direct parser coverage for device/package/process/file
   transcripts
+- **Lazy APK metadata** — Apps rows near the viewport gain bounded,
+  identity-cached labels and raster icons without pulling every installed APK
 - **scrcpy on PATH** — version and device encoders are probed, cached against
   the binary identity, and supervised with bounded failure diagnostics for
   mirror/control sessions

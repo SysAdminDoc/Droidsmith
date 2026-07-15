@@ -2,6 +2,7 @@
 /// this crate as `droidsmith_lib`) can reach the transport and action
 /// types. The Tauri runtime still goes through `crate::adb`.
 pub mod adb;
+mod apk_metadata;
 mod backup;
 mod bugreport;
 mod commands;
@@ -29,8 +30,8 @@ pub mod time;
 use commands::{
     apply_action, apply_device_control, backup_package, cancel_operation, capture_bugreport,
     connect_wireless, explain_failure, export_package_apks, export_recovery_baseline, extract_apk,
-    fastboot_getvar, get_device_info, heartbeat, inspect_recovery_baseline, install_apk,
-    journal_list, journal_undo, launch_scrcpy, list_devices, list_fastboot_devices,
+    fastboot_getvar, get_device_info, get_package_metadata, heartbeat, inspect_recovery_baseline,
+    install_apk, journal_list, journal_undo, launch_scrcpy, list_devices, list_fastboot_devices,
     list_network_connections, list_packages, list_packs, list_permissions, list_processes,
     list_remote_files, list_users, list_wireless_services, locate_fastboot, locate_scrcpy,
     pair_wireless, plan_action, plan_pack, plan_shell_action, preflight_package_backup,
@@ -76,6 +77,7 @@ pub fn run() {
             pair_wireless,
             connect_wireless,
             list_packages,
+            get_package_metadata,
             list_users,
             list_packs,
             plan_pack,

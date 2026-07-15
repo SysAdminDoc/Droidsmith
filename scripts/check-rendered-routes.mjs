@@ -219,6 +219,7 @@ async function runDesktopFlow(browser) {
 
   await page.getByRole("button", { name: /Apps/ }).click();
   await page.getByText("com.example.app").waitFor();
+  await page.getByText("Example App", { exact: true }).waitFor();
   await page.getByText("com.android.settings").waitFor();
   const exampleAppRow = page
     .getByRole("row")
@@ -1024,6 +1025,14 @@ async function installTauriMock(page) {
         }
         if (cmd === "list_packages") {
           return filterPackages(packages, args.filter ?? "all");
+        }
+        if (cmd === "get_package_metadata") {
+          return {
+            package: args.package,
+            label: args.package === "com.example.app" ? "Example App" : null,
+            icon_data_uri: null,
+            cache_hit: false,
+          };
         }
         if (cmd === "preflight_package_backup") {
           return {

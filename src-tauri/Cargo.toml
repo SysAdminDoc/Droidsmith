@@ -27,6 +27,7 @@ thiserror = "2"
 uuid = { version = "1", features = ["v4"] }
 which = "8"
 os_info = "3"
+base64 = "0.22.1"
 zip = { version = "=3.0.0", default-features = false, features = ["deflate-flate2-zlib-rs"] }
 
 [target.'cfg(windows)'.dependencies]

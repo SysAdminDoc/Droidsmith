@@ -74,6 +74,7 @@
       ["target", "package", "permission", "grant", "userId"],
       [],
     ],
+    get_package_metadata: [["target", "package", "userId"], []],
     take_screenshot: [["target", "path_grant"], []],
     scrcpy_capabilities: [["target"], []],
     launch_scrcpy: [["request"], ["path_grant"]],

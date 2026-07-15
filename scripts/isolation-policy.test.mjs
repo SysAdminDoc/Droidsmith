@@ -232,6 +232,33 @@ test("validates the target for scrcpy capability probes", () => {
   assert.equal(hook(invalid).cmd, blockedCommand);
 });
 
+test("bounds lazy package metadata requests to one validated package", () => {
+  const valid = message("get_package_metadata", {
+    target,
+    package: "com.example.app",
+    userId: 0,
+  });
+  assert.equal(hook(valid), valid);
+  assert.equal(
+    hook(
+      message("get_package_metadata", {
+        ...valid.payload,
+        package: "../base.apk",
+      }),
+    ).cmd,
+    blockedCommand,
+  );
+  assert.equal(
+    hook(
+      message("get_package_metadata", {
+        ...valid.payload,
+        packages: ["com.other"],
+      }),
+    ).cmd,
+    blockedCommand,
+  );
+});
+
 test("allows bounded multiline Logcat exports", () => {
   const valid = message("save_logcat_export", {
     path_grant: pathGrant,

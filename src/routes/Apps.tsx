@@ -8,6 +8,7 @@ import {
   callExportPackageApks,
   callExportRecoveryBaseline,
   callInspectRecoveryBaseline,
+  callGetPackageMetadata,
   callInstallApk,
   callJournalList,
   callJournalUndo,
@@ -23,6 +24,7 @@ import {
   type ActionKind,
   type AndroidUser,
   type AppPackage,
+  type AppPackageMetadata,
   type Device,
   type DeviceTarget,
   type JournalEntry,
@@ -151,6 +153,9 @@ export default function AppsRoute() {
   const [selectedUser, setSelectedUser] = useState<number>(0);
   const [filter, setFilter] = useState<PackageFilter>("all");
   const [pkgState, setPkgState] = useState<PackagesState>({ kind: "idle" });
+  const [packageMetadata, setPackageMetadata] = useState<
+    Record<string, AppPackageMetadata | null>
+  >({});
   const [actionState, setActionState] = useState<ActionState>({ kind: "idle" });
   const [journalState, setJournalState] = useState<JournalState>({
     kind: "idle",
@@ -170,6 +175,8 @@ export default function AppsRoute() {
   const backupGenerationRef = useRef(0);
   const activeInstallRef = useRef<string | null>(null);
   const installGenerationRef = useRef(0);
+  const metadataGenerationRef = useRef(0);
+  const metadataRequestedRef = useRef(new Set<string>());
 
   const selectedDevice =
     authorizedDevices.find((device) =>
@@ -211,6 +218,9 @@ export default function AppsRoute() {
 
   const loadPackages = useCallback(async () => {
     if (!selectedDevice || !usersReady) return;
+    metadataGenerationRef.current += 1;
+    metadataRequestedRef.current.clear();
+    setPackageMetadata({});
     setPkgState({ kind: "loading" });
     try {
       const packages = await callListPackages(
@@ -226,6 +236,37 @@ export default function AppsRoute() {
       });
     }
   }, [selectedDevice, filter, selectedUser, usersReady]);
+
+  const requestPackageMetadata = useCallback(
+    (packageName: string) => {
+      if (!selectedDevice || !usersReady) return;
+      if (metadataRequestedRef.current.has(packageName)) return;
+      metadataRequestedRef.current.add(packageName);
+      const generation = metadataGenerationRef.current;
+      void callGetPackageMetadata(
+        deviceTarget(selectedDevice),
+        packageName,
+        selectedUser,
+      )
+        .then((metadata) => {
+          if (metadataGenerationRef.current !== generation) return;
+          setPackageMetadata((current) => ({
+            ...current,
+            [packageName]: metadata,
+          }));
+        })
+        .catch(() => {
+          if (metadataGenerationRef.current !== generation) return;
+          // Unsupported vendor resource shapes degrade to the package-name
+          // fallback and are not retried until the package list refreshes.
+          setPackageMetadata((current) => ({
+            ...current,
+            [packageName]: null,
+          }));
+        });
+    },
+    [selectedDevice, selectedUser, usersReady],
+  );
 
   const loadJournal = useCallback(async () => {
     if (!selectedSerial) {
@@ -815,7 +856,10 @@ export default function AppsRoute() {
     pkgState.kind === "ok"
       ? pkgState.packages.filter((p) =>
           search
-            ? p.package.toLowerCase().includes(search.toLowerCase())
+            ? [p.package, packageMetadata[p.package]?.label ?? ""]
+                .join(" ")
+                .toLowerCase()
+                .includes(search.toLowerCase())
             : true,
         )
       : [];
@@ -1015,7 +1059,9 @@ export default function AppsRoute() {
             {pkgState.kind === "ok" && (
               <PackageTable
                 packages={filteredPackages}
+                metadata={packageMetadata}
                 totalCount={pkgState.packages.length}
+                onMetadataRequest={requestPackageMetadata}
                 onAction={startAction}
                 onInspect={setInspectedPkg}
                 onExport={(pkg) => void runPackageExport(pkg, "apk_export")}
@@ -1510,7 +1556,9 @@ function FilterChips({
 
 function PackageTable({
   packages,
+  metadata,
   totalCount,
+  onMetadataRequest,
   onAction,
   onInspect,
   onExport,
@@ -1518,7 +1566,9 @@ function PackageTable({
   showLegacyExport,
 }: {
   packages: AppPackage[];
+  metadata: Record<string, AppPackageMetadata | null>;
   totalCount: number;
+  onMetadataRequest: (pkg: string) => void;
   onAction: (pkg: string, kind: ActionKind) => void;
   onInspect: (pkg: string) => void;
   onExport: (pkg: string) => void;
@@ -1574,18 +1624,11 @@ function PackageTable({
                   className="bg-anvil-950/20 transition hover:bg-white/[0.035]"
                 >
                   <TableCell>
-                    <div className="min-w-[16rem]">
-                      <code className="font-mono text-xs text-anvil-50">
-                        {pkg.package}
-                      </code>
-                      {pkg.installer && (
-                        <p className="mt-1 text-[11px] text-anvil-500">
-                          {t("apps.viaInstaller", {
-                            installer: pkg.installer,
-                          })}
-                        </p>
-                      )}
-                    </div>
+                    <PackageIdentity
+                      pkg={pkg}
+                      metadata={metadata[pkg.package]}
+                      onRequest={onMetadataRequest}
+                    />
                   </TableCell>
                   <TableCell>
                     <Badge tone={pkg.system ? "warning" : "neutral"}>
@@ -1677,6 +1720,96 @@ function PackageTable({
       )}
     </Card>
   );
+}
+
+function PackageIdentity({
+  pkg,
+  metadata,
+  onRequest,
+}: {
+  pkg: AppPackage;
+  metadata: AppPackageMetadata | null | undefined;
+  onRequest: (pkg: string) => void;
+}) {
+  const { t } = useTranslation();
+  const containerRef = useRef<HTMLDivElement>(null);
+  const label = metadata?.label ?? packageFallbackLabel(pkg.package);
+
+  useEffect(() => {
+    const element = containerRef.current;
+    if (!element || metadata !== undefined) return;
+    if (typeof IntersectionObserver === "undefined") {
+      onRequest(pkg.package);
+      return;
+    }
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          onRequest(pkg.package);
+          observer.disconnect();
+        }
+      },
+      { rootMargin: "320px 0px" },
+    );
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [metadata, onRequest, pkg.package]);
+
+  return (
+    <div ref={containerRef} className="flex min-w-[18rem] items-center gap-3">
+      <PackageIcon label={label} iconDataUri={metadata?.icon_data_uri} />
+      <div className="min-w-0">
+        <p className="truncate text-sm font-medium text-anvil-50">{label}</p>
+        <code className="mt-1 block truncate font-mono text-xs text-anvil-300">
+          {pkg.package}
+        </code>
+        {pkg.installer && (
+          <p className="mt-1 text-[11px] text-anvil-500">
+            {t("apps.viaInstaller", { installer: pkg.installer })}
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function PackageIcon({
+  label,
+  iconDataUri,
+}: {
+  label: string;
+  iconDataUri: string | null | undefined;
+}) {
+  if (iconDataUri) {
+    return (
+      <img
+        src={iconDataUri}
+        alt=""
+        className="h-9 w-9 shrink-0 rounded-lg border border-white/10 bg-anvil-900 object-contain p-1"
+        loading="lazy"
+      />
+    );
+  }
+  return (
+    <div
+      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-circuit-300/10 text-xs font-semibold text-circuit-100"
+      aria-hidden="true"
+    >
+      {initials(label)}
+    </div>
+  );
+}
+
+function packageFallbackLabel(pkg: string): string {
+  return pkg.split(".").filter(Boolean).pop() ?? pkg;
+}
+
+function initials(label: string): string {
+  const parts = label.trim().split(/\s+/u).filter(Boolean);
+  if (parts.length >= 2) {
+    return `${parts[0]?.[0] ?? ""}${parts[1]?.[0] ?? ""}`.toUpperCase();
+  }
+  return (parts[0] ?? "AP").slice(0, 2).toUpperCase();
 }
 
 function JournalPanel({

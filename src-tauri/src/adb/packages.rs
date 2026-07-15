@@ -11,8 +11,9 @@
 //! - `pm list packages -i` → suffix with `installer=<pkg>`
 //!
 //! For v0.1 we do two passes: one `-e -f -U -i` and one `-d -f -U -i`,
-//! then union them with `enabled: bool`. Labels and icons (F-NEW-09)
-//! land later — for now the UI shows package names.
+//! then union them with `enabled: bool`. Labels and icons are deliberately
+//! fetched through the separate lazy metadata command so this hot path never
+//! pulls every installed APK.
 
 use crate::adb::device::DeviceTarget;
 use crate::adb::transport::{AdbTransport, TransportError};

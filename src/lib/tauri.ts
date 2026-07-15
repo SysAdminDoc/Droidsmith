@@ -405,6 +405,13 @@ export type AppPackage = {
   installer: string | null;
 };
 
+export type AppPackageMetadata = {
+  package: string;
+  label: string | null;
+  icon_data_uri: string | null;
+  cache_hit: boolean;
+};
+
 export type ActionKind =
   | "disable"
   | "enable"
@@ -821,6 +828,18 @@ export async function callListPackages(
   userId = 0,
 ): Promise<AppPackage[]> {
   return invoke<AppPackage[]>("list_packages", { target, filter, userId });
+}
+
+export async function callGetPackageMetadata(
+  target: DeviceTarget,
+  packageName: string,
+  userId = 0,
+): Promise<AppPackageMetadata> {
+  return invoke<AppPackageMetadata>("get_package_metadata", {
+    target,
+    package: packageName,
+    userId,
+  });
 }
 
 export async function callListUsers(
