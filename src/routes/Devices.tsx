@@ -1366,7 +1366,7 @@ function ProcessManager({ target }: { target: DeviceTarget }) {
         </EmptyState>
       )}
       {processes.length > 0 && filtered.length > 0 && (
-        <div className="overflow-x-auto" style={{ maxHeight: "24rem" }}>
+        <div className="max-h-96 overflow-x-auto">
           <table className="min-w-full text-xs">
             <thead className="sticky top-0 bg-anvil-900">
               <tr>
@@ -1652,10 +1652,7 @@ function FileManager({ target }: { target: DeviceTarget }) {
               {currentPath}
             </code>
           </div>
-          <div
-            className="divide-y divide-white/5 overflow-y-auto"
-            style={{ maxHeight: "20rem" }}
-          >
+          <div className="max-h-80 divide-y divide-white/5 overflow-y-auto">
             {listing.entries.length === 0 && (
               <EmptyState
                 title={t("devices.controls.emptyDirectory")}
@@ -1843,7 +1840,7 @@ function NetworkInspector({ target }: { target: DeviceTarget }) {
         </EmptyState>
       )}
       {connections.length > 0 && filtered.length > 0 && (
-        <div className="overflow-x-auto" style={{ maxHeight: "20rem" }}>
+        <div className="max-h-80 overflow-x-auto">
           <table className="min-w-full text-xs">
             <thead className="sticky top-0 bg-anvil-900">
               <tr>

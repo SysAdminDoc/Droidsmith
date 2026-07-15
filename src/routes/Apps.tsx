@@ -1825,10 +1825,7 @@ function PermissionsPanel({
           <p>{t("apps.noPermissionsFoundBody")}</p>
         </EmptyState>
       ) : (
-        <div
-          className="divide-y divide-white/10"
-          style={{ maxHeight: "20rem", overflowY: "auto" }}
-        >
+        <div className="max-h-80 divide-y divide-white/10 overflow-y-auto">
           {perms.map((p) => (
             <div
               key={p.permission}

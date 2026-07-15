@@ -11,7 +11,7 @@
 use std::collections::HashMap;
 use std::fs::{self, OpenOptions};
 use std::io::Write;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
 
 use serde::{Deserialize, Serialize};
@@ -912,6 +912,16 @@ fn validate_local_path(local_path: &str) -> Result<PathBuf, CommandError> {
             message: format!("file path must be absolute: {trimmed}"),
         });
     }
+    if trimmed.chars().any(char::is_control)
+        || path
+            .components()
+            .any(|part| matches!(part, Component::ParentDir | Component::CurDir))
+    {
+        return Err(CommandError {
+            code: "invalid_path",
+            message: "file path must be normalized and contain no control characters".to_string(),
+        });
+    }
     Ok(path)
 }
 
@@ -938,6 +948,14 @@ fn validate_remote_path(remote_path: &str) -> Result<String, CommandError> {
         return Err(CommandError {
             code: "invalid_remote_path",
             message: format!("device path must be absolute: {trimmed}"),
+        });
+    }
+    if trimmed.chars().any(char::is_control)
+        || trimmed.split('/').any(|part| matches!(part, "." | ".."))
+    {
+        return Err(CommandError {
+            code: "invalid_remote_path",
+            message: "device path must be normalized and contain no control characters".to_string(),
         });
     }
     Ok(trimmed.to_string())
@@ -2346,7 +2364,7 @@ mod tests {
     }
 
     #[test]
-    fn remote_path_rejects_flags_and_relative() {
+    fn remote_path_rejects_flags_relative_and_traversal() {
         // A leading '-' would reach adb as an option flag.
         assert_eq!(
             validate_remote_path("-a").unwrap_err().code,
@@ -2359,6 +2377,22 @@ mod tests {
         );
         assert_eq!(
             validate_remote_path("   ").unwrap_err().code,
+            "invalid_remote_path"
+        );
+        assert_eq!(
+            validate_remote_path("/sdcard/../data/secret")
+                .unwrap_err()
+                .code,
+            "invalid_remote_path"
+        );
+        assert_eq!(
+            validate_remote_path("/sdcard/./Download").unwrap_err().code,
+            "invalid_remote_path"
+        );
+        assert_eq!(
+            validate_remote_path("/sdcard/Download\nsecret")
+                .unwrap_err()
+                .code,
             "invalid_remote_path"
         );
         assert_eq!(
@@ -2518,7 +2552,7 @@ packages:
     }
 
     #[test]
-    fn local_path_requires_absolute() {
+    fn local_path_requires_normalized_absolute() {
         assert_eq!(validate_local_path("   ").unwrap_err().code, "invalid_path");
         // Relative paths (the old screenshot/pull bug) are rejected.
         assert_eq!(
@@ -2527,6 +2561,16 @@ packages:
         );
         assert_eq!(
             validate_local_path("./sub/dir/file.png").unwrap_err().code,
+            "invalid_path"
+        );
+
+        let traversal = if cfg!(windows) {
+            "C:\\Users\\qa\\..\\admin\\shot.png"
+        } else {
+            "/home/qa/../admin/shot.png"
+        };
+        assert_eq!(
+            validate_local_path(traversal).unwrap_err().code,
             "invalid_path"
         );
 

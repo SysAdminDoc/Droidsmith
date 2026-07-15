@@ -1069,12 +1069,12 @@ function QueueApplyProgress({
           </span>
           <span>{pct}%</span>
         </div>
-        <div className="mt-2 h-2 overflow-hidden rounded-sm bg-white/[0.08]">
-          <div
-            className="h-full rounded-sm bg-circuit-300 transition-all duration-300"
-            style={{ width: `${pct}%` }}
-          />
-        </div>
+        <progress
+          aria-hidden="true"
+          className="queue-progress mt-2 block h-2 w-full overflow-hidden rounded-sm"
+          max={100}
+          value={pct}
+        />
       </div>
 
       <QueueRows rows={queue} />

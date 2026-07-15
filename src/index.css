@@ -27,6 +27,28 @@
     @apply rounded bg-black/20 px-1 py-0.5 text-[0.92em] text-anvil-100;
   }
 
+  .queue-progress {
+    appearance: none;
+    border: 0;
+    background-color: rgb(255 255 255 / 0.08);
+  }
+
+  .queue-progress::-webkit-progress-bar {
+    background-color: rgb(255 255 255 / 0.08);
+  }
+
+  .queue-progress::-webkit-progress-value {
+    border-radius: 0.125rem;
+    background-color: #67e8f9;
+    transition: inline-size 300ms;
+  }
+
+  .queue-progress::-moz-progress-bar {
+    border-radius: 0.125rem;
+    background-color: #67e8f9;
+    transition: inline-size 300ms;
+  }
+
   .nav-strip {
     scrollbar-width: none;
   }
