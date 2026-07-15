@@ -1124,6 +1124,29 @@ export async function callLocateScrcpy(): Promise<string | null> {
   return invoke<string | null>("locate_scrcpy");
 }
 
+export type ScrcpyVideoCodec = "h264" | "h265" | "av1" | "vp8" | "vp9";
+
+export type ScrcpyVideoEncoder = {
+  codec: ScrcpyVideoCodec;
+  name: string;
+  software: boolean;
+};
+
+export type ScrcpyCapabilities = {
+  path: string;
+  version: string;
+  available_video_codecs: ScrcpyVideoCodec[];
+  video_encoders: ScrcpyVideoEncoder[];
+  probe_warning: string | null;
+  cache_hit: boolean;
+};
+
+export async function callScrcpyCapabilities(
+  target: DeviceTarget,
+): Promise<ScrcpyCapabilities> {
+  return invoke<ScrcpyCapabilities>("scrcpy_capabilities", { target });
+}
+
 export type LaunchScrcpyOptions = {
   serial: string;
   target: DeviceTarget;
@@ -1131,12 +1154,24 @@ export type LaunchScrcpyOptions = {
   bit_rate?: string | null;
   no_audio: boolean;
   keyboard_mode?: string | null;
+  video_codec?: ScrcpyVideoCodec | null;
+  video_encoder?: string | null;
   turn_screen_off: boolean;
   stay_awake: boolean;
   show_touches: boolean;
 };
 
 export type ScrcpySessionState = "running" | "exited" | "stopped";
+
+export type ScrcpyExitReason =
+  | "user_stopped"
+  | "unsupported_option"
+  | "device_disconnected"
+  | "encoder_failed"
+  | "permission_denied"
+  | "adb_failed"
+  | "signaled"
+  | "process_exited";
 
 export type ScrcpySession = {
   id: number;
@@ -1146,6 +1181,8 @@ export type ScrcpySession = {
   started_at: string;
   state: ScrcpySessionState;
   exit_code: number | null;
+  exit_reason: ScrcpyExitReason | null;
+  stderr_tail: string;
 };
 
 export async function callLaunchScrcpy(

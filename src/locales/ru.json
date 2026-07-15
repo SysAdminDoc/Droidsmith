@@ -677,6 +677,10 @@
     "keyboardUhid": "UHID",
     "keyboardAoa": "AOA",
     "keyboardDisabled": "Отключена",
+    "videoCodec": "Видеокодек",
+    "videoEncoder": "Видеокодировщик",
+    "encoderAutomatic": "Автоматически",
+    "encoderSoftware": "программный",
     "disableAudio": "Отключить аудио",
     "recordSession": "Записать сессию",
     "turnScreenOff": "Выключить экран устройства",
@@ -699,12 +703,53 @@
     "scrcpyInstallPrefix": "Droidsmith использует scrcpy для зеркалирования устройства. Установите его с",
     "noAuthorizedBody": "Подключите и авторизуйте устройство, чтобы начать зеркалирование.",
     "scrcpyAt": "scrcpy по пути",
+    "probingCapabilities": "Проверка возможностей scrcpy и устройства",
+    "probingCapabilitiesBody": "Перед запуском Droidsmith определяет версию scrcpy и видеокодировщики, заявленные выбранным устройством.",
+    "capabilityProbeFailed": "Не удалось проверить возможности scrcpy",
+    "capabilityProbeLimited": "Поиск кодировщиков ограничен",
+    "negotiatedCapabilities_one": "scrcpy {{version}} · согласован {{count}} видеокодек",
+    "negotiatedCapabilities_other": "scrcpy {{version}} · согласовано видеокодеков: {{count}}",
     "launchFailed": "Запуск зеркала не удался",
     "sessionRunning": "Mirror-сессия запущена",
     "sessionRunningBody": "scrcpy работает как PID {{pid}}. Закройте окно scrcpy или остановите его здесь, чтобы завершить сессию.",
     "sessionEndedTitle": "Mirror-сессия завершена",
     "sessionEndedBody": "scrcpy завершился с кодом {{code}}.",
-    "sessionStarted": "Запущено {{time}}"
+    "sessionStarted": "Запущено {{time}}",
+    "stderrTail": "Ограниченная диагностика scrcpy",
+    "failureReasons": {
+      "user_stopped": {
+        "title": "Mirror-сессия остановлена",
+        "body": "Сессия остановлена из Droidsmith."
+      },
+      "unsupported_option": {
+        "title": "Установленный scrcpy отклонил параметр",
+        "body": "Повторите проверку возможностей. Возможно, binary scrcpy изменился или не поддерживает сохранённый параметр."
+      },
+      "device_disconnected": {
+        "title": "Устройство отключилось во время зеркалирования",
+        "body": "Подключите и авторизуйте то же устройство, затем запустите новую сессию."
+      },
+      "encoder_failed": {
+        "title": "Видеокодировщик устройства завершился с ошибкой",
+        "body": "Выберите другой обнаруженный кодировщик или H.264, уменьшите максимальный размер и повторите попытку."
+      },
+      "permission_denied": {
+        "title": "Android запретил управление scrcpy",
+        "body": "Включите дополнительную OEM-настройку безопасности USB debugging или используйте режим клавиатуры SDK."
+      },
+      "adb_failed": {
+        "title": "ADB не смог запустить Mirror-сессию",
+        "body": "Проверьте авторизацию устройства и состояние ADB, затем повторите попытку при стабильном подключении."
+      },
+      "signaled": {
+        "title": "scrcpy завершён внешним процессом",
+        "body": "Другой процесс или операционная система завершили scrcpy без кода выхода."
+      },
+      "process_exited": {
+        "title": "scrcpy завершился с ошибкой",
+        "body": "Точная ошибка хоста или устройства приведена в ограниченной диагностике ниже."
+      }
+    }
   },
   "console": {
     "title": "Консоль",

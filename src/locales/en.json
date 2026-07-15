@@ -677,6 +677,10 @@
     "keyboardUhid": "UHID",
     "keyboardAoa": "AOA",
     "keyboardDisabled": "Disabled",
+    "videoCodec": "Video codec",
+    "videoEncoder": "Video encoder",
+    "encoderAutomatic": "Automatic",
+    "encoderSoftware": "software",
     "disableAudio": "Disable audio",
     "recordSession": "Record session",
     "turnScreenOff": "Turn device screen off",
@@ -699,12 +703,53 @@
     "scrcpyInstallPrefix": "Droidsmith uses scrcpy for device mirroring. Install it from",
     "noAuthorizedBody": "Connect and authorize a device to start mirroring.",
     "scrcpyAt": "scrcpy at",
+    "probingCapabilities": "Checking scrcpy and device capabilities",
+    "probingCapabilitiesBody": "Droidsmith is reading the scrcpy version and the selected device's reported video encoders before enabling launch.",
+    "capabilityProbeFailed": "scrcpy capability check failed",
+    "capabilityProbeLimited": "Encoder discovery is limited",
+    "negotiatedCapabilities_one": "scrcpy {{version}} · {{count}} negotiated video codec",
+    "negotiatedCapabilities_other": "scrcpy {{version}} · {{count}} negotiated video codecs",
     "launchFailed": "Mirror launch failed",
     "sessionRunning": "Mirror session running",
     "sessionRunningBody": "scrcpy is running as PID {{pid}}. Close the scrcpy window or stop it here to end the session.",
     "sessionEndedTitle": "Mirror session ended",
     "sessionEndedBody": "scrcpy exited with code {{code}}.",
-    "sessionStarted": "Started {{time}}"
+    "sessionStarted": "Started {{time}}",
+    "stderrTail": "Bounded scrcpy diagnostics",
+    "failureReasons": {
+      "user_stopped": {
+        "title": "Mirror session stopped",
+        "body": "The session was stopped from Droidsmith."
+      },
+      "unsupported_option": {
+        "title": "Installed scrcpy rejected an option",
+        "body": "Recheck capabilities. The scrcpy binary may have changed or may not support a saved option."
+      },
+      "device_disconnected": {
+        "title": "Device disconnected during mirroring",
+        "body": "Reconnect and authorize the same device, then start a new session."
+      },
+      "encoder_failed": {
+        "title": "Device video encoder failed",
+        "body": "Choose another reported encoder or H.264, reduce the maximum size, and retry."
+      },
+      "permission_denied": {
+        "title": "Android denied scrcpy control",
+        "body": "Enable the OEM's additional USB debugging security setting or use the SDK keyboard mode."
+      },
+      "adb_failed": {
+        "title": "ADB could not start the mirror session",
+        "body": "Review device authorization and ADB health, then retry after the transport is stable."
+      },
+      "signaled": {
+        "title": "scrcpy was terminated externally",
+        "body": "Another process or the operating system ended scrcpy without an exit code."
+      },
+      "process_exited": {
+        "title": "scrcpy exited with an error",
+        "body": "Review the bounded diagnostics below for the exact host or device failure."
+      }
+    }
   },
   "console": {
     "title": "Console",

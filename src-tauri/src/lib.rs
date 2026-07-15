@@ -35,8 +35,9 @@ use commands::{
     list_remote_files, list_users, list_wireless_services, locate_fastboot, locate_scrcpy,
     pair_wireless, plan_action, plan_pack, plan_shell_action, preflight_package_backup,
     preview_diagnostics, pull_file, push_file, recover_adb, run_host_doctor, save_diagnostics,
-    save_logcat_export, scrcpy_session_status, select_host_path, set_permission, shell_run,
-    stop_scrcpy, stream_logcat, take_screenshot, watch_devices, wipe_diagnostics,
+    save_logcat_export, scrcpy_capabilities, scrcpy_session_status, select_host_path,
+    set_permission, shell_run, stop_scrcpy, stream_logcat, take_screenshot, watch_devices,
+    wipe_diagnostics,
 };
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -101,6 +102,7 @@ pub fn run() {
             list_processes,
             take_screenshot,
             locate_scrcpy,
+            scrcpy_capabilities,
             launch_scrcpy,
             scrcpy_session_status,
             stop_scrcpy,

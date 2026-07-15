@@ -2149,6 +2149,39 @@ pub fn locate_scrcpy() -> Option<String> {
     which::which("scrcpy").ok().map(|p| p.display().to_string())
 }
 
+/// Probe the installed scrcpy build and the selected device's reported video
+/// encoders. Results are cached against both the binary fingerprint and the
+/// immutable device target, so an upgraded/replaced executable is never
+/// trusted through stale capability data.
+#[tauri::command]
+pub async fn scrcpy_capabilities(
+    target: adb::DeviceTarget,
+) -> Result<crate::scrcpy::ScrcpyCapabilities, CommandError> {
+    let transport = validated_transport(&target)?;
+    let duplicate_count = transport
+        .list_devices()?
+        .into_iter()
+        .filter(|device| device.serial == target.serial)
+        .count();
+    if duplicate_count != 1 {
+        return Err(CommandError {
+            code: "ambiguous_serial",
+            message: "scrcpy cannot safely probe a duplicate device serial".to_string(),
+        });
+    }
+    let scrcpy_path = which::which("scrcpy").map_err(|_| CommandError {
+        code: "scrcpy_not_found",
+        message: "scrcpy binary not found on PATH".to_string(),
+    })?;
+    spawn_blocking_operation(move || {
+        crate::scrcpy::capabilities(&scrcpy_path, &target).map_err(|message| CommandError {
+            code: "scrcpy_capability_probe_failed",
+            message,
+        })
+    })
+    .await
+}
+
 /// Launch scrcpy for a device. Fire-and-forget: we spawn the process
 /// and track it so the renderer can poll or stop the session.
 #[tauri::command]
@@ -2180,15 +2213,27 @@ pub fn launch_scrcpy(
         code: "scrcpy_not_found",
         message: "scrcpy binary not found on PATH".to_string(),
     })?;
+    let capabilities =
+        crate::scrcpy::capabilities(&scrcpy_path, &request.target).map_err(|message| {
+            CommandError {
+                code: "scrcpy_capability_probe_failed",
+                message,
+            }
+        })?;
     let record_path = path_grant
         .as_deref()
         .map(|grant| grants.consume(grant, HostPathPurpose::ScrcpyRecordSave))
         .transpose()?;
-    crate::scrcpy::launch(&scrcpy_path, request, record_path.as_deref(), iso_now()).map_err(|e| {
-        CommandError {
-            code: "scrcpy_spawn_failed",
-            message: e,
-        }
+    crate::scrcpy::launch(
+        &scrcpy_path,
+        request,
+        record_path.as_deref(),
+        iso_now(),
+        &capabilities,
+    )
+    .map_err(|message| CommandError {
+        code: "scrcpy_spawn_failed",
+        message,
     })
 }
 

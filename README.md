@@ -79,7 +79,7 @@ ADB front end, but it has hard limits that an open project can fix:
 | Platforms | Windows only (.NET 4.6+) | Windows, macOS, Linux |
 | Free tier | Core only — dark theme, Process Manager, batch ops are sponsor-gated | All features always free |
 | Debloat lists | Static, underperforms Universal Android Debloater per user reports | Versioned YAML packs, vendor quirks, recovery baselines, and a final count/unsafe-tier review before apply; UAD-NG import is blocked on redistribution permission |
-| Screen mirror | Virtual buttons + screenshots | System scrcpy launch/supervision with per-device presets; bundled scrcpy remains planned |
+| Screen mirror | Virtual buttons + screenshots | Capability-negotiated scrcpy launch/supervision with per-device presets, encoder selection, and actionable bounded failure diagnostics; bundled scrcpy remains planned |
 | Wireless ADB | Manual `adb pair` in console | First-class Android 11+ pairing, exact mDNS TLS provenance, explicit legacy/unknown TCP warnings, and privacy-bounded VPN/mDNS failure guidance |
 | Automation | None | YAML profiles + headless CLI for reproducible device actions |
 | Extensibility | None | Versioned local pack, quirk, and profile schemas; plugin API and marketplace are deferred |
@@ -94,7 +94,9 @@ ADB front end, but it has hard limits that an open project can fix:
 - **ADB shell transport** — typed Rust wrappers around the platform-tools
   `adb` binary, with direct parser coverage for device/package/process/file
   transcripts
-- **scrcpy on PATH** — detected and supervised for mirror/control sessions
+- **scrcpy on PATH** — version and device encoders are probed, cached against
+  the binary identity, and supervised with bounded failure diagnostics for
+  mirror/control sessions
 - **Versioned YAML packs, quirks, and profiles** — packaged as Tauri resources
   for local linting and reproducible actions
 - **Tailwind** — dark-first route surfaces

@@ -75,6 +75,7 @@
       [],
     ],
     take_screenshot: [["target", "path_grant"], []],
+    scrcpy_capabilities: [["target"], []],
     launch_scrcpy: [["request"], ["path_grant"]],
     stop_scrcpy: [["session_id"], []],
     shell_run: [["target", "argv", "operation_id", "on_event"], []],
@@ -326,7 +327,13 @@
           "stay_awake",
           "show_touches",
         ],
-        ["max_size", "bit_rate", "keyboard_mode"],
+        [
+          "max_size",
+          "bit_rate",
+          "keyboard_mode",
+          "video_codec",
+          "video_encoder",
+        ],
         "scrcpy_request",
       );
       ensureIdentifier(request.serial, "scrcpy_serial");
@@ -340,6 +347,19 @@
         if (typeof request[flag] !== "boolean") reject("scrcpy_flag");
       }
       if (request.serial !== request.target.serial) reject("scrcpy_target");
+      if (
+        request.video_codec != null &&
+        !["h264", "h265", "av1", "vp8", "vp9"].includes(request.video_codec)
+      ) {
+        reject("scrcpy_video_codec");
+      }
+      if (
+        request.video_encoder != null &&
+        (typeof request.video_encoder !== "string" ||
+          !/^[A-Za-z0-9_.-]{1,255}$/u.test(request.video_encoder))
+      ) {
+        reject("scrcpy_video_encoder");
+      }
     }
   }
 

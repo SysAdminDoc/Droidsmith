@@ -1,4 +1,5 @@
 export type KeyboardMode = "default" | "sdk" | "uhid" | "aoa" | "disabled";
+export type VideoCodec = "h264" | "h265" | "av1" | "vp8" | "vp9";
 
 export type MirrorPreset = {
   maxSize: string;
@@ -6,6 +7,8 @@ export type MirrorPreset = {
   noAudio: boolean;
   recording: boolean;
   keyboardMode: KeyboardMode;
+  videoCodec: VideoCodec;
+  videoEncoder: string;
   turnScreenOff: boolean;
   stayAwake: boolean;
   showTouches: boolean;
@@ -17,6 +20,8 @@ export const DEFAULT_MIRROR_PRESET: MirrorPreset = {
   noAudio: false,
   recording: false,
   keyboardMode: "default",
+  videoCodec: "h264",
+  videoEncoder: "",
   turnScreenOff: false,
   stayAwake: false,
   showTouches: false,
@@ -43,6 +48,14 @@ export function normalizePreset(value: Partial<MirrorPreset>): MirrorPreset {
     keyboardMode: isKeyboardMode(value.keyboardMode)
       ? value.keyboardMode
       : DEFAULT_MIRROR_PRESET.keyboardMode,
+    videoCodec: isVideoCodec(value.videoCodec)
+      ? value.videoCodec
+      : DEFAULT_MIRROR_PRESET.videoCodec,
+    videoEncoder:
+      typeof value.videoEncoder === "string" &&
+      /^[A-Za-z0-9_.-]{0,255}$/u.test(value.videoEncoder)
+        ? value.videoEncoder
+        : DEFAULT_MIRROR_PRESET.videoEncoder,
     turnScreenOff:
       typeof value.turnScreenOff === "boolean"
         ? value.turnScreenOff
@@ -56,6 +69,16 @@ export function normalizePreset(value: Partial<MirrorPreset>): MirrorPreset {
         ? value.showTouches
         : DEFAULT_MIRROR_PRESET.showTouches,
   };
+}
+
+function isVideoCodec(value: unknown): value is VideoCodec {
+  return (
+    value === "h264" ||
+    value === "h265" ||
+    value === "av1" ||
+    value === "vp8" ||
+    value === "vp9"
+  );
 }
 
 export function presetStorageKey(serial: string): string {

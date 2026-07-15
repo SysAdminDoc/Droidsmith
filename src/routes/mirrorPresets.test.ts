@@ -23,6 +23,24 @@ describe("mirror presets", () => {
     );
   });
 
+  it("normalizes negotiated video codec and encoder fields", () => {
+    expect(
+      normalizePreset({
+        videoCodec: "h265",
+        videoEncoder: "c2.vendor.hevc.encoder",
+      }),
+    ).toMatchObject({
+      videoCodec: "h265",
+      videoEncoder: "c2.vendor.hevc.encoder",
+    });
+    expect(
+      normalizePreset({
+        videoCodec: "bad" as never,
+        videoEncoder: "bad encoder with spaces",
+      }),
+    ).toMatchObject({ videoCodec: "h264", videoEncoder: "" });
+  });
+
   it("drops legacy renderer-authored recording paths", () => {
     const migrated = normalizePreset({
       recording: true,

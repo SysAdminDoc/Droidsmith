@@ -426,6 +426,9 @@ async function runDesktopFlow(browser) {
 
   await page.getByRole("button", { name: /Mirror/ }).click();
   await page.getByRole("heading", { name: "Mirror", exact: true }).waitFor();
+  await page.getByText("scrcpy 4.0", { exact: true }).waitFor();
+  await page.getByLabel("Video codec").selectOption("h265");
+  await page.getByLabel("Video encoder").selectOption("c2.vendor.hevc.encoder");
   await page.getByRole("checkbox", { name: "Record session" }).check();
   await page
     .getByText(/native save dialog will choose the .mp4 or .mkv/)
@@ -437,6 +440,11 @@ async function runDesktopFlow(browser) {
     .waitFor();
   await page.getByRole("button", { name: "Stop session" }).click();
   await page.getByText("Mirror session ended", { exact: true }).waitFor();
+  await page.getByRole("button", { name: "Launch mirror" }).click();
+  await page
+    .getByText("Device video encoder failed", { exact: true })
+    .waitFor();
+  await page.getByText(/MediaCodec encoder failed to initialize/).waitFor();
 
   await page.getByLabel("Language").selectOption("ru");
   await page.waitForFunction(
@@ -664,6 +672,7 @@ async function installTauriMock(page) {
     ];
     let journalId = 20;
     let installAttempts = 0;
+    let scrcpyLaunches = 0;
     const qaPackAssessment = {
       status: "compatible",
       override_required: false,
@@ -1444,15 +1453,39 @@ async function installTauriMock(page) {
           };
         }
         if (cmd === "locate_scrcpy") return "C:/Tools/scrcpy.exe";
+        if (cmd === "scrcpy_capabilities") {
+          return {
+            path: "C:/Tools/scrcpy.exe",
+            version: "4.0",
+            available_video_codecs: ["h264", "h265"],
+            video_encoders: [
+              {
+                codec: "h264",
+                name: "c2.vendor.avc.encoder",
+                software: false,
+              },
+              {
+                codec: "h265",
+                name: "c2.vendor.hevc.encoder",
+                software: false,
+              },
+            ],
+            probe_warning: null,
+            cache_hit: false,
+          };
+        }
         if (cmd === "launch_scrcpy") {
           if (
             args.path_grant !== "123e4567-e89b-42d3-a456-426614174009" ||
-            "record_path" in args.request
+            "record_path" in args.request ||
+            args.request.video_codec !== "h265" ||
+            args.request.video_encoder !== "c2.vendor.hevc.encoder"
           ) {
             throw new Error(
-              "Mirror recording bypassed the one-shot native save grant",
+              "Mirror launch bypassed the native grant or negotiated capabilities",
             );
           }
+          scrcpyLaunches += 1;
           return {
             id: 301,
             serial: args.request.serial,
@@ -1460,15 +1493,38 @@ async function installTauriMock(page) {
             args: [
               "-s",
               args.request.serial,
+              "--video-codec=h265",
+              "--video-encoder=c2.vendor.hevc.encoder",
               "--record",
               "C:/Users/QA/Desktop/droidsmith-recording-2026-07-15.mp4",
             ],
             started_at: "2026-07-15T11:00:00Z",
             state: "running",
             exit_code: null,
+            exit_reason: null,
+            stderr_tail: "",
           };
         }
         if (cmd === "scrcpy_session_status") {
+          if (scrcpyLaunches >= 2) {
+            return {
+              id: args.session_id,
+              serial: "QA123",
+              pid: 4243,
+              args: [
+                "-s",
+                "QA123",
+                "--video-codec=h265",
+                "--video-encoder=c2.vendor.hevc.encoder",
+              ],
+              started_at: "2026-07-15T11:01:00Z",
+              state: "exited",
+              exit_code: 1,
+              exit_reason: "encoder_failed",
+              stderr_tail:
+                "[server] ERROR: MediaCodec encoder failed to initialize",
+            };
+          }
           return {
             id: args.session_id,
             serial: "QA123",
@@ -1477,6 +1533,8 @@ async function installTauriMock(page) {
             started_at: "2026-07-15T11:00:00Z",
             state: "running",
             exit_code: null,
+            exit_reason: null,
+            stderr_tail: "",
           };
         }
         if (cmd === "stop_scrcpy") {
@@ -1488,6 +1546,8 @@ async function installTauriMock(page) {
             started_at: "2026-07-15T11:00:00Z",
             state: "stopped",
             exit_code: 0,
+            exit_reason: "user_stopped",
+            stderr_tail: "INFO: session stopped by user",
           };
         }
         if (cmd === "locate_fastboot") return null;

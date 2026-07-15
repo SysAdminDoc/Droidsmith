@@ -197,6 +197,8 @@ test("accepts only a one-shot grant for optional scrcpy recording", () => {
     bit_rate: "8M",
     no_audio: false,
     keyboard_mode: "uhid",
+    video_codec: "h265",
+    video_encoder: "c2.vendor.hevc.encoder",
     turn_screen_off: false,
     stay_awake: true,
     show_touches: false,
@@ -206,11 +208,28 @@ test("accepts only a one-shot grant for optional scrcpy recording", () => {
   assert.equal(
     hook(
       message("launch_scrcpy", {
+        request: { ...request, video_encoder: "bad encoder" },
+      }),
+    ).cmd,
+    blockedCommand,
+  );
+  assert.equal(
+    hook(
+      message("launch_scrcpy", {
         request: { ...request, record_path: "C:/arbitrary/output.mp4" },
       }),
     ).cmd,
     blockedCommand,
   );
+});
+
+test("validates the target for scrcpy capability probes", () => {
+  const valid = message("scrcpy_capabilities", { target });
+  const invalid = message("scrcpy_capabilities", {
+    target: { ...target, transport_kind: "invented" },
+  });
+  assert.equal(hook(valid), valid);
+  assert.equal(hook(invalid).cmd, blockedCommand);
 });
 
 test("allows bounded multiline Logcat exports", () => {

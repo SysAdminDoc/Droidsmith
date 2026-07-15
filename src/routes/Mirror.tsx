@@ -4,12 +4,14 @@ import { useTranslation } from "react-i18next";
 import {
   callLaunchScrcpy,
   callLocateScrcpy,
+  callScrcpyCapabilities,
   callScrcpySessionStatus,
   callSelectHostPath,
   callStopScrcpy,
   deviceTarget,
   inTauri,
   type DeviceTarget,
+  type ScrcpyCapabilities,
   type ScrcpySession,
 } from "../lib/tauri";
 import {
@@ -43,6 +45,12 @@ type ScrcpyState =
   | { kind: "found"; path: string }
   | { kind: "not_found" };
 
+type CapabilityState =
+  | { kind: "idle" }
+  | { kind: "checking" }
+  | { kind: "ready"; value: ScrcpyCapabilities }
+  | { kind: "error"; message: string };
+
 type SessionState =
   | { kind: "idle" }
   | { kind: "launching" }
@@ -73,6 +81,9 @@ export default function MirrorRoute() {
     authorizedTarget,
   } = useTransportAuthorization(selectedTarget);
   const [session, setSession] = useState<SessionState>({ kind: "idle" });
+  const [capabilityState, setCapabilityState] = useState<CapabilityState>({
+    kind: "idle",
+  });
   const [preset, setPreset] = useState<MirrorPreset>(DEFAULT_MIRROR_PRESET);
   const [presetMessage, setPresetMessage] = useState<string | null>(null);
 
@@ -119,6 +130,46 @@ export default function MirrorRoute() {
     }
   }, [selectedTarget]);
 
+  const probeCapabilities = useCallback(async (target: DeviceTarget) => {
+    setCapabilityState({ kind: "checking" });
+    try {
+      const value = await callScrcpyCapabilities(target);
+      setCapabilityState({ kind: "ready", value });
+    } catch (error) {
+      setCapabilityState({
+        kind: "error",
+        message: commandErrorMessage(error),
+      });
+    }
+  }, []);
+
+  useEffect(() => {
+    if (scrcpyState.kind !== "found" || !selectedTarget) {
+      setCapabilityState({ kind: "idle" });
+      return;
+    }
+    void probeCapabilities(selectedTarget);
+  }, [probeCapabilities, scrcpyState.kind, selectedTarget]);
+
+  useEffect(() => {
+    if (capabilityState.kind !== "ready") return;
+    setPreset((previous) => {
+      const videoCodec = capabilityState.value.available_video_codecs.includes(
+        previous.videoCodec,
+      )
+        ? previous.videoCodec
+        : (capabilityState.value.available_video_codecs[0] ?? "h264");
+      const videoEncoder = capabilityState.value.video_encoders.some(
+        (encoder) =>
+          encoder.codec === videoCodec &&
+          encoder.name === previous.videoEncoder,
+      )
+        ? previous.videoEncoder
+        : "";
+      return { ...previous, videoCodec, videoEncoder };
+    });
+  }, [capabilityState]);
+
   const runningSessionId =
     session.kind === "running" ? session.session.id : null;
 
@@ -142,7 +193,7 @@ export default function MirrorRoute() {
         .catch((e) => {
           setSession({
             kind: "error",
-            message: e instanceof Error ? e.message : String(e),
+            message: commandErrorMessage(e),
           });
         });
     }, 2000);
@@ -169,7 +220,12 @@ export default function MirrorRoute() {
   }, [selectedTarget, t]);
 
   const launchMirror = useCallback(async () => {
-    if (!selectedTarget || !authorizedTarget || scrcpyState.kind !== "found")
+    if (
+      !selectedTarget ||
+      !authorizedTarget ||
+      scrcpyState.kind !== "found" ||
+      capabilityState.kind !== "ready"
+    )
       return;
     setSession({ kind: "launching" });
     try {
@@ -191,6 +247,8 @@ export default function MirrorRoute() {
           bit_rate: preset.bitRate.trim() || null,
           no_audio: preset.noAudio,
           keyboard_mode: preset.keyboardMode,
+          video_codec: preset.videoCodec,
+          video_encoder: preset.videoEncoder || null,
           turn_screen_off: preset.turnScreenOff,
           stay_awake: preset.stayAwake,
           show_touches: preset.showTouches,
@@ -201,10 +259,16 @@ export default function MirrorRoute() {
     } catch (e) {
       setSession({
         kind: "error",
-        message: e instanceof Error ? e.message : String(e),
+        message: commandErrorMessage(e),
       });
     }
-  }, [authorizedTarget, selectedTarget, scrcpyState, preset]);
+  }, [
+    authorizedTarget,
+    capabilityState.kind,
+    selectedTarget,
+    scrcpyState,
+    preset,
+  ]);
 
   const stopMirror = useCallback(async () => {
     if (session.kind !== "running") return;
@@ -214,7 +278,7 @@ export default function MirrorRoute() {
     } catch (e) {
       setSession({
         kind: "error",
-        message: e instanceof Error ? e.message : String(e),
+        message: commandErrorMessage(e),
       });
     }
   }, [session]);
@@ -229,6 +293,9 @@ export default function MirrorRoute() {
           <div className="flex flex-wrap items-center gap-2">
             {scrcpyState.kind === "found" && (
               <Badge tone="success">{t("mirror.scrcpyFound")}</Badge>
+            )}
+            {capabilityState.kind === "ready" && (
+              <Badge tone="info">scrcpy {capabilityState.value.version}</Badge>
             )}
             {scrcpyState.kind === "not_found" && (
               <Badge tone="warning">{t("mirror.scrcpyMissingShort")}</Badge>
@@ -318,6 +385,40 @@ export default function MirrorRoute() {
               onAcceptedChange={setTransportOverrideAccepted}
             />
 
+            {selectedTarget && capabilityState.kind === "checking" && (
+              <StatePanel title={t("mirror.probingCapabilities")} tone="info">
+                <p>{t("mirror.probingCapabilitiesBody")}</p>
+              </StatePanel>
+            )}
+
+            {selectedTarget && capabilityState.kind === "error" && (
+              <StatePanel
+                title={t("mirror.capabilityProbeFailed")}
+                tone="danger"
+                actions={
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={() => void probeCapabilities(selectedTarget)}
+                  >
+                    {t("common.checkAgain")}
+                  </Button>
+                }
+              >
+                <p>{capabilityState.message}</p>
+              </StatePanel>
+            )}
+
+            {capabilityState.kind === "ready" &&
+              capabilityState.value.probe_warning && (
+                <StatePanel
+                  title={t("mirror.capabilityProbeLimited")}
+                  tone="warning"
+                >
+                  <p>{capabilityState.value.probe_warning}</p>
+                </StatePanel>
+              )}
+
             {selectedTarget && (
               <Card className="p-5">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -329,6 +430,15 @@ export default function MirrorRoute() {
                       {t("mirror.scrcpyAt")}{" "}
                       <code className="text-anvil-200">{scrcpyState.path}</code>
                     </p>
+                    {capabilityState.kind === "ready" && (
+                      <p className="mt-1 text-xs text-anvil-400">
+                        {t("mirror.negotiatedCapabilities", {
+                          version: capabilityState.value.version,
+                          count:
+                            capabilityState.value.available_video_codecs.length,
+                        })}
+                      </p>
+                    )}
                   </div>
                   <div className="flex flex-wrap gap-2">
                     <Button type="button" size="sm" onClick={savePreset}>
@@ -350,7 +460,7 @@ export default function MirrorRoute() {
                   </p>
                 )}
 
-                <div className="mt-4 grid gap-4 sm:grid-cols-3">
+                <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                   <label className="grid gap-1.5">
                     <span className="text-xs font-medium text-anvil-400">
                       {t("mirror.maxSize")}
@@ -368,6 +478,64 @@ export default function MirrorRoute() {
                       inputMode="numeric"
                       className="font-mono"
                     />
+                  </label>
+                  <label className="grid gap-1.5">
+                    <span className="text-xs font-medium text-anvil-400">
+                      {t("mirror.videoCodec")}
+                    </span>
+                    <select
+                      value={preset.videoCodec}
+                      onChange={(event) =>
+                        setPreset((previous) => ({
+                          ...previous,
+                          videoCodec: event.target
+                            .value as MirrorPreset["videoCodec"],
+                          videoEncoder: "",
+                        }))
+                      }
+                      disabled={capabilityState.kind !== "ready"}
+                      className="h-9 rounded-md border border-white/10 bg-white/[0.06] px-3 text-sm text-anvil-50 outline-none transition focus:border-circuit-300/60 focus:ring-2 focus:ring-circuit-300/20 disabled:opacity-50"
+                    >
+                      {(capabilityState.kind === "ready"
+                        ? capabilityState.value.available_video_codecs
+                        : ["h264"]
+                      ).map((codec) => (
+                        <option key={codec} value={codec}>
+                          {codec.toUpperCase()}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="grid gap-1.5">
+                    <span className="text-xs font-medium text-anvil-400">
+                      {t("mirror.videoEncoder")}
+                    </span>
+                    <select
+                      value={preset.videoEncoder}
+                      onChange={(event) =>
+                        setPreset((previous) => ({
+                          ...previous,
+                          videoEncoder: event.target.value,
+                        }))
+                      }
+                      disabled={capabilityState.kind !== "ready"}
+                      className="h-9 rounded-md border border-white/10 bg-white/[0.06] px-3 font-mono text-xs text-anvil-50 outline-none transition focus:border-circuit-300/60 focus:ring-2 focus:ring-circuit-300/20 disabled:opacity-50"
+                    >
+                      <option value="">{t("mirror.encoderAutomatic")}</option>
+                      {(capabilityState.kind === "ready"
+                        ? capabilityState.value.video_encoders.filter(
+                            (encoder) => encoder.codec === preset.videoCodec,
+                          )
+                        : []
+                      ).map((encoder) => (
+                        <option key={encoder.name} value={encoder.name}>
+                          {encoder.name}
+                          {encoder.software
+                            ? ` (${t("mirror.encoderSoftware")})`
+                            : ""}
+                        </option>
+                      ))}
+                    </select>
                   </label>
                   <label className="grid gap-1.5">
                     <span className="text-xs font-medium text-anvil-400">
@@ -462,7 +630,9 @@ export default function MirrorRoute() {
                     variant="primary"
                     onClick={() => void launchMirror()}
                     disabled={
-                      session.kind === "launching" || session.kind === "running"
+                      capabilityState.kind !== "ready" ||
+                      session.kind === "launching" ||
+                      session.kind === "running"
                     }
                   >
                     {session.kind === "launching"
@@ -498,7 +668,15 @@ export default function MirrorRoute() {
             )}
 
             {session.kind === "ended" && (
-              <SessionPanel session={session.session} tone="warning" />
+              <SessionPanel
+                session={session.session}
+                tone={
+                  session.session.state === "exited" &&
+                  session.session.exit_code !== 0
+                    ? "danger"
+                    : "warning"
+                }
+              />
             )}
           </>
         )}
@@ -534,23 +712,33 @@ function SessionPanel({
   tone,
 }: {
   session: ScrcpySession;
-  tone: "success" | "warning";
+  tone: "success" | "warning" | "danger";
 }) {
   const { t, i18n } = useTranslation();
   const running = session.state === "running";
+  const failed =
+    session.state === "exited" &&
+    session.exit_code !== 0 &&
+    session.exit_reason !== null;
   return (
     <StatePanel
       title={
-        running ? t("mirror.sessionRunning") : t("mirror.sessionEndedTitle")
+        running
+          ? t("mirror.sessionRunning")
+          : failed
+            ? t(`mirror.failureReasons.${session.exit_reason}.title`)
+            : t("mirror.sessionEndedTitle")
       }
       tone={tone}
     >
       <p>
         {running
           ? t("mirror.sessionRunningBody", { pid: session.pid })
-          : t("mirror.sessionEndedBody", {
-              code: session.exit_code ?? t("common.notReported"),
-            })}
+          : failed
+            ? t(`mirror.failureReasons.${session.exit_reason}.body`)
+            : t("mirror.sessionEndedBody", {
+                code: session.exit_code ?? t("common.notReported"),
+              })}
       </p>
       <p className="mt-2 text-xs text-anvil-400">
         {t("mirror.sessionStarted", {
@@ -563,8 +751,31 @@ function SessionPanel({
       <pre className="mt-3 overflow-auto rounded-md border border-white/10 bg-black/30 p-3 font-mono text-xs leading-5 text-anvil-200">
         scrcpy {session.args.join(" ")}
       </pre>
+      {session.stderr_tail && (
+        <div className="mt-3">
+          <p className="text-xs font-medium text-anvil-400">
+            {t("mirror.stderrTail")}
+          </p>
+          <pre className="mt-1 max-h-64 overflow-auto whitespace-pre-wrap rounded-md border border-white/10 bg-black/30 p-3 font-mono text-xs leading-5 text-anvil-200">
+            {session.stderr_tail}
+          </pre>
+        </div>
+      )}
     </StatePanel>
   );
+}
+
+function commandErrorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    "message" in error &&
+    typeof error.message === "string"
+  ) {
+    return error.message;
+  }
+  return String(error);
 }
 
 function parsePositiveInt(value: string): number | null {
