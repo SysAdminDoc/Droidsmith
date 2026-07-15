@@ -702,7 +702,7 @@ pub fn list_packages(
     target: adb::DeviceTarget,
     filter: adb::PackageFilter,
     #[allow(non_snake_case)] userId: u32,
-) -> Result<Vec<adb::AppPackage>, adb::TransportError> {
+) -> Result<adb::PackageListing, adb::TransportError> {
     let resolution = adb::locate_adb();
     let path = resolution
         .path
@@ -710,7 +710,7 @@ pub fn list_packages(
         .ok_or(adb::TransportError::AdbNotFound)?;
     let transport = adb::ShellTransport::new(path);
     adb::validate_device_target(&transport, &target)?;
-    adb::list_packages(&transport, &target, filter, userId)
+    adb::list_packages_with_capability(&transport, &target, filter, userId)
 }
 
 /// Lazily enrich one package row after it approaches the renderer viewport.
@@ -888,6 +888,7 @@ fn profile_preview_rows(
                 .iter()
                 .find(|candidate| candidate.package == action.package);
             let current_state = match package {
+                Some(package) if package.archived => "archived",
                 Some(package) if package.enabled => "enabled",
                 Some(_) => "disabled",
                 None => "missing",
@@ -905,6 +906,11 @@ fn profile_preview_rows(
             }
             .to_string();
             let (status, reason) = match (package, action.kind) {
+                (Some(package), _) if package.archived => (
+                    ProfilePreviewStatus::Missing,
+                    "package is archived; restore it from Apps before applying profile actions"
+                        .to_string(),
+                ),
                 (None, actions::ActionKind::UninstallForUser) => (
                     ProfilePreviewStatus::AlreadyMatches,
                     "package is already absent for this user".to_string(),
@@ -954,6 +960,8 @@ pub fn plan_action(
         request.kind,
         actions::ActionKind::Disable
             | actions::ActionKind::Enable
+            | actions::ActionKind::Archive
+            | actions::ActionKind::RequestUnarchive
             | actions::ActionKind::UninstallForUser
             | actions::ActionKind::ClearData
             | actions::ActionKind::ForceStop
@@ -1870,6 +1878,7 @@ pub fn apply_remote_file_mutation(
 /// Push a local file to the device.
 #[tauri::command]
 #[specta::specta]
+#[allow(clippy::too_many_arguments)]
 pub async fn push_file(
     app: tauri::AppHandle,
     target: adb::DeviceTarget,
@@ -2913,6 +2922,7 @@ fn pack_context(
     let installed_packages =
         adb::list_packages(transport, target, adb::PackageFilter::All, user_id)?
             .into_iter()
+            .filter(|package| !package.archived)
             .map(|package| package.package)
             .collect();
     Ok(crate::packs::DevicePackContext {
@@ -3119,6 +3129,7 @@ mod tests {
             apk_path: None,
             uid: None,
             installer: None,
+            archived: false,
         };
         let rows = profile_preview_rows(
             &profile,

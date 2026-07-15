@@ -28,11 +28,12 @@ export type QueueStats = {
 };
 
 export function snapshotPackage(
-  packages: Pick<AppPackage, "package" | "enabled" | "system">[],
+  packages: (Pick<AppPackage, "package" | "enabled" | "system"> &
+    Partial<Pick<AppPackage, "archived">>)[],
   packageId: string,
 ): PackageSnapshot {
   const match = packages.find((pkg) => pkg.package === packageId);
-  if (!match) {
+  if (!match || match.archived) {
     return { present: false, enabled: null, system: null };
   }
   return {

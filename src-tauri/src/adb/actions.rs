@@ -26,6 +26,11 @@ pub enum ActionKind {
     Disable,
     /// `pm enable <pkg>` — reverses Disable.
     Enable,
+    /// Android 15+ `pm archive` keeps user data while removing APK/cache.
+    Archive,
+    /// Android 15+ `pm request-unarchive` asks the responsible installer to
+    /// restore an archived package.
+    RequestUnarchive,
     /// `pm uninstall --user 0 <pkg>` — effectively permanent for the
     /// current user; the APK remains in `/system/` (system apps) but
     /// is removed from `/data/app/` (user apps).
@@ -283,7 +288,12 @@ impl ActionKind {
     pub fn is_reversible(self) -> bool {
         matches!(
             self,
-            Self::Disable | Self::Enable | Self::GrantPermission | Self::RevokePermission
+            Self::Disable
+                | Self::Enable
+                | Self::Archive
+                | Self::RequestUnarchive
+                | Self::GrantPermission
+                | Self::RevokePermission
         )
     }
 
@@ -291,6 +301,8 @@ impl ActionKind {
         match self {
             Self::Disable => Some(Self::Enable),
             Self::Enable => Some(Self::Disable),
+            Self::Archive => Some(Self::RequestUnarchive),
+            Self::RequestUnarchive => Some(Self::Archive),
             Self::GrantPermission => Some(Self::RevokePermission),
             Self::RevokePermission => Some(Self::GrantPermission),
             Self::UninstallForUser => Some(Self::RestoreExistingForUser),
@@ -435,6 +447,20 @@ fn synth_args(r: &ActionRequest) -> Vec<String> {
             user,
             r.package.clone(),
         ],
+        ActionKind::Archive => vec![
+            "pm".into(),
+            "archive".into(),
+            "--user".into(),
+            user,
+            r.package.clone(),
+        ],
+        ActionKind::RequestUnarchive => vec![
+            "pm".into(),
+            "request-unarchive".into(),
+            "--user".into(),
+            user,
+            r.package.clone(),
+        ],
         ActionKind::UninstallForUser => vec![
             "pm".into(),
             "uninstall".into(),
@@ -485,6 +511,14 @@ fn describe(r: &ActionRequest) -> String {
     match r.kind {
         ActionKind::Disable => format!("Disable {} for user {u}", r.package),
         ActionKind::Enable => format!("Re-enable {} for user {u}", r.package),
+        ActionKind::Archive => format!(
+            "Archive {} for user {u}; Android removes APK/cache but keeps user data",
+            r.package
+        ),
+        ActionKind::RequestUnarchive => format!(
+            "Request restoration of archived {} for user {u} from its responsible installer",
+            r.package
+        ),
         ActionKind::UninstallForUser => format!(
             "Remove {} for user {u}; undo is offered only if PackageManager verifies a retained preinstalled APK",
             r.package
@@ -538,6 +572,29 @@ pub fn apply(
     } else {
         plan.before_state.clone()
     };
+    if matches!(
+        plan.request.kind,
+        ActionKind::Archive | ActionKind::RequestUnarchive
+    ) {
+        let capability = crate::adb::packages::archive_capability(transport, &plan.request.target);
+        if !capability.supported {
+            return Err(TransportError::Parse(capability.reason));
+        }
+        let valid_before = match plan.request.kind {
+            ActionKind::Archive => matches!(
+                before_state.as_str(),
+                "user_installed_enabled" | "user_installed_disabled"
+            ),
+            ActionKind::RequestUnarchive => before_state == "archived",
+            _ => unreachable!(),
+        };
+        if !valid_before {
+            return Err(TransportError::Parse(format!(
+                "refusing {:?} because the verified package state is {before_state}",
+                plan.request.kind
+            )));
+        }
+    }
     let stdout = if plan.request.kind == ActionKind::RestoreExistingForUser {
         restore_existing_for_user(transport, &plan.request, &plan.args, &before_state)?
     } else {
@@ -547,7 +604,14 @@ pub fn apply(
     // `pm disable-user --user 0 com.foo` prints "Package com.foo new
     // state: disabled" on success and "Failure [...]" on failure. We
     // surface the raw text and let UI / journal layers decide.
-    let after_state = capture_state(transport, &plan.request);
+    let after_state = if matches!(
+        plan.request.kind,
+        ActionKind::Archive | ActionKind::RequestUnarchive
+    ) {
+        wait_for_archive_transition(transport, &plan.request)?
+    } else {
+        capture_state(transport, &plan.request)
+    };
     if plan.request.kind == ActionKind::RestoreExistingForUser {
         let expected = if plan.request.context.restore_enabled_state == Some(true) {
             "preinstalled_enabled"
@@ -580,6 +644,9 @@ pub fn capture_state(transport: &dyn AdbTransport, request: &ActionRequest) -> S
             package_state(transport, request).unwrap_or_else(|_| "unknown".to_string())
         }
         ActionKind::UninstallForUser | ActionKind::RestoreExistingForUser => {
+            removal_state(transport, request).unwrap_or_else(|_| "unknown".to_string())
+        }
+        ActionKind::Archive | ActionKind::RequestUnarchive => {
             removal_state(transport, request).unwrap_or_else(|_| "unknown".to_string())
         }
         ActionKind::GrantPermission | ActionKind::RevokePermission => transport
@@ -638,11 +705,37 @@ fn removal_state(
             enabled: false,
             system: false,
         } => "user_installed_disabled",
+        PackagePresence::Archived => "archived",
         PackagePresence::Retained { system: true } => "retained_preinstalled",
         PackagePresence::Retained { system: false } => "retained_unclassified",
         PackagePresence::Missing => "not_installed",
     }
     .to_string())
+}
+
+fn wait_for_archive_transition(
+    transport: &dyn AdbTransport,
+    request: &ActionRequest,
+) -> Result<String, TransportError> {
+    for _ in 0..40 {
+        let state = removal_state(transport, request)?;
+        let complete = match request.kind {
+            ActionKind::Archive => state == "archived",
+            ActionKind::RequestUnarchive => matches!(
+                state.as_str(),
+                "user_installed_enabled" | "user_installed_disabled"
+            ),
+            _ => unreachable!(),
+        };
+        if complete {
+            return Ok(state);
+        }
+        std::thread::sleep(std::time::Duration::from_millis(250));
+    }
+    Err(TransportError::Parse(
+        "Android accepted the archive request but the expected package state was not observed within 10 seconds"
+            .to_string(),
+    ))
 }
 
 fn checked_package_command(
@@ -1038,6 +1131,30 @@ mod tests {
     }
 
     #[test]
+    fn archive_plans_are_user_scoped_and_canonical() {
+        let request = |kind| ActionRequest {
+            serial: "abc".into(),
+            target: target("abc"),
+            package: "com.example.app".into(),
+            kind,
+            user_id: 10,
+            pack_context: None,
+            context: ActionContext {
+                confirmation_source: ConfirmationSource::AppsPreview,
+                ..Default::default()
+            },
+        };
+        assert_eq!(
+            plan(request(ActionKind::Archive)).args,
+            ["pm", "archive", "--user", "10", "com.example.app"]
+        );
+        assert_eq!(
+            plan(request(ActionKind::RequestUnarchive)).args,
+            ["pm", "request-unarchive", "--user", "10", "com.example.app"]
+        );
+    }
+
+    #[test]
     fn plan_uninstall_user_emits_pm_uninstall() {
         let p = plan(ActionRequest {
             serial: "abc".into(),
@@ -1102,6 +1219,15 @@ mod tests {
     fn inverse_and_reversibility() {
         assert_eq!(ActionKind::Disable.inverse(), Some(ActionKind::Enable));
         assert_eq!(ActionKind::Enable.inverse(), Some(ActionKind::Disable));
+        assert_eq!(
+            ActionKind::Archive.inverse(),
+            Some(ActionKind::RequestUnarchive)
+        );
+        assert_eq!(
+            ActionKind::RequestUnarchive.inverse(),
+            Some(ActionKind::Archive)
+        );
+        assert!(ActionKind::Archive.is_reversible());
         assert!(ActionKind::Disable.is_reversible());
         assert!(ActionKind::Enable.is_reversible());
         assert!(!ActionKind::UninstallForUser.is_reversible());
@@ -1220,6 +1346,157 @@ mod tests {
         .unwrap();
         assert_eq!(applied.before_state, "revoked");
         assert_eq!(applied.after_state, "granted");
+    }
+
+    #[test]
+    fn archive_and_unarchive_complete_a_verified_round_trip() {
+        let mock = MockTransport::new().with_devices(vec![device("abc")]);
+        let disabled = "package:/data/app/Example/base.apk=com.example.app\n";
+        let package_probe = [
+            "sh",
+            "-c",
+            "pm get-archived-package-metadata --user \"$1\" \"$2\" >/dev/null",
+            "droidsmith",
+            "0",
+            "com.example.app",
+        ];
+
+        // Archive: verify a user-installed source, execute the canonical API 35
+        // command, then observe the archived metadata predicate.
+        expect_owner(&mock);
+        mock.expect_shell(
+            "abc",
+            &[
+                "pm",
+                "list",
+                "packages",
+                "--user",
+                "0",
+                "-d",
+                "-f",
+                "com.example.app",
+            ],
+            Ok(disabled.into()),
+        );
+        mock.expect_shell(
+            "abc",
+            &["getprop", "ro.build.version.sdk"],
+            Ok("35\n".into()),
+        );
+        mock.expect_shell(
+            "abc",
+            &["pm", "archive", "--user", "0", "com.example.app"],
+            Ok("Success\n".into()),
+        );
+        for flag in ["-d", "-e"] {
+            mock.expect_shell(
+                "abc",
+                &[
+                    "pm",
+                    "list",
+                    "packages",
+                    "--user",
+                    "0",
+                    flag,
+                    "-f",
+                    "com.example.app",
+                ],
+                Ok(String::new()),
+            );
+        }
+        mock.expect_shell(
+            "abc",
+            &["getprop", "ro.build.version.sdk"],
+            Ok("35\n".into()),
+        );
+        mock.expect_shell("abc", &package_probe, Ok(String::new()));
+
+        let archived = apply(
+            &mock,
+            plan(ActionRequest {
+                serial: "abc".into(),
+                target: target("abc"),
+                package: "com.example.app".into(),
+                kind: ActionKind::Archive,
+                user_id: 0,
+                pack_context: None,
+                context: ActionContext::default(),
+            }),
+            "2026-07-15T12:00:00Z",
+        )
+        .unwrap();
+        assert_eq!(archived.before_state, "user_installed_disabled");
+        assert_eq!(archived.after_state, "archived");
+
+        // Undo: require the archived source state, submit Android's asynchronous
+        // unarchive request, and wait for PackageManager to restore the app.
+        expect_owner(&mock);
+        for flag in ["-d", "-e"] {
+            mock.expect_shell(
+                "abc",
+                &[
+                    "pm",
+                    "list",
+                    "packages",
+                    "--user",
+                    "0",
+                    flag,
+                    "-f",
+                    "com.example.app",
+                ],
+                Ok(String::new()),
+            );
+        }
+        mock.expect_shell(
+            "abc",
+            &["getprop", "ro.build.version.sdk"],
+            Ok("35\n".into()),
+        );
+        mock.expect_shell("abc", &package_probe, Ok(String::new()));
+        mock.expect_shell(
+            "abc",
+            &["getprop", "ro.build.version.sdk"],
+            Ok("35\n".into()),
+        );
+        mock.expect_shell(
+            "abc",
+            &["pm", "request-unarchive", "--user", "0", "com.example.app"],
+            Ok("Success\n".into()),
+        );
+        mock.expect_shell(
+            "abc",
+            &[
+                "pm",
+                "list",
+                "packages",
+                "--user",
+                "0",
+                "-d",
+                "-f",
+                "com.example.app",
+            ],
+            Ok(disabled.into()),
+        );
+
+        let restored = apply(
+            &mock,
+            plan(ActionRequest {
+                serial: "abc".into(),
+                target: target("abc"),
+                package: "com.example.app".into(),
+                kind: ActionKind::RequestUnarchive,
+                user_id: 0,
+                pack_context: None,
+                context: ActionContext {
+                    confirmation_source: ConfirmationSource::JournalUndo,
+                    ..Default::default()
+                },
+            }),
+            "2026-07-15T12:00:01Z",
+        )
+        .unwrap();
+        assert_eq!(restored.before_state, "archived");
+        assert_eq!(restored.after_state, "user_installed_disabled");
     }
 
     #[test]

@@ -43,7 +43,10 @@ pub use device::{
     DeviceTransportKind,
 };
 pub use device_info::{get_device_info, DeviceInfo};
-pub use packages::{list_packages, AppPackage, PackageFilter};
+pub use packages::{
+    list_packages, list_packages_with_capability, AppPackage, PackageArchiveCapability,
+    PackageFilter, PackageListing,
+};
 pub use resolver::{locate_adb, AdbResolution};
 pub use transport::{validate_device_target, AdbTransport, ShellTransport, TransportError};
 pub use users::{list_users, AndroidUser};

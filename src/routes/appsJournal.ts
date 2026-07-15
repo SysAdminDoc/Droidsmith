@@ -42,5 +42,19 @@ export function journalEntryStatus(
       ? "undoable"
       : "irreversible";
   }
+  if (kind === "archive") {
+    return (entry.applied.before_state === "user_installed_enabled" ||
+      entry.applied.before_state === "user_installed_disabled") &&
+      entry.applied.after_state === "archived"
+      ? "undoable"
+      : "irreversible";
+  }
+  if (kind === "request_unarchive") {
+    return entry.applied.before_state === "archived" &&
+      (entry.applied.after_state === "user_installed_enabled" ||
+        entry.applied.after_state === "user_installed_disabled")
+      ? "undoable"
+      : "irreversible";
+  }
   return kind === "disable" || kind === "enable" ? "undoable" : "irreversible";
 }

@@ -391,6 +391,67 @@ async function runDesktopFlow(browser) {
     .getByRole("button", { name: "Dismiss", exact: true })
     .click();
 
+  const archiveActionRow = page
+    .getByRole("row")
+    .filter({ hasText: "com.example.app" })
+    .filter({ has: page.getByRole("button", { name: "Archive" }) });
+  await archiveActionRow.getByRole("button", { name: "Archive" }).click();
+  const archiveReview = page.getByRole("alertdialog", {
+    name: "Apply package action",
+  });
+  await archiveReview.waitFor();
+  await archiveReview
+    .getByText(/pm archive --user 0 com\.example\.app/)
+    .waitFor();
+  if (
+    (await archiveReview
+      .getByRole("button", {
+        name: "Export pre-change baseline",
+      })
+      .count()) !== 0
+  ) {
+    throw new Error("Archive review exposed an incompatible portable baseline");
+  }
+  await archiveReview.getByRole("button", { name: "Apply change" }).click();
+  await page.getByText("Action completed", { exact: true }).waitFor();
+  await page
+    .getByRole("status")
+    .filter({
+      has: page.getByRole("heading", { name: "Action completed", exact: true }),
+    })
+    .getByRole("button", { name: "Dismiss", exact: true })
+    .click();
+  const archivedPackageRow = page
+    .getByRole("row")
+    .filter({ hasText: "com.example.app" })
+    .filter({ has: page.getByRole("button", { name: "Unarchive" }) });
+  await archivedPackageRow.getByText("Archived", { exact: true }).waitFor();
+
+  const archiveJournalRow = page
+    .getByRole("row")
+    .filter({ hasText: "com.example.app" })
+    .filter({ hasText: "Archive" });
+  await archiveJournalRow.getByRole("button", { name: "Undo" }).click();
+  await page.getByText("Undo completed for com.example.app.").waitFor();
+  const restoredPackageRow = page
+    .getByRole("row")
+    .filter({ hasText: "com.example.app" })
+    .filter({ has: page.getByRole("button", { name: "Enable" }) });
+  await restoredPackageRow.getByText("Disabled", { exact: true }).waitFor();
+  await page.evaluate(() => window.__DROIDSMITH_MOCK_ARCHIVE_API__(34));
+  await page.getByRole("button", { name: "Refresh packages" }).click();
+  await page
+    .getByRole("heading", { name: "App archiving unavailable" })
+    .waitFor();
+  if (
+    (await restoredPackageRow
+      .getByRole("button", { name: "Archive" })
+      .count()) !== 0
+  ) {
+    throw new Error("Android 14 exposed an unsupported archive action");
+  }
+  await page.evaluate(() => window.__DROIDSMITH_MOCK_ARCHIVE_API__(35));
+
   await page.getByRole("button", { name: /Profiles/ }).click();
   await page.getByRole("heading", { name: "Profiles", exact: true }).waitFor();
   await page.getByLabel("Name", { exact: true }).fill("QA profile");
@@ -742,6 +803,7 @@ async function installTauriMock(page) {
       {
         package: "com.example.app",
         enabled: true,
+        archived: false,
         system: false,
         apk_path: "/data/app/com.example.app/base.apk",
         uid: 10101,
@@ -750,6 +812,7 @@ async function installTauriMock(page) {
       {
         package: "com.android.settings",
         enabled: true,
+        archived: false,
         system: true,
         apk_path: "/system/priv-app/Settings/Settings.apk",
         uid: 1000,
@@ -758,6 +821,7 @@ async function installTauriMock(page) {
       {
         package: "com.example.disabled",
         enabled: false,
+        archived: false,
         system: false,
         apk_path: "/data/app/com.example.disabled/base.apk",
         uid: 10102,
@@ -766,6 +830,7 @@ async function installTauriMock(page) {
       {
         package: "com.example.fail",
         enabled: true,
+        archived: false,
         system: false,
         apk_path: "/data/app/com.example.fail/base.apk",
         uid: 10103,
@@ -789,8 +854,13 @@ async function installTauriMock(page) {
       },
     ];
     let journalId = 20;
+    const runtimeJournal = [];
     let installAttempts = 0;
     let scrcpyLaunches = 0;
+    let archiveApi = 35;
+    window.__DROIDSMITH_MOCK_ARCHIVE_API__ = (api) => {
+      archiveApi = api;
+    };
     const qaPackAssessment = {
       status: "compatible",
       override_required: false,
@@ -1153,7 +1223,17 @@ async function installTauriMock(page) {
           };
         }
         if (cmd === "list_packages") {
-          return filterPackages(packages, args.filter ?? "all");
+          return {
+            packages: filterPackages(packages, args.filter ?? "all"),
+            archive: {
+              supported: archiveApi >= 35,
+              api_level: archiveApi,
+              reason:
+                archiveApi >= 35
+                  ? "Android 15+ package archiving is available"
+                  : `package archiving requires Android 15 (API 35); device reports API ${archiveApi}`,
+            },
+          };
         }
         if (cmd === "get_device_info") {
           return {
@@ -1554,8 +1634,46 @@ async function installTauriMock(page) {
               },
               undone_by: null,
               undoes: null,
+              outcome: "succeeded",
+              failure: null,
             },
+            ...runtimeJournal,
           ];
+        }
+        if (cmd === "journal_undo") {
+          const original = runtimeJournal.find(
+            (entry) => entry.id === args.entry_id,
+          );
+          if (!original || original.applied.plan.request.kind !== "archive") {
+            throw new Error("journal entry is not safely undoable");
+          }
+          const pkg = packages.find(
+            (item) => item.package === original.applied.plan.request.package,
+          );
+          if (pkg) {
+            pkg.archived = false;
+            pkg.enabled = original.applied.before_state.endsWith("_enabled");
+          }
+          const undo = {
+            id: ++journalId,
+            applied: {
+              plan: planFor({
+                ...original.applied.plan.request,
+                kind: "request_unarchive",
+              }),
+              stdout: "Success",
+              before_state: "archived",
+              after_state: original.applied.before_state,
+              applied_at: "2026-07-15T12:30:00Z",
+            },
+            undone_by: null,
+            undoes: original.id,
+            outcome: "succeeded",
+            failure: null,
+          };
+          original.undone_by = undo.id;
+          runtimeJournal.push(undo);
+          return undo;
         }
         if (cmd === "plan_action") {
           return planFor(args.request);
@@ -1672,21 +1790,46 @@ async function installTauriMock(page) {
           }
           await new Promise((resolve) => window.setTimeout(resolve, 150));
           const pkg = packages.find((item) => item.package === request.package);
+          const beforeState =
+            request.kind === "archive"
+              ? pkg?.enabled
+                ? "user_installed_enabled"
+                : "user_installed_disabled"
+              : request.kind === "request_unarchive"
+                ? "archived"
+                : "installed_enabled";
           if (pkg && request.kind === "disable") pkg.enabled = false;
           if (pkg && request.kind === "enable") pkg.enabled = true;
+          if (pkg && request.kind === "archive") {
+            pkg.archived = true;
+            pkg.enabled = false;
+          }
+          if (pkg && request.kind === "request_unarchive") {
+            pkg.archived = false;
+            pkg.enabled = true;
+          }
+          const afterState =
+            request.kind === "archive"
+              ? "archived"
+              : request.kind === "request_unarchive"
+                ? "user_installed_enabled"
+                : "installed_disabled";
           const stdout = `Applied ${request.kind} to ${request.package}`;
           const entry = {
             id: ++journalId,
             applied: {
               plan: args.plan,
               stdout,
-              before_state: "installed_enabled",
-              after_state: "installed_disabled",
+              before_state: beforeState,
+              after_state: afterState,
               applied_at: "2026-06-29T10:05:00Z",
             },
             undone_by: null,
             undoes: null,
+            outcome: "succeeded",
+            failure: null,
           };
+          runtimeJournal.push(entry);
           return { entry, stdout };
         }
         if (cmd === "list_packs") {
@@ -1905,8 +2048,11 @@ async function installTauriMock(page) {
     function filterPackages(items, filter) {
       if (filter === "user") return items.filter((item) => !item.system);
       if (filter === "system") return items.filter((item) => item.system);
-      if (filter === "enabled") return items.filter((item) => item.enabled);
-      if (filter === "disabled") return items.filter((item) => !item.enabled);
+      if (filter === "enabled")
+        return items.filter((item) => item.enabled && !item.archived);
+      if (filter === "disabled")
+        return items.filter((item) => !item.enabled && !item.archived);
+      if (filter === "archived") return items.filter((item) => item.archived);
       return items;
     }
 
@@ -1956,7 +2102,23 @@ async function installTauriMock(page) {
       const action =
         request.kind === "enable"
           ? ["pm", "enable", request.package]
-          : ["pm", "disable-user", "--user", "0", request.package];
+          : request.kind === "archive"
+            ? [
+                "pm",
+                "archive",
+                "--user",
+                String(request.user_id),
+                request.package,
+              ]
+            : request.kind === "request_unarchive"
+              ? [
+                  "pm",
+                  "request-unarchive",
+                  "--user",
+                  String(request.user_id),
+                  request.package,
+                ]
+              : ["pm", "disable-user", "--user", "0", request.package];
       return {
         request: {
           ...request,

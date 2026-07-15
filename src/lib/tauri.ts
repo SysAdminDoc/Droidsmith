@@ -35,6 +35,7 @@ import {
   type PackageBackupPreflight,
   type PackageExportResult,
   type PackageFilter,
+  type PackageListing,
   type Pack as GeneratedPack,
   type PackCandidate as GeneratedPackCandidate,
   type PackEntry as GeneratedPackEntry,
@@ -436,6 +437,14 @@ export async function callListPackages(
   filter: PackageFilter,
   userId = 0,
 ): Promise<AppPackage[]> {
+  return (await commands.listPackages(target, filter, userId)).packages;
+}
+
+export async function callListPackagesWithCapability(
+  target: DeviceTarget,
+  filter: PackageFilter,
+  userId = 0,
+): Promise<PackageListing> {
   return commands.listPackages(target, filter, userId);
 }
 

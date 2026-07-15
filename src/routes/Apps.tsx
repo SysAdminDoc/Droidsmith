@@ -12,7 +12,7 @@ import {
   callInstallApk,
   callJournalList,
   callJournalUndo,
-  callListPackages,
+  callListPackagesWithCapability,
   callListPermissions,
   callListUsers,
   callPlanAction,
@@ -31,6 +31,7 @@ import {
   type InstallOptions,
   type InstallPackageResult,
   type PackageFilter,
+  type PackageArchiveCapability,
   type OperationEvent,
   type PackageBackupPreflight,
   type PermissionInfo,
@@ -69,7 +70,11 @@ import {
 type PackagesState =
   | { kind: "idle" }
   | { kind: "loading" }
-  | { kind: "ok"; packages: AppPackage[] }
+  | {
+      kind: "ok";
+      packages: AppPackage[];
+      archive: PackageArchiveCapability;
+    }
   | { kind: "error"; message: string };
 
 type ActionState =
@@ -138,6 +143,7 @@ const FILTERS: { value: PackageFilter; labelKey: string }[] = [
   { value: "system", labelKey: "apps.filterSystem" },
   { value: "enabled", labelKey: "apps.filterEnabled" },
   { value: "disabled", labelKey: "apps.filterDisabled" },
+  { value: "archived", labelKey: "apps.filterArchived" },
 ];
 
 export default function AppsRoute() {
@@ -223,12 +229,16 @@ export default function AppsRoute() {
     setPackageMetadata({});
     setPkgState({ kind: "loading" });
     try {
-      const packages = await callListPackages(
+      const listing = await callListPackagesWithCapability(
         deviceTarget(selectedDevice),
         filter,
         selectedUser,
       );
-      setPkgState({ kind: "ok", packages });
+      setPkgState({
+        kind: "ok",
+        packages: listing.packages,
+        archive: listing.archive,
+      });
     } catch (e) {
       setPkgState({
         kind: "error",
@@ -1057,17 +1067,28 @@ export default function AppsRoute() {
             )}
 
             {pkgState.kind === "ok" && (
-              <PackageTable
-                packages={filteredPackages}
-                metadata={packageMetadata}
-                totalCount={pkgState.packages.length}
-                onMetadataRequest={requestPackageMetadata}
-                onAction={startAction}
-                onInspect={setInspectedPkg}
-                onExport={(pkg) => void runPackageExport(pkg, "apk_export")}
-                onLegacyExport={(pkg) => void inspectLegacyExport(pkg)}
-                showLegacyExport={showAdvancedBackups}
-              />
+              <>
+                {!pkgState.archive.supported && (
+                  <StatePanel
+                    title={t("apps.archiveUnavailable")}
+                    tone="warning"
+                  >
+                    <p>{pkgState.archive.reason}</p>
+                  </StatePanel>
+                )}
+                <PackageTable
+                  packages={filteredPackages}
+                  metadata={packageMetadata}
+                  totalCount={pkgState.packages.length}
+                  archiveSupported={pkgState.archive.supported}
+                  onMetadataRequest={requestPackageMetadata}
+                  onAction={startAction}
+                  onInspect={setInspectedPkg}
+                  onExport={(pkg) => void runPackageExport(pkg, "apk_export")}
+                  onLegacyExport={(pkg) => void inspectLegacyExport(pkg)}
+                  showLegacyExport={showAdvancedBackups}
+                />
+              </>
             )}
 
             <JournalPanel
@@ -1558,6 +1579,7 @@ function PackageTable({
   packages,
   metadata,
   totalCount,
+  archiveSupported,
   onMetadataRequest,
   onAction,
   onInspect,
@@ -1568,6 +1590,7 @@ function PackageTable({
   packages: AppPackage[];
   metadata: Record<string, AppPackageMetadata | null>;
   totalCount: number;
+  archiveSupported: boolean;
   onMetadataRequest: (pkg: string) => void;
   onAction: (pkg: string, kind: ActionKind) => void;
   onInspect: (pkg: string) => void;
@@ -1638,15 +1661,36 @@ function PackageTable({
                     </Badge>
                   </TableCell>
                   <TableCell>
-                    <Badge tone={pkg.enabled ? "success" : "danger"}>
-                      {pkg.enabled
-                        ? t("apps.filterEnabled")
-                        : t("apps.filterDisabled")}
+                    <Badge
+                      tone={
+                        pkg.archived
+                          ? "warning"
+                          : pkg.enabled
+                            ? "success"
+                            : "danger"
+                      }
+                    >
+                      {pkg.archived
+                        ? t("apps.filterArchived")
+                        : pkg.enabled
+                          ? t("apps.filterEnabled")
+                          : t("apps.filterDisabled")}
                     </Badge>
                   </TableCell>
                   <TableCell>
                     <div className="flex min-w-[10rem] flex-wrap gap-1.5">
-                      {pkg.enabled ? (
+                      {pkg.archived ? (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="primary"
+                          onClick={() =>
+                            onAction(pkg.package, "request_unarchive")
+                          }
+                        >
+                          {t("apps.unarchive")}
+                        </Button>
+                      ) : pkg.enabled ? (
                         <>
                           <Button
                             type="button"
@@ -1676,31 +1720,44 @@ function PackageTable({
                           {t("apps.enable")}
                         </Button>
                       )}
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => onAction(pkg.package, "force_stop")}
-                      >
-                        {t("apps.stop")}
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => onInspect(pkg.package)}
-                      >
-                        {t("apps.perms")}
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => onExport(pkg.package)}
-                      >
-                        {t("apps.exportApks")}
-                      </Button>
-                      {showLegacyExport && (
+                      {!pkg.archived && archiveSupported && !pkg.system && (
+                        <Button
+                          type="button"
+                          size="sm"
+                          onClick={() => onAction(pkg.package, "archive")}
+                        >
+                          {t("apps.archive")}
+                        </Button>
+                      )}
+                      {!pkg.archived && (
+                        <>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => onAction(pkg.package, "force_stop")}
+                          >
+                            {t("apps.stop")}
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => onInspect(pkg.package)}
+                          >
+                            {t("apps.perms")}
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => onExport(pkg.package)}
+                          >
+                            {t("apps.exportApks")}
+                          </Button>
+                        </>
+                      )}
+                      {!pkg.archived && showLegacyExport && (
                         <Button
                           type="button"
                           size="sm"
@@ -1737,7 +1794,7 @@ function PackageIdentity({
 
   useEffect(() => {
     const element = containerRef.current;
-    if (!element || metadata !== undefined) return;
+    if (!element || metadata !== undefined || pkg.archived) return;
     if (typeof IntersectionObserver === "undefined") {
       onRequest(pkg.package);
       return;
@@ -1753,7 +1810,7 @@ function PackageIdentity({
     );
     observer.observe(element);
     return () => observer.disconnect();
-  }, [metadata, onRequest, pkg.package]);
+  }, [metadata, onRequest, pkg.archived, pkg.package]);
 
   return (
     <div ref={containerRef} className="flex min-w-[18rem] items-center gap-3">
@@ -2107,6 +2164,10 @@ function ActionOverlay({
   if (state.kind === "idle") return null;
 
   if (state.kind === "confirming") {
+    const portableBaselineSupported = ![
+      "archive",
+      "request_unarchive",
+    ].includes(state.plan.request.kind);
     return (
       <div
         ref={trapRef}
@@ -2149,16 +2210,18 @@ function ActionOverlay({
             </p>
           )}
           <div className="mt-5 flex justify-end gap-3">
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={onExportBaseline}
-              disabled={exportingBaseline}
-            >
-              {exportingBaseline
-                ? t("apps.recoveryExporting")
-                : t("apps.recoveryExportBeforeApply")}
-            </Button>
+            {portableBaselineSupported && (
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={onExportBaseline}
+                disabled={exportingBaseline}
+              >
+                {exportingBaseline
+                  ? t("apps.recoveryExporting")
+                  : t("apps.recoveryExportBeforeApply")}
+              </Button>
+            )}
             <Button type="button" onClick={onCancel}>
               {t("apps.cancel")}
             </Button>

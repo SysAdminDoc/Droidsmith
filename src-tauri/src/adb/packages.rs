@@ -18,6 +18,7 @@
 use crate::adb::device::DeviceTarget;
 use crate::adb::transport::{AdbTransport, TransportError};
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 
 #[derive(specta::Type, Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct AppPackage {
@@ -36,11 +37,28 @@ pub struct AppPackage {
     /// Installer source package id, when `-i` produced one. Used to
     /// surface "Installed from Play Store" vs ApkMirror / sideload.
     pub installer: Option<String>,
+    /// True when Android 15+ has removed the APK/cache while retaining user
+    /// data and installer metadata for a later unarchive request.
+    pub archived: bool,
+}
+
+#[derive(specta::Type, Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct PackageArchiveCapability {
+    pub supported: bool,
+    pub api_level: Option<u32>,
+    pub reason: String,
+}
+
+#[derive(specta::Type, Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct PackageListing {
+    pub packages: Vec<AppPackage>,
+    pub archive: PackageArchiveCapability,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PackagePresence {
     Installed { enabled: bool, system: bool },
+    Archived,
     Retained { system: bool },
     Missing,
 }
@@ -63,18 +81,20 @@ pub enum PackageFilter {
     System,
     Enabled,
     Disabled,
+    Archived,
 }
 
 /// Enumerate packages on `serial` for Android user `user_id`, applying
 /// `filter` after the union. Passing the explicit `--user` keeps the
 /// listed set consistent with the user that destructive actions target.
-pub fn list_packages(
+pub fn list_packages_with_capability(
     t: &dyn AdbTransport,
     target: &DeviceTarget,
     filter: PackageFilter,
     user_id: u32,
-) -> Result<Vec<AppPackage>, TransportError> {
+) -> Result<PackageListing, TransportError> {
     let user = user_id.to_string();
+    let archive = archive_capability(t, target);
     let enabled_raw = t.shell_target(
         target,
         &[
@@ -100,16 +120,149 @@ pub fn list_packages(
         }
     }
 
-    Ok(packages
+    if archive.supported {
+        let known_raw = t.shell_target(
+            target,
+            &[
+                "pm", "list", "packages", "--user", &user, "-u", "-f", "-U", "-i",
+            ],
+        )?;
+        let mut candidates = parse_pm_list(&known_raw, false);
+        candidates.retain(|candidate| {
+            !packages
+                .iter()
+                .any(|installed| installed.package == candidate.package)
+        });
+        let archived = archived_package_names(
+            t,
+            target,
+            user_id,
+            &candidates
+                .iter()
+                .map(|candidate| candidate.package.clone())
+                .collect::<Vec<_>>(),
+        )?;
+        for mut candidate in candidates {
+            if archived.contains(&candidate.package) {
+                candidate.archived = true;
+                candidate.enabled = false;
+                packages.push(candidate);
+            }
+        }
+    }
+
+    let packages = packages
         .into_iter()
         .filter(|p| match filter {
             PackageFilter::All => true,
             PackageFilter::User => !p.system,
             PackageFilter::System => p.system,
-            PackageFilter::Enabled => p.enabled,
-            PackageFilter::Disabled => !p.enabled,
+            PackageFilter::Enabled => p.enabled && !p.archived,
+            PackageFilter::Disabled => !p.enabled && !p.archived,
+            PackageFilter::Archived => p.archived,
         })
-        .collect())
+        .collect();
+    Ok(PackageListing { packages, archive })
+}
+
+fn archived_package_names(
+    t: &dyn AdbTransport,
+    target: &DeviceTarget,
+    user_id: u32,
+    packages: &[String],
+) -> Result<HashSet<String>, TransportError> {
+    const PROBE_BATCH_SIZE: usize = 128;
+    const PROBE_SCRIPT: &str = "user=\"$1\"; shift; for package do if pm get-archived-package-metadata --user \"$user\" \"$package\" >/dev/null 2>&1; then printf '%s\\n' \"$package\"; fi; done";
+
+    let user = user_id.to_string();
+    let requested = packages.iter().map(String::as_str).collect::<HashSet<_>>();
+    let mut archived = HashSet::new();
+    for batch in packages.chunks(PROBE_BATCH_SIZE) {
+        let mut args = vec![
+            "sh".to_string(),
+            "-c".to_string(),
+            PROBE_SCRIPT.to_string(),
+            "droidsmith".to_string(),
+            user.clone(),
+        ];
+        args.extend(batch.iter().cloned());
+        let refs = args.iter().map(String::as_str).collect::<Vec<_>>();
+        for package in t.shell_target(target, &refs)?.lines() {
+            let package = package.trim();
+            if requested.contains(package) && valid_package_name(package) {
+                archived.insert(package.to_string());
+            }
+        }
+    }
+    Ok(archived)
+}
+
+pub fn list_packages(
+    t: &dyn AdbTransport,
+    target: &DeviceTarget,
+    filter: PackageFilter,
+    user_id: u32,
+) -> Result<Vec<AppPackage>, TransportError> {
+    Ok(list_packages_with_capability(t, target, filter, user_id)?.packages)
+}
+
+pub fn archive_capability(t: &dyn AdbTransport, target: &DeviceTarget) -> PackageArchiveCapability {
+    let api_level = t
+        .shell_target(target, &["getprop", "ro.build.version.sdk"])
+        .ok()
+        .and_then(|value| value.trim().parse::<u32>().ok());
+    match api_level {
+        Some(api) if api >= 35 => PackageArchiveCapability {
+            supported: true,
+            api_level: Some(api),
+            reason: "Android 15+ package archiving is available".to_string(),
+        },
+        Some(api) => PackageArchiveCapability {
+            supported: false,
+            api_level: Some(api),
+            reason: format!(
+                "package archiving requires Android 15 (API 35); device reports API {api}"
+            ),
+        },
+        None => PackageArchiveCapability {
+            supported: false,
+            api_level: None,
+            reason: "could not determine the Android API level; package archiving is unavailable"
+                .to_string(),
+        },
+    }
+}
+
+pub fn is_package_archived(
+    t: &dyn AdbTransport,
+    target: &DeviceTarget,
+    user_id: u32,
+    package: &str,
+) -> Result<bool, TransportError> {
+    if !valid_package_name(package) {
+        return Err(TransportError::Parse(format!(
+            "invalid package id {package:?}"
+        )));
+    }
+    let user = user_id.to_string();
+    // Discard the metadata payload (which may contain encoded icons) on the
+    // device and use only the command status as the archive-state predicate.
+    // User and package remain positional argv values, never interpolated.
+    match t.shell_target(
+        target,
+        &[
+            "sh",
+            "-c",
+            "pm get-archived-package-metadata --user \"$1\" \"$2\" >/dev/null",
+            "droidsmith",
+            &user,
+            package,
+        ],
+    ) {
+        Ok(_) => Ok(true),
+        Err(TransportError::Exit { .. }) => Ok(false),
+        Err(error) => Err(error),
+    }
 }
 
 /// Inspect one package for one Android user, including packages removed for
@@ -139,6 +292,11 @@ pub fn inspect_package_presence(
                 system: entry.system,
             });
         }
+    }
+
+    if archive_capability(t, target).supported && is_package_archived(t, target, user_id, package)?
+    {
+        return Ok(PackagePresence::Archived);
     }
 
     let retained = t.shell_target(
@@ -219,6 +377,7 @@ fn parse_pm_line(line: &str, enabled: bool) -> Option<AppPackage> {
         apk_path,
         uid,
         installer,
+        archived: false,
     })
 }
 
@@ -332,6 +491,63 @@ package:/system/app/FacebookStub/FacebookStub.apk=com.facebook.appmanager uid:10
         assert_eq!(v.len(), 4);
         let enabled: Vec<_> = v.iter().filter(|p| p.enabled).collect();
         assert_eq!(enabled.len(), 3);
+    }
+
+    #[test]
+    fn android_15_listing_distinguishes_archived_from_retained_data() {
+        let mock = MockTransport::new();
+        mock.expect_shell(
+            "abc",
+            &["getprop", "ro.build.version.sdk"],
+            Ok("35\n".to_string()),
+        );
+        mock.expect_shell(
+            "abc",
+            &[
+                "pm", "list", "packages", "--user", "0", "-e", "-f", "-U", "-i",
+            ],
+            Ok("package:/data/app/base.apk=com.example.installed\n".to_string()),
+        );
+        mock.expect_shell(
+            "abc",
+            &[
+                "pm", "list", "packages", "--user", "0", "-d", "-f", "-U", "-i",
+            ],
+            Ok(String::new()),
+        );
+        mock.expect_shell(
+            "abc",
+            &[
+                "pm", "list", "packages", "--user", "0", "-u", "-f", "-U", "-i",
+            ],
+            Ok("package:com.example.installed\npackage:com.example.archived installer=com.android.vending\npackage:com.example.retained\n".to_string()),
+        );
+        mock.expect_shell(
+            "abc",
+            &[
+                "sh",
+                "-c",
+                "user=\"$1\"; shift; for package do if pm get-archived-package-metadata --user \"$user\" \"$package\" >/dev/null 2>&1; then printf '%s\\n' \"$package\"; fi; done",
+                "droidsmith",
+                "0",
+                "com.example.archived",
+                "com.example.retained",
+            ],
+            Ok("com.example.archived\n".to_string()),
+        );
+
+        let listing =
+            list_packages_with_capability(&mock, &target(), PackageFilter::All, 0).unwrap();
+        assert!(listing.archive.supported);
+        assert_eq!(listing.packages.len(), 2);
+        assert!(listing
+            .packages
+            .iter()
+            .any(|package| package.package == "com.example.archived" && package.archived));
+        assert!(!listing
+            .packages
+            .iter()
+            .any(|package| package.package == "com.example.retained"));
     }
 
     #[test]

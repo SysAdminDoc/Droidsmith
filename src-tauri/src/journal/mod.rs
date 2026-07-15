@@ -590,6 +590,23 @@ pub fn undo_request_for(journal: &Journal, entry_id: u64) -> Option<ActionReques
         {
             return None;
         }
+        crate::adb::actions::ActionKind::Archive
+            if !matches!(
+                entry.applied.before_state.as_str(),
+                "user_installed_enabled" | "user_installed_disabled"
+            ) || entry.applied.after_state != "archived" =>
+        {
+            return None;
+        }
+        crate::adb::actions::ActionKind::RequestUnarchive
+            if entry.applied.before_state != "archived"
+                || !matches!(
+                    entry.applied.after_state.as_str(),
+                    "user_installed_enabled" | "user_installed_disabled"
+                ) =>
+        {
+            return None;
+        }
         _ => {}
     }
     let kind = original_kind.inverse()?;
@@ -769,6 +786,26 @@ mod tests {
         let req = undo_request_for(&j, 1).unwrap();
         assert_eq!(req.kind, ActionKind::Enable);
         assert_eq!(req.package, "com.foo");
+    }
+
+    #[test]
+    fn archive_undo_requires_a_verified_round_trip_state() {
+        let dir = fresh_tmp_dir("archive-inverse");
+        let mut journal = Journal::open(&dir, "abc").unwrap();
+        let mut archived = fake_applied("abc", "com.foo", ActionKind::Archive);
+        archived.before_state = "user_installed_enabled".into();
+        archived.after_state = "archived".into();
+        journal.record(archived).unwrap();
+        assert_eq!(
+            undo_request_for(&journal, 1).unwrap().kind,
+            ActionKind::RequestUnarchive
+        );
+
+        let mut unverified = fake_applied("abc", "com.bar", ActionKind::Archive);
+        unverified.before_state = "user_installed_enabled".into();
+        unverified.after_state = "retained_unclassified".into();
+        journal.record(unverified).unwrap();
+        assert!(undo_request_for(&journal, 2).is_none());
     }
 
     #[test]

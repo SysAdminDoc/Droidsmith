@@ -103,6 +103,21 @@ describe("journalEntryStatus", () => {
     expect(journalEntryStatus(userInstalled)).toBe("irreversible");
   });
 
+  it("offers archive undo only after a verified state transition", () => {
+    const archived = entry("archive");
+    archived.applied.before_state = "user_installed_enabled";
+    archived.applied.after_state = "archived";
+    expect(journalEntryStatus(archived)).toBe("undoable");
+
+    const unarchived = entry("request_unarchive");
+    unarchived.applied.before_state = "archived";
+    unarchived.applied.after_state = "user_installed_enabled";
+    expect(journalEntryStatus(unarchived)).toBe("undoable");
+
+    archived.applied.after_state = "retained_unclassified";
+    expect(journalEntryStatus(archived)).toBe("irreversible");
+  });
+
   it("surfaces pending, failed, and interrupted operation records", () => {
     expect(
       journalEntryStatus({ ...entry("disable"), outcome: "pending" }),

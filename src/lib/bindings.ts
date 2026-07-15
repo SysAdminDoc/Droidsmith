@@ -104,7 +104,7 @@ export const commands = {
     target: DeviceTarget,
     filter: PackageFilter,
     userId: number,
-  ): Promise<AppPackage[]> {
+  ): Promise<PackageListing> {
     return await TAURI_INVOKE("list_packages", { target, filter, userId });
   },
   /**
@@ -635,6 +635,15 @@ export type ActionKind =
    */
   | "enable"
   /**
+   * Android 15+ `pm archive` keeps user data while removing APK/cache.
+   */
+  | "archive"
+  /**
+   * Android 15+ `pm request-unarchive` asks the responsible installer to
+   * restore an archived package.
+   */
+  | "request_unarchive"
+  /**
    * `pm uninstall --user 0 <pkg>` — effectively permanent for the
    * current user; the APK remains in `/system/` (system apps) but
    * is removed from `/data/app/` (user apps).
@@ -787,6 +796,11 @@ export type AppPackage = {
    * surface "Installed from Play Store" vs ApkMirror / sideload.
    */
   installer: string | null;
+  /**
+   * True when Android 15+ has removed the APK/cache while retaining user
+   * data and installer metadata for a later unarchive request.
+   */
+  archived: boolean;
 };
 export type AppPackageMetadata = {
   package: string;
@@ -1423,6 +1437,11 @@ export type PackTargets = {
    */
   user_scope?: UserScope;
 };
+export type PackageArchiveCapability = {
+  supported: boolean;
+  api_level: number | null;
+  reason: string;
+};
 export type PackageBackupPreflight = {
   package: string;
   android_user: number;
@@ -1447,7 +1466,17 @@ export type PackageExportResult = {
   artifact: HostArtifact;
   manifest: PackageExportManifest;
 };
-export type PackageFilter = "all" | "user" | "system" | "enabled" | "disabled";
+export type PackageFilter =
+  | "all"
+  | "user"
+  | "system"
+  | "enabled"
+  | "disabled"
+  | "archived";
+export type PackageListing = {
+  packages: AppPackage[];
+  archive: PackageArchiveCapability;
+};
 export type PermissionInfo = { permission: string; granted: boolean };
 export type PlanPackRequest = {
   target: DeviceTarget;
