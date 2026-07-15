@@ -35,6 +35,7 @@ use crate::host_path::{
 use crate::install;
 use crate::journal::{self, Journal, JournalEntry};
 use crate::operations::{self, OperationEvent};
+use crate::profile;
 use crate::quirks::{self, DeviceContext, Quirk};
 use crate::recovery_baseline::{self, BaselineActionInput, BaselinePack, RecoveryBaselineDiff};
 use crate::support_bundle;
@@ -758,6 +759,188 @@ pub fn list_users(target: adb::DeviceTarget) -> Result<Vec<adb::AndroidUser>, ad
     adb::list_users(&transport, &target)
 }
 
+#[derive(specta::Type, Debug, Clone, Copy, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ProfilePreviewStatus {
+    Ready,
+    AlreadyMatches,
+    Missing,
+}
+
+#[derive(specta::Type, Debug, Clone, Serialize)]
+pub struct ProfilePreviewRow {
+    pub action: profile::ProfileAction,
+    pub plan: actions::PlannedAction,
+    pub current_state: String,
+    pub expected_state: String,
+    pub status: ProfilePreviewStatus,
+    pub reason: String,
+}
+
+#[derive(specta::Type, Debug, Clone, Serialize)]
+pub struct ProfilePreview {
+    pub source_version: String,
+    pub profile: profile::Profile,
+    pub migration: Option<profile::ProfileMigration>,
+    pub compatible: bool,
+    pub compatibility_issues: Vec<String>,
+    pub android_user: Option<u32>,
+    pub rows: Vec<ProfilePreviewRow>,
+}
+
+/// Import a profile through a one-shot native read grant and build a complete,
+/// read-only device/user/package diff. Legacy v1 input is returned only as an
+/// explicit migration candidate and cannot be applied as-is.
+#[tauri::command]
+#[specta::specta]
+pub fn inspect_profile(
+    grants: tauri::State<'_, PathGrantStore>,
+    target: adb::DeviceTarget,
+    path_grant: String,
+) -> Result<ProfilePreview, CommandError> {
+    let path = grants.consume(&path_grant, HostPathPurpose::ProfileOpen)?;
+    let document = profile::inspect(&path)?;
+    let (source_version, profile, migration) = match document {
+        profile::ProfileDocument::Current { profile } => (profile.version.clone(), profile, None),
+        profile::ProfileDocument::MigrationAvailable { migration } => (
+            migration.from_version.clone(),
+            migration.profile.clone(),
+            Some(migration),
+        ),
+    };
+
+    let resolution = adb::locate_adb();
+    let adb_path = resolution
+        .path
+        .as_ref()
+        .ok_or(adb::TransportError::AdbNotFound)?;
+    let transport = adb::ShellTransport::new(adb_path);
+    adb::validate_device_target(&transport, &target)?;
+    let info = adb::get_device_info(&transport, &target)?;
+    let users = adb::list_users(&transport, &target)?;
+    let mut compatibility_issues = profile::device_match_issues(
+        &profile,
+        &target.serial,
+        info.manufacturer.as_deref(),
+        info.model.as_deref(),
+        info.sdk_level
+            .as_deref()
+            .and_then(|value| value.parse::<u32>().ok()),
+    );
+    let android_user = match profile::resolve_user(&profile, &users) {
+        Ok(user_id) => Some(user_id),
+        Err(mut issues) => {
+            compatibility_issues.append(&mut issues);
+            None
+        }
+    };
+    let rows = if let Some(user_id) = android_user {
+        let packages = adb::list_packages(&transport, &target, adb::PackageFilter::All, user_id)?;
+        profile_preview_rows(&profile, &target, user_id, &packages)
+    } else {
+        Vec::new()
+    };
+    Ok(ProfilePreview {
+        source_version,
+        profile,
+        migration,
+        compatible: compatibility_issues.is_empty(),
+        compatibility_issues,
+        android_user,
+        rows,
+    })
+}
+
+/// Validate and atomically export a current v2 profile through a purpose-
+/// scoped native save grant. This is also the only GUI path that finalizes a
+/// reviewed v1 migration.
+#[tauri::command]
+#[specta::specta]
+pub fn save_profile(
+    grants: tauri::State<'_, PathGrantStore>,
+    path_grant: String,
+    profile: profile::Profile,
+) -> Result<HostArtifact, CommandError> {
+    let path = grants.consume(&path_grant, HostPathPurpose::ProfileSave)?;
+    Ok(profile::save(&path, &profile)?)
+}
+
+fn profile_preview_rows(
+    profile: &profile::Profile,
+    target: &adb::DeviceTarget,
+    user_id: u32,
+    packages: &[adb::AppPackage],
+) -> Vec<ProfilePreviewRow> {
+    let requests = profile::requests_for(
+        profile,
+        target,
+        user_id,
+        actions::ConfirmationSource::ProfilePreview,
+    );
+    profile
+        .actions
+        .iter()
+        .cloned()
+        .zip(requests.into_iter().map(actions::plan))
+        .map(|(action, plan)| {
+            let package = packages
+                .iter()
+                .find(|candidate| candidate.package == action.package);
+            let current_state = match package {
+                Some(package) if package.enabled => "enabled",
+                Some(_) => "disabled",
+                None => "missing",
+            }
+            .to_string();
+            let expected_state = match action.kind {
+                actions::ActionKind::Disable => "disabled",
+                actions::ActionKind::Enable | actions::ActionKind::RestoreExistingForUser => {
+                    "enabled"
+                }
+                actions::ActionKind::UninstallForUser => "uninstalled_for_user",
+                actions::ActionKind::ClearData => "data_cleared",
+                actions::ActionKind::ForceStop => "stopped",
+                _ => "reviewed_action",
+            }
+            .to_string();
+            let (status, reason) = match (package, action.kind) {
+                (None, actions::ActionKind::UninstallForUser) => (
+                    ProfilePreviewStatus::AlreadyMatches,
+                    "package is already absent for this user".to_string(),
+                ),
+                (None, actions::ActionKind::RestoreExistingForUser) => (
+                    ProfilePreviewStatus::Ready,
+                    "restore will ask Android to install the retained system package".to_string(),
+                ),
+                (None, _) => (
+                    ProfilePreviewStatus::Missing,
+                    "package is not installed for this user".to_string(),
+                ),
+                (Some(package), actions::ActionKind::Disable) if !package.enabled => (
+                    ProfilePreviewStatus::AlreadyMatches,
+                    "package is already disabled".to_string(),
+                ),
+                (Some(package), actions::ActionKind::Enable) if package.enabled => (
+                    ProfilePreviewStatus::AlreadyMatches,
+                    "package is already enabled".to_string(),
+                ),
+                _ => (
+                    ProfilePreviewStatus::Ready,
+                    "canonical action is ready for explicit review".to_string(),
+                ),
+            };
+            ProfilePreviewRow {
+                action,
+                plan,
+                current_state,
+                expected_state,
+                status,
+                reason,
+            }
+        })
+        .collect()
+}
+
 /// Synthesise an ADB action without running it. Pure: this is the
 /// preview surface the confirmation dialog renders before the user
 /// commits.
@@ -846,6 +1029,22 @@ impl From<recovery_baseline::RecoveryBaselineError> for CommandError {
     fn from(error: recovery_baseline::RecoveryBaselineError) -> Self {
         Self {
             code: error.code(),
+            message: error.to_string(),
+        }
+    }
+}
+
+impl From<profile::ProfileError> for CommandError {
+    fn from(error: profile::ProfileError) -> Self {
+        let code = match &error {
+            profile::ProfileError::Read { .. } => "profile_read_failed",
+            profile::ProfileError::Parse { .. } => "profile_parse_failed",
+            profile::ProfileError::Validate { .. } => "profile_invalid",
+            profile::ProfileError::Serialize(_) => "profile_serialize_failed",
+            profile::ProfileError::Save(_) => "profile_save_failed",
+        };
+        Self {
+            code,
             message: error.to_string(),
         }
     }
@@ -2725,11 +2924,79 @@ mod tests {
     use super::{
         accepted_transport_override, append_host_operation, classify_shell, diagnostic_text,
         is_allowed_device_control, load_runtime_packs, pack_error_to_load_error,
-        parse_fastboot_getvar, unique_screenshot_remote, validate_backup_target,
-        validate_remote_path, AdbRecoveryOutcome, AdbRecoveryRecord, ProcessOutput,
-        ShellClassification,
+        parse_fastboot_getvar, profile_preview_rows, unique_screenshot_remote,
+        validate_backup_target, validate_remote_path, AdbRecoveryOutcome, AdbRecoveryRecord,
+        ProcessOutput, ProfilePreviewStatus, ShellClassification,
     };
-    use crate::adb::DeviceTransportKind;
+    use crate::adb::{actions::ActionKind, AppPackage, DeviceTarget, DeviceTransportKind};
+
+    #[test]
+    fn profile_preview_reports_ready_matching_and_missing_rows_without_mutation() {
+        let profile = crate::profile::Profile {
+            name: "preview-test".to_string(),
+            version: crate::profile::PROFILE_SCHEMA_VERSION.to_string(),
+            description: String::new(),
+            device: Default::default(),
+            user: Default::default(),
+            actions: vec![
+                crate::profile::ProfileAction {
+                    kind: ActionKind::Disable,
+                    package: "com.example.enabled".to_string(),
+                    note: String::new(),
+                },
+                crate::profile::ProfileAction {
+                    kind: ActionKind::Disable,
+                    package: "com.example.disabled".to_string(),
+                    note: String::new(),
+                },
+                crate::profile::ProfileAction {
+                    kind: ActionKind::Enable,
+                    package: "com.example.missing".to_string(),
+                    note: String::new(),
+                },
+            ],
+        };
+        let target = DeviceTarget {
+            serial: "QA123".to_string(),
+            transport_id: Some(7),
+            connection_generation: 2,
+            transport_kind: DeviceTransportKind::Usb,
+            untrusted_transport_override: false,
+            model: Some("Pixel QA".to_string()),
+            product: None,
+            device: None,
+            build_fingerprint: Some("google/qa/qa:17/test".to_string()),
+        };
+        let package = |name: &str, enabled: bool| AppPackage {
+            package: name.to_string(),
+            enabled,
+            system: false,
+            apk_path: None,
+            uid: None,
+            installer: None,
+        };
+        let rows = profile_preview_rows(
+            &profile,
+            &target,
+            10,
+            &[
+                package("com.example.enabled", true),
+                package("com.example.disabled", false),
+            ],
+        );
+
+        assert!(matches!(rows[0].status, ProfilePreviewStatus::Ready));
+        assert!(matches!(
+            rows[1].status,
+            ProfilePreviewStatus::AlreadyMatches
+        ));
+        assert!(matches!(rows[2].status, ProfilePreviewStatus::Missing));
+        assert!(rows.iter().all(|row| row.plan.request.user_id == 10));
+        assert!(rows
+            .iter()
+            .all(|row| row.plan.request.context.confirmation_source
+                == crate::adb::actions::ConfirmationSource::ProfilePreview));
+    }
 
     #[test]
     fn host_recovery_records_are_newline_delimited_and_synced() {

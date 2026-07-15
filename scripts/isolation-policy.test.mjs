@@ -292,6 +292,57 @@ test("allows bounded recovery baseline export and read-only inspection", () => {
   assert.equal(hook(invalid).cmd, blockedCommand);
 });
 
+test("allows scoped profile preview and validates current schema exports", () => {
+  const inspectMessage = message("inspect_profile", {
+    target,
+    path_grant: pathGrant,
+  });
+  const profile = {
+    name: "QA setup",
+    version: "2",
+    description: "Reviewed package state",
+    device: {
+      require_serial_prefix: "R58",
+      require_manufacturer: "Google",
+      require_model: "Pixel 9",
+      require_android_min: 34,
+      require_android_max: 36,
+    },
+    user: { mode: "explicit", id: 10 },
+    actions: [{ kind: "disable", package: "com.example.app" }],
+  };
+  const saveMessage = message("save_profile", {
+    path_grant: pathGrant,
+    profile,
+  });
+  assert.equal(hook(inspectMessage), inspectMessage);
+  assert.equal(hook(saveMessage), saveMessage);
+
+  for (const invalidProfile of [
+    { ...profile, version: "1" },
+    { ...profile, user: { mode: "current", id: 10 } },
+    { ...profile, actions: [{ kind: "shell", package: "com.example.app" }] },
+    {
+      ...profile,
+      device: {
+        ...profile.device,
+        require_android_min: 36,
+        require_android_max: 34,
+      },
+    },
+  ]) {
+    assert.equal(
+      hook(
+        message("save_profile", {
+          path_grant: pathGrant,
+          profile: invalidProfile,
+        }),
+      ).cmd,
+      blockedCommand,
+    );
+  }
+});
+
 test("allows scoped package exports and rejects malformed Android users", () => {
   for (const cmd of ["export_package_apks", "backup_package"]) {
     const valid = message(cmd, {
@@ -356,6 +407,11 @@ test("allows only bounded native dialog purposes and file names", () => {
     suggested_name: "droidsmith-recording-2026-07-15.mp4",
   });
   assert.equal(hook(recording), recording);
+  const profileOpen = message("select_host_path", {
+    purpose: "profile_open",
+    suggested_name: null,
+  });
+  assert.equal(hook(profileOpen), profileOpen);
 
   for (const payload of [
     { purpose: "arbitrary_write", suggested_name: "capture.png" },

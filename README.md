@@ -23,6 +23,7 @@ server/mDNS/Wi-Fi 2.0 health with audited guided recovery, provenance-classified
 USB/TLS/legacy/unknown transports with fail-closed unsafe-TCP acknowledgement,
 read-only host connection diagnostics for ADB/tool/USB/driver/udev state,
 portable pre-change recovery baselines with read-only OTA drift review,
+GUI-authored schema-v2 action profiles with read-only live import diffs,
 native-selected scrcpy recording destinations, and fastboot inspection. A
 local-only Diagnostics center previews and saves redacted support
 bundles with tool/OS/ADB health, failed-operation records, and crash excerpts;
@@ -81,7 +82,7 @@ ADB front end, but it has hard limits that an open project can fix:
 | Debloat lists | Static, underperforms Universal Android Debloater per user reports | Versioned YAML packs, vendor quirks, recovery baselines, and a final count/unsafe-tier review before apply; UAD-NG import is blocked on redistribution permission |
 | Screen mirror | Virtual buttons + screenshots | Capability-negotiated scrcpy launch/supervision with per-device presets, encoder selection, and actionable bounded failure diagnostics; bundled scrcpy remains planned |
 | Wireless ADB | Manual `adb pair` in console | First-class Android 11+ pairing, exact mDNS TLS provenance, explicit legacy/unknown TCP warnings, and privacy-bounded VPN/mDNS failure guidance |
-| Automation | None | YAML profiles + headless CLI for reproducible device actions |
+| Automation | None | GUI-authored YAML profiles, explicit v1 migration, live dry-run diffs, and a JSON-capable headless CLI |
 | Extensibility | None | Versioned local pack, quirk, and profile schemas; plugin API and marketplace are deferred |
 | i18n | EN + RU | i18next-driven, contributor-friendly |
 | Multi-device | One at a time | Device selector and per-device workflows; side-by-side device tabs remain planned |
@@ -107,11 +108,39 @@ ADB front end, but it has hard limits that an open project can fix:
 Bundled platform-tools and bundled scrcpy are not wired into the installer yet;
 that work is held with release signing in [Roadmap_Blocked.md](Roadmap_Blocked.md).
 The current extension surface is schema-only: this build accepts schema version
-`"1"` for packs, quirks, and profiles and rejects future revisions with a
-migration hint. The plugin API and marketplace remain deferred in
+`"1"` for packs and quirks and version `"2"` for profiles. Profile v1 has an
+explicit review-and-migrate path; future revisions are rejected with migration
+guidance. The plugin API and marketplace remain deferred in
 [Roadmap_Blocked.md](Roadmap_Blocked.md).
 See [RESEARCH_REPORT.md](RESEARCH_REPORT.md) for the rationale and the
 alternatives considered.
+
+## Profiles and headless automation
+
+The **Profiles** workspace builds an ordered YAML profile from supported
+journaled package actions. A profile can target the owner, foreground, or an
+explicit discovered Android user and can optionally constrain the device serial
+prefix, manufacturer, model, and SDK range. Export validates schema v2 and uses
+an atomic, native-selected destination.
+
+Import is read-only: Droidsmith validates the schema and live device/user
+constraints, then shows every current-to-expected package state, readiness
+reason, and exact planned ADB command. A v1 file is converted only in memory;
+the user must review and save the v2 document before it can run.
+
+The CLI uses the same validation and planning code. `--json` emits stable
+machine-readable results, and exit codes are `0` for success, `1` for a failed
+operation or incompatibility, `2` for invalid input, and `3` when ADB is absent.
+
+```bash
+droidsmith-cli devices --json
+droidsmith-cli migrate-v1 old-profile.yaml --output profile-v2.yaml --json
+droidsmith-cli run profile-v2.yaml --device SERIAL --dry-run --json
+droidsmith-cli run profile-v2.yaml --device SERIAL --apply --json
+```
+
+Legacy or unknown TCP transports additionally require
+`--allow-unsafe-transport`; USB and paired TLS Wi-Fi do not.
 
 ## Portable recovery baselines
 

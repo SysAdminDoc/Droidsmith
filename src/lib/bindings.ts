@@ -130,6 +130,34 @@ export const commands = {
   async listUsers(target: DeviceTarget): Promise<AndroidUser[]> {
     return await TAURI_INVOKE("list_users", { target });
   },
+  /**
+   * Import a profile through a one-shot native read grant and build a complete,
+   * read-only device/user/package diff. Legacy v1 input is returned only as an
+   * explicit migration candidate and cannot be applied as-is.
+   */
+  async inspectProfile(
+    target: DeviceTarget,
+    pathGrant: string,
+  ): Promise<ProfilePreview> {
+    return await TAURI_INVOKE("inspect_profile", {
+      target,
+      path_grant: pathGrant,
+    });
+  },
+  /**
+   * Validate and atomically export a current v2 profile through a purpose-
+   * scoped native save grant. This is also the only GUI path that finalizes a
+   * reviewed v1 migration.
+   */
+  async saveProfile(
+    pathGrant: string,
+    profile: Profile,
+  ): Promise<HostArtifact> {
+    return await TAURI_INVOKE("save_profile", {
+      path_grant: pathGrant,
+      profile,
+    });
+  },
   async listPacks(target: DeviceTarget, userId: number): Promise<PackListing> {
     return await TAURI_INVOKE("list_packs", { target, userId });
   },
@@ -838,6 +866,7 @@ export type ConfirmationSource =
   | "console_review"
   | "device_control"
   | "cli_apply"
+  | "profile_preview"
   | "journal_undo"
   | "recovery_baseline";
 /**
@@ -1083,9 +1112,11 @@ export type HostPathPurpose =
   | "pull_save"
   | "extract_apk_save"
   | "recovery_baseline_save"
+  | "profile_save"
   | "push_open"
   | "install_open"
-  | "recovery_baseline_open";
+  | "recovery_baseline_open"
+  | "profile_open";
 export type InstallFailure = {
   code: string;
   cause: string;
@@ -1442,6 +1473,52 @@ export type ProcessInfo = {
   name: string;
   parse_error?: string | null;
 };
+export type Profile = {
+  name: string;
+  version: string;
+  description?: string;
+  device?: ProfileDeviceMatch;
+  user?: ProfileUserTarget;
+  actions: ProfileAction[];
+};
+export type ProfileAction = {
+  kind: ActionKind;
+  package: string;
+  note?: string;
+};
+export type ProfileDeviceMatch = {
+  require_serial_prefix?: string;
+  require_manufacturer?: string;
+  require_model?: string;
+  require_android_min?: number | null;
+  require_android_max?: number | null;
+};
+export type ProfileMigration = {
+  from_version: string;
+  to_version: string;
+  profile: Profile;
+  warnings: string[];
+};
+export type ProfilePreview = {
+  source_version: string;
+  profile: Profile;
+  migration: ProfileMigration | null;
+  compatible: boolean;
+  compatibility_issues: string[];
+  android_user: number | null;
+  rows: ProfilePreviewRow[];
+};
+export type ProfilePreviewRow = {
+  action: ProfileAction;
+  plan: PlannedAction;
+  current_state: string;
+  expected_state: string;
+  status: ProfilePreviewStatus;
+  reason: string;
+};
+export type ProfilePreviewStatus = "ready" | "already_matches" | "missing";
+export type ProfileUserMode = "owner" | "current" | "explicit";
+export type ProfileUserTarget = { mode?: ProfileUserMode; id?: number | null };
 export type Quirk = {
   /**
    * Stable id for cross-referencing in bug reports.

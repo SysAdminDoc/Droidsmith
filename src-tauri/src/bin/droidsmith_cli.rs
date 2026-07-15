@@ -4,7 +4,8 @@
 //!
 //! ```text
 //! droidsmith-cli devices                        # list ADB devices
-//! droidsmith-cli run <profile.yaml> --device <serial> [--dry-run|--apply]
+//! droidsmith-cli run <profile.yaml> --device <serial> [--dry-run|--apply] [--json]
+//! droidsmith-cli migrate-v1 <profile.yaml> --output <profile-v2.yaml> [--json]
 //! droidsmith-cli baseline-export <profile.yaml> --device <serial> --output <file.json>
 //! droidsmith-cli baseline-inspect <file.json> --device <serial> [--json]
 //! ```
@@ -21,6 +22,8 @@
 use std::path::PathBuf;
 use std::process::ExitCode;
 
+use serde::Serialize;
+
 use droidsmith_lib::adb::{
     self, actions, device::valid_serial, AdbTransport, DeviceTarget, ShellTransport,
 };
@@ -36,8 +39,9 @@ fn main() -> ExitCode {
     }
 
     match argv[0].as_str() {
-        "devices" => cmd_devices(),
+        "devices" => cmd_devices(&argv[1..]),
         "run" => cmd_run(&argv[1..]),
+        "migrate-v1" => cmd_migrate_v1(&argv[1..]),
         "baseline-export" => cmd_baseline_export(&argv[1..]),
         "baseline-inspect" => cmd_baseline_inspect(&argv[1..]),
         "-h" | "--help" | "help" => {
@@ -56,13 +60,100 @@ fn print_help() {
     eprintln!(
         "droidsmith-cli — headless ADB action runner\n\n\
          USAGE\n  \
-         droidsmith-cli devices\n  \
-         droidsmith-cli run <profile.yaml> --device <serial> [--dry-run|--apply]\n  \
+         droidsmith-cli devices [--json]\n  \
+         droidsmith-cli run <profile.yaml> --device <serial> [--dry-run|--apply] [--json] [--allow-unsafe-transport]\n  \
+         droidsmith-cli migrate-v1 <profile-v1.yaml> --output <profile-v2.yaml> [--json]\n  \
          droidsmith-cli baseline-export <profile.yaml> --device <serial> --output <file.json> [--allow-unsafe-transport]\n  \
          droidsmith-cli baseline-inspect <file.json> --device <serial> [--json] [--allow-unsafe-transport]\n\n\
          EXIT CODES\n  \
          0 success, 1 apply failure, 2 usage/parse, 3 adb not found"
     );
+}
+
+#[derive(Serialize)]
+struct MigrationOutput {
+    schema_version: u32,
+    command: &'static str,
+    from_version: String,
+    to_version: String,
+    output_path: String,
+    warnings: Vec<String>,
+    action_count: usize,
+}
+
+fn cmd_migrate_v1(argv: &[String]) -> ExitCode {
+    if argv.is_empty() {
+        eprintln!("[droidsmith-cli] missing <profile-v1.yaml>");
+        return ExitCode::from(2);
+    }
+    let input = PathBuf::from(&argv[0]);
+    let mut output = None;
+    let mut json = false;
+    let mut index = 1;
+    while index < argv.len() {
+        match argv[index].as_str() {
+            "--output" => {
+                index += 1;
+                if index >= argv.len() {
+                    eprintln!("[droidsmith-cli] --output requires an argument");
+                    return ExitCode::from(2);
+                }
+                output = Some(PathBuf::from(&argv[index]));
+            }
+            "--json" => json = true,
+            other => {
+                eprintln!("[droidsmith-cli] unknown flag: {other}");
+                return ExitCode::from(2);
+            }
+        }
+        index += 1;
+    }
+    let Some(output) = output else {
+        eprintln!("[droidsmith-cli] --output <profile-v2.yaml> is required");
+        return ExitCode::from(2);
+    };
+    let migration = match profile::migrate_v1(&input) {
+        Ok(migration) => migration,
+        Err(error) => {
+            eprintln!("[droidsmith-cli] {error}");
+            return ExitCode::from(2);
+        }
+    };
+    let output = match absolute_path(&output) {
+        Ok(output) => output,
+        Err(error) => {
+            eprintln!("[droidsmith-cli] {error}");
+            return ExitCode::from(2);
+        }
+    };
+    if let Err(error) = profile::save(&output, &migration.profile) {
+        eprintln!("[droidsmith-cli] {error}");
+        return ExitCode::from(1);
+    }
+    let result = MigrationOutput {
+        schema_version: 1,
+        command: "migrate-v1",
+        from_version: migration.from_version,
+        to_version: migration.to_version,
+        output_path: output.display().to_string(),
+        warnings: migration.warnings,
+        action_count: migration.profile.actions.len(),
+    };
+    if json {
+        println!(
+            "{}",
+            serde_json::to_string(&result).expect("serializable result")
+        );
+    } else {
+        println!(
+            "Migrated profile v{} to v{}: {} ({} actions)",
+            result.from_version, result.to_version, result.output_path, result.action_count
+        );
+        for warning in result.warnings {
+            println!("  warning: {warning}");
+        }
+    }
+    ExitCode::SUCCESS
 }
 
 #[derive(Debug)]
@@ -138,21 +229,6 @@ fn cmd_baseline_export(argv: &[String]) -> ExitCode {
             return ExitCode::from(2);
         }
     };
-    let serial_issues = profile::serial_match_issues(&profile, &args.serial);
-    if !serial_issues.is_empty() {
-        for issue in serial_issues {
-            eprintln!("[droidsmith-cli] {issue}");
-        }
-        return ExitCode::from(2);
-    }
-    let mut users = profile.actions.iter().map(|action| action.user);
-    let user_id = users.next().unwrap_or_default();
-    if users.any(|candidate| candidate != user_id) {
-        eprintln!(
-            "[droidsmith-cli] one recovery baseline covers exactly one Android user; split this profile by user"
-        );
-        return ExitCode::from(2);
-    }
     let Some(transport) = resolve_or_fail() else {
         return ExitCode::from(3);
     };
@@ -167,24 +243,27 @@ fn cmd_baseline_export(argv: &[String]) -> ExitCode {
         eprintln!("[droidsmith-cli] {error}");
         return ExitCode::from(2);
     }
-    if !profile.device.require_manufacturer.trim().is_empty() {
-        let manufacturer =
-            match transport.shell_target(&target, &["getprop", "ro.product.manufacturer"]) {
-                Ok(value) => value,
-                Err(error) => {
-                    eprintln!(
-                        "[droidsmith-cli] could not verify required device manufacturer: {error}"
-                    );
-                    return ExitCode::from(1);
-                }
-            };
-        let issues = profile::manufacturer_match_issues(&profile, Some(manufacturer.trim()));
-        if !issues.is_empty() {
-            for issue in issues {
-                eprintln!("[droidsmith-cli] {issue}");
-            }
+    let info = match adb::get_device_info(&transport, &target) {
+        Ok(info) => info,
+        Err(error) => {
+            eprintln!("[droidsmith-cli] device constraint probe failed: {error}");
             return ExitCode::from(1);
         }
+    };
+    let compatibility = profile::device_match_issues(
+        &profile,
+        &args.serial,
+        info.manufacturer.as_deref(),
+        info.model.as_deref(),
+        info.sdk_level
+            .as_deref()
+            .and_then(|value| value.parse().ok()),
+    );
+    if !compatibility.is_empty() {
+        for issue in compatibility {
+            eprintln!("[droidsmith-cli] {issue}");
+        }
+        return ExitCode::from(1);
     }
     let available_users = match adb::list_users(&transport, &target) {
         Ok(users) => users,
@@ -193,10 +272,15 @@ fn cmd_baseline_export(argv: &[String]) -> ExitCode {
             return ExitCode::from(1);
         }
     };
-    if !available_users.iter().any(|user| user.id == user_id) {
-        eprintln!("[droidsmith-cli] Android user {user_id} is not available");
-        return ExitCode::from(1);
-    }
+    let user_id = match profile::resolve_user(&profile, &available_users) {
+        Ok(user_id) => user_id,
+        Err(issues) => {
+            for issue in issues {
+                eprintln!("[droidsmith-cli] {issue}");
+            }
+            return ExitCode::from(1);
+        }
+    };
     let packages = match adb::list_packages(&transport, &target, adb::PackageFilter::All, user_id) {
         Ok(packages) => packages,
         Err(error) => {
@@ -366,13 +450,38 @@ fn resolve_or_fail() -> Option<ShellTransport> {
     Some(ShellTransport::new(path))
 }
 
-fn cmd_devices() -> ExitCode {
+#[derive(Serialize)]
+struct DevicesOutput {
+    schema_version: u32,
+    command: &'static str,
+    devices: Vec<adb::Device>,
+}
+
+fn cmd_devices(argv: &[String]) -> ExitCode {
+    let json = match argv {
+        [] => false,
+        [flag] if flag == "--json" => true,
+        _ => {
+            eprintln!("[droidsmith-cli] devices accepts only --json");
+            return ExitCode::from(2);
+        }
+    };
     let Some(t) = resolve_or_fail() else {
         return ExitCode::from(3);
     };
     match t.list_devices() {
         Ok(devs) => {
-            if devs.is_empty() {
+            if json {
+                let output = DevicesOutput {
+                    schema_version: 1,
+                    command: "devices",
+                    devices: devs,
+                };
+                println!(
+                    "{}",
+                    serde_json::to_string(&output).expect("serializable result")
+                );
+            } else if devs.is_empty() {
                 println!("(no devices)");
             } else {
                 println!("SERIAL\t\tSTATE\t\tMODEL");
@@ -398,6 +507,8 @@ struct RunArgs {
     profile_path: PathBuf,
     serial: String,
     apply: bool,
+    json: bool,
+    allow_unsafe_transport: bool,
 }
 
 fn parse_run_args(argv: &[String]) -> Result<RunArgs, String> {
@@ -407,6 +518,8 @@ fn parse_run_args(argv: &[String]) -> Result<RunArgs, String> {
     let profile_path = PathBuf::from(&argv[0]);
     let mut serial: Option<String> = None;
     let mut apply: Option<bool> = None;
+    let mut json = false;
+    let mut allow_unsafe_transport = false;
 
     let mut i = 1;
     while i < argv.len() {
@@ -418,8 +531,20 @@ fn parse_run_args(argv: &[String]) -> Result<RunArgs, String> {
                 }
                 serial = Some(argv[i].clone());
             }
-            "--dry-run" => apply = Some(false),
-            "--apply" => apply = Some(true),
+            "--dry-run" => {
+                if apply.is_some() {
+                    return Err("pass exactly one of --dry-run or --apply".to_string());
+                }
+                apply = Some(false);
+            }
+            "--apply" => {
+                if apply.is_some() {
+                    return Err("pass exactly one of --dry-run or --apply".to_string());
+                }
+                apply = Some(true);
+            }
+            "--json" => json = true,
+            "--allow-unsafe-transport" => allow_unsafe_transport = true,
             other => return Err(format!("unknown flag: {other}")),
         }
         i += 1;
@@ -433,155 +558,243 @@ fn parse_run_args(argv: &[String]) -> Result<RunArgs, String> {
         profile_path,
         serial,
         apply,
+        json,
+        allow_unsafe_transport,
     })
 }
 
-fn cmd_run(argv: &[String]) -> ExitCode {
-    let args = match parse_run_args(argv) {
-        Ok(a) => a,
-        Err(e) => {
-            eprintln!("[droidsmith-cli] {e}");
-            print_help();
-            return ExitCode::from(2);
-        }
-    };
+#[derive(Serialize)]
+struct RunPlanOutput {
+    index: usize,
+    package: String,
+    action: actions::ActionKind,
+    user_id: u32,
+    before_state: String,
+    description: String,
+    adb_args: Vec<String>,
+}
 
-    let profile = match profile::load(&args.profile_path) {
-        Ok(p) => p,
-        Err(e) => {
-            eprintln!("[droidsmith-cli] {e}");
-            return ExitCode::from(2);
-        }
-    };
+#[derive(Serialize)]
+struct RunApplyOutput {
+    index: usize,
+    package: String,
+    status: &'static str,
+    error: Option<String>,
+}
 
-    let serial_issues = profile::serial_match_issues(&profile, &args.serial);
-    if !serial_issues.is_empty() {
-        for issue in serial_issues {
-            eprintln!("[droidsmith-cli] {issue}");
-        }
-        return ExitCode::from(2);
-    }
+#[derive(Serialize)]
+struct RunOutput {
+    schema_version: u32,
+    command: &'static str,
+    mode: &'static str,
+    profile_name: String,
+    profile_version: String,
+    device_serial: String,
+    android_user: u32,
+    compatible: bool,
+    plans: Vec<RunPlanOutput>,
+    results: Vec<RunApplyOutput>,
+    success: bool,
+}
 
-    println!("Profile: {} (version {})", profile.name, profile.version);
-    if !profile.description.is_empty() {
-        println!("  {}", profile.description);
-    }
-    println!("Target device: {}", args.serial);
-    println!("Actions: {} step(s)", profile.actions.len());
+#[derive(Serialize)]
+struct ErrorOutput<'a> {
+    schema_version: u32,
+    command: &'static str,
+    code: &'a str,
+    message: String,
+    exit_code: u8,
+}
 
-    let transport = if args.apply {
-        let Some(transport) = resolve_or_fail() else {
-            return ExitCode::from(3);
-        };
-        Some(transport)
+fn run_error(json: bool, exit_code: u8, code: &str, message: impl Into<String>) -> ExitCode {
+    let message = message.into();
+    if json {
+        eprintln!(
+            "{}",
+            serde_json::to_string(&ErrorOutput {
+                schema_version: 1,
+                command: "run",
+                code,
+                message,
+                exit_code,
+            })
+            .expect("serializable error")
+        );
     } else {
-        None
-    };
-    let target = match &transport {
-        Some(transport) => match target_for_serial(transport, &args.serial) {
-            Ok(target) => target,
-            Err(error) => {
-                eprintln!("[droidsmith-cli] {error}");
-                return ExitCode::from(1);
-            }
-        },
-        None => DeviceTarget {
-            serial: args.serial.clone(),
-            transport_id: None,
-            // Dry runs never execute this target; a non-zero value keeps the
-            // plan schema complete without pretending a live transport was
-            // verified.
-            connection_generation: 1,
-            model: None,
-            product: None,
-            device: None,
-            build_fingerprint: Some("dry-run-unverified".to_string()),
-            transport_kind: droidsmith_lib::adb::DeviceTransportKind::UnknownTcp,
-            untrusted_transport_override: false,
-        },
-    };
-    let requests = profile::requests_for(&profile, &target);
+        eprintln!("[droidsmith-cli] {message}");
+    }
+    ExitCode::from(exit_code)
+}
 
-    // Always render plans for the dry-run-or-apply preview.
-    let plans: Vec<_> = requests.into_iter().map(actions::plan).collect();
-    for (i, plan) in plans.iter().enumerate() {
-        println!(
-            "  [{:>2}] {}  →  adb {} shell {}",
-            i + 1,
-            plan.description,
-            plan.request.target.adb_selector().join(" "),
-            plan.args.join(" ")
+fn cmd_run(argv: &[String]) -> ExitCode {
+    let json_requested = argv.iter().any(|value| value == "--json");
+    let args = match parse_run_args(argv) {
+        Ok(args) => args,
+        Err(error) => return run_error(json_requested, 2, "usage", error),
+    };
+    let profile = match profile::load(&args.profile_path) {
+        Ok(profile) => profile,
+        Err(error) => return run_error(args.json, 2, "profile_invalid", error.to_string()),
+    };
+    let Some(transport) = resolve_or_fail() else {
+        return run_error(args.json, 3, "adb_not_found", "adb binary not found");
+    };
+    let mut target = match target_for_serial(&transport, &args.serial) {
+        Ok(target) => target,
+        Err(error) => return run_error(args.json, 1, "device_unavailable", error),
+    };
+    if let Err(error) = authorize_cli_transport(&mut target, args.allow_unsafe_transport) {
+        return run_error(args.json, 2, "transport_confirmation_required", error);
+    }
+    let info = match adb::get_device_info(&transport, &target) {
+        Ok(info) => info,
+        Err(error) => return run_error(args.json, 1, "device_probe_failed", error.to_string()),
+    };
+    let compatibility = profile::device_match_issues(
+        &profile,
+        &args.serial,
+        info.manufacturer.as_deref(),
+        info.model.as_deref(),
+        info.sdk_level
+            .as_deref()
+            .and_then(|value| value.parse().ok()),
+    );
+    if !compatibility.is_empty() {
+        return run_error(
+            args.json,
+            1,
+            "profile_incompatible",
+            compatibility.join("; "),
         );
     }
-
-    if !args.apply {
-        if !profile.device.require_manufacturer.trim().is_empty() {
-            println!(
-                "\n(dry-run; manufacturer constraint {:?} will be verified during --apply)",
-                profile.device.require_manufacturer
-            );
-        }
-        println!("\n(dry-run; nothing was changed)");
-        return ExitCode::SUCCESS;
-    }
-
-    let transport = transport.expect("apply mode resolves a transport before planning");
-    let manufacturer =
-        match transport.shell_target(&target, &["getprop", "ro.product.manufacturer"]) {
-            Ok(value) => Some(value.trim().to_string()),
-            Err(e) if profile.device.require_manufacturer.trim().is_empty() => {
-                eprintln!("[droidsmith-cli] warning: could not read device manufacturer: {e}");
-                None
-            }
-            Err(e) => {
-                eprintln!("[droidsmith-cli] could not verify required device manufacturer: {e}");
-                return ExitCode::from(1);
-            }
-        };
-    let manufacturer_issues = profile::manufacturer_match_issues(&profile, manufacturer.as_deref());
-    if !manufacturer_issues.is_empty() {
-        for issue in manufacturer_issues {
-            eprintln!("[droidsmith-cli] {issue}");
-        }
-        return ExitCode::from(1);
-    }
-
-    let mut failures = 0;
-    let journal_dir = match journal::default_journal_dir() {
-        Ok(path) => path,
-        Err(error) => {
-            eprintln!("[droidsmith-cli] cannot resolve operation journal: {error}");
-            return ExitCode::from(1);
+    let users = match adb::list_users(&transport, &target) {
+        Ok(users) => users,
+        Err(error) => return run_error(args.json, 1, "user_probe_failed", error.to_string()),
+    };
+    let user_id = match profile::resolve_user(&profile, &users) {
+        Ok(user_id) => user_id,
+        Err(issues) => {
+            return run_error(args.json, 1, "profile_user_unavailable", issues.join("; "))
         }
     };
-    for (i, mut plan) in plans.into_iter().enumerate() {
+    let requests = profile::requests_for(
+        &profile,
+        &target,
+        user_id,
+        actions::ConfirmationSource::CliApply,
+    );
+    let mut plans = requests.into_iter().map(actions::plan).collect::<Vec<_>>();
+    for plan in &mut plans {
         plan.before_state = actions::capture_state(&transport, &plan.request);
-        let now = iso_now();
-        let result = journal::with_journal(&journal_dir, &target.serial, |journal| {
-            journal.execute(plan, None, &now, |plan| {
-                actions::apply(&transport, plan, &iso_now())
-            })
-        });
-        match result {
-            Ok(_) => println!("  [{:>2}] ok", i + 1),
-            Err(journal::ExecuteError::Operation(e)) => {
-                eprintln!("  [{:>2}] FAILED: {e}", i + 1);
-                failures += 1;
-            }
-            Err(journal::ExecuteError::Journal(e)) => {
-                eprintln!("  [{:>2}] JOURNAL FAILED: {e}", i + 1);
-                eprintln!("\nStopped before any later actions to preserve auditability.");
-                return ExitCode::from(1);
+    }
+    let plan_output = plans
+        .iter()
+        .enumerate()
+        .map(|(index, plan)| RunPlanOutput {
+            index: index + 1,
+            package: plan.request.package.clone(),
+            action: plan.request.kind,
+            user_id: plan.request.user_id,
+            before_state: plan.before_state.clone(),
+            description: plan.description.clone(),
+            adb_args: plan
+                .request
+                .target
+                .adb_selector()
+                .into_iter()
+                .chain(["shell".to_string()])
+                .chain(plan.args.clone())
+                .collect(),
+        })
+        .collect::<Vec<_>>();
+
+    if !args.json {
+        println!("Profile: {} (version {})", profile.name, profile.version);
+        println!("Target device: {} / Android user {user_id}", args.serial);
+        for plan in &plan_output {
+            println!(
+                "  [{:>2}] {} [{}] → adb {}",
+                plan.index,
+                plan.description,
+                plan.before_state,
+                plan.adb_args.join(" ")
+            );
+        }
+    }
+
+    let mut results = Vec::new();
+    let mut success = true;
+    if args.apply {
+        let journal_dir = match journal::default_journal_dir() {
+            Ok(path) => path,
+            Err(error) => return run_error(args.json, 1, "journal_unavailable", error.to_string()),
+        };
+        for (index, plan) in plans.into_iter().enumerate() {
+            let package = plan.request.package.clone();
+            let now = iso_now();
+            let result = journal::with_journal(&journal_dir, &target.serial, |journal| {
+                journal.execute(plan, None, &now, |plan| {
+                    actions::apply(&transport, plan, &iso_now())
+                })
+            });
+            match result {
+                Ok(_) => {
+                    if !args.json {
+                        println!("  [{:>2}] ok", index + 1);
+                    }
+                    results.push(RunApplyOutput {
+                        index: index + 1,
+                        package,
+                        status: "applied",
+                        error: None,
+                    });
+                }
+                Err(journal::ExecuteError::Operation(error)) => {
+                    success = false;
+                    if !args.json {
+                        eprintln!("  [{:>2}] FAILED: {error}", index + 1);
+                    }
+                    results.push(RunApplyOutput {
+                        index: index + 1,
+                        package,
+                        status: "failed",
+                        error: Some(error.to_string()),
+                    });
+                }
+                Err(journal::ExecuteError::Journal(error)) => {
+                    return run_error(args.json, 1, "journal_failed", error.to_string())
+                }
             }
         }
     }
 
-    if failures > 0 {
-        eprintln!("\n{failures} action(s) failed");
-        ExitCode::from(1)
-    } else {
+    let output = RunOutput {
+        schema_version: 1,
+        command: "run",
+        mode: if args.apply { "apply" } else { "dry_run" },
+        profile_name: profile.name,
+        profile_version: profile.version,
+        device_serial: args.serial,
+        android_user: user_id,
+        compatible: true,
+        plans: plan_output,
+        results,
+        success,
+    };
+    if args.json {
+        println!(
+            "{}",
+            serde_json::to_string(&output).expect("serializable result")
+        );
+    } else if args.apply && success {
         println!("\nAll actions applied successfully.");
+    } else if !args.apply {
+        println!("\n(dry-run; read-only state captured; nothing was changed)");
+    }
+    if success {
         ExitCode::SUCCESS
+    } else {
+        ExitCode::from(1)
     }
 }
 
@@ -672,6 +885,30 @@ mod tests {
             &strings(&["baseline.json", "--device", "abc", "--output", "x"]),
             false,
         )
+        .is_err());
+    }
+
+    #[test]
+    fn run_parser_supports_machine_output_and_rejects_ambiguous_modes() {
+        let args = parse_run_args(&strings(&[
+            "profile.yaml",
+            "--device",
+            "QA123",
+            "--dry-run",
+            "--json",
+            "--allow-unsafe-transport",
+        ]))
+        .unwrap();
+        assert!(!args.apply);
+        assert!(args.json);
+        assert!(args.allow_unsafe_transport);
+        assert!(parse_run_args(&strings(&[
+            "profile.yaml",
+            "--device",
+            "QA123",
+            "--dry-run",
+            "--apply",
+        ]))
         .is_err());
     }
 }

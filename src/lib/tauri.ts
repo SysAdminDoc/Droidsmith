@@ -45,6 +45,8 @@ import {
   type PlannedAction as GeneratedPlannedAction,
   type PlannedPack as GeneratedPlannedPack,
   type ProcessInfo,
+  type Profile,
+  type ProfilePreview,
   type RecoveryBaselineDiff as GeneratedRecoveryBaselineDiff,
   type RemoteListing,
   type SavedResult,
@@ -447,6 +449,20 @@ export async function callListUsers(
   target: DeviceTarget,
 ): Promise<AndroidUser[]> {
   return commands.listUsers(target);
+}
+
+export async function callInspectProfile(
+  target: DeviceTarget,
+  pathGrant: string,
+): Promise<ProfilePreview> {
+  return rendererRecord(await commands.inspectProfile(target, pathGrant));
+}
+
+export async function callSaveProfile(
+  pathGrant: string,
+  profile: Profile,
+): Promise<HostArtifact> {
+  return commands.saveProfile(pathGrant, profile);
 }
 
 export async function callPlanAction(

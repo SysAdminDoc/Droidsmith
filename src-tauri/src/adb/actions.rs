@@ -59,6 +59,7 @@ pub enum ConfirmationSource {
     ConsoleReview,
     DeviceControl,
     CliApply,
+    ProfilePreview,
     JournalUndo,
     RecoveryBaseline,
 }

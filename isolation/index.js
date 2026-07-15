@@ -49,6 +49,8 @@
       [],
     ],
     inspect_recovery_baseline: [["target", "path_grant"], []],
+    inspect_profile: [["target", "path_grant"], []],
+    save_profile: [["path_grant", "profile"], []],
     journal_undo: [["target", "entry_id"], []],
     backup_package: [
       ["target", "package", "userId", "path_grant", "operation_id", "on_event"],
@@ -116,9 +118,11 @@
     "pull_save",
     "extract_apk_save",
     "recovery_baseline_save",
+    "profile_save",
     "push_open",
     "install_open",
     "recovery_baseline_open",
+    "profile_open",
   ]);
 
   function isRecord(value) {
@@ -364,6 +368,79 @@
     }
   }
 
+  function validateProfile(profile) {
+    validateKeys(
+      profile,
+      ["name", "version", "actions"],
+      ["description", "device", "user"],
+      "profile",
+    );
+    ensureIdentifier(profile.name, "profile_name");
+    if (profile.name.length > 200 || profile.version !== "2") {
+      reject("profile_header");
+    }
+    if (
+      !Array.isArray(profile.actions) ||
+      profile.actions.length === 0 ||
+      profile.actions.length > 2000
+    ) {
+      reject("profile_actions");
+    }
+    for (const action of profile.actions) {
+      validateKeys(action, ["kind", "package"], ["note"], "profile_action");
+      if (
+        ![
+          "disable",
+          "enable",
+          "uninstall_for_user",
+          "restore_existing_for_user",
+          "clear_data",
+          "force_stop",
+        ].includes(action.kind)
+      ) {
+        reject("profile_action_kind");
+      }
+    }
+    if (profile.device !== undefined) {
+      validateKeys(
+        profile.device,
+        [],
+        [
+          "require_serial_prefix",
+          "require_manufacturer",
+          "require_model",
+          "require_android_min",
+          "require_android_max",
+        ],
+        "profile_device",
+      );
+      for (const key of ["require_android_min", "require_android_max"]) {
+        if (profile.device[key] !== undefined && profile.device[key] !== null) {
+          ensureInteger(profile.device[key], `profile_device_${key}`, 1);
+        }
+      }
+      if (
+        profile.device.require_android_min != null &&
+        profile.device.require_android_max != null &&
+        profile.device.require_android_min > profile.device.require_android_max
+      ) {
+        reject("profile_device_android_range");
+      }
+    }
+    if (profile.user !== undefined) {
+      validateKeys(profile.user, [], ["mode", "id"], "profile_user");
+      const mode = profile.user.mode ?? "owner";
+      if (!["owner", "current", "explicit"].includes(mode)) {
+        reject("profile_user_mode");
+      }
+      if (mode === "explicit") {
+        ensureInteger(profile.user.id, "profile_user_id");
+      } else if (profile.user.id !== undefined && profile.user.id !== null) {
+        reject("profile_user_id");
+      }
+    }
+  }
+
   function validateSpecific(command, payload) {
     if (command === "select_host_path") {
       if (!PATH_PURPOSES.has(payload.purpose)) reject("path_purpose");
@@ -439,6 +516,7 @@
         if (typeof value !== "boolean") reject("install_option");
       }
     }
+    if (command === "save_profile") validateProfile(payload.profile);
     if (command === "journal_undo")
       ensureInteger(payload.entry_id, "entry_id", 1);
     if (command === "stop_scrcpy")

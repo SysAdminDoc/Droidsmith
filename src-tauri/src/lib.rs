@@ -30,15 +30,15 @@ pub mod time;
 use commands::{
     apply_action, apply_device_control, backup_package, cancel_operation, capture_bugreport,
     connect_wireless, explain_failure, export_package_apks, export_recovery_baseline, extract_apk,
-    fastboot_getvar, get_device_info, get_package_metadata, heartbeat, inspect_recovery_baseline,
-    install_apk, journal_list, journal_undo, launch_scrcpy, list_devices, list_fastboot_devices,
-    list_network_connections, list_packages, list_packs, list_permissions, list_processes,
-    list_remote_files, list_users, list_wireless_services, locate_fastboot, locate_scrcpy,
-    pair_wireless, plan_action, plan_pack, plan_shell_action, preflight_package_backup,
-    preview_diagnostics, pull_file, push_file, recover_adb, run_host_doctor, save_diagnostics,
-    save_logcat_export, scrcpy_capabilities, scrcpy_session_status, select_host_path,
-    set_permission, shell_run, stop_scrcpy, stream_logcat, take_screenshot, watch_devices,
-    wipe_diagnostics,
+    fastboot_getvar, get_device_info, get_package_metadata, heartbeat, inspect_profile,
+    inspect_recovery_baseline, install_apk, journal_list, journal_undo, launch_scrcpy,
+    list_devices, list_fastboot_devices, list_network_connections, list_packages, list_packs,
+    list_permissions, list_processes, list_remote_files, list_users, list_wireless_services,
+    locate_fastboot, locate_scrcpy, pair_wireless, plan_action, plan_pack, plan_shell_action,
+    preflight_package_backup, preview_diagnostics, pull_file, push_file, recover_adb,
+    run_host_doctor, save_diagnostics, save_logcat_export, save_profile, scrcpy_capabilities,
+    scrcpy_session_status, select_host_path, set_permission, shell_run, stop_scrcpy, stream_logcat,
+    take_screenshot, watch_devices, wipe_diagnostics,
 };
 
 fn ipc_builder() -> tauri_specta::Builder<tauri::Wry> {
@@ -61,6 +61,8 @@ fn ipc_builder() -> tauri_specta::Builder<tauri::Wry> {
             list_packages,
             get_package_metadata,
             list_users,
+            inspect_profile,
+            save_profile,
             list_packs,
             plan_pack,
             plan_action,

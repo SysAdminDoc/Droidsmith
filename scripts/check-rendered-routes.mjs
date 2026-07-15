@@ -134,7 +134,7 @@ async function runDesktopFlow(browser) {
     fullPage: false,
   });
   await page.getByRole("button", { name: "Close", exact: true }).click();
-  for (const route of ["Devices", "Apps", "Debloat", "Console"]) {
+  for (const route of ["Devices", "Apps", "Debloat", "Profiles", "Console"]) {
     await page.getByRole("button", { name: new RegExp(route) }).click();
     await page.getByRole("heading", { name: route, exact: true }).waitFor();
     await assertMainFocused(page, route);
@@ -314,6 +314,31 @@ async function runDesktopFlow(browser) {
     })
     .getByRole("button", { name: "Dismiss", exact: true })
     .click();
+
+  await page.getByRole("button", { name: /Profiles/ }).click();
+  await page.getByRole("heading", { name: "Profiles", exact: true }).waitFor();
+  await page.getByLabel("Name", { exact: true }).fill("QA profile");
+  await page
+    .getByLabel("Search packages for profile actions")
+    .fill("com.example.app");
+  await page.getByRole("checkbox", { name: /com\.example\.app/ }).check();
+  await page.getByRole("button", { name: "Add selected (1)" }).click();
+  await page.getByRole("button", { name: "Validate and export" }).click();
+  await page.getByText("Profile saved", { exact: true }).waitFor();
+  await page.getByRole("tab", { name: "Import and preview" }).click();
+  await page.getByRole("button", { name: "Choose profile" }).click();
+  await page.getByText("Full dry-run diff", { exact: true }).waitFor();
+  await page
+    .getByText("Explicit migration required: v1 to v2", { exact: true })
+    .waitFor();
+  await page.getByText("Already matches", { exact: true }).waitFor();
+  await page.getByRole("button", { name: "Save reviewed v2 profile" }).click();
+  await page.getByText(/Validated schema v2 profile saved to/).waitFor();
+  await assertNoHorizontalOverflow(page, "desktop Profiles diff");
+  await page.screenshot({
+    path: path.join(screenshotDir, "desktop-profiles-diff.png"),
+    fullPage: false,
+  });
 
   await page.getByRole("button", { name: "Commands", exact: true }).click();
   await page.getByRole("dialog", { name: "Command palette" }).waitFor();
@@ -735,6 +760,14 @@ async function installTauriMock(page) {
               id: "123e4567-e89b-42d3-a456-426614174005",
               local_path: "C:/Users/QA/Desktop/imported-recovery.json",
             },
+            profile_save: {
+              id: "123e4567-e89b-42d3-a456-42661417400a",
+              local_path: "C:/Users/QA/Desktop/qa-profile-v2.yaml",
+            },
+            profile_open: {
+              id: "123e4567-e89b-42d3-a456-42661417400b",
+              local_path: "C:/Users/QA/Desktop/legacy-profile-v1.yaml",
+            },
             package_export_save: {
               id: "123e4567-e89b-42d3-a456-426614174006",
               local_path: "C:/Users/QA/Desktop/com.example.app.apks.zip",
@@ -1026,6 +1059,21 @@ async function installTauriMock(page) {
         if (cmd === "list_packages") {
           return filterPackages(packages, args.filter ?? "all");
         }
+        if (cmd === "get_device_info") {
+          return {
+            serial: args.target.serial,
+            model: "Pixel QA",
+            manufacturer: "Google",
+            android_version: "17",
+            sdk_level: "36",
+            build_fingerprint: args.target.build_fingerprint,
+            security_patch: "2026-07-01",
+            hardware_serial: null,
+            battery: null,
+            storage: null,
+            wifi_ip: null,
+          };
+        }
         if (cmd === "get_package_metadata") {
           return {
             package: args.package,
@@ -1149,6 +1197,105 @@ async function installTauriMock(page) {
               },
             ],
             plans: [recoveryPlan],
+          };
+        }
+        if (cmd === "save_profile") {
+          if (
+            args.path_grant !== "123e4567-e89b-42d3-a456-42661417400a" ||
+            args.profile.version !== "2" ||
+            args.profile.actions.length === 0
+          ) {
+            throw new Error("Profile export did not validate schema v2");
+          }
+          return {
+            local_path: "C:/Users/QA/Desktop/qa-profile-v2.yaml",
+            size_bytes: 768,
+            sha256: "c".repeat(64),
+          };
+        }
+        if (cmd === "inspect_profile") {
+          if (args.path_grant !== "123e4567-e89b-42d3-a456-42661417400b") {
+            throw new Error("Profile import did not consume its read grant");
+          }
+          const migrated = {
+            name: "Legacy QA setup",
+            version: "2",
+            description: "Migrated rendered-smoke profile",
+            device: {
+              require_serial_prefix: "QA",
+              require_manufacturer: "Google",
+              require_model: "Pixel QA",
+              require_android_min: 34,
+              require_android_max: 36,
+            },
+            user: { mode: "owner", id: null },
+            actions: [
+              { kind: "disable", package: "com.example.app", note: "" },
+              {
+                kind: "disable",
+                package: "com.example.disabled",
+                note: "",
+              },
+            ],
+          };
+          return {
+            source_version: "1",
+            profile: migrated,
+            migration: {
+              from_version: "1",
+              to_version: "2",
+              profile: migrated,
+              warnings: [
+                "Android user 0 was promoted to the profile-level owner constraint.",
+              ],
+            },
+            compatible: true,
+            compatibility_issues: [],
+            android_user: 0,
+            rows: [
+              {
+                action: migrated.actions[0],
+                plan: planFor({
+                  serial: "QA123",
+                  target: args.target,
+                  package: "com.example.app",
+                  kind: "disable",
+                  user_id: 0,
+                  context: {
+                    confirmation_source: "profile_preview",
+                    permission: null,
+                    shell_argv: [],
+                    transport_override: null,
+                    restore_enabled_state: null,
+                  },
+                }),
+                current_state: "enabled",
+                expected_state: "disabled",
+                status: "ready",
+                reason: "canonical action is ready for explicit review",
+              },
+              {
+                action: migrated.actions[1],
+                plan: planFor({
+                  serial: "QA123",
+                  target: args.target,
+                  package: "com.example.disabled",
+                  kind: "disable",
+                  user_id: 0,
+                  context: {
+                    confirmation_source: "profile_preview",
+                    permission: null,
+                    shell_argv: [],
+                    transport_override: null,
+                    restore_enabled_state: null,
+                  },
+                }),
+                current_state: "disabled",
+                expected_state: "disabled",
+                status: "already_matches",
+                reason: "package is already disabled",
+              },
+            ],
           };
         }
         if (cmd === "install_apk") {

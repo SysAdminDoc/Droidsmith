@@ -20,6 +20,7 @@ import DevicesRoute from "./routes/Devices";
 import WirelessRoute from "./routes/Wireless";
 import AppsRoute from "./routes/Apps";
 import DebloatRoute from "./routes/Debloat";
+import ProfilesRoute from "./routes/Profiles";
 import ConsoleRoute from "./routes/Console";
 import LogcatRoute from "./routes/Logcat";
 import MirrorRoute from "./routes/Mirror";
@@ -32,6 +33,7 @@ export type NavItem = {
     | "wireless"
     | "apps"
     | "debloat"
+    | "profiles"
     | "mirror"
     | "console"
     | "logcat"
@@ -72,6 +74,13 @@ export const NAV_ITEMS: ReadonlyArray<NavItem> = [
     milestone: "R-033",
     descriptionKey: "debloat.description",
     render: () => <DebloatRoute />,
+  },
+  {
+    id: "profiles",
+    labelKey: "nav.profiles",
+    milestone: "R-034",
+    descriptionKey: "profiles.description",
+    render: () => <ProfilesRoute />,
   },
   {
     id: "mirror",
@@ -719,6 +728,12 @@ function NavIcon({ id, active }: { id: NavItem["id"]; active: boolean }) {
         <>
           <path d="M12 4.5 18 7v4.5c0 3.75-2.4 6.6-6 8-3.6-1.4-6-4.25-6-8V7l6-2.5Z" />
           <path d="m9.5 12.25 1.7 1.7 3.6-4" />
+        </>
+      )}
+      {id === "profiles" && (
+        <>
+          <path d="M7 4.5h8l3 3v12H7a2 2 0 0 1-2-2v-11a2 2 0 0 1 2-2Z" />
+          <path d="M15 4.5v3h3M8.5 11h6M8.5 14.5h6" />
         </>
       )}
       {id === "mirror" && (
