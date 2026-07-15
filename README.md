@@ -21,7 +21,7 @@ supervision, cancellable background shell/backup/file operations, incremental
 Logcat streaming and export, live cross-route device hot-plug updates, ADB
 server/mDNS/Wi-Fi 2.0 health with audited guided recovery, provenance-classified
 USB/TLS/legacy/unknown transports with fail-closed unsafe-TCP acknowledgement,
-and fastboot
+portable pre-change recovery baselines with read-only OTA drift review, and fastboot
 inspection. A local-only Diagnostics center previews and saves redacted support
 bundles with tool/OS/ADB health, failed-operation records, and crash excerpts;
 it never uploads data and can wipe disposable local diagnostic history.
@@ -87,6 +87,33 @@ migration hint. The plugin API and marketplace remain deferred in
 [Roadmap_Blocked.md](Roadmap_Blocked.md).
 See [RESEARCH_REPORT.md](RESEARCH_REPORT.md) for the rationale and the
 alternatives considered.
+
+## Portable recovery baselines
+
+Before applying a package action in Apps or a selected Debloat batch, export a
+versioned JSON recovery baseline from the review screen. The file contains the
+hashed device identity, build fingerprint, Android user, optional pack revision,
+requested actions, and only the package presence/enabled/system state needed for
+recovery; it excludes the raw serial, APK paths, UIDs, and installer metadata.
+
+Use **Inspect recovery baseline** in Apps after a host reinstall or OTA update.
+Import is read-only: Droidsmith shows identity/build/user compatibility, packages
+already matching, and every skipped mismatch before enabling the separate apply
+button. Only reviewed enable/disable recovery plans use the existing journaled
+action executor; irreversible historical actions are never presented as safely
+undoable.
+
+The headless CLI exposes the same schema and diff engine:
+
+```bash
+droidsmith-cli baseline-export profile.yaml --device SERIAL --output baseline.json
+droidsmith-cli baseline-inspect baseline.json --device SERIAL
+droidsmith-cli baseline-inspect baseline.json --device SERIAL --json
+```
+
+Legacy or unknown TCP transports require the explicit
+`--allow-unsafe-transport` flag for these CLI commands; USB and paired TLS Wi-Fi
+do not.
 
 ## Repository layout
 

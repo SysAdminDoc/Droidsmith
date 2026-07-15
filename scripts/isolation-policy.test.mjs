@@ -197,12 +197,42 @@ test("allows bounded multiline Logcat exports", () => {
   assert.equal(hook(valid), valid);
 });
 
+test("allows bounded recovery baseline export and read-only inspection", () => {
+  const exportMessage = message("export_recovery_baseline", {
+    target,
+    userId: 0,
+    actions: [{ package: "com.example.app", kind: "disable" }],
+    pack: { id: "pixel-safe", revision: 4 },
+    path_grant: pathGrant,
+  });
+  const inspectMessage = message("inspect_recovery_baseline", {
+    target,
+    path_grant: pathGrant,
+  });
+  assert.equal(hook(exportMessage), exportMessage);
+  assert.equal(hook(inspectMessage), inspectMessage);
+
+  const invalid = message("export_recovery_baseline", {
+    target,
+    userId: 0,
+    actions: [{ package: "com.example.app", kind: "shell" }],
+    pack: null,
+    path_grant: pathGrant,
+  });
+  assert.equal(hook(invalid).cmd, blockedCommand);
+});
+
 test("allows only bounded native dialog purposes and file names", () => {
   const valid = message("select_host_path", {
     purpose: "screenshot_save",
     suggested_name: "capture.png",
   });
   assert.equal(hook(valid), valid);
+  const recovery = message("select_host_path", {
+    purpose: "recovery_baseline_open",
+    suggested_name: null,
+  });
+  assert.equal(hook(recovery), recovery);
 
   for (const payload of [
     { purpose: "arbitrary_write", suggested_name: "capture.png" },

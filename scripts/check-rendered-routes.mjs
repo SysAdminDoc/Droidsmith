@@ -200,6 +200,16 @@ async function runDesktopFlow(browser) {
     fullPage: false,
   });
 
+  await page.getByRole("button", { name: "Inspect recovery baseline" }).click();
+  await page.getByText("Read-only recovery diff", { exact: true }).waitFor();
+  await page.getByText("Build changed / OTA drift", { exact: true }).waitFor();
+  await page.getByText("Skipped safely", { exact: true }).waitFor();
+  await page.getByRole("button", { name: "Apply 1 reviewed actions" }).click();
+  await page.getByText("Applied: 1; failed: 0.", { exact: true }).waitFor();
+  await page
+    .getByRole("button", { name: "Close recovery baseline", exact: true })
+    .click();
+
   await page
     .getByRole("row")
     .filter({ hasText: "com.example.app" })
@@ -208,7 +218,16 @@ async function runDesktopFlow(browser) {
   await page.getByRole("alertdialog").waitFor();
   await page.getByText(/pm disable-user --user 0 com\.example\.app/).waitFor();
   await assertTabMovesFocus(page, "Apps action overlay");
+  await page
+    .getByRole("button", { name: "Export pre-change baseline" })
+    .click();
+  await page
+    .getByText(/Portable recovery evidence saved to .*droidsmith-recovery/)
+    .waitFor();
   await page.getByRole("button", { name: "Cancel" }).click();
+  await page
+    .getByRole("button", { name: "Close recovery baseline", exact: true })
+    .click();
 
   await page.getByRole("button", { name: "Commands", exact: true }).click();
   await page.getByRole("dialog", { name: "Command palette" }).waitFor();
@@ -225,6 +244,10 @@ async function runDesktopFlow(browser) {
     path: path.join(screenshotDir, "desktop-debloat-preview.png"),
     fullPage: false,
   });
+  await page
+    .getByRole("button", { name: "Export baseline before applying" })
+    .click();
+  await page.getByText(/Baseline saved to .*qa-debloat/).waitFor();
   await page.getByRole("button", { name: /Apply 2 packages/ }).click();
   await page.getByText(/QA Debloat Pack - debloat complete/).waitFor();
   await page.getByText("Failed", { exact: true }).waitFor();
@@ -444,6 +467,15 @@ async function installTauriMock(page) {
               id: "123e4567-e89b-42d3-a456-426614174002",
               local_path: "C:/Users/QA/Downloads/sample.apks",
             },
+            recovery_baseline_save: {
+              id: "123e4567-e89b-42d3-a456-426614174004",
+              local_path:
+                "C:/Users/QA/Desktop/droidsmith-recovery-2026-07-15-qa-debloat.json",
+            },
+            recovery_baseline_open: {
+              id: "123e4567-e89b-42d3-a456-426614174005",
+              local_path: "C:/Users/QA/Desktop/imported-recovery.json",
+            },
           };
           const selection = selections[args.purpose];
           if (!selection) {
@@ -622,6 +654,79 @@ async function installTauriMock(page) {
         }
         if (cmd === "list_packages") {
           return filterPackages(packages, args.filter ?? "all");
+        }
+        if (cmd === "export_recovery_baseline") {
+          if (args.path_grant !== "123e4567-e89b-42d3-a456-426614174004") {
+            throw new Error("Recovery export did not consume its path grant");
+          }
+          return {
+            local_path:
+              "C:/Users/QA/Desktop/droidsmith-recovery-2026-07-15-qa-debloat.json",
+            size_bytes: 2048,
+            sha256: "a".repeat(64),
+          };
+        }
+        if (cmd === "inspect_recovery_baseline") {
+          const recoveryPlan = planFor({
+            serial: "QA123",
+            target: args.target,
+            package: "com.example.app",
+            kind: "enable",
+            user_id: 0,
+            pack_context: null,
+            context: {
+              confirmation_source: "recovery_baseline",
+              permission: null,
+              shell_argv: [],
+              transport_override: null,
+            },
+          });
+          return {
+            baseline: {
+              format: "droidsmith_recovery_baseline",
+              schema_version: 1,
+              exported_at: "2026-07-01T12:00:00Z",
+              device: {
+                identity_sha256: "b".repeat(64),
+                build_fingerprint: "google/oriole/oriole:14/OLD",
+              },
+              android_user: 0,
+              pack: { id: "qa-debloat", revision: 2 },
+              packages: [],
+            },
+            compatibility: {
+              device_identity_matches: true,
+              build_fingerprint_matches: false,
+              android_user_available: true,
+              current_device_identity_sha256: "b".repeat(64),
+              current_build_fingerprint: device.build_fingerprint,
+            },
+            rows: [
+              {
+                package: "com.example.app",
+                baseline_present: true,
+                baseline_enabled: true,
+                live_present: true,
+                live_enabled: false,
+                requested_action: "disable",
+                status: "ready",
+                reason_code: null,
+                reason: "review this canonical enable-state recovery action",
+              },
+              {
+                package: "com.example.removed",
+                baseline_present: true,
+                baseline_enabled: true,
+                live_present: false,
+                live_enabled: null,
+                requested_action: "disable",
+                status: "skipped",
+                reason_code: "live_package_absent",
+                reason: "package is absent from the live Android user",
+              },
+            ],
+            plans: [recoveryPlan],
+          };
         }
         if (cmd === "install_apk") {
           installAttempts += 1;

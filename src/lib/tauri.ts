@@ -344,7 +344,8 @@ export type ConfirmationSource =
   | "console_review"
   | "device_control"
   | "cli_apply"
-  | "journal_undo";
+  | "journal_undo"
+  | "recovery_baseline";
 
 export type ActionContext = {
   confirmation_source: ConfirmationSource;
@@ -399,6 +400,68 @@ export type AppliedAction = {
 export type ApplyActionResult = {
   entry: JournalEntry;
   stdout: string;
+};
+
+export type BaselineActionInput = {
+  package: string;
+  kind: ActionKind;
+};
+
+export type BaselinePack = {
+  id: string;
+  revision: number;
+};
+
+export type BaselineUndoPlan = {
+  kind: ActionKind;
+  user_id: number;
+};
+
+export type BaselinePackage = {
+  package: string;
+  present: boolean;
+  enabled: boolean | null;
+  system: boolean | null;
+  requested_action: ActionKind;
+  undo_plan: BaselineUndoPlan | null;
+};
+
+export type RecoveryBaseline = {
+  format: "droidsmith_recovery_baseline";
+  schema_version: 1;
+  exported_at: string;
+  device: {
+    identity_sha256: string;
+    build_fingerprint: string;
+  };
+  android_user: number;
+  pack: BaselinePack | null;
+  packages: BaselinePackage[];
+};
+
+export type BaselineDiffRow = {
+  package: string;
+  baseline_present: boolean;
+  baseline_enabled: boolean | null;
+  live_present: boolean;
+  live_enabled: boolean | null;
+  requested_action: ActionKind;
+  status: "ready" | "already_matches" | "skipped";
+  reason_code: string | null;
+  reason: string;
+};
+
+export type RecoveryBaselineDiff = {
+  baseline: RecoveryBaseline;
+  compatibility: {
+    device_identity_matches: boolean;
+    build_fingerprint_matches: boolean;
+    android_user_available: boolean;
+    current_device_identity_sha256: string;
+    current_build_fingerprint: string;
+  };
+  rows: BaselineDiffRow[];
+  plans: PlannedAction[];
 };
 
 export type JournalEntry = {
@@ -532,8 +595,10 @@ export type HostPathPurpose =
   | "screenshot_save"
   | "pull_save"
   | "extract_apk_save"
+  | "recovery_baseline_save"
   | "push_open"
-  | "install_open";
+  | "install_open"
+  | "recovery_baseline_open";
 
 export type HostPathGrant = {
   id: string;
@@ -611,6 +676,32 @@ export async function callApplyAction(
   plan: PlannedAction,
 ): Promise<ApplyActionResult> {
   return invoke<ApplyActionResult>("apply_action", { plan });
+}
+
+export async function callExportRecoveryBaseline(
+  target: DeviceTarget,
+  userId: number,
+  actions: BaselineActionInput[],
+  pack: BaselinePack | null,
+  pathGrant: string,
+): Promise<HostArtifact> {
+  return invoke<HostArtifact>("export_recovery_baseline", {
+    target,
+    userId,
+    actions,
+    pack,
+    path_grant: pathGrant,
+  });
+}
+
+export async function callInspectRecoveryBaseline(
+  target: DeviceTarget,
+  pathGrant: string,
+): Promise<RecoveryBaselineDiff> {
+  return invoke<RecoveryBaselineDiff>("inspect_recovery_baseline", {
+    target,
+    path_grant: pathGrant,
+  });
 }
 
 export async function callJournalList(serial: string): Promise<JournalEntry[]> {

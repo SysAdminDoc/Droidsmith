@@ -5,6 +5,8 @@ import {
   callApplyAction,
   callBackupPackage,
   callCancelOperation,
+  callExportRecoveryBaseline,
+  callInspectRecoveryBaseline,
   callInstallApk,
   callJournalList,
   callJournalUndo,
@@ -28,6 +30,7 @@ import {
   type OperationEvent,
   type PermissionInfo,
   type PlannedAction,
+  type RecoveryBaselineDiff,
 } from "../lib/tauri";
 import {
   useAuthorizedDevices,
@@ -104,6 +107,19 @@ type InstallState =
       result: InstallPackageResult;
     };
 
+type RecoveryState =
+  | { kind: "idle" }
+  | { kind: "busy"; message: string }
+  | { kind: "saved"; path: string; sha256: string }
+  | { kind: "review"; diff: RecoveryBaselineDiff }
+  | {
+      kind: "result";
+      diff: RecoveryBaselineDiff;
+      applied: number;
+      failures: string[];
+    }
+  | { kind: "error"; message: string };
+
 const FILTERS: { value: PackageFilter; labelKey: string }[] = [
   { value: "all", labelKey: "apps.filterAll" },
   { value: "user", labelKey: "apps.filterUser" },
@@ -134,6 +150,9 @@ export default function AppsRoute() {
   const [inspectedPkg, setInspectedPkg] = useState<string | null>(null);
   const [backupNotice, setBackupNotice] = useState<BackupNotice | null>(null);
   const [installState, setInstallState] = useState<InstallState>({
+    kind: "idle",
+  });
+  const [recoveryState, setRecoveryState] = useState<RecoveryState>({
     kind: "idle",
   });
   const activeBackupRef = useRef<string | null>(null);
@@ -245,6 +264,7 @@ export default function AppsRoute() {
     setInspectedPkg(null);
     setBackupNotice(null);
     setInstallState({ kind: "idle" });
+    setRecoveryState({ kind: "idle" });
   }, [authorizedDevices, selectedSerial, selectedTransportId]);
 
   useEffect(() => {
@@ -582,6 +602,95 @@ export default function AppsRoute() {
     }
   }, [actionState, loadJournal, loadPackages, t]);
 
+  const exportActionBaseline = useCallback(async () => {
+    if (actionState.kind !== "confirming" || !authorizedTarget) return;
+    const { plan } = actionState;
+    setRecoveryState({
+      kind: "busy",
+      message: t("apps.recoveryExporting"),
+    });
+    try {
+      const selected = await callSelectHostPath(
+        "recovery_baseline_save",
+        recoveryFileName(plan.request.package),
+      );
+      if (!selected) {
+        setRecoveryState({ kind: "idle" });
+        return;
+      }
+      const artifact = await callExportRecoveryBaseline(
+        authorizedTarget,
+        plan.request.user_id,
+        [{ package: plan.request.package, kind: plan.request.kind }],
+        plan.request.pack_context
+          ? {
+              id: plan.request.pack_context.pack_id,
+              revision: plan.request.pack_context.revision,
+            }
+          : null,
+        selected.id,
+      );
+      setRecoveryState({
+        kind: "saved",
+        path: artifact.local_path,
+        sha256: artifact.sha256,
+      });
+    } catch (error) {
+      setRecoveryState({
+        kind: "error",
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }, [actionState, authorizedTarget, t]);
+
+  const inspectRecoveryBaseline = useCallback(async () => {
+    if (!authorizedTarget) return;
+    setRecoveryState({
+      kind: "busy",
+      message: t("apps.recoveryInspecting"),
+    });
+    try {
+      const selected = await callSelectHostPath("recovery_baseline_open");
+      if (!selected) {
+        setRecoveryState({ kind: "idle" });
+        return;
+      }
+      const diff = await callInspectRecoveryBaseline(
+        authorizedTarget,
+        selected.id,
+      );
+      setRecoveryState({ kind: "review", diff });
+    } catch (error) {
+      setRecoveryState({
+        kind: "error",
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }, [authorizedTarget, t]);
+
+  const applyRecoveryBaseline = useCallback(async () => {
+    if (recoveryState.kind !== "review") return;
+    const { diff } = recoveryState;
+    setRecoveryState({
+      kind: "busy",
+      message: t("apps.recoveryApplying", { count: diff.plans.length }),
+    });
+    let applied = 0;
+    const failures: string[] = [];
+    for (const plan of diff.plans) {
+      try {
+        await callApplyAction(plan);
+        applied += 1;
+      } catch (error) {
+        failures.push(
+          `${plan.request.package}: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
+    }
+    setRecoveryState({ kind: "result", diff, applied, failures });
+    await Promise.all([loadPackages(), loadJournal()]);
+  }, [loadJournal, loadPackages, recoveryState, t]);
+
   const undoJournalEntry = useCallback(
     async (entry: JournalEntry) => {
       if (!selectedDevice || !authorizedTarget || !usersReady) return;
@@ -632,6 +741,18 @@ export default function AppsRoute() {
         actions={
           selectedDevice ? (
             <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                onClick={() => void inspectRecoveryBaseline()}
+                disabled={
+                  !authorizedTarget ||
+                  recoveryState.kind === "busy" ||
+                  !usersReady
+                }
+                variant="ghost"
+              >
+                {t("apps.recoveryInspect")}
+              </Button>
               <Button
                 type="button"
                 onClick={() => void startInstall()}
@@ -717,6 +838,7 @@ export default function AppsRoute() {
               setInspectedPkg(null);
               setBackupNotice(null);
               setInstallState({ kind: "idle" });
+              setRecoveryState({ kind: "idle" });
             }}
           />
         )}
@@ -725,6 +847,12 @@ export default function AppsRoute() {
           target={selectedTarget}
           accepted={transportOverrideAccepted}
           onAcceptedChange={setTransportOverrideAccepted}
+        />
+
+        <RecoveryBaselinePanel
+          state={recoveryState}
+          onApply={() => void applyRecoveryBaseline()}
+          onDismiss={() => setRecoveryState({ kind: "idle" })}
         />
 
         {selectedSerial && (
@@ -747,7 +875,10 @@ export default function AppsRoute() {
                   <span>{t("apps.userLabel")}</span>
                   <select
                     value={selectedUser}
-                    onChange={(e) => setSelectedUser(Number(e.target.value))}
+                    onChange={(e) => {
+                      setSelectedUser(Number(e.target.value));
+                      setRecoveryState({ kind: "idle" });
+                    }}
                     aria-label={t("apps.userLabel")}
                     className="rounded-md border border-slate-700 bg-slate-900 px-2 py-1 font-mono text-slate-100"
                   >
@@ -852,6 +983,17 @@ export default function AppsRoute() {
         <ActionOverlay
           state={actionState}
           onConfirm={() => void confirmAction()}
+          onExportBaseline={() => void exportActionBaseline()}
+          exportingBaseline={recoveryState.kind === "busy"}
+          baselineFeedback={
+            recoveryState.kind === "saved"
+              ? t("apps.recoveryExportedReady")
+              : recoveryState.kind === "error"
+                ? t("apps.recoveryExportError", {
+                    message: recoveryState.message,
+                  })
+                : null
+          }
           onCancel={() => setActionState({ kind: "idle" })}
           onDismiss={() => setActionState({ kind: "idle" })}
         />
@@ -1637,11 +1779,17 @@ function summarizeJournalOutput(output: string): string {
 function ActionOverlay({
   state,
   onConfirm,
+  onExportBaseline,
+  exportingBaseline,
+  baselineFeedback,
   onCancel,
   onDismiss,
 }: {
   state: ActionState;
   onConfirm: () => void;
+  onExportBaseline: () => void;
+  exportingBaseline: boolean;
+  baselineFeedback: string | null;
   onCancel: () => void;
   onDismiss: () => void;
 }) {
@@ -1694,7 +1842,25 @@ function ActionOverlay({
               {state.plan.args.join(" ")}
             </code>
           </div>
+          {baselineFeedback && (
+            <p
+              className="mt-3 text-xs leading-5 text-circuit-100"
+              role="status"
+            >
+              {baselineFeedback}
+            </p>
+          )}
           <div className="mt-5 flex justify-end gap-3">
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={onExportBaseline}
+              disabled={exportingBaseline}
+            >
+              {exportingBaseline
+                ? t("apps.recoveryExporting")
+                : t("apps.recoveryExportBeforeApply")}
+            </Button>
             <Button type="button" onClick={onCancel}>
               {t("apps.cancel")}
             </Button>
@@ -1754,6 +1920,193 @@ function ActionOverlay({
       <p>{state.message}</p>
     </StatePanel>
   );
+}
+
+function RecoveryBaselinePanel({
+  state,
+  onApply,
+  onDismiss,
+}: {
+  state: RecoveryState;
+  onApply: () => void;
+  onDismiss: () => void;
+}) {
+  const { t } = useTranslation();
+  if (state.kind === "idle") return null;
+  if (state.kind === "busy") {
+    return (
+      <StatePanel title={t("apps.recoveryWorking")} tone="info">
+        <p>{state.message}</p>
+      </StatePanel>
+    );
+  }
+  if (state.kind === "saved") {
+    return (
+      <StatePanel
+        title={t("apps.recoverySavedTitle")}
+        tone="success"
+        actions={
+          <Button type="button" size="sm" onClick={onDismiss}>
+            {t("apps.recoveryDismiss")}
+          </Button>
+        }
+      >
+        <p>{t("apps.recoverySaved", { path: state.path })}</p>
+        <code className="mt-2 block break-all font-mono text-xs">
+          sha256 {state.sha256}
+        </code>
+      </StatePanel>
+    );
+  }
+  if (state.kind === "error") {
+    return (
+      <StatePanel
+        title={t("apps.recoveryFailed")}
+        tone="danger"
+        actions={
+          <Button type="button" size="sm" onClick={onDismiss}>
+            {t("apps.recoveryDismiss")}
+          </Button>
+        }
+      >
+        <p>{state.message}</p>
+      </StatePanel>
+    );
+  }
+
+  const { diff } = state;
+  const ready = diff.rows.filter((row) => row.status === "ready").length;
+  const skipped = diff.rows.filter((row) => row.status === "skipped").length;
+  const matching = diff.rows.filter(
+    (row) => row.status === "already_matches",
+  ).length;
+  return (
+    <Card className="overflow-hidden p-0">
+      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-white/10 p-5">
+        <div>
+          <h3 className="font-semibold text-anvil-50">
+            {t("apps.recoveryReviewTitle")}
+          </h3>
+          <p className="mt-1 text-xs text-anvil-400">
+            {t("apps.recoveryReviewBody", {
+              user: diff.baseline.android_user,
+              date: diff.baseline.exported_at,
+            })}
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Badge
+            tone={
+              diff.compatibility.device_identity_matches ? "success" : "danger"
+            }
+          >
+            {diff.compatibility.device_identity_matches
+              ? t("apps.recoveryDeviceMatch")
+              : t("apps.recoveryDeviceMismatch")}
+          </Badge>
+          <Badge
+            tone={
+              diff.compatibility.build_fingerprint_matches
+                ? "success"
+                : "warning"
+            }
+          >
+            {diff.compatibility.build_fingerprint_matches
+              ? t("apps.recoveryBuildMatch")
+              : t("apps.recoveryBuildChanged")}
+          </Badge>
+          <Badge tone="info">{t("apps.recoveryReady", { count: ready })}</Badge>
+          <Badge tone="neutral">
+            {t("apps.recoveryMatching", { count: matching })}
+          </Badge>
+          <Badge tone={skipped ? "warning" : "neutral"}>
+            {t("apps.recoverySkipped", { count: skipped })}
+          </Badge>
+        </div>
+      </div>
+      <div className="max-h-72 overflow-auto">
+        <table className="w-full text-left text-xs">
+          <thead className="sticky top-0 bg-slate-950">
+            <tr>
+              <TableHeaderCell>{t("apps.package")}</TableHeaderCell>
+              <TableHeaderCell>
+                {t("apps.recoveryBaselineState")}
+              </TableHeaderCell>
+              <TableHeaderCell>{t("apps.recoveryLiveState")}</TableHeaderCell>
+              <TableHeaderCell>{t("apps.recoveryDecision")}</TableHeaderCell>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-white/10">
+            {diff.rows.map((row) => (
+              <tr key={row.package}>
+                <TableCell>
+                  <code className="font-mono">{row.package}</code>
+                </TableCell>
+                <TableCell>
+                  {recoveryPackageState(row.baseline_enabled, t)}
+                </TableCell>
+                <TableCell>
+                  {recoveryPackageState(row.live_enabled, t)}
+                </TableCell>
+                <TableCell>
+                  <Badge
+                    tone={
+                      row.status === "ready"
+                        ? "info"
+                        : row.status === "skipped"
+                          ? "warning"
+                          : "success"
+                    }
+                  >
+                    {t(`apps.recoveryStatus.${row.status}`)}
+                  </Badge>
+                  <p className="mt-1 text-anvil-400">{row.reason}</p>
+                </TableCell>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div className="flex flex-wrap justify-end gap-2 border-t border-white/10 p-4">
+        {state.kind === "result" && (
+          <p className="mr-auto text-xs text-anvil-300">
+            {t("apps.recoveryResult", {
+              applied: state.applied,
+              failed: state.failures.length,
+            })}
+            {state.failures.length > 0 && ` ${state.failures.join("; ")}`}
+          </p>
+        )}
+        <Button type="button" onClick={onDismiss}>
+          {t("apps.recoveryDismiss")}
+        </Button>
+        {state.kind === "review" && (
+          <Button
+            type="button"
+            variant="primary"
+            onClick={onApply}
+            disabled={diff.plans.length === 0}
+          >
+            {t("apps.recoveryApply", { count: diff.plans.length })}
+          </Button>
+        )}
+      </div>
+    </Card>
+  );
+}
+
+function recoveryPackageState(
+  enabled: boolean | null,
+  t: (key: string) => string,
+): string {
+  if (enabled === null) return t("apps.recoveryAbsent");
+  return enabled ? t("apps.recoveryEnabled") : t("apps.recoveryDisabled");
+}
+
+function recoveryFileName(packageName: string): string {
+  const date = new Date().toISOString().slice(0, 10);
+  const safePackage = packageName.replace(/[^A-Za-z0-9_.-]/g, "_");
+  return `droidsmith-recovery-${date}-${safePackage}.json`;
 }
 
 function PermissionsPanel({

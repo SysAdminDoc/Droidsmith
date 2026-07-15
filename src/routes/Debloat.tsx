@@ -3,10 +3,12 @@ import { useTranslation } from "react-i18next";
 
 import {
   callApplyAction,
+  callExportRecoveryBaseline,
   callListPackages,
   callListPacks,
   callListUsers,
   callPlanPack,
+  callSelectHostPath,
   deviceTarget,
   inTauri,
   type AndroidUser,
@@ -93,6 +95,11 @@ type WizardStep =
       overrideAccepted: boolean;
     };
 
+type BaselineNotice =
+  | { kind: "busy"; message: string }
+  | { kind: "success"; message: string }
+  | { kind: "error"; message: string };
+
 export default function DebloatRoute() {
   const { t } = useTranslation();
   const { devicesState, authorizedDevices } = useAuthorizedDevices();
@@ -106,6 +113,9 @@ export default function DebloatRoute() {
   const [userError, setUserError] = useState<string | null>(null);
   const [selectedUser, setSelectedUser] = useState<number>(0);
   const [wizard, setWizard] = useState<WizardStep>({ step: "pick_pack" });
+  const [baselineNotice, setBaselineNotice] = useState<BaselineNotice | null>(
+    null,
+  );
   const cancelRequestedRef = useRef(false);
 
   const selectedDevice =
@@ -192,12 +202,14 @@ export default function DebloatRoute() {
 
   useEffect(() => {
     if (selectedDevice && usersReady) {
+      setBaselineNotice(null);
       setWizard({ step: "pick_pack" });
       void loadPacks();
     }
   }, [loadPacks, selectedDevice, usersReady]);
 
   const selectPack = useCallback((candidate: PackCandidate) => {
+    setBaselineNotice(null);
     const { pack, assessment } = candidate;
     const ready = new Set(
       assessment.entries
@@ -220,6 +232,7 @@ export default function DebloatRoute() {
   }, []);
 
   const toggleEntry = useCallback((id: string) => {
+    setBaselineNotice(null);
     setWizard((prev) => {
       if (prev.step !== "preview") return prev;
       const next = new Set(prev.selected);
@@ -438,6 +451,54 @@ export default function DebloatRoute() {
     }
   }, [authorizedTarget, runQueue, selectedUser, usersReady, wizard]);
 
+  const exportPackBaseline = useCallback(async () => {
+    if (wizard.step !== "preview" || !authorizedTarget || !usersReady) return;
+    setBaselineNotice({
+      kind: "busy",
+      message: t("debloat.recoveryExporting"),
+    });
+    try {
+      const planned = await callPlanPack({
+        target: authorizedTarget,
+        user_id: selectedUser,
+        pack_id: wizard.pack.id,
+        revision: wizard.pack.revision,
+        selected: [...wizard.selected],
+        override_compatibility: wizard.overrideAccepted,
+      });
+      const selected = await callSelectHostPath(
+        "recovery_baseline_save",
+        debloatRecoveryFileName(wizard.pack.id),
+      );
+      if (!selected) {
+        setBaselineNotice(null);
+        return;
+      }
+      const artifact = await callExportRecoveryBaseline(
+        authorizedTarget,
+        selectedUser,
+        planned.selected_ids.map((packageName) => ({
+          package: packageName,
+          kind: "disable",
+        })),
+        { id: wizard.pack.id, revision: wizard.pack.revision },
+        selected.id,
+      );
+      setBaselineNotice({
+        kind: "success",
+        message: t("debloat.recoverySaved", {
+          path: artifact.local_path,
+          sha256: artifact.sha256,
+        }),
+      });
+    } catch (error) {
+      setBaselineNotice({
+        kind: "error",
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }, [authorizedTarget, selectedUser, t, usersReady, wizard]);
+
   const cancelAfterCurrent = useCallback(() => {
     cancelRequestedRef.current = true;
     setWizard((prev) =>
@@ -569,27 +630,60 @@ export default function DebloatRoute() {
         )}
 
         {usersReady && wizard.step === "preview" && (
-          <PackPreview
-            pack={wizard.pack}
-            assessment={wizard.assessment}
-            selected={wizard.selected}
-            overrideAccepted={wizard.overrideAccepted}
-            planError={wizard.planError}
-            onToggle={toggleEntry}
-            onOverrideChange={(accepted) =>
-              setWizard((previous) =>
-                previous.step === "preview"
-                  ? {
-                      ...previous,
-                      overrideAccepted: accepted,
-                      planError: null,
-                    }
-                  : previous,
-              )
-            }
-            onApply={() => void applyPack()}
-            onBack={() => setWizard({ step: "pick_pack" })}
-          />
+          <>
+            {baselineNotice && (
+              <StatePanel
+                title={t("debloat.recoveryBaseline")}
+                tone={
+                  baselineNotice.kind === "error"
+                    ? "danger"
+                    : baselineNotice.kind === "success"
+                      ? "success"
+                      : "info"
+                }
+                actions={
+                  baselineNotice.kind !== "busy" ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={() => setBaselineNotice(null)}
+                    >
+                      {t("common.dismiss")}
+                    </Button>
+                  ) : undefined
+                }
+              >
+                <p className="break-all">{baselineNotice.message}</p>
+              </StatePanel>
+            )}
+            <PackPreview
+              pack={wizard.pack}
+              assessment={wizard.assessment}
+              selected={wizard.selected}
+              overrideAccepted={wizard.overrideAccepted}
+              planError={wizard.planError}
+              onToggle={toggleEntry}
+              onOverrideChange={(accepted) => {
+                setBaselineNotice(null);
+                setWizard((previous) =>
+                  previous.step === "preview"
+                    ? {
+                        ...previous,
+                        overrideAccepted: accepted,
+                        planError: null,
+                      }
+                    : previous,
+                );
+              }}
+              onExportBaseline={() => void exportPackBaseline()}
+              exportingBaseline={baselineNotice?.kind === "busy"}
+              onApply={() => void applyPack()}
+              onBack={() => {
+                setBaselineNotice(null);
+                setWizard({ step: "pick_pack" });
+              }}
+            />
+          </>
         )}
 
         {usersReady && wizard.step === "applying" && (
@@ -805,6 +899,8 @@ function PackPreview({
   planError,
   onToggle,
   onOverrideChange,
+  onExportBaseline,
+  exportingBaseline,
   onApply,
   onBack,
 }: {
@@ -815,6 +911,8 @@ function PackPreview({
   planError: string | null;
   onToggle: (id: string) => void;
   onOverrideChange: (accepted: boolean) => void;
+  onExportBaseline: () => void;
+  exportingBaseline: boolean;
   onApply: () => void;
   onBack: () => void;
 }) {
@@ -970,21 +1068,38 @@ function PackPreview({
         </label>
       )}
 
-      <div className="flex justify-between">
+      <div className="flex flex-wrap justify-between gap-3">
         <Button type="button" onClick={onBack}>
           {t("debloat.back")}
         </Button>
-        <Button
-          type="button"
-          variant="primary"
-          onClick={onApply}
-          disabled={
-            selected.size === 0 ||
-            (assessment.override_required && !overrideAccepted)
-          }
-        >
-          {t("debloat.applyCount", { count: selected.size })}
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={onExportBaseline}
+            disabled={
+              selected.size === 0 ||
+              exportingBaseline ||
+              (assessment.override_required && !overrideAccepted)
+            }
+          >
+            {exportingBaseline
+              ? t("debloat.recoveryExporting")
+              : t("debloat.recoveryExport")}
+          </Button>
+          <Button
+            type="button"
+            variant="primary"
+            onClick={onApply}
+            disabled={
+              selected.size === 0 ||
+              exportingBaseline ||
+              (assessment.override_required && !overrideAccepted)
+            }
+          >
+            {t("debloat.applyCount", { count: selected.size })}
+          </Button>
+        </div>
       </div>
     </>
   );
@@ -1298,6 +1413,12 @@ function snapshotLabel(
       ? t("debloat.stateEnabled")
       : t("debloat.stateDisabled"),
   };
+}
+
+function debloatRecoveryFileName(packId: string): string {
+  const date = new Date().toISOString().slice(0, 10);
+  const safePack = packId.replace(/[^A-Za-z0-9_.-]/g, "_");
+  return `droidsmith-recovery-${date}-${safePack}.json`;
 }
 
 function groupByTier(entries: PackEntry[]): Map<RemovalLevel, PackEntry[]> {

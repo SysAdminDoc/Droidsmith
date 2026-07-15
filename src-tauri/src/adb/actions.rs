@@ -56,6 +56,7 @@ pub enum ConfirmationSource {
     DeviceControl,
     CliApply,
     JournalUndo,
+    RecoveryBaseline,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]

@@ -42,6 +42,11 @@
     pair_wireless: [["request"], []],
     connect_wireless: [["request"], []],
     apply_action: [["plan"], []],
+    export_recovery_baseline: [
+      ["target", "userId", "actions", "pack", "path_grant"],
+      [],
+    ],
+    inspect_recovery_baseline: [["target", "path_grant"], []],
     journal_undo: [["target", "entry_id"], []],
     backup_package: [
       ["target", "package", "path_grant", "operation_id", "on_event"],
@@ -95,8 +100,10 @@
     "screenshot_save",
     "pull_save",
     "extract_apk_save",
+    "recovery_baseline_save",
     "push_open",
     "install_open",
+    "recovery_baseline_open",
   ]);
 
   function isRecord(value) {
@@ -349,6 +356,34 @@
     }
     if (command === "apply_action" && !isRecord(payload.plan))
       reject("action_plan");
+    if (command === "export_recovery_baseline") {
+      if (
+        !Array.isArray(payload.actions) ||
+        payload.actions.length === 0 ||
+        payload.actions.length > 2048
+      ) {
+        reject("baseline_actions");
+      }
+      for (const action of payload.actions) {
+        validateKeys(action, ["package", "kind"], [], "baseline_action");
+        if (
+          ![
+            "disable",
+            "enable",
+            "uninstall_for_user",
+            "clear_data",
+            "force_stop",
+          ].includes(action.kind)
+        ) {
+          reject("baseline_action_kind");
+        }
+      }
+      if (payload.pack !== null) {
+        validateKeys(payload.pack, ["id", "revision"], [], "baseline_pack");
+        ensureIdentifier(payload.pack.id, "baseline_pack_id");
+        ensureInteger(payload.pack.revision, "baseline_pack_revision");
+      }
+    }
     if (command === "set_permission" && typeof payload.grant !== "boolean") {
       reject("permission_grant");
     }

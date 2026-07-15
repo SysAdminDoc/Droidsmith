@@ -18,20 +18,21 @@ pub mod profile;
 /// Public for the read-only schema-lint binary; runtime callers still use the
 /// same bounded loader and validation path.
 pub mod quirks;
+pub mod recovery_baseline;
 mod scrcpy;
 mod support_bundle;
 pub mod time;
 
 use commands::{
     apply_action, apply_device_control, backup_package, cancel_operation, connect_wireless,
-    explain_failure, extract_apk, fastboot_getvar, get_device_info, heartbeat, install_apk,
-    journal_list, journal_undo, launch_scrcpy, list_devices, list_fastboot_devices,
-    list_network_connections, list_packages, list_packs, list_permissions, list_processes,
-    list_remote_files, list_users, list_wireless_services, locate_fastboot, locate_scrcpy,
-    pair_wireless, plan_action, plan_pack, plan_shell_action, preview_diagnostics, pull_file,
-    push_file, recover_adb, save_diagnostics, save_logcat_export, scrcpy_session_status,
-    select_host_path, set_permission, shell_run, stop_scrcpy, stream_logcat, take_screenshot,
-    watch_devices, wipe_diagnostics,
+    explain_failure, export_recovery_baseline, extract_apk, fastboot_getvar, get_device_info,
+    heartbeat, inspect_recovery_baseline, install_apk, journal_list, journal_undo, launch_scrcpy,
+    list_devices, list_fastboot_devices, list_network_connections, list_packages, list_packs,
+    list_permissions, list_processes, list_remote_files, list_users, list_wireless_services,
+    locate_fastboot, locate_scrcpy, pair_wireless, plan_action, plan_pack, plan_shell_action,
+    preview_diagnostics, pull_file, push_file, recover_adb, save_diagnostics, save_logcat_export,
+    scrcpy_session_status, select_host_path, set_permission, shell_run, stop_scrcpy, stream_logcat,
+    take_screenshot, watch_devices, wipe_diagnostics,
 };
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -75,6 +76,8 @@ pub fn run() {
             plan_action,
             plan_shell_action,
             apply_action,
+            export_recovery_baseline,
+            inspect_recovery_baseline,
             apply_device_control,
             shell_run,
             stream_logcat,

@@ -33,6 +33,7 @@ use crate::install;
 use crate::journal::{self, Journal, JournalEntry};
 use crate::operations::{self, OperationEvent};
 use crate::quirks::{self, DeviceContext, Quirk};
+use crate::recovery_baseline::{self, BaselineActionInput, BaselinePack, RecoveryBaselineDiff};
 use crate::support_bundle;
 
 #[derive(Serialize)]
@@ -774,6 +775,15 @@ impl From<PathGrantError> for CommandError {
     }
 }
 
+impl From<recovery_baseline::RecoveryBaselineError> for CommandError {
+    fn from(error: recovery_baseline::RecoveryBaselineError) -> Self {
+        Self {
+            code: error.code(),
+            message: error.to_string(),
+        }
+    }
+}
+
 impl From<operations::OperationError> for CommandError {
     fn from(error: operations::OperationError) -> Self {
         let code = match &error {
@@ -1070,6 +1080,60 @@ pub fn apply_action(
         execute_journaled(journal, &transport, plan, None)
     })?;
     Ok(result)
+}
+
+/// Export a redacted package snapshot before a reviewed destructive batch.
+/// The renderer supplies requested intents, while the backend captures all
+/// device/package state and writes through a one-shot native path grant.
+#[tauri::command]
+pub fn export_recovery_baseline(
+    target: adb::DeviceTarget,
+    #[allow(non_snake_case)] userId: u32,
+    actions: Vec<BaselineActionInput>,
+    pack: Option<BaselinePack>,
+    path_grant: String,
+    grants: tauri::State<'_, PathGrantStore>,
+) -> Result<HostArtifact, CommandError> {
+    let (transport, _) = privileged_transport(&target)?;
+    let path = grants.consume(&path_grant, HostPathPurpose::RecoveryBaselineSave)?;
+    let users = adb::list_users(&transport, &target)?;
+    if !users.iter().any(|user| user.id == userId) {
+        return Err(CommandError {
+            code: "recovery_baseline_user_missing",
+            message: format!("Android user {userId} is not available"),
+        });
+    }
+    let packages = adb::list_packages(&transport, &target, adb::PackageFilter::All, userId)?;
+    let baseline = recovery_baseline::build(&target, userId, pack, &packages, actions, iso_now())?;
+    Ok(recovery_baseline::save(&path, &baseline)?)
+}
+
+/// Load and compare a baseline without mutating the device. Returned plans are
+/// canonical but remain inert until the renderer shows the diff and explicitly
+/// submits individual plans through `apply_action`.
+#[tauri::command]
+pub fn inspect_recovery_baseline(
+    target: adb::DeviceTarget,
+    path_grant: String,
+    grants: tauri::State<'_, PathGrantStore>,
+) -> Result<RecoveryBaselineDiff, CommandError> {
+    let (transport, _) = privileged_transport(&target)?;
+    let path = grants.consume(&path_grant, HostPathPurpose::RecoveryBaselineOpen)?;
+    let baseline = recovery_baseline::load(&path)?;
+    let users = adb::list_users(&transport, &target)?;
+    let packages = if users.iter().any(|user| user.id == baseline.android_user) {
+        adb::list_packages(
+            &transport,
+            &target,
+            adb::PackageFilter::All,
+            baseline.android_user,
+        )?
+    } else {
+        Vec::new()
+    };
+    Ok(recovery_baseline::inspect(
+        baseline, &target, &users, &packages,
+    )?)
 }
 
 #[tauri::command]
