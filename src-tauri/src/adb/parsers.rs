@@ -409,9 +409,222 @@ fn degraded_process(line: &str) -> ProcessInfo {
     }
 }
 
+/// One node of a `uiautomator dump` UI hierarchy, flattened with its nesting
+/// `depth` so the renderer can indent it. Malformed structure yields a node
+/// with `parse_error` set instead of being silently dropped.
+#[derive(specta::Type, Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct LayoutNode {
+    pub depth: u32,
+    pub index: String,
+    pub class: String,
+    pub package: String,
+    pub text: String,
+    pub content_desc: String,
+    pub resource_id: String,
+    pub bounds: String,
+    pub clickable: bool,
+    pub enabled: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub parse_error: Option<String>,
+}
+
+/// Parse a `uiautomator dump` XML document into a depth-flattened node list.
+/// The uiautomator format escapes `<`, `>`, `&`, and `"` inside attribute
+/// values, so a quote-aware scan is sufficient and needs no XML dependency.
+pub fn parse_uiautomator_dump(xml: &str) -> Vec<LayoutNode> {
+    let mut nodes = Vec::new();
+    let mut depth: i64 = 0;
+    let mut cursor = 0usize;
+    while let Some(rel) = xml[cursor..].find('<') {
+        let start = cursor + rel;
+        let rest = &xml[start..];
+        if rest.starts_with("</node>") {
+            depth -= 1;
+            if depth < 0 {
+                nodes.push(layout_parse_error("unbalanced closing node"));
+                depth = 0;
+            }
+            cursor = start + "</node>".len();
+        } else if rest.starts_with("<node")
+            && matches!(
+                rest.as_bytes().get(5),
+                Some(b' ' | b'\t' | b'\n' | b'\r' | b'/' | b'>')
+            )
+        {
+            match find_node_tag_end(rest) {
+                Some((end, self_closing)) => {
+                    let attrs_end = if self_closing { end - 1 } else { end };
+                    let attrs = &rest[5..attrs_end];
+                    nodes.push(build_layout_node(attrs, depth.max(0) as u32));
+                    if !self_closing {
+                        depth += 1;
+                    }
+                    cursor = start + end + 1;
+                }
+                None => {
+                    nodes.push(layout_parse_error("unterminated node tag"));
+                    break;
+                }
+            }
+        } else {
+            // Non-node markup (<?xml?>, <hierarchy>, </hierarchy>) is skipped.
+            cursor = start + 1;
+        }
+    }
+    if depth != 0 {
+        nodes.push(layout_parse_error("unbalanced node nesting"));
+    }
+    if nodes.is_empty() {
+        nodes.push(layout_parse_error("no UI nodes found in dump"));
+    }
+    nodes
+}
+
+fn find_node_tag_end(tag: &str) -> Option<(usize, bool)> {
+    let bytes = tag.as_bytes();
+    let mut in_quote = false;
+    let mut last_non_space = b' ';
+    let mut i = 5;
+    while i < bytes.len() {
+        let byte = bytes[i];
+        if byte == b'"' {
+            in_quote = !in_quote;
+        } else if byte == b'>' && !in_quote {
+            return Some((i, last_non_space == b'/'));
+        }
+        if !in_quote && !byte.is_ascii_whitespace() {
+            last_non_space = byte;
+        }
+        i += 1;
+    }
+    None
+}
+
+fn build_layout_node(attrs: &str, depth: u32) -> LayoutNode {
+    let map = parse_node_attributes(attrs);
+    let take = |key: &str| map.get(key).cloned().unwrap_or_default();
+    let flag = |key: &str| map.get(key).map(|value| value == "true").unwrap_or(false);
+    LayoutNode {
+        depth,
+        index: take("index"),
+        class: take("class"),
+        package: take("package"),
+        text: take("text"),
+        content_desc: take("content-desc"),
+        resource_id: take("resource-id"),
+        bounds: take("bounds"),
+        clickable: flag("clickable"),
+        enabled: flag("enabled"),
+        parse_error: None,
+    }
+}
+
+fn parse_node_attributes(attrs: &str) -> std::collections::BTreeMap<String, String> {
+    let mut map = std::collections::BTreeMap::new();
+    let bytes = attrs.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        while i < bytes.len() && !bytes[i].is_ascii_alphabetic() {
+            i += 1;
+        }
+        let name_start = i;
+        while i < bytes.len()
+            && (bytes[i].is_ascii_alphanumeric() || bytes[i] == b'-' || bytes[i] == b'_')
+        {
+            i += 1;
+        }
+        if name_start == i {
+            break;
+        }
+        let name = &attrs[name_start..i];
+        while i < bytes.len() && (bytes[i] == b' ' || bytes[i] == b'=') {
+            i += 1;
+        }
+        if i >= bytes.len() || bytes[i] != b'"' {
+            continue;
+        }
+        i += 1;
+        let value_start = i;
+        while i < bytes.len() && bytes[i] != b'"' {
+            i += 1;
+        }
+        let value = &attrs[value_start..i.min(bytes.len())];
+        if i < bytes.len() {
+            i += 1;
+        }
+        map.insert(name.to_string(), unescape_xml(value));
+    }
+    map
+}
+
+fn unescape_xml(value: &str) -> String {
+    value
+        .replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&quot;", "\"")
+        .replace("&apos;", "'")
+        .replace("&amp;", "&")
+}
+
+fn layout_parse_error(message: &str) -> LayoutNode {
+    LayoutNode {
+        depth: 0,
+        index: String::new(),
+        class: String::new(),
+        package: String::new(),
+        text: String::new(),
+        content_desc: String::new(),
+        resource_id: String::new(),
+        bounds: String::new(),
+        clickable: false,
+        enabled: false,
+        parse_error: Some(message.to_string()),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn parses_uiautomator_hierarchy_with_depth_and_entities() {
+        let xml = r#"<?xml version='1.0' encoding='UTF-8'?>
+<hierarchy rotation="0">
+  <node index="0" class="android.widget.FrameLayout" package="com.example.app" text="" content-desc="" resource-id="" bounds="[0,0][1080,2400]" clickable="false" enabled="true">
+    <node index="1" class="android.widget.TextView" package="com.example.app" text="Tom &amp; Jerry &lt;3" content-desc="Play" resource-id="com.example.app:id/title" bounds="[10,20][300,80]" clickable="true" enabled="true" />
+  </node>
+</hierarchy>"#;
+        let nodes = parse_uiautomator_dump(xml);
+        assert_eq!(nodes.len(), 2);
+        assert!(nodes.iter().all(|node| node.parse_error.is_none()));
+        assert_eq!(nodes[0].depth, 0);
+        assert_eq!(nodes[0].class, "android.widget.FrameLayout");
+        assert_eq!(nodes[1].depth, 1);
+        assert_eq!(nodes[1].text, "Tom & Jerry <3");
+        assert_eq!(nodes[1].content_desc, "Play");
+        assert_eq!(nodes[1].resource_id, "com.example.app:id/title");
+        assert!(nodes[1].clickable);
+    }
+
+    #[test]
+    fn malformed_dumps_surface_parse_errors_rather_than_dropping() {
+        let empty = parse_uiautomator_dump("<hierarchy></hierarchy>");
+        assert_eq!(empty.len(), 1);
+        assert_eq!(
+            empty[0].parse_error.as_deref(),
+            Some("no UI nodes found in dump")
+        );
+
+        let unbalanced =
+            parse_uiautomator_dump("<hierarchy><node index=\"0\" class=\"X\"></hierarchy>");
+        assert!(unbalanced
+            .iter()
+            .any(|node| node.parse_error.as_deref() == Some("unbalanced node nesting")));
+
+        let garbage = parse_uiautomator_dump("not xml at all");
+        assert_eq!(garbage.len(), 1);
+        assert!(garbage[0].parse_error.is_some());
+    }
 
     #[test]
     fn parses_file_rows_and_keeps_malformed_oem_rows_visible() {

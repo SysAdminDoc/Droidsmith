@@ -359,6 +359,22 @@
       "colProcess": "Process",
       "notReported": "Not reported",
       "showingConnections": "Showing 100 of {{count}} connections"
+    },
+    "layout": {
+      "title": "Layout inspector",
+      "body": "Capture the current on-screen UI hierarchy, read-only, with",
+      "capture": "Capture hierarchy",
+      "recapture": "Recapture",
+      "export": "Export XML",
+      "exported": "Layout saved to {{path}}",
+      "exportFailed": "Layout export failed: {{message}}",
+      "captureFailed": "Could not capture the UI hierarchy: {{message}}",
+      "empty": "No hierarchy captured yet",
+      "emptyBody": "Capture the current screen to browse its view tree.",
+      "filterNodes": "Filter layout nodes",
+      "nodeParseError": "Unparsed node",
+      "clickable": "Clickable",
+      "truncated": "Showing 500 of {{count}} nodes"
     }
   },
   "wireless": {

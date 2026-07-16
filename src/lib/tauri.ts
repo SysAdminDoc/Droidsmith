@@ -31,6 +31,7 @@ import {
   type InstallPackageResult,
   type JournalEntry as GeneratedJournalEntry,
   type LaunchScrcpyRequest,
+  type LayoutSnapshot,
   type LegacySettingsImport,
   type LogcatQuery,
   type LogcatQueryLibrary,
@@ -865,6 +866,19 @@ export async function callSaveLogcatExport(
   contents: string,
 ): Promise<string> {
   return commands.saveLogcatExport(pathGrant, contents);
+}
+
+export async function callCaptureLayout(
+  target: DeviceTarget,
+): Promise<LayoutSnapshot> {
+  return commands.captureLayout(target);
+}
+
+export async function callSaveLayoutExport(
+  pathGrant: string,
+  contents: string,
+): Promise<string> {
+  return commands.saveLayoutExport(pathGrant, contents);
 }
 
 export async function callPlanShellAction(

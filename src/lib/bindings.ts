@@ -85,6 +85,24 @@ export const commands = {
     });
   },
   /**
+   * Capture the current UI hierarchy with `uiautomator dump`. This is a
+   * read-only inspection: it prints the hierarchy to `/dev/tty` (no device-side
+   * file is written) and the renderer never controls any path.
+   */
+  async captureLayout(target: DeviceTarget): Promise<LayoutSnapshot> {
+    return await TAURI_INVOKE("capture_layout", { target });
+  },
+  /**
+   * Persist a captured UI hierarchy XML through a one-shot path grant. The size
+   * bound keeps the IPC and host write bounded, mirroring the Logcat export.
+   */
+  async saveLayoutExport(pathGrant: string, contents: string): Promise<string> {
+    return await TAURI_INVOKE("save_layout_export", {
+      path_grant: pathGrant,
+      contents,
+    });
+  },
+  /**
    * Run a bounded, non-elevated, read-only host connection scan. The report
    * contains state counts and redacted configuration presence only; it never
    * persists device identifiers, USB instance IDs, environment values, or keys.
@@ -1291,6 +1309,7 @@ export type HostPathPurpose =
   | "recovery_baseline_save"
   | "profile_save"
   | "settings_export"
+  | "layout_export_save"
   | "push_open"
   | "install_open"
   | "recovery_baseline_open"
@@ -1363,6 +1382,33 @@ export type LaunchScrcpyRequest = {
   turn_screen_off: boolean;
   stay_awake: boolean;
   show_touches: boolean;
+};
+/**
+ * One node of a `uiautomator dump` UI hierarchy, flattened with its nesting
+ * `depth` so the renderer can indent it. Malformed structure yields a node
+ * with `parse_error` set instead of being silently dropped.
+ */
+export type LayoutNode = {
+  depth: number;
+  index: string;
+  class: string;
+  package: string;
+  text: string;
+  content_desc: string;
+  resource_id: string;
+  bounds: string;
+  clickable: boolean;
+  enabled: boolean;
+  parse_error?: string | null;
+};
+/**
+ * A read-only snapshot of the current on-screen UI hierarchy plus the raw
+ * dump so the renderer can export it verbatim.
+ */
+export type LayoutSnapshot = {
+  nodes: LayoutNode[];
+  node_count: number;
+  raw_xml: string;
 };
 export type LegacyContent = "app_data_entries_detected" | "no_app_data_entries";
 export type LegacyEligibilityEvidence = {

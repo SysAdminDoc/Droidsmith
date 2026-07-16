@@ -39,7 +39,11 @@ the exact native-selected source, device target, and argument boundaries before
 confirmation, writes a durable journal outcome, verifies the resulting device
 state, and refreshes the current directory. Device paths with spaces or
 non-ASCII names remain distinct ADB arguments instead of interpolated shell
-text.
+text. The device dashboard also includes a read-only layout inspector: one click
+captures the on-screen UI hierarchy with `uiautomator dump`, renders it as a
+searchable, depth-indented node tree (class, resource-id, text, content-desc,
+bounds), and exports the raw XML through a one-shot save grant. Malformed dumps
+surface visible parse errors instead of being dropped.
 
 Per-user removal now records package provenance and post-state immediately
 around the mutation. A preinstalled system app is undoable from Activity only

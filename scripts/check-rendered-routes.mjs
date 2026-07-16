@@ -4,7 +4,7 @@ import http from "node:http";
 import net from "node:net";
 import path from "node:path";
 import { spawn, spawnSync } from "node:child_process";
-import { env, execPath, platform, stdout } from "node:process";
+import { argv, env, execPath, platform, stdout } from "node:process";
 import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 
@@ -21,7 +21,7 @@ const screenshotDir = path.join(repoRoot, "test-results", "rendered-routes");
 const docsScreenshotDir = path.join(repoRoot, "docs", "screenshots");
 // When set, refresh the committed README screenshots from the mocked-native
 // state instead of only asserting they are free of desktop-required placeholders.
-const captureDocs = process.argv.includes("--capture-docs");
+const captureDocs = argv.includes("--capture-docs");
 
 fs.mkdirSync(screenshotDir, { recursive: true });
 
@@ -79,6 +79,17 @@ async function runDesktopFlow(browser) {
     fullPage: false,
   });
   await page.getByRole("button", { name: "Close", exact: true }).click();
+
+  // Read-only layout inspector: select the device, capture the mocked UI
+  // hierarchy, confirm nodes render indented, and export the raw XML.
+  await page.getByRole("button", { name: "Select Pixel QA" }).click();
+  await page.getByRole("heading", { name: "Layout inspector" }).waitFor();
+  await page.getByRole("button", { name: "Capture hierarchy" }).click();
+  await page.getByText("com.example.app:id/title").waitFor();
+  await page.getByText("“Hello”").waitFor();
+  await page.getByRole("button", { name: "Export XML" }).click();
+  await page.getByText(/Layout saved to .*layout-QA123\.xml/).waitFor();
+
   await page.getByRole("button", { name: "Diagnostics", exact: true }).click();
   const diagnosticsDialog = page.getByRole("dialog", {
     name: "Diagnostics center",
@@ -1169,6 +1180,10 @@ async function installTauriMock(page) {
             push_open: {
               id: "123e4567-e89b-42d3-a456-42661417400c",
               local_path: "C:/Users/QA/Downloads/新しい report.txt",
+            },
+            layout_export_save: {
+              id: "123e4567-e89b-42d3-a456-42661417400d",
+              local_path: "C:/Users/QA/Desktop/layout-QA123.xml",
             },
           };
           const selection = selections[args.purpose];
@@ -2288,6 +2303,42 @@ async function installTauriMock(page) {
             byteSize: 128,
             scope: args.scope,
           };
+        }
+        if (cmd === "capture_layout") {
+          return {
+            node_count: 2,
+            raw_xml:
+              '<hierarchy rotation="0"><node index="0" class="android.widget.FrameLayout" package="com.example.app" text="" content-desc="" resource-id="" bounds="[0,0][1080,2400]" clickable="false" enabled="true"><node index="1" class="android.widget.TextView" package="com.example.app" text="Hello" content-desc="Greeting" resource-id="com.example.app:id/title" bounds="[10,20][300,80]" clickable="true" enabled="true" /></node></hierarchy>',
+            nodes: [
+              {
+                depth: 0,
+                index: "0",
+                class: "android.widget.FrameLayout",
+                package: "com.example.app",
+                text: "",
+                content_desc: "",
+                resource_id: "",
+                bounds: "[0,0][1080,2400]",
+                clickable: false,
+                enabled: true,
+              },
+              {
+                depth: 1,
+                index: "1",
+                class: "android.widget.TextView",
+                package: "com.example.app",
+                text: "Hello",
+                content_desc: "Greeting",
+                resource_id: "com.example.app:id/title",
+                bounds: "[10,20][300,80]",
+                clickable: true,
+                enabled: true,
+              },
+            ],
+          };
+        }
+        if (cmd === "save_layout_export") {
+          return "C:/Users/QA/Desktop/layout-QA123.xml";
         }
         if (cmd === "list_logcat_queries") {
           return { version: "1", global: logcatQueries.global, device: [] };

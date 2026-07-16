@@ -21,8 +21,9 @@ use tauri::Manager;
 use crate::adb::device::valid_serial;
 use crate::adb::packages::valid_package_name;
 use crate::adb::parsers::{
-    parse_fastboot_devices, parse_ls_output, parse_ps_output, parse_ss_output, FastbootDevice,
-    NetworkConnection, ProcessInfo, RemoteFileEntry,
+    parse_fastboot_devices, parse_ls_output, parse_ps_output, parse_ss_output,
+    parse_uiautomator_dump, FastbootDevice, LayoutNode, NetworkConnection, ProcessInfo,
+    RemoteFileEntry,
 };
 use crate::adb::transport::AdbTransport;
 use crate::adb::{self, actions};
@@ -3062,6 +3063,78 @@ pub fn list_processes(target: adb::DeviceTarget) -> Result<Vec<ProcessInfo>, Com
     let transport = validated_transport(&target)?;
     let stdout = transport.shell_target(&target, &["ps", "-A", "-o", "PID,USER,VSZ,RSS,NAME"])?;
     Ok(parse_ps_output(&stdout))
+}
+
+/// A read-only snapshot of the current on-screen UI hierarchy plus the raw
+/// dump so the renderer can export it verbatim.
+#[derive(specta::Type, Debug, Clone, Serialize)]
+pub struct LayoutSnapshot {
+    pub nodes: Vec<LayoutNode>,
+    pub node_count: u32,
+    pub raw_xml: String,
+}
+
+/// Capture the current UI hierarchy with `uiautomator dump`. This is a
+/// read-only inspection: it prints the hierarchy to `/dev/tty` (no device-side
+/// file is written) and the renderer never controls any path.
+#[tauri::command]
+#[specta::specta]
+pub fn capture_layout(target: adb::DeviceTarget) -> Result<LayoutSnapshot, CommandError> {
+    let transport = validated_transport(&target)?;
+    let stdout = transport.shell_target(&target, &["uiautomator", "dump", "/dev/tty"])?;
+    let xml = extract_hierarchy(&stdout);
+    let nodes = parse_uiautomator_dump(&xml);
+    let node_count = nodes
+        .iter()
+        .filter(|node| node.parse_error.is_none())
+        .count() as u32;
+    Ok(LayoutSnapshot {
+        nodes,
+        node_count,
+        raw_xml: xml,
+    })
+}
+
+/// Isolate the `<hierarchy>…</hierarchy>` document from `uiautomator dump`
+/// output, which appends a "UI hierarchy dumped to: /dev/tty" status line.
+fn extract_hierarchy(stdout: &str) -> String {
+    if let (Some(start), Some(end)) = (stdout.find("<hierarchy"), stdout.rfind("</hierarchy>")) {
+        if end >= start {
+            return stdout[start..end + "</hierarchy>".len()].to_string();
+        }
+    }
+    stdout.trim().to_string()
+}
+
+/// Persist a captured UI hierarchy XML through a one-shot path grant. The size
+/// bound keeps the IPC and host write bounded, mirroring the Logcat export.
+#[tauri::command]
+#[specta::specta]
+pub async fn save_layout_export(
+    grants: tauri::State<'_, PathGrantStore>,
+    path_grant: String,
+    contents: String,
+) -> Result<String, CommandError> {
+    const MAX_LAYOUT_EXPORT_BYTES: usize = 8 * 1024 * 1024;
+    if contents.len() > MAX_LAYOUT_EXPORT_BYTES {
+        return Err(CommandError {
+            code: "layout_export_too_large",
+            message: format!("Layout export exceeds the {MAX_LAYOUT_EXPORT_BYTES}-byte limit"),
+        });
+    }
+    let path = grants.consume(&path_grant, HostPathPurpose::LayoutExportSave)?;
+    if !path.parent().is_some_and(std::path::Path::is_dir) {
+        return Err(CommandError {
+            code: "invalid_path",
+            message: "Layout export parent directory does not exist".to_string(),
+        });
+    }
+    let display_path = path.display().to_string();
+    spawn_blocking_operation(move || {
+        std::fs::write(&path, contents.as_bytes())?;
+        Ok(display_path)
+    })
+    .await
 }
 
 /// Take a screenshot on the device and pull it to a local path.

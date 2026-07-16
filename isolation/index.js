@@ -107,6 +107,8 @@
     stream_logcat: [["target", "operation_id", "on_event"], []],
     cancel_operation: [["operation_id"], []],
     save_logcat_export: [["path_grant", "contents"], []],
+    capture_layout: [["target"], []],
+    save_layout_export: [["path_grant", "contents"], []],
     apply_device_control: [["target", "argv"], []],
     install_apk: [
       ["target", "path_grant", "options", "operation_id", "on_event"],
@@ -142,6 +144,7 @@
     "recovery_baseline_save",
     "profile_save",
     "settings_export",
+    "layout_export_save",
     "push_open",
     "install_open",
     "recovery_baseline_open",

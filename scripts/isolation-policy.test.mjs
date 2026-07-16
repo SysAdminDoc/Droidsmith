@@ -506,6 +506,30 @@ test("persists bounded Logcat query presets and rejects catastrophic regex", () 
   }
 });
 
+test("allows read-only layout capture and bounded hierarchy export", () => {
+  const capture = message("capture_layout", { target });
+  assert.equal(hook(capture), capture);
+  const save = message("save_layout_export", {
+    path_grant: pathGrant,
+    contents: "<hierarchy></hierarchy>\n",
+  });
+  assert.equal(hook(save), save);
+
+  const malformedTarget = hook(
+    message("capture_layout", {
+      target: { ...target, connection_generation: 0 },
+    }),
+  );
+  const badGrant = hook(
+    message("save_layout_export", {
+      path_grant: "not-a-grant",
+      contents: "<hierarchy/>",
+    }),
+  );
+  assert.equal(malformedTarget.cmd, blockedCommand);
+  assert.equal(badGrant.cmd, blockedCommand);
+});
+
 test("allows only bounded native dialog purposes and file names", () => {
   const valid = message("select_host_path", {
     purpose: "screenshot_save",

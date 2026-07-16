@@ -32,13 +32,6 @@ instead.
   Acceptance: A persisted theme toggle switches dark/light (default dark) across every route without contrast regressions; the choice survives restart; ui:smoke covers both themes.
   Complexity: M
 
-- [ ] P3 — Read-only layout / view-hierarchy inspector
-  Why: A one-click `uiautomator dump` + saved snapshot extends Droidsmith's existing inspection panels with a developer-grade, no-root workflow competitors expose.
-  Evidence: AYA layout inspect; `src/routes/Devices.tsx` inspection surfaces
-  Touches: `src-tauri/src/commands.rs`, `src-tauri/src/adb/parsers.rs`, `src/lib/tauri.ts`, `src/routes/Devices.tsx`
-  Acceptance: Users capture the current UI hierarchy to a saved artifact, browse nodes read-only, and export it; malformed dumps surface visible parse errors rather than being dropped.
-  Complexity: M
-
 ## Audit-Deferred Items
 
 ## Research-Driven Additions
