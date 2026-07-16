@@ -104,10 +104,11 @@ instead.
 
 ### P2
 
-- [ ] P2 — **IMP-59** Persist named structured Logcat queries
-  Why: Logcat currently offers only ephemeral tag/level/text fields, while comparable tools make recurring crash and package investigations reusable.
-  Evidence: `src/routes/Logcat.tsx`; Android Studio Logcat query history/favorites; ADB AppControl console favorites.
-  Touches: Logcat parser/query DTOs, typed settings from **IMP-50**, `src/lib/tauri.ts`, `src/routes/Logcat.tsx`, query migration/parser/rendered tests and locales.
-  Acceptance: Users can save, rename, duplicate, reorder, export/import, and delete versioned presets for the supported subset of package/process/tag/message/level/age plus negation and linear-time regex; unsupported syntax is rejected with field-level guidance; presets may be global or device-scoped by hashed identity; quick history is bounded; raw log lines are never persisted; built-in `crash` and `stacktrace` presets match documented Android Studio semantics in fixtures.
+### P3
+
+- [ ] P3 — **IMP-60** Add package-name Logcat filtering via PID→package resolution
+  Why: IMP-59 shipped structured Logcat query presets over tag/message/PID/level/age with negation and a linear-time-safe regex subset, but package/process-*name* filtering was deferred: the stream now uses `-v threadtime` (timestamp + PID) which still carries no package or process name, and Android Studio resolves those from a live PID→package map the app does not yet build.
+  Evidence: `src-tauri/src/commands.rs::stream_logcat` (threadtime, PID only); `src/routes/logcatQueries.ts` (pidFilter); Android Studio Logcat `package:`/`process:` semantics.
+  Touches: a periodic `ps`/`pm` PID→package snapshot in the backend, `LogcatQuery` package/process fields, `src/routes/logcatQueries.ts` matching, `src/routes/Logcat.tsx`, locales, tests.
+  Acceptance: A query can filter (and negate) by package or process name; the PID→package map refreshes on a bounded cadence without blocking the stream; lines whose PID is unmapped are surfaced rather than silently dropped; presets round-trip the new fields.
   Complexity: M
-  Depends on: **IMP-50**

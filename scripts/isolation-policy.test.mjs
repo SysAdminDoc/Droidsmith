@@ -435,6 +435,77 @@ test("requires explicit privacy confirmation for bugreport capture", () => {
   );
 });
 
+test("persists bounded Logcat query presets and rejects catastrophic regex", () => {
+  const query = {
+    id: "crash-watch",
+    name: "Crashes",
+    tagFilter: "ActivityManager",
+    messageFilter: "FATAL EXCEPTION|ANR in",
+    pidFilter: "",
+    minLevel: "E",
+    maxAgeSeconds: 3600,
+    useRegex: true,
+    negateTag: false,
+    negateMessage: false,
+    negatePid: false,
+  };
+  const list = message("list_logcat_queries", { deviceIdentity: null });
+  assert.equal(hook(list), list);
+  const listDevice = message("list_logcat_queries", {
+    deviceIdentity: "R58M12345",
+  });
+  assert.equal(hook(listDevice), listDevice);
+
+  const saveGlobal = message("save_logcat_queries", {
+    scope: "global",
+    deviceIdentity: null,
+    queries: [query],
+  });
+  assert.equal(hook(saveGlobal), saveGlobal);
+  const saveDevice = message("save_logcat_queries", {
+    scope: "device",
+    deviceIdentity: "R58M12345",
+    queries: [query],
+  });
+  assert.equal(hook(saveDevice), saveDevice);
+  const clear = message("save_logcat_queries", {
+    scope: "global",
+    deviceIdentity: null,
+    queries: [],
+  });
+  assert.equal(hook(clear), clear);
+
+  for (const invalid of [
+    { scope: "device", deviceIdentity: null, queries: [query] },
+    { scope: "planet", deviceIdentity: null, queries: [query] },
+    {
+      scope: "global",
+      deviceIdentity: null,
+      queries: [{ ...query, messageFilter: "(a+)+" }],
+    },
+    {
+      scope: "global",
+      deviceIdentity: null,
+      queries: [{ ...query, messageFilter: "(\\w)\\1" }],
+    },
+    {
+      scope: "global",
+      deviceIdentity: null,
+      queries: [{ ...query, id: "bad id" }],
+    },
+    {
+      scope: "global",
+      deviceIdentity: null,
+      queries: [query, { ...query }],
+    },
+  ]) {
+    assert.equal(
+      hook(message("save_logcat_queries", invalid)).cmd,
+      blockedCommand,
+    );
+  }
+});
+
 test("allows only bounded native dialog purposes and file names", () => {
   const valid = message("select_host_path", {
     purpose: "screenshot_save",

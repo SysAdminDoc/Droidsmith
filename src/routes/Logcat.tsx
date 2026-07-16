@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import {
@@ -9,14 +9,34 @@ import {
   deviceTarget,
   newOperationId,
   type DeviceTarget,
+  type LogcatQueryScope,
   type OperationEvent,
 } from "../lib/tauri";
+import {
+  loadLogcatLibrary,
+  saveLogcatQueries,
+  type LogcatLibrary,
+} from "../lib/logcatQueries";
 import {
   resolveAuthorizedTarget,
   sameDeviceTarget,
   useAuthorizedDevices,
   useTransportAuthorization,
 } from "../lib/useAuthorizedDevices";
+import {
+  BUILTIN_QUERIES,
+  DEFAULT_QUERY,
+  LOGCAT_LEVELS,
+  MAX_LOGCAT_HISTORY,
+  matchesLine,
+  newQueryId,
+  parseLogcatLine,
+  serializeQueries,
+  parseImportedQueries,
+  validateQuery,
+  type LogLine,
+  type WorkingQuery,
+} from "./logcatQueries";
 
 import {
   Badge,
@@ -29,15 +49,6 @@ import {
   TransportTrustNotice,
 } from "./common";
 
-type LogLine = {
-  raw: string;
-  level: string;
-  tag: string;
-  pid: string;
-  message: string;
-};
-
-const LEVELS = ["V", "D", "I", "W", "E", "F"] as const;
 const MAX_LOG_LINES = 2_000;
 
 export default function LogcatRoute() {
@@ -54,9 +65,19 @@ export default function LogcatRoute() {
   const [lines, setLines] = useState<LogLine[]>([]);
   const [tailing, setTailing] = useState(false);
   const [paused, setPaused] = useState(false);
-  const [tagFilter, setTagFilter] = useState("");
-  const [levelFilter, setLevelFilter] = useState<string>("V");
-  const [textFilter, setTextFilter] = useState("");
+  const [query, setQuery] = useState<WorkingQuery>({ ...DEFAULT_QUERY });
+  const [library, setLibrary] = useState<LogcatLibrary>({
+    global: [],
+    device: [],
+  });
+  const [history, setHistory] = useState<WorkingQuery[]>([]);
+  const [saveName, setSaveName] = useState("");
+  const [saveScope, setSaveScope] = useState<LogcatQueryScope>("global");
+  const [queryMessage, setQueryMessage] = useState<string | null>(null);
+  const [renameId, setRenameId] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState("");
+  const [transferOpen, setTransferOpen] = useState(false);
+  const [importText, setImportText] = useState("");
   const [streamError, setStreamError] = useState<string | null>(null);
   const [reconnecting, setReconnecting] = useState(false);
   const [exportMessage, setExportMessage] = useState<string | null>(null);
@@ -66,10 +87,27 @@ export default function LogcatRoute() {
   const partialLineRef = useRef("");
   const generationRef = useRef(0);
   const outputRef = useRef<HTMLDivElement>(null);
+
+  const deviceIdentity = selectedTarget?.serial ?? null;
+
   const queueLogAnnouncement = useCallback(() => {
     setAnnouncement("");
     setAnnouncementRevision((revision) => revision + 1);
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    void loadLogcatLibrary(deviceIdentity)
+      .then((loaded) => {
+        if (!cancelled) setLibrary(loaded);
+      })
+      .catch(() => {
+        if (!cancelled) setLibrary({ global: [], device: [] });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [deviceIdentity]);
 
   const startTailing = useCallback(() => {
     if (!authorizedTarget || operationRef.current) return;
@@ -169,20 +207,11 @@ export default function LogcatRoute() {
     }
   }, [lines, paused]);
 
-  const levelIndex = LEVELS.indexOf(levelFilter as (typeof LEVELS)[number]);
-  const filteredLines = lines.filter((l) => {
-    const li = LEVELS.indexOf(l.level as (typeof LEVELS)[number]);
-    if (li >= 0 && levelIndex >= 0 && li < levelIndex) return false;
-    if (
-      tagFilter &&
-      l.tag &&
-      !l.tag.toLowerCase().includes(tagFilter.trim().toLowerCase())
-    )
-      return false;
-    if (textFilter && !l.raw.toLowerCase().includes(textFilter.toLowerCase()))
-      return false;
-    return true;
-  });
+  const nowMs = Date.now();
+  const filteredLines = useMemo(
+    () => lines.filter((line) => matchesLine(line, query, nowMs)),
+    [lines, query, nowMs],
+  );
 
   useEffect(() => {
     if (announcementRevision === 0) return;
@@ -193,6 +222,141 @@ export default function LogcatRoute() {
     }, 750);
     return () => window.clearTimeout(timer);
   }, [announcementRevision, filteredLines.length, t]);
+
+  const applyQuery = useCallback((preset: WorkingQuery) => {
+    setQuery({ ...preset });
+    setSaveName(preset.name);
+    setHistory((previous) => {
+      const next = [
+        preset,
+        ...previous.filter((item) => item.id !== preset.id),
+      ];
+      return next.slice(0, MAX_LOGCAT_HISTORY);
+    });
+  }, []);
+
+  const persistScope = useCallback(
+    async (scope: LogcatQueryScope, next: WorkingQuery[], toast: string) => {
+      try {
+        const updated = await saveLogcatQueries(scope, deviceIdentity, next);
+        setLibrary(updated);
+        setQueryMessage(toast);
+      } catch (error) {
+        setQueryMessage(
+          t("logcat.queries.saveFailed", {
+            message: error instanceof Error ? error.message : String(error),
+          }),
+        );
+      }
+    },
+    [deviceIdentity, t],
+  );
+
+  const scopeList = useCallback(
+    (scope: LogcatQueryScope) =>
+      scope === "device" ? library.device : library.global,
+    [library],
+  );
+
+  const saveCurrent = useCallback(async () => {
+    const candidate: WorkingQuery = {
+      ...query,
+      name: saveName.trim(),
+      id:
+        query.id && !query.id.startsWith("builtin-") ? query.id : newQueryId(),
+    };
+    const invalid = validateQuery(candidate);
+    if (invalid) {
+      setQueryMessage(
+        t(`logcat.queries.invalid.${invalid.code}`, invalid.code),
+      );
+      return;
+    }
+    const current = scopeList(saveScope);
+    const existingIndex = current.findIndex((item) => item.id === candidate.id);
+    const next =
+      existingIndex >= 0
+        ? current.map((item, index) =>
+            index === existingIndex ? candidate : item,
+          )
+        : [...current, candidate];
+    setQuery(candidate);
+    await persistScope(saveScope, next, t("logcat.queries.saved"));
+  }, [persistScope, query, saveName, saveScope, scopeList, t]);
+
+  const duplicateQuery = useCallback(
+    async (scope: LogcatQueryScope, preset: WorkingQuery) => {
+      const target: LogcatQueryScope = preset.id.startsWith("builtin-")
+        ? "global"
+        : scope;
+      const copy: WorkingQuery = {
+        ...preset,
+        id: newQueryId(),
+        name: t("logcat.queries.copyName", { name: preset.name }),
+      };
+      const next = [...scopeList(target), copy];
+      await persistScope(target, next, t("logcat.queries.saved"));
+    },
+    [persistScope, scopeList, t],
+  );
+
+  const deleteQuery = useCallback(
+    async (scope: LogcatQueryScope, id: string) => {
+      const next = scopeList(scope).filter((item) => item.id !== id);
+      await persistScope(scope, next, t("logcat.queries.deleted"));
+    },
+    [persistScope, scopeList, t],
+  );
+
+  const moveQuery = useCallback(
+    async (scope: LogcatQueryScope, index: number, delta: number) => {
+      const current = scopeList(scope);
+      const target = index + delta;
+      if (target < 0 || target >= current.length) return;
+      const next = [...current];
+      const [moved] = next.splice(index, 1);
+      next.splice(target, 0, moved!);
+      await persistScope(scope, next, t("logcat.queries.saved"));
+    },
+    [persistScope, scopeList, t],
+  );
+
+  const commitRename = useCallback(
+    async (scope: LogcatQueryScope, id: string) => {
+      const name = renameValue.trim();
+      const next = scopeList(scope).map((item) =>
+        item.id === id ? { ...item, name } : item,
+      );
+      const invalid = next.find((item) => validateQuery(item) !== null);
+      setRenameId(null);
+      if (invalid) {
+        setQueryMessage(t("logcat.queries.invalid.name", "name"));
+        return;
+      }
+      await persistScope(scope, next, t("logcat.queries.saved"));
+    },
+    [persistScope, renameValue, scopeList, t],
+  );
+
+  const exportQueries = useCallback(() => {
+    const combined = [...library.global, ...library.device];
+    setImportText(serializeQueries(combined));
+    setTransferOpen(true);
+    setQueryMessage(t("logcat.queries.exported", { count: combined.length }));
+  }, [library, t]);
+
+  const importQueries = useCallback(async () => {
+    const parsed = parseImportedQueries(importText);
+    if (!parsed.ok) {
+      setQueryMessage(
+        t(`logcat.queries.importError.${parsed.error}`, parsed.error),
+      );
+      return;
+    }
+    const next = [...scopeList("global"), ...parsed.queries].slice(0, 64);
+    await persistScope("global", next, t("logcat.queries.imported"));
+    setTransferOpen(false);
+  }, [importText, persistScope, scopeList, t]);
 
   const exportLog = useCallback(async () => {
     if (lines.length === 0) return;
@@ -308,10 +472,12 @@ export default function LogcatRoute() {
                 </span>
                 <FieldInput
                   type="text"
-                  value={tagFilter}
-                  onChange={(e) => setTagFilter(e.target.value)}
+                  value={query.tagFilter}
+                  onChange={(e) =>
+                    setQuery((q) => ({ ...q, tagFilter: e.target.value }))
+                  }
                   placeholder="ActivityManager"
-                  className="w-44 font-mono"
+                  className="w-40 font-mono"
                 />
               </label>
               <label className="grid gap-1.5">
@@ -319,11 +485,16 @@ export default function LogcatRoute() {
                   {t("logcat.minLevel")}
                 </span>
                 <select
-                  value={levelFilter}
-                  onChange={(e) => setLevelFilter(e.target.value)}
+                  value={query.minLevel}
+                  onChange={(e) =>
+                    setQuery((q) => ({
+                      ...q,
+                      minLevel: e.target.value as WorkingQuery["minLevel"],
+                    }))
+                  }
                   className="h-9 rounded-md border border-white/10 bg-white/[0.06] px-3 text-sm text-anvil-50 outline-none transition hover:border-white/20 focus:border-circuit-300/60 focus:ring-2 focus:ring-circuit-300/20"
                 >
-                  {LEVELS.map((l) => (
+                  {LOGCAT_LEVELS.map((l) => (
                     <option key={l} value={l}>
                       {t(levelNameKey(l))}
                     </option>
@@ -332,71 +503,193 @@ export default function LogcatRoute() {
               </label>
               <label className="grid gap-1.5">
                 <span className="text-xs font-medium text-anvil-400">
-                  {t("logcat.textSearch")}
+                  {t("logcat.queries.message")}
                 </span>
                 <FieldInput
                   type="text"
-                  value={textFilter}
-                  onChange={(e) => setTextFilter(e.target.value)}
+                  value={query.messageFilter}
+                  onChange={(e) =>
+                    setQuery((q) => ({ ...q, messageFilter: e.target.value }))
+                  }
                   placeholder="grep"
                   aria-label={t("logcat.textSearchLabel")}
-                  className="w-44 font-mono"
+                  className="w-40 font-mono"
                 />
               </label>
-              <div className="flex gap-2">
-                {!tailing ? (
+              <label className="grid gap-1.5">
+                <span className="text-xs font-medium text-anvil-400">
+                  {t("logcat.queries.pid")}
+                </span>
+                <FieldInput
+                  type="text"
+                  inputMode="numeric"
+                  value={query.pidFilter}
+                  onChange={(e) =>
+                    setQuery((q) => ({
+                      ...q,
+                      pidFilter: e.target.value.replace(/[^0-9]/gu, ""),
+                    }))
+                  }
+                  placeholder="1234"
+                  className="w-24 font-mono"
+                />
+              </label>
+              <label className="grid gap-1.5">
+                <span className="text-xs font-medium text-anvil-400">
+                  {t("logcat.queries.maxAge")}
+                </span>
+                <FieldInput
+                  type="text"
+                  inputMode="numeric"
+                  value={
+                    query.maxAgeSeconds === null
+                      ? ""
+                      : String(query.maxAgeSeconds)
+                  }
+                  onChange={(e) => {
+                    const digits = e.target.value.replace(/[^0-9]/gu, "");
+                    setQuery((q) => ({
+                      ...q,
+                      maxAgeSeconds: digits ? Number(digits) : null,
+                    }));
+                  }}
+                  placeholder="300"
+                  className="w-24 font-mono"
+                />
+              </label>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-4 text-xs text-anvil-300">
+              <label className="inline-flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={query.useRegex}
+                  onChange={(e) =>
+                    setQuery((q) => ({ ...q, useRegex: e.target.checked }))
+                  }
+                />
+                {t("logcat.queries.useRegex")}
+              </label>
+              <label className="inline-flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={query.negateTag}
+                  onChange={(e) =>
+                    setQuery((q) => ({ ...q, negateTag: e.target.checked }))
+                  }
+                />
+                {t("logcat.queries.negateTag")}
+              </label>
+              <label className="inline-flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={query.negateMessage}
+                  onChange={(e) =>
+                    setQuery((q) => ({ ...q, negateMessage: e.target.checked }))
+                  }
+                />
+                {t("logcat.queries.negateMessage")}
+              </label>
+              <label className="inline-flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={query.negatePid}
+                  onChange={(e) =>
+                    setQuery((q) => ({ ...q, negatePid: e.target.checked }))
+                  }
+                />
+                {t("logcat.queries.negatePid")}
+              </label>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              {!tailing ? (
+                <Button
+                  type="button"
+                  variant="primary"
+                  size="sm"
+                  onClick={startTailing}
+                >
+                  {t("logcat.startTail")}
+                </Button>
+              ) : (
+                <>
                   <Button
                     type="button"
-                    variant="primary"
+                    variant="danger"
                     size="sm"
-                    onClick={startTailing}
+                    onClick={stopTailing}
                   >
-                    {t("logcat.startTail")}
+                    {t("logcat.stop")}
                   </Button>
-                ) : (
-                  <>
-                    <Button
-                      type="button"
-                      variant="danger"
-                      size="sm"
-                      onClick={stopTailing}
-                    >
-                      {t("logcat.stop")}
-                    </Button>
-                    <Button
-                      type="button"
-                      size="sm"
-                      onClick={() => setPaused((p) => !p)}
-                    >
-                      {paused
-                        ? t("logcat.resumeScroll")
-                        : t("logcat.pauseScroll")}
-                    </Button>
-                  </>
-                )}
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    partialLineRef.current = "";
-                    setLines([]);
-                    setAnnouncement(t("logcat.clearedAnnouncement"));
-                  }}
-                >
-                  {t("logcat.clear")}
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => void exportLog()}
-                  disabled={lines.length === 0}
-                >
-                  {t("logcat.export")}
-                </Button>
-              </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={() => setPaused((p) => !p)}
+                  >
+                    {paused
+                      ? t("logcat.resumeScroll")
+                      : t("logcat.pauseScroll")}
+                  </Button>
+                </>
+              )}
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  partialLineRef.current = "";
+                  setLines([]);
+                  setAnnouncement(t("logcat.clearedAnnouncement"));
+                }}
+              >
+                {t("logcat.clear")}
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => void exportLog()}
+                disabled={lines.length === 0}
+              >
+                {t("logcat.export")}
+              </Button>
             </div>
+
+            <QueryManager
+              library={library}
+              history={history}
+              saveName={saveName}
+              saveScope={saveScope}
+              renameId={renameId}
+              renameValue={renameValue}
+              transferOpen={transferOpen}
+              importText={importText}
+              message={queryMessage}
+              onSaveNameChange={setSaveName}
+              onSaveScopeChange={setSaveScope}
+              onSaveCurrent={() => void saveCurrent()}
+              onApply={applyQuery}
+              onDuplicate={(scope, preset) =>
+                void duplicateQuery(scope, preset)
+              }
+              onDelete={(scope, id) => void deleteQuery(scope, id)}
+              onMove={(scope, index, delta) =>
+                void moveQuery(scope, index, delta)
+              }
+              onStartRename={(id, name) => {
+                setRenameId(id);
+                setRenameValue(name);
+              }}
+              onRenameValueChange={setRenameValue}
+              onCommitRename={(scope, id) => void commitRename(scope, id)}
+              onCancelRename={() => setRenameId(null)}
+              onToggleTransfer={() =>
+                transferOpen ? setTransferOpen(false) : exportQueries()
+              }
+              onImportTextChange={setImportText}
+              onImport={() => void importQueries()}
+            />
 
             {streamError && (
               <StatePanel title={t("logcat.streamFailed")} tone="danger">
@@ -445,6 +738,282 @@ export default function LogcatRoute() {
   );
 }
 
+type QueryManagerProps = {
+  library: LogcatLibrary;
+  history: WorkingQuery[];
+  saveName: string;
+  saveScope: LogcatQueryScope;
+  renameId: string | null;
+  renameValue: string;
+  transferOpen: boolean;
+  importText: string;
+  message: string | null;
+  onSaveNameChange: (value: string) => void;
+  onSaveScopeChange: (scope: LogcatQueryScope) => void;
+  onSaveCurrent: () => void;
+  onApply: (preset: WorkingQuery) => void;
+  onDuplicate: (scope: LogcatQueryScope, preset: WorkingQuery) => void;
+  onDelete: (scope: LogcatQueryScope, id: string) => void;
+  onMove: (scope: LogcatQueryScope, index: number, delta: number) => void;
+  onStartRename: (id: string, name: string) => void;
+  onRenameValueChange: (value: string) => void;
+  onCommitRename: (scope: LogcatQueryScope, id: string) => void;
+  onCancelRename: () => void;
+  onToggleTransfer: () => void;
+  onImportTextChange: (value: string) => void;
+  onImport: () => void;
+};
+
+function QueryManager(props: QueryManagerProps) {
+  const { t } = useTranslation();
+  return (
+    <Card className="p-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h3 className="text-sm font-semibold text-anvil-50">
+            {t("logcat.queries.title")}
+          </h3>
+          <p className="mt-1 text-xs leading-5 text-anvil-400">
+            {t("logcat.queries.description")}
+          </p>
+        </div>
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          onClick={props.onToggleTransfer}
+        >
+          {props.transferOpen
+            ? t("logcat.queries.close")
+            : t("logcat.queries.transfer")}
+        </Button>
+      </div>
+
+      <div className="mt-4 flex flex-wrap items-end gap-2">
+        <label className="grid gap-1.5">
+          <span className="text-xs font-medium text-anvil-400">
+            {t("logcat.queries.name")}
+          </span>
+          <FieldInput
+            type="text"
+            value={props.saveName}
+            onChange={(e) => props.onSaveNameChange(e.target.value)}
+            placeholder={t("logcat.queries.namePlaceholder")}
+            className="w-56"
+          />
+        </label>
+        <label className="grid gap-1.5">
+          <span className="text-xs font-medium text-anvil-400">
+            {t("logcat.queries.scope")}
+          </span>
+          <select
+            value={props.saveScope}
+            onChange={(e) =>
+              props.onSaveScopeChange(e.target.value as LogcatQueryScope)
+            }
+            className="h-9 rounded-md border border-white/10 bg-white/[0.06] px-3 text-sm text-anvil-50 outline-none focus:border-circuit-300/60 focus:ring-2 focus:ring-circuit-300/20"
+          >
+            <option value="global">{t("logcat.queries.scopeGlobal")}</option>
+            <option value="device">{t("logcat.queries.scopeDevice")}</option>
+          </select>
+        </label>
+        <Button type="button" size="sm" onClick={props.onSaveCurrent}>
+          {t("logcat.queries.save")}
+        </Button>
+      </div>
+
+      {props.transferOpen && (
+        <div className="mt-4 rounded-md border border-white/10 bg-anvil-900/60 p-3">
+          <textarea
+            value={props.importText}
+            onChange={(e) => props.onImportTextChange(e.target.value)}
+            spellCheck={false}
+            aria-label={t("logcat.queries.transfer")}
+            className="h-40 w-full rounded-md border border-white/10 bg-[#0c0d12] p-2 font-mono text-[11px] text-anvil-100 outline-none focus:border-circuit-300/60"
+            placeholder={t("logcat.queries.importPlaceholder")}
+          />
+          <div className="mt-2 flex justify-end">
+            <Button type="button" size="sm" onClick={props.onImport}>
+              {t("logcat.queries.import")}
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {props.message && (
+        <p role="status" className="mt-3 text-xs text-circuit-100">
+          {props.message}
+        </p>
+      )}
+
+      {props.history.length > 0 && (
+        <div className="mt-4">
+          <p className="text-xs font-medium text-anvil-400">
+            {t("logcat.queries.history")}
+          </p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {props.history.map((preset) => (
+              <button
+                key={`history-${preset.id}`}
+                type="button"
+                onClick={() => props.onApply(preset)}
+                className="rounded-md border border-white/10 bg-white/[0.04] px-2 py-1 text-xs text-anvil-200 hover:border-white/20"
+              >
+                {preset.name || t("logcat.queries.unnamed")}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <QueryList
+        heading={t("logcat.queries.builtinHeading")}
+        scope="global"
+        presets={BUILTIN_QUERIES as WorkingQuery[]}
+        builtin
+        {...props}
+      />
+      <QueryList
+        heading={t("logcat.queries.globalHeading")}
+        scope="global"
+        presets={props.library.global}
+        {...props}
+      />
+      <QueryList
+        heading={t("logcat.queries.deviceHeading")}
+        scope="device"
+        presets={props.library.device}
+        {...props}
+      />
+    </Card>
+  );
+}
+
+function QueryList(
+  props: QueryManagerProps & {
+    heading: string;
+    scope: LogcatQueryScope;
+    presets: WorkingQuery[];
+    builtin?: boolean;
+  },
+) {
+  const { t } = useTranslation();
+  return (
+    <div className="mt-4">
+      <p className="text-xs font-medium text-anvil-400">{props.heading}</p>
+      {props.presets.length === 0 ? (
+        <p className="mt-2 text-xs text-anvil-600">
+          {t("logcat.queries.empty")}
+        </p>
+      ) : (
+        <ul className="mt-2 space-y-1.5">
+          {props.presets.map((preset, index) => (
+            <li
+              key={preset.id}
+              className="flex flex-wrap items-center gap-2 rounded-md border border-white/10 bg-white/[0.03] px-3 py-2"
+            >
+              {props.renameId === preset.id ? (
+                <>
+                  <FieldInput
+                    type="text"
+                    value={props.renameValue}
+                    onChange={(e) => props.onRenameValueChange(e.target.value)}
+                    className="w-56"
+                    aria-label={t("logcat.queries.rename")}
+                  />
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={() => props.onCommitRename(props.scope, preset.id)}
+                  >
+                    {t("logcat.queries.save")}
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    onClick={props.onCancelRename}
+                  >
+                    {t("common.cancel")}
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <span className="min-w-0 flex-1 truncate text-sm text-anvil-100">
+                    {preset.name || t("logcat.queries.unnamed")}
+                  </span>
+                  {props.builtin && (
+                    <Badge tone="neutral">
+                      {t("logcat.queries.builtinBadge")}
+                    </Badge>
+                  )}
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={() => props.onApply(preset)}
+                  >
+                    {t("logcat.queries.apply")}
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => props.onDuplicate(props.scope, preset)}
+                  >
+                    {t("logcat.queries.duplicate")}
+                  </Button>
+                  {!props.builtin && (
+                    <>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        onClick={() =>
+                          props.onStartRename(preset.id, preset.name)
+                        }
+                      >
+                        {t("logcat.queries.rename")}
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        disabled={index === 0}
+                        aria-label={t("logcat.queries.moveUp")}
+                        onClick={() => props.onMove(props.scope, index, -1)}
+                      >
+                        ↑
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        disabled={index === props.presets.length - 1}
+                        aria-label={t("logcat.queries.moveDown")}
+                        onClick={() => props.onMove(props.scope, index, 1)}
+                      >
+                        ↓
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="danger"
+                        onClick={() => props.onDelete(props.scope, preset.id)}
+                      >
+                        {t("logcat.queries.delete")}
+                      </Button>
+                    </>
+                  )}
+                </>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 type PartialLineRef = { current: string };
 type LineSetter = (update: (previous: LogLine[]) => LogLine[]) => void;
 
@@ -456,7 +1025,9 @@ function appendLogcatChunk(
   const combined = `${partialRef.current}${chunk}`.replace(/\r\n?/g, "\n");
   const rows = combined.split("\n");
   partialRef.current = rows.pop() ?? "";
-  const parsed = rows.filter((row) => row.trim()).map(parseLogcatLine);
+  const parsed = rows
+    .filter((row) => row.trim())
+    .map((row) => parseLogcatLine(row));
   appendBoundedLines(setLines, parsed);
 }
 
@@ -476,21 +1047,6 @@ function appendBoundedLines(setLines: LineSetter, incoming: LogLine[]) {
 
 async function cancelWithRegistrationRetry(operationId: string) {
   await callCancelOperation(operationId);
-}
-
-function parseLogcatLine(raw: string): LogLine {
-  // Brief format: L/Tag(PID): message
-  const match = raw.match(/^([VDIWEF])\/([^(]+)\(\s*(\d+)\):\s*(.*)$/);
-  if (match) {
-    return {
-      raw,
-      level: match[1]!,
-      tag: match[2]!.trim(),
-      pid: match[3]!,
-      message: match[4]!,
-    };
-  }
-  return { raw, level: "", tag: "", pid: "", message: raw };
 }
 
 function logLineColor(level: string): string {

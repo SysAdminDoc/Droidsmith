@@ -24,6 +24,12 @@ const MAX_LEGACY_PRESETS: usize = 128;
 const MAX_LEGACY_VALUE_BYTES: usize = 64 * 1024;
 const MAX_DEVICE_IDENTITY_BYTES: usize = 512;
 const MAX_QUARANTINED_FILES: usize = 5;
+const MAX_LOGCAT_QUERIES: usize = 64;
+const MAX_LOGCAT_FILTER_BYTES: usize = 256;
+const MAX_LOGCAT_NAME_BYTES: usize = 80;
+const MAX_LOGCAT_ID_BYTES: usize = 64;
+const MAX_LOGCAT_AGE_SECONDS: u32 = 30 * 24 * 60 * 60;
+const LOGCAT_GLOBAL_KEY: &str = "global";
 
 #[derive(specta::Type, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -100,6 +106,65 @@ pub enum VideoCodec {
     Vp9,
 }
 
+/// Minimum severity a Logcat query preset matches, using adb's single-letter
+/// level codes so the renderer can reuse its existing `V D I W E F` ladder.
+#[derive(specta::Type, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum LogcatLevel {
+    #[serde(rename = "V")]
+    Verbose,
+    #[serde(rename = "D")]
+    Debug,
+    #[serde(rename = "I")]
+    Info,
+    #[serde(rename = "W")]
+    Warn,
+    #[serde(rename = "E")]
+    Error,
+    #[serde(rename = "F")]
+    Fatal,
+}
+
+#[derive(specta::Type, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum LogcatQueryScope {
+    Global,
+    Device,
+}
+
+/// A reusable, versioned Logcat filter. Only the query definition is persisted;
+/// captured log lines never enter the store.
+#[derive(specta::Type, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct LogcatQuery {
+    pub id: String,
+    pub name: String,
+    #[serde(default)]
+    pub tag_filter: String,
+    #[serde(default)]
+    pub message_filter: String,
+    #[serde(default)]
+    pub pid_filter: String,
+    pub min_level: LogcatLevel,
+    #[serde(default)]
+    pub max_age_seconds: Option<u32>,
+    #[serde(default)]
+    pub use_regex: bool,
+    #[serde(default)]
+    pub negate_tag: bool,
+    #[serde(default)]
+    pub negate_message: bool,
+    #[serde(default)]
+    pub negate_pid: bool,
+}
+
+#[derive(specta::Type, Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LogcatQueryLibrary {
+    pub version: String,
+    pub global: Vec<LogcatQuery>,
+    pub device: Vec<LogcatQuery>,
+}
+
 #[derive(specta::Type, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct LegacyMirrorPresetInput {
@@ -147,6 +212,8 @@ struct SettingsDocument {
     language: Option<SettingsLanguage>,
     #[serde(default)]
     mirror_presets: BTreeMap<String, MirrorPreset>,
+    #[serde(default)]
+    logcat_queries: BTreeMap<String, Vec<LogcatQuery>>,
 }
 
 impl Default for SettingsDocument {
@@ -156,6 +223,7 @@ impl Default for SettingsDocument {
             legacy_import_complete: true,
             language: None,
             mirror_presets: BTreeMap::new(),
+            logcat_queries: BTreeMap::new(),
         }
     }
 }
@@ -265,6 +333,81 @@ pub fn reset_mirror_preset(
     mutate(app_data_dir, move |settings| {
         settings.mirror_presets.remove(&scope);
     })
+}
+
+pub fn list_logcat_queries(
+    app_data_dir: &Path,
+    device_identity: Option<&str>,
+) -> Result<LogcatQueryLibrary, SettingsError> {
+    let device_key = device_identity.map(device_scope).transpose()?;
+    with_lock(|| {
+        initialize_locked(app_data_dir, &LegacySettingsImport::default())?;
+        let document = read_valid_document(&settings_path(app_data_dir))?;
+        Ok(logcat_library(&document, device_key.as_deref()))
+    })
+}
+
+pub fn save_logcat_queries(
+    app_data_dir: &Path,
+    scope: LogcatQueryScope,
+    device_identity: Option<&str>,
+    queries: Vec<LogcatQuery>,
+) -> Result<LogcatQueryLibrary, SettingsError> {
+    let key = match scope {
+        LogcatQueryScope::Global => LOGCAT_GLOBAL_KEY.to_string(),
+        LogcatQueryScope::Device => {
+            let identity = device_identity.ok_or_else(|| {
+                SettingsError::Invalid(
+                    "device-scoped queries require a device identity".to_string(),
+                )
+            })?;
+            device_scope(identity)?
+        }
+    };
+    if queries.len() > MAX_LOGCAT_QUERIES {
+        return Err(SettingsError::Invalid(format!(
+            "too many Logcat queries; keep at most {MAX_LOGCAT_QUERIES}"
+        )));
+    }
+    let mut seen = std::collections::BTreeSet::new();
+    for query in &queries {
+        validate_logcat_query(query)?;
+        if !seen.insert(query.id.clone()) {
+            return Err(SettingsError::Invalid(format!(
+                "duplicate Logcat query id {:?}",
+                query.id
+            )));
+        }
+    }
+    let device_key = device_identity.map(device_scope).transpose()?;
+    with_lock(move || {
+        initialize_locked(app_data_dir, &LegacySettingsImport::default())?;
+        let path = settings_path(app_data_dir);
+        let mut settings = read_valid_document(&path)?;
+        if queries.is_empty() {
+            settings.logcat_queries.remove(&key);
+        } else {
+            settings.logcat_queries.insert(key, queries);
+        }
+        validate_document(&settings)?;
+        write_document(&path, &settings)?;
+        Ok(logcat_library(&settings, device_key.as_deref()))
+    })
+}
+
+fn logcat_library(document: &SettingsDocument, device_key: Option<&str>) -> LogcatQueryLibrary {
+    LogcatQueryLibrary {
+        version: document.version.clone(),
+        global: document
+            .logcat_queries
+            .get(LOGCAT_GLOBAL_KEY)
+            .cloned()
+            .unwrap_or_default(),
+        device: device_key
+            .and_then(|key| document.logcat_queries.get(key))
+            .cloned()
+            .unwrap_or_default(),
+    }
 }
 
 pub fn reset(app_data_dir: &Path, scope: SettingsScope) -> Result<SettingsSnapshot, SettingsError> {
@@ -422,6 +565,7 @@ fn import_legacy(
         legacy_import_complete: true,
         language,
         mirror_presets,
+        logcat_queries: BTreeMap::new(),
     };
     write_document(&settings_path(app_data_dir), &settings)?;
     Ok(settings)
@@ -459,6 +603,143 @@ fn validate_document(settings: &SettingsDocument) -> Result<(), SettingsError> {
             ));
         }
         validate_preset(preset)?;
+    }
+    for (scope, queries) in &settings.logcat_queries {
+        if scope != LOGCAT_GLOBAL_KEY
+            && (scope.len() != 64 || !scope.bytes().all(|byte| byte.is_ascii_hexdigit()))
+        {
+            return Err(SettingsError::Invalid(
+                "logcat query scope is neither global nor a device hash".to_string(),
+            ));
+        }
+        if queries.len() > MAX_LOGCAT_QUERIES {
+            return Err(SettingsError::Invalid(
+                "too many Logcat queries in a scope".to_string(),
+            ));
+        }
+        for query in queries {
+            validate_logcat_query(query)?;
+        }
+    }
+    Ok(())
+}
+
+fn validate_logcat_query(query: &LogcatQuery) -> Result<(), SettingsError> {
+    if query.id.is_empty()
+        || query.id.len() > MAX_LOGCAT_ID_BYTES
+        || !query
+            .id
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-'))
+    {
+        return Err(SettingsError::Invalid(
+            "logcat query id must be 1-64 chars of [A-Za-z0-9_-]".to_string(),
+        ));
+    }
+    let name = query.name.trim();
+    if name.is_empty()
+        || query.name.len() > MAX_LOGCAT_NAME_BYTES
+        || query.name.chars().any(char::is_control)
+    {
+        return Err(SettingsError::Invalid(
+            "logcat query name is empty, oversized, or has control characters".to_string(),
+        ));
+    }
+    for (label, value) in [
+        ("tagFilter", &query.tag_filter),
+        ("messageFilter", &query.message_filter),
+    ] {
+        if value.len() > MAX_LOGCAT_FILTER_BYTES || value.chars().any(char::is_control) {
+            return Err(SettingsError::Invalid(format!(
+                "logcat query {label} is oversized or has control characters"
+            )));
+        }
+        if query.use_regex && !value.is_empty() {
+            validate_linear_regex(label, value)?;
+        }
+    }
+    if !query.pid_filter.is_empty()
+        && (query.pid_filter.len() > 7 || !query.pid_filter.bytes().all(|b| b.is_ascii_digit()))
+    {
+        return Err(SettingsError::Invalid(
+            "logcat query pidFilter must be up to 7 ASCII digits".to_string(),
+        ));
+    }
+    if query
+        .max_age_seconds
+        .is_some_and(|seconds| seconds == 0 || seconds > MAX_LOGCAT_AGE_SECONDS)
+    {
+        return Err(SettingsError::Invalid(
+            "logcat query maxAgeSeconds is out of range".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+/// Reject regex constructs that a backtracking engine (the renderer's JS
+/// `RegExp`) can evaluate in super-linear time. The renderer mirrors this and
+/// also compiles the pattern; this backend copy is the durable guard so a
+/// hand-edited store can never smuggle a catastrophic pattern back in.
+fn validate_linear_regex(label: &str, pattern: &str) -> Result<(), SettingsError> {
+    let reject = |reason: &str| {
+        Err(SettingsError::Invalid(format!(
+            "logcat query {label} rejected: {reason}"
+        )))
+    };
+    let bytes = pattern.as_bytes();
+    let mut depth: i32 = 0;
+    let mut index = 0;
+    let mut prev_was_group_close = false;
+    while index < bytes.len() {
+        let byte = bytes[index];
+        match byte {
+            b'\\' => {
+                let Some(&next) = bytes.get(index + 1) else {
+                    return reject("dangling escape");
+                };
+                if next.is_ascii_digit() {
+                    return reject("backreferences are not allowed");
+                }
+                if next == b'k' {
+                    return reject("named backreferences are not allowed");
+                }
+                index += 2;
+                prev_was_group_close = false;
+                continue;
+            }
+            b'(' => {
+                if bytes.get(index + 1) == Some(&b'?') {
+                    match bytes.get(index + 2) {
+                        Some(b'=' | b'!') => return reject("lookahead is not allowed"),
+                        Some(b'<') if matches!(bytes.get(index + 3), Some(b'=' | b'!')) => {
+                            return reject("lookbehind is not allowed")
+                        }
+                        _ => {}
+                    }
+                }
+                depth += 1;
+                prev_was_group_close = false;
+            }
+            b')' => {
+                depth -= 1;
+                if depth < 0 {
+                    return reject("unbalanced parentheses");
+                }
+                prev_was_group_close = true;
+                index += 1;
+                continue;
+            }
+            b'*' | b'+' | b'{' if prev_was_group_close => {
+                return reject("a quantifier applied to a group can backtrack catastrophically");
+            }
+            _ => {
+                prev_was_group_close = false;
+            }
+        }
+        index += 1;
+    }
+    if depth != 0 {
+        return reject("unbalanced parentheses");
     }
     Ok(())
 }
@@ -724,6 +1005,85 @@ mod tests {
         assert!(!raw.contains("device-a"));
         reset_mirror_preset(&dir, "device-a").unwrap();
         assert_eq!(get_mirror_preset(&dir, "device-a").unwrap(), None);
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    fn sample_query(id: &str) -> LogcatQuery {
+        LogcatQuery {
+            id: id.to_string(),
+            name: format!("Query {id}"),
+            tag_filter: "ActivityManager".to_string(),
+            message_filter: String::new(),
+            pid_filter: String::new(),
+            min_level: LogcatLevel::Info,
+            max_age_seconds: Some(3600),
+            use_regex: false,
+            negate_tag: false,
+            negate_message: false,
+            negate_pid: false,
+        }
+    }
+
+    #[test]
+    fn logcat_queries_persist_ordered_and_scoped_by_hash() {
+        let dir = temp_dir("logcat");
+        initialize(&dir, LegacySettingsImport::default()).unwrap();
+
+        let global = vec![sample_query("crash-watch"), sample_query("net-noise")];
+        let library =
+            save_logcat_queries(&dir, LogcatQueryScope::Global, None, global.clone()).unwrap();
+        assert_eq!(library.global, global);
+        assert!(library.device.is_empty());
+
+        let device = vec![sample_query("device-only")];
+        save_logcat_queries(
+            &dir,
+            LogcatQueryScope::Device,
+            Some("SERIAL-1"),
+            device.clone(),
+        )
+        .unwrap();
+        let listed = list_logcat_queries(&dir, Some("SERIAL-1")).unwrap();
+        assert_eq!(listed.global, global);
+        assert_eq!(listed.device, device);
+
+        // A different device never sees another device's queries.
+        let other = list_logcat_queries(&dir, Some("SERIAL-2")).unwrap();
+        assert!(other.device.is_empty());
+
+        // The raw serial is hashed, never stored in the clear.
+        let raw = fs::read_to_string(dir.join(SETTINGS_FILE)).unwrap();
+        assert!(!raw.contains("SERIAL-1"));
+
+        // Saving an empty list clears the scope.
+        save_logcat_queries(&dir, LogcatQueryScope::Global, None, Vec::new()).unwrap();
+        assert!(list_logcat_queries(&dir, None).unwrap().global.is_empty());
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn logcat_queries_reject_catastrophic_regex_and_duplicate_ids() {
+        let dir = temp_dir("logcat-reject");
+        initialize(&dir, LegacySettingsImport::default()).unwrap();
+
+        let mut bad = sample_query("redos");
+        bad.use_regex = true;
+        bad.message_filter = "(a+)+".to_string();
+        assert!(save_logcat_queries(&dir, LogcatQueryScope::Global, None, vec![bad]).is_err());
+
+        let mut backref = sample_query("backref");
+        backref.use_regex = true;
+        backref.message_filter = r"(\w)\1".to_string();
+        assert!(save_logcat_queries(&dir, LogcatQueryScope::Global, None, vec![backref]).is_err());
+
+        let dupes = vec![sample_query("same"), sample_query("same")];
+        assert!(save_logcat_queries(&dir, LogcatQueryScope::Global, None, dupes).is_err());
+
+        // A safe regex is accepted.
+        let mut ok = sample_query("ok");
+        ok.use_regex = true;
+        ok.message_filter = "FATAL EXCEPTION|ANR in".to_string();
+        assert!(save_logcat_queries(&dir, LogcatQueryScope::Global, None, vec![ok]).is_ok());
         fs::remove_dir_all(dir).unwrap();
     }
 

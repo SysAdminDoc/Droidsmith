@@ -1314,6 +1314,49 @@ pub async fn reset_settings_mirror_preset(
     .await
 }
 
+/// List the saved Logcat query presets for the global scope and, when a device
+/// identity is supplied, that device's scope. Only query definitions are
+/// stored; captured log lines never enter the settings document.
+#[tauri::command]
+#[specta::specta]
+pub async fn list_logcat_queries(
+    app: tauri::AppHandle,
+    device_identity: Option<String>,
+) -> Result<settings::LogcatQueryLibrary, CommandError> {
+    let app_data_dir = settings_app_data_dir(&app)?;
+    spawn_blocking_operation(move || {
+        Ok(settings::list_logcat_queries(
+            &app_data_dir,
+            device_identity.as_deref(),
+        )?)
+    })
+    .await
+}
+
+/// Persist the full ordered list of Logcat query presets for one scope. This
+/// single write covers create, rename, duplicate, reorder, and delete; an empty
+/// list clears the scope. Each preset is validated (including a linear-time
+/// regex guard) before it is written.
+#[tauri::command]
+#[specta::specta]
+pub async fn save_logcat_queries(
+    app: tauri::AppHandle,
+    scope: settings::LogcatQueryScope,
+    device_identity: Option<String>,
+    queries: Vec<settings::LogcatQuery>,
+) -> Result<settings::LogcatQueryLibrary, CommandError> {
+    let app_data_dir = settings_app_data_dir(&app)?;
+    spawn_blocking_operation(move || {
+        Ok(settings::save_logcat_queries(
+            &app_data_dir,
+            scope,
+            device_identity.as_deref(),
+            queries,
+        )?)
+    })
+    .await
+}
+
 #[tauri::command]
 #[specta::specta]
 pub async fn reset_settings(
@@ -2092,7 +2135,9 @@ pub async fn stream_logcat(
         "shell".to_string(),
         "logcat".to_string(),
         "-v".to_string(),
-        "brief".to_string(),
+        // threadtime carries the timestamp and pid the query presets filter on;
+        // brief format omitted both.
+        "threadtime".to_string(),
     ]);
     let sink = operations::channel_sink(on_event);
     spawn_blocking_operation(move || {

@@ -58,6 +58,33 @@ export const commands = {
     });
   },
   /**
+   * List the saved Logcat query presets for the global scope and, when a device
+   * identity is supplied, that device's scope. Only query definitions are
+   * stored; captured log lines never enter the settings document.
+   */
+  async listLogcatQueries(
+    deviceIdentity: string | null,
+  ): Promise<LogcatQueryLibrary> {
+    return await TAURI_INVOKE("list_logcat_queries", { deviceIdentity });
+  },
+  /**
+   * Persist the full ordered list of Logcat query presets for one scope. This
+   * single write covers create, rename, duplicate, reorder, and delete; an empty
+   * list clears the scope. Each preset is validated (including a linear-time
+   * regex guard) before it is written.
+   */
+  async saveLogcatQueries(
+    scope: LogcatQueryScope,
+    deviceIdentity: string | null,
+    queries: LogcatQuery[],
+  ): Promise<LogcatQueryLibrary> {
+    return await TAURI_INVOKE("save_logcat_queries", {
+      scope,
+      deviceIdentity,
+      queries,
+    });
+  },
+  /**
    * Run a bounded, non-elevated, read-only host connection scan. The report
    * contains state counts and redacted configuration presence only; it never
    * persists device identifiers, USB instance IDs, environment values, or keys.
@@ -1369,6 +1396,34 @@ export type ListWirelessServicesResult = {
   adb_path: string | null;
   services: WirelessAdbService[];
 };
+/**
+ * Minimum severity a Logcat query preset matches, using adb's single-letter
+ * level codes so the renderer can reuse its existing `V D I W E F` ladder.
+ */
+export type LogcatLevel = "V" | "D" | "I" | "W" | "E" | "F";
+/**
+ * A reusable, versioned Logcat filter. Only the query definition is persisted;
+ * captured log lines never enter the store.
+ */
+export type LogcatQuery = {
+  id: string;
+  name: string;
+  tagFilter?: string;
+  messageFilter?: string;
+  pidFilter?: string;
+  minLevel: LogcatLevel;
+  maxAgeSeconds?: number | null;
+  useRegex?: boolean;
+  negateTag?: boolean;
+  negateMessage?: boolean;
+  negatePid?: boolean;
+};
+export type LogcatQueryLibrary = {
+  version: string;
+  global: LogcatQuery[];
+  device: LogcatQuery[];
+};
+export type LogcatQueryScope = "global" | "device";
 export type MirrorPreset = {
   maxSize: string;
   bitRate: string;

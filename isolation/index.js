@@ -49,6 +49,8 @@
     reset_settings_mirror_preset: [["deviceIdentity"], []],
     reset_settings: [["scope"], []],
     export_settings: [["scope", "path_grant"], []],
+    list_logcat_queries: [["deviceIdentity"], []],
+    save_logcat_queries: [["scope", "deviceIdentity", "queries"], []],
     save_diagnostics: [["path_grant"], []],
     wipe_diagnostics: [["confirmed"], []],
     pair_wireless: [["request"], []],
@@ -481,6 +483,80 @@
     }
   }
 
+  function validateLinearRegex(pattern, code) {
+    if (/\\[0-9]/u.test(pattern) || /\\k/u.test(pattern)) reject(code);
+    if (/\(\?[=!]/u.test(pattern) || /\(\?<[=!]/u.test(pattern)) reject(code);
+    if (/\)[*+]/u.test(pattern) || /\)\{/u.test(pattern)) reject(code);
+    try {
+      void new RegExp(pattern, "u");
+    } catch {
+      reject(code);
+    }
+  }
+
+  function validateLogcatQuery(query) {
+    validateKeys(
+      query,
+      ["id", "name", "minLevel"],
+      [
+        "tagFilter",
+        "messageFilter",
+        "pidFilter",
+        "maxAgeSeconds",
+        "useRegex",
+        "negateTag",
+        "negateMessage",
+        "negatePid",
+      ],
+      "logcat_query",
+    );
+    if (
+      typeof query.id !== "string" ||
+      !/^[A-Za-z0-9_-]{1,64}$/u.test(query.id)
+    ) {
+      reject("logcat_query_id");
+    }
+    if (
+      typeof query.name !== "string" ||
+      query.name.trim().length === 0 ||
+      query.name.length > 80 ||
+      hasControlCharacter(query.name)
+    ) {
+      reject("logcat_query_name");
+    }
+    if (!["V", "D", "I", "W", "E", "F"].includes(query.minLevel)) {
+      reject("logcat_query_level");
+    }
+    const useRegex = query.useRegex === true;
+    for (const [key, code] of [
+      ["tagFilter", "logcat_query_tag"],
+      ["messageFilter", "logcat_query_message"],
+    ]) {
+      const value = query[key];
+      if (value === undefined) continue;
+      if (typeof value !== "string" || value.length > 256) reject(code);
+      if (hasControlCharacter(value)) reject(code);
+      if (useRegex && value.length > 0) validateLinearRegex(value, code);
+    }
+    if (query.pidFilter !== undefined) {
+      if (
+        typeof query.pidFilter !== "string" ||
+        (query.pidFilter.length > 0 && !/^[0-9]{1,7}$/u.test(query.pidFilter))
+      ) {
+        reject("logcat_query_pid");
+      }
+    }
+    if (query.maxAgeSeconds !== undefined && query.maxAgeSeconds !== null) {
+      ensureInteger(query.maxAgeSeconds, "logcat_query_age", 1);
+      if (query.maxAgeSeconds > 30 * 24 * 60 * 60) reject("logcat_query_age");
+    }
+    for (const key of ["useRegex", "negateTag", "negateMessage", "negatePid"]) {
+      if (query[key] !== undefined && typeof query[key] !== "boolean") {
+        reject(`logcat_query_${key}`);
+      }
+    }
+  }
+
   function validateProfile(profile) {
     validateKeys(
       profile,
@@ -593,6 +669,28 @@
     if (["reset_settings", "export_settings"].includes(command)) {
       if (!["all", "language", "mirror_presets"].includes(payload.scope)) {
         reject("settings_scope");
+      }
+    }
+    if (command === "list_logcat_queries" && payload.deviceIdentity !== null) {
+      ensureIdentifier(payload.deviceIdentity, "logcat_device");
+    }
+    if (command === "save_logcat_queries") {
+      if (!["global", "device"].includes(payload.scope)) {
+        reject("logcat_scope");
+      }
+      if (payload.scope === "device") {
+        ensureIdentifier(payload.deviceIdentity, "logcat_device");
+      } else if (payload.deviceIdentity !== null) {
+        ensureIdentifier(payload.deviceIdentity, "logcat_device");
+      }
+      if (!Array.isArray(payload.queries) || payload.queries.length > 64) {
+        reject("logcat_queries");
+      }
+      const ids = new Set();
+      for (const query of payload.queries) {
+        validateLogcatQuery(query);
+        if (ids.has(query.id)) reject("logcat_query_duplicate");
+        ids.add(query.id);
       }
     }
     if (command === "recover_adb" || command === "wipe_diagnostics") {

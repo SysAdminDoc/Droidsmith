@@ -869,6 +869,7 @@ async function installTauriMock(page) {
     let installAttempts = 0;
     let scrcpyLaunches = 0;
     let settingsLanguage = "en";
+    const logcatQueries = { global: [] };
     let archiveApi = 35;
     window.__DROIDSMITH_MOCK_ARCHIVE_API__ = (api) => {
       archiveApi = api;
@@ -2069,6 +2070,17 @@ async function installTauriMock(page) {
             path: "C:/Users/QA/Desktop/droidsmith-settings-all.json",
             byteSize: 128,
             scope: args.scope,
+          };
+        }
+        if (cmd === "list_logcat_queries") {
+          return { version: "1", global: logcatQueries.global, device: [] };
+        }
+        if (cmd === "save_logcat_queries") {
+          if (args.scope === "global") logcatQueries.global = args.queries;
+          return {
+            version: "1",
+            global: logcatQueries.global,
+            device: args.scope === "device" ? args.queries : [],
           };
         }
         throw new Error(`Unhandled mocked command: ${cmd}`);

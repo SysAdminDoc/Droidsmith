@@ -32,6 +32,9 @@ import {
   type JournalEntry as GeneratedJournalEntry,
   type LaunchScrcpyRequest,
   type LegacySettingsImport,
+  type LogcatQuery,
+  type LogcatQueryLibrary,
+  type LogcatQueryScope,
   type ListDevicesResult,
   type ListWirelessServicesResult,
   type NetworkConnection,
@@ -364,6 +367,20 @@ export async function callExportSettings(
   pathGrant: string,
 ): Promise<SettingsExportResult> {
   return commands.exportSettings(scope, pathGrant);
+}
+
+export async function callListLogcatQueries(
+  deviceIdentity: string | null,
+): Promise<LogcatQueryLibrary> {
+  return commands.listLogcatQueries(deviceIdentity);
+}
+
+export async function callSaveLogcatQueries(
+  scope: LogcatQueryScope,
+  deviceIdentity: string | null,
+  queries: LogcatQuery[],
+): Promise<LogcatQueryLibrary> {
+  return commands.saveLogcatQueries(scope, deviceIdentity, queries);
 }
 
 export async function callRunHostDoctor(): Promise<HostDoctorReport> {
