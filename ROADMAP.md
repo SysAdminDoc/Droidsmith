@@ -25,27 +25,12 @@ instead.
 
 ### P3
 
-- [ ] P3 — Desktop-polish plugin cluster: window-state, tray, and background notifications
-  Why: The app forgets window size/position, has no tray presence while supervising scrcpy/logcat, and gives no OS-level feedback on device connect/disconnect or long-job completion.
-  Evidence: `src-tauri/src/lib.rs:34` (dialog plugin only); Tauri v2 window-state / tray / notification plugin docs
-  Touches: `src-tauri/Cargo.toml`, `src-tauri/src/lib.rs`, `src-tauri/capabilities/default.json`, `src/App.tsx`
-  Acceptance: Window size/position persist across launches; a tray icon keeps supervision alive when the window is closed/minimized; connect/disconnect and long-operation completion raise OS notifications consistent with the toast model; each plugin is capability-scoped.
-  Complexity: M
-
 - [ ] P3 — Add a light theme toggle
   Why: Surfaces are dark-only Tailwind; a light option is expected desktop polish and an accessibility preference for bright environments.
   Evidence: no theme state in `src/App.tsx` or `src/lib/`; dark-first `tailwind.config.ts`
   Touches: `tailwind.config.ts`, `src/App.tsx`, route components, a persisted `droidsmith.theme` key, locales
   Acceptance: A persisted theme toggle switches dark/light (default dark) across every route without contrast regressions; the choice survives restart; ui:smoke covers both themes.
   Complexity: M
-
-- [ ] P3 — Add an incremental-install option for large APKs
-  Why: `adb install --incremental` starts large installs before all bytes transfer, a measurable speed win the current single-shot install cannot offer.
-  Evidence: AOSP incremental-install doc; `src-tauri/src/adb/actions.rs::install_apk`
-  Touches: `src-tauri/src/adb/actions.rs`, `src-tauri/src/commands.rs`, `src/lib/tauri.ts`, `src/routes/Apps.tsx`
-  Acceptance: An opt-in incremental toggle is used when the device/tooling reports support and falls back cleanly to a normal install otherwise, with the chosen mode recorded in the operation record.
-  Complexity: S
-  Depends on: app-bundle install (P1)
 
 - [ ] P3 — Read-only layout / view-hierarchy inspector
   Why: A one-click `uiautomator dump` + saved snapshot extends Droidsmith's existing inspection panels with a developer-grade, no-root workflow competitors expose.
