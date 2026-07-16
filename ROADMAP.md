@@ -71,13 +71,6 @@ instead.
 
 ### P2
 
-- [ ] P2 — **IMP-52** Implement independent side-by-side device workspaces
-  Why: The README promises side-by-side device tabs, while route-local selection currently unmounts and loses state; comparable ADB/scrcpy tools retain independent sessions for multiple devices.
-  Evidence: `README.md:57`, `src/App.tsx`, `src/routes/Mirror.tsx:114-128`; Escrcpy and DeviceFarmer STF.
-  Touches: `src/App.tsx`, shared workspace/device store, all route selection state, scrcpy/operation supervisors, persistence and regression tests.
-  Acceptance: Users open at least two device tabs with independent route/filter/Android-user/session state; the active target is always visible; disconnected tabs become timestamped read-only snapshots and reconnect safely; no broadcast mutation exists.
-  Complexity: XL
-
 ### P3
 
 ## Research-Driven Additions
