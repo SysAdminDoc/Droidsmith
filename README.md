@@ -1,6 +1,6 @@
 # Droidsmith
 
-![Version](https://img.shields.io/badge/version-0.2.0-cyan)
+![Version](https://img.shields.io/badge/version-0.3.0-cyan)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Platforms](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-blue)
 
