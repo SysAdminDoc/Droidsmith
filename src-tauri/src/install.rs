@@ -42,6 +42,24 @@ pub struct InstallOptions {
     pub bypass_low_target_sdk_block: bool,
     #[serde(default)]
     pub override_confirmed: bool,
+    /// Opt-in: begin a single-APK install before all bytes transfer via
+    /// `adb install --incremental`, falling back to a normal install when the
+    /// device or platform-tools do not support Incremental FS.
+    #[serde(default)]
+    pub incremental: bool,
+}
+
+/// The install strategy actually used, recorded in the operation audit so a
+/// fallback is never silent.
+#[derive(specta::Type, Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum InstallMode {
+    /// A standard `adb install` (or the split-session path for archives).
+    Normal,
+    /// `adb install --incremental` succeeded.
+    Incremental,
+    /// Incremental was requested but unsupported here, so a normal install ran.
+    IncrementalUnsupported,
 }
 
 impl InstallOptions {
@@ -84,6 +102,7 @@ pub struct InstallFailure {
 pub struct InstallPackageResult {
     pub succeeded: bool,
     pub source_kind: InstallSourceKind,
+    pub install_mode: InstallMode,
     pub file_count: usize,
     pub total_bytes: u64,
     pub output: String,
@@ -168,6 +187,7 @@ struct InstallAuditRecord {
     operation_id: String,
     device_serial: String,
     source_kind: InstallSourceKind,
+    install_mode: InstallMode,
     file_count: usize,
     total_bytes: u64,
     allow_downgrade: bool,
@@ -212,10 +232,17 @@ pub fn install_package(
     let started_at = crate::time::iso_utc_now();
     let audit_path = app_data_dir.join("install-operations.jsonl");
     let mut audit = InstallAuditRecord {
-        schema_version: 2,
+        schema_version: 3,
         operation_id: operation_id.to_string(),
         device_serial: target.serial.clone(),
         source_kind: prepared.kind,
+        // Provisional; the actual mode (including a fallback) is written back
+        // from the execution result below.
+        install_mode: if options.incremental && prepared.kind == InstallSourceKind::Apk {
+            InstallMode::Incremental
+        } else {
+            InstallMode::Normal
+        },
         file_count: prepared.files.len(),
         total_bytes: prepared.total_bytes(),
         allow_downgrade: options.allow_downgrade,
@@ -257,6 +284,7 @@ pub fn install_package(
 
     match execution {
         Ok(mut result) => {
+            audit.install_mode = result.install_mode;
             audit.outcome = if result.succeeded {
                 AuditOutcome::Succeeded
             } else {
@@ -313,22 +341,77 @@ fn install_single(
     runner: &mut RegisteredOperation,
 ) -> Result<InstallPackageResult, InstallError> {
     let file = &package.files[0];
+    let apk = file.local_path.display().to_string();
+
+    if options.incremental {
+        let mut inc_args = target.adb_selector();
+        inc_args.extend([
+            "install".to_string(),
+            "--incremental".to_string(),
+            "-r".to_string(),
+        ]);
+        options.append_flags(&mut inc_args);
+        inc_args.push(apk.clone());
+        let inc_output = runner.run_stage(
+            &transport.adb_path,
+            &inc_args,
+            INSTALL_TIMEOUT,
+            "Installing the APK incrementally",
+        )?;
+        // Only fall back when the *incremental transport itself* is unsupported.
+        // A genuine INSTALL_FAILED_* would fail identically over a normal push,
+        // so it is surfaced as an incremental attempt rather than retried.
+        if !incremental_unsupported(&inc_output) {
+            return Ok(result_from_output(
+                package,
+                operation_id,
+                inc_output,
+                "adb install --incremental",
+                InstallMode::Incremental,
+            ));
+        }
+    }
+
     let mut args = target.adb_selector();
     args.extend(["install".to_string(), "-r".to_string()]);
     options.append_flags(&mut args);
-    args.push(file.local_path.display().to_string());
+    args.push(apk);
     let output = runner.run_stage(
         &transport.adb_path,
         &args,
         INSTALL_TIMEOUT,
-        "Installing the APK",
+        if options.incremental {
+            "Incremental unavailable; installing the APK normally"
+        } else {
+            "Installing the APK"
+        },
     )?;
     Ok(result_from_output(
         package,
         operation_id,
         output,
         "adb install",
+        if options.incremental {
+            InstallMode::IncrementalUnsupported
+        } else {
+            InstallMode::Normal
+        },
     ))
+}
+
+/// Detect that `adb install --incremental` failed because Incremental FS is not
+/// available (old platform-tools, pre-Android-11 device, or a disabled kernel
+/// feature) — as opposed to a real package/verification failure.
+fn incremental_unsupported(output: &ProcessOutput) -> bool {
+    if output.success() {
+        return false;
+    }
+    let combined = combined_output(output).to_ascii_uppercase();
+    combined.contains("INCREMENTAL INSTALLATION NOT SUPPORTED")
+        || combined.contains("FAILED TO START INLINE INSTALLATION")
+        || (combined.contains("UNKNOWN OPTION") && combined.contains("INCREMENTAL"))
+        || (combined.contains("INCREMENTAL") && combined.contains("NOT SUPPORTED"))
+        || (combined.contains("INCREMENTAL") && combined.contains("UNAVAILABLE"))
 }
 
 fn install_archive(
@@ -355,13 +438,19 @@ fn install_archive(
         "Creating an atomic Android install session",
     )?;
     if let Some(raw) = failed_output(&create_output, "pm install-create") {
-        return Ok(failed_result(package, operation_id, &raw));
+        return Ok(failed_result(
+            package,
+            operation_id,
+            &raw,
+            InstallMode::Normal,
+        ));
     }
     let Some(session_id) = parse_session_id(&create_output.stdout) else {
         return Ok(failed_result(
             package,
             operation_id,
             "pm install-create succeeded but did not return a session ID",
+            InstallMode::Normal,
         ));
     };
 
@@ -386,7 +475,12 @@ fn install_archive(
             ),
         )?;
         if let Some(raw) = failed_output(&push, "adb push") {
-            return Ok(failed_result(package, operation_id, &raw));
+            return Ok(failed_result(
+                package,
+                operation_id,
+                &raw,
+                InstallMode::Normal,
+            ));
         }
 
         let mut write_args = target.adb_selector();
@@ -408,7 +502,12 @@ fn install_archive(
         )?;
         session.remove_remote(&remote);
         if let Some(raw) = failed_output(&write, "pm install-write") {
-            return Ok(failed_result(package, operation_id, &raw));
+            return Ok(failed_result(
+                package,
+                operation_id,
+                &raw,
+                InstallMode::Normal,
+            ));
         }
     }
 
@@ -426,13 +525,19 @@ fn install_archive(
         "Committing the complete package set",
     )?;
     if let Some(raw) = failed_output(&commit, "pm install-commit") {
-        return Ok(failed_result(package, operation_id, &raw));
+        return Ok(failed_result(
+            package,
+            operation_id,
+            &raw,
+            InstallMode::Normal,
+        ));
     }
     session.mark_committed();
     Ok(success_result(
         package,
         operation_id,
         combined_output(&commit),
+        InstallMode::Normal,
     ))
 }
 
@@ -499,10 +604,11 @@ fn result_from_output(
     operation_id: &str,
     output: ProcessOutput,
     label: &str,
+    mode: InstallMode,
 ) -> InstallPackageResult {
     match failed_output(&output, label) {
-        Some(raw) => failed_result(package, operation_id, &raw),
-        None => success_result(package, operation_id, combined_output(&output)),
+        Some(raw) => failed_result(package, operation_id, &raw, mode),
+        None => success_result(package, operation_id, combined_output(&output), mode),
     }
 }
 
@@ -510,10 +616,12 @@ fn success_result(
     package: &PreparedPackage,
     operation_id: &str,
     output: String,
+    mode: InstallMode,
 ) -> InstallPackageResult {
     InstallPackageResult {
         succeeded: true,
         source_kind: package.kind,
+        install_mode: mode,
         file_count: package.files.len(),
         total_bytes: package.total_bytes(),
         output: bounded(&output),
@@ -523,10 +631,16 @@ fn success_result(
     }
 }
 
-fn failed_result(package: &PreparedPackage, operation_id: &str, raw: &str) -> InstallPackageResult {
+fn failed_result(
+    package: &PreparedPackage,
+    operation_id: &str,
+    raw: &str,
+    mode: InstallMode,
+) -> InstallPackageResult {
     InstallPackageResult {
         succeeded: false,
         source_kind: package.kind,
+        install_mode: mode,
         file_count: package.files.len(),
         total_bytes: package.total_bytes(),
         output: String::new(),
@@ -1028,6 +1142,45 @@ mod tests {
         assert_eq!(failure.suggested_override, None);
     }
 
+    fn process_output(stdout: &str, stderr: &str, code: i32) -> ProcessOutput {
+        ProcessOutput {
+            stdout: stdout.to_string(),
+            stderr: stderr.to_string(),
+            code: Some(code),
+            timed_out: false,
+            cancelled: false,
+        }
+    }
+
+    #[test]
+    fn incremental_fallback_triggers_only_on_transport_unsupport() {
+        // Incremental-FS-unavailable markers fall back to a normal install.
+        assert!(incremental_unsupported(&process_output(
+            "",
+            "adb: failed to install app.apk: Incremental installation not supported",
+            1,
+        )));
+        assert!(incremental_unsupported(&process_output(
+            "",
+            "Failed to start inline installation",
+            1,
+        )));
+        assert!(incremental_unsupported(&process_output(
+            "",
+            "adb: unknown option -- incremental",
+            1,
+        )));
+        // A genuine package failure is NOT an incremental-transport problem, so
+        // it is surfaced as-is instead of being retried over a normal push.
+        assert!(!incremental_unsupported(&process_output(
+            "",
+            "Failure [INSTALL_FAILED_VERSION_DOWNGRADE]",
+            1,
+        )));
+        // A successful incremental install never falls back.
+        assert!(!incremental_unsupported(&process_output("Success", "", 0,)));
+    }
+
     #[test]
     fn override_flags_require_explicit_confirmation() {
         let options = InstallOptions {
@@ -1049,10 +1202,11 @@ mod tests {
         let dir = temp_dir("audit");
         let path = dir.join("install-operations.jsonl");
         let record = InstallAuditRecord {
-            schema_version: 2,
+            schema_version: 3,
             operation_id: "install-audit-01".to_string(),
             device_serial: "SERIAL-1".to_string(),
             source_kind: InstallSourceKind::Apks,
+            install_mode: InstallMode::Normal,
             file_count: 3,
             total_bytes: 42,
             allow_downgrade: true,

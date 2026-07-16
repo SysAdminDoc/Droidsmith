@@ -186,6 +186,7 @@ export default function AppsRoute() {
   const [installState, setInstallState] = useState<InstallState>({
     kind: "idle",
   });
+  const [incrementalInstall, setIncrementalInstall] = useState(false);
   const [recoveryState, setRecoveryState] = useState<RecoveryState>({
     kind: "idle",
   });
@@ -733,14 +734,16 @@ export default function AppsRoute() {
         setInstallState({ kind: "idle" });
         return;
       }
-      await runInstall(selected.id, selected.local_path, {});
+      await runInstall(selected.id, selected.local_path, {
+        incremental: incrementalInstall,
+      });
     } catch (error) {
       setInstallState({
         kind: "error",
         message: installErrorMessage(error),
       });
     }
-  }, [runInstall, selectedDevice]);
+  }, [incrementalInstall, runInstall, selectedDevice]);
 
   const cancelInstall = useCallback(async () => {
     const operationId = activeInstallRef.current;
@@ -1053,6 +1056,21 @@ export default function AppsRoute() {
               >
                 {t("apps.installPackage")}
               </Button>
+              <label
+                className="inline-flex items-center gap-2 text-xs text-anvil-300"
+                title={t("apps.installIncrementalHint")}
+              >
+                <input
+                  type="checkbox"
+                  checked={incrementalInstall}
+                  onChange={(e) => setIncrementalInstall(e.target.checked)}
+                  disabled={
+                    installState.kind === "choosing" ||
+                    installState.kind === "running"
+                  }
+                />
+                {t("apps.installIncremental")}
+              </label>
               <Button
                 type="button"
                 onClick={() => void loadPackages()}
@@ -1450,6 +1468,17 @@ function InstallStatePanel({
             })
           : failure?.cause}
       </p>
+      {result.succeeded && result.install_mode === "incremental" && (
+        <p className="mt-2 text-xs text-circuit-200/80">
+          {t("apps.installModeIncremental")}
+        </p>
+      )}
+      {result.succeeded &&
+        result.install_mode === "incremental_unsupported" && (
+          <p className="mt-2 text-xs text-amber-200/80">
+            {t("apps.installModeIncrementalUnsupported")}
+          </p>
+        )}
       {!result.succeeded && failure && (
         <>
           <dl className="mt-3 grid gap-2 text-xs sm:grid-cols-[7rem_minmax(0,1fr)]">

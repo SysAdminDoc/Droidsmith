@@ -15,7 +15,8 @@ root, without a closed-source binary, without paywalled features.
 Functional early desktop build. The Tauri shell builds and runs; shipped routes
 cover device readiness, wireless ADB pairing/connect, package inventory and
 actions, reversible Android 15 package archiving, atomic
-APK/APKS/XAPK/APKM installation with guarded failure remedies,
+APK/APKS/XAPK/APKM installation with guarded failure remedies and an opt-in
+`--incremental` single-APK mode that falls back cleanly when unsupported,
 hashed base/split APK export, audited permission/device-control mutations, reviewed shell
 mutations, journal undo, debloat queue recovery, scrcpy launch and session
 supervision, cancellable background shell/export/file operations, incremental

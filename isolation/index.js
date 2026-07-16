@@ -795,6 +795,7 @@
           "allow_downgrade",
           "bypass_low_target_sdk_block",
           "override_confirmed",
+          "incremental",
         ],
         "install_options",
       );

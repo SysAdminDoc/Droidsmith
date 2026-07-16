@@ -338,6 +338,14 @@ async function runDesktopFlow(browser) {
   await page.getByText("com.example.app").waitFor({ state: "hidden" });
   await page.evaluate(() => window.__DROIDSMITH_MOCK_HOTPLUG__(true));
   await page.getByText("com.example.app").waitFor();
+
+  // Opt-in incremental install records and surfaces its mode.
+  await page.getByRole("checkbox", { name: "Incremental" }).check();
+  await page.getByRole("button", { name: "Install package" }).click();
+  await page.getByText(/Installed incrementally/).waitFor();
+  await page.getByRole("button", { name: "Dismiss", exact: true }).click();
+  await page.getByRole("checkbox", { name: "Incremental" }).uncheck();
+
   await page.getByRole("button", { name: "Install package" }).click();
   await page
     .getByText("INSTALL_FAILED_VERSION_DOWNGRADE", { exact: true })
@@ -1835,6 +1843,26 @@ async function installTauriMock(page) {
           };
         }
         if (cmd === "install_apk") {
+          // Incremental installs take a clean success path with the mode
+          // recorded, independent of the downgrade-override sequence below.
+          if (args.options?.incremental) {
+            emitChannel(args.on_event, {
+              operation_id: args.operation_id,
+              kind: "progress",
+              message: "Installing the APK incrementally",
+            });
+            return {
+              succeeded: true,
+              source_kind: "apk",
+              install_mode: "incremental",
+              file_count: 1,
+              total_bytes: 12288,
+              output: "Success",
+              failure: null,
+              audit_id: args.operation_id,
+              retry_path_grant: null,
+            };
+          }
           installAttempts += 1;
           const expectedGrant =
             installAttempts === 1
@@ -1857,6 +1885,7 @@ async function installTauriMock(page) {
             return {
               succeeded: false,
               source_kind: "apks",
+              install_mode: "normal",
               file_count: 3,
               total_bytes: 24576,
               output: "",
@@ -1885,6 +1914,7 @@ async function installTauriMock(page) {
           return {
             succeeded: true,
             source_kind: "apks",
+            install_mode: "normal",
             file_count: 3,
             total_bytes: 24576,
             output: "Success",

@@ -1321,14 +1321,38 @@ export type InstallFailure = {
   suggested_override: SuggestedInstallOverride | null;
   raw_output: string;
 };
+/**
+ * The install strategy actually used, recorded in the operation audit so a
+ * fallback is never silent.
+ */
+export type InstallMode =
+  /**
+   * A standard `adb install` (or the split-session path for archives).
+   */
+  | "normal"
+  /**
+   * `adb install --incremental` succeeded.
+   */
+  | "incremental"
+  /**
+   * Incremental was requested but unsupported here, so a normal install ran.
+   */
+  | "incremental_unsupported";
 export type InstallOptions = {
   allow_downgrade?: boolean;
   bypass_low_target_sdk_block?: boolean;
   override_confirmed?: boolean;
+  /**
+   * Opt-in: begin a single-APK install before all bytes transfer via
+   * `adb install --incremental`, falling back to a normal install when the
+   * device or platform-tools do not support Incremental FS.
+   */
+  incremental?: boolean;
 };
 export type InstallPackageResult = {
   succeeded: boolean;
   source_kind: InstallSourceKind;
+  install_mode: InstallMode;
   file_count: number;
   total_bytes: number;
   output: string;
