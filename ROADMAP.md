@@ -25,13 +25,6 @@ instead.
 
 ### P3
 
-- [ ] P3 — Add a light theme toggle
-  Why: Surfaces are dark-only Tailwind; a light option is expected desktop polish and an accessibility preference for bright environments.
-  Evidence: no theme state in `src/App.tsx` or `src/lib/`; dark-first `tailwind.config.ts`
-  Touches: `tailwind.config.ts`, `src/App.tsx`, route components, a persisted `droidsmith.theme` key, locales
-  Acceptance: A persisted theme toggle switches dark/light (default dark) across every route without contrast regressions; the choice survives restart; ui:smoke covers both themes.
-  Complexity: M
-
 ## Audit-Deferred Items
 
 ## Research-Driven Additions
