@@ -79,6 +79,43 @@ describe("threadtime parsing and matching", () => {
       false,
     );
   });
+
+  it("resolves package/process filters via the PID map and surfaces unmapped PIDs", () => {
+    const map = new Map([["1234", "com.example.app:remote"]]);
+    // Process filter matches the full ps name.
+    expect(
+      matchesLine(line, query({ processFilter: "app:remote" }), nowMs, map),
+    ).toBe(true);
+    expect(
+      matchesLine(line, query({ processFilter: "other" }), nowMs, map),
+    ).toBe(false);
+    // Package filter strips the ":component" suffix.
+    expect(
+      matchesLine(
+        line,
+        query({ packageFilter: "com.example.app" }),
+        nowMs,
+        map,
+      ),
+    ).toBe(true);
+    expect(
+      matchesLine(
+        line,
+        query({ packageFilter: "com.example.app", negatePackage: true }),
+        nowMs,
+        map,
+      ),
+    ).toBe(false);
+    // An unmapped PID is never dropped by a package/process filter.
+    expect(
+      matchesLine(
+        line,
+        query({ packageFilter: "com.other" }),
+        nowMs,
+        new Map(),
+      ),
+    ).toBe(true);
+  });
 });
 
 describe("built-in presets match Android Studio semantics", () => {

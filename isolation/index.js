@@ -505,11 +505,15 @@
         "tagFilter",
         "messageFilter",
         "pidFilter",
+        "packageFilter",
+        "processFilter",
         "maxAgeSeconds",
         "useRegex",
         "negateTag",
         "negateMessage",
         "negatePid",
+        "negatePackage",
+        "negateProcess",
       ],
       "logcat_query",
     );
@@ -534,6 +538,8 @@
     for (const [key, code] of [
       ["tagFilter", "logcat_query_tag"],
       ["messageFilter", "logcat_query_message"],
+      ["packageFilter", "logcat_query_package"],
+      ["processFilter", "logcat_query_process"],
     ]) {
       const value = query[key];
       if (value === undefined) continue;
@@ -553,7 +559,14 @@
       ensureInteger(query.maxAgeSeconds, "logcat_query_age", 1);
       if (query.maxAgeSeconds > 30 * 24 * 60 * 60) reject("logcat_query_age");
     }
-    for (const key of ["useRegex", "negateTag", "negateMessage", "negatePid"]) {
+    for (const key of [
+      "useRegex",
+      "negateTag",
+      "negateMessage",
+      "negatePid",
+      "negatePackage",
+      "negateProcess",
+    ]) {
       if (query[key] !== undefined && typeof query[key] !== "boolean") {
         reject(`logcat_query_${key}`);
       }

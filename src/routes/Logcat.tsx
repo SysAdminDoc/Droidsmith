@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 
 import {
   callCancelOperation,
+  callListProcesses,
   callSaveLogcatExport,
   callSelectHostPath,
   callStreamLogcat,
@@ -65,6 +66,9 @@ export default function LogcatRoute() {
   const [lines, setLines] = useState<LogLine[]>([]);
   const [tailing, setTailing] = useState(false);
   const [paused, setPaused] = useState(false);
+  const [processNames, setProcessNames] = useState<Map<string, string>>(
+    () => new Map(),
+  );
   const [query, setQuery] = useState<WorkingQuery>({ ...DEFAULT_QUERY });
   const [library, setLibrary] = useState<LogcatLibrary>({
     global: [],
@@ -108,6 +112,38 @@ export default function LogcatRoute() {
       cancelled = true;
     };
   }, [deviceIdentity]);
+
+  // Resolve PIDs to process names for package/process filters, refreshed on a
+  // bounded cadence only while such a filter is active. The `ps` snapshot never
+  // blocks the log stream — filtering just uses the most recent map it has.
+  const needsProcessNames =
+    query.packageFilter.length > 0 || query.processFilter.length > 0;
+  useEffect(() => {
+    if (!authorizedTarget || !needsProcessNames) {
+      setProcessNames(new Map());
+      return;
+    }
+    let cancelled = false;
+    const refresh = () => {
+      void callListProcesses(authorizedTarget)
+        .then((processes) => {
+          if (cancelled) return;
+          setProcessNames(
+            new Map(processes.map((p) => [String(p.pid), p.name])),
+          );
+        })
+        .catch(() => {
+          // A failed snapshot leaves the previous map in place; unmapped PIDs
+          // are surfaced rather than dropped by matchesLine.
+        });
+    };
+    refresh();
+    const timer = window.setInterval(refresh, 4000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [authorizedTarget, needsProcessNames]);
 
   const startTailing = useCallback(() => {
     if (!authorizedTarget || operationRef.current) return;
@@ -209,8 +245,8 @@ export default function LogcatRoute() {
 
   const nowMs = Date.now();
   const filteredLines = useMemo(
-    () => lines.filter((line) => matchesLine(line, query, nowMs)),
-    [lines, query, nowMs],
+    () => lines.filter((line) => matchesLine(line, query, nowMs, processNames)),
+    [lines, query, nowMs, processNames],
   );
 
   useEffect(() => {
@@ -536,6 +572,34 @@ export default function LogcatRoute() {
               </label>
               <label className="grid gap-1.5">
                 <span className="text-xs font-medium text-anvil-400">
+                  {t("logcat.queries.package")}
+                </span>
+                <FieldInput
+                  type="text"
+                  value={query.packageFilter}
+                  onChange={(e) =>
+                    setQuery((q) => ({ ...q, packageFilter: e.target.value }))
+                  }
+                  placeholder="com.example.app"
+                  className="w-44 font-mono"
+                />
+              </label>
+              <label className="grid gap-1.5">
+                <span className="text-xs font-medium text-anvil-400">
+                  {t("logcat.queries.process")}
+                </span>
+                <FieldInput
+                  type="text"
+                  value={query.processFilter}
+                  onChange={(e) =>
+                    setQuery((q) => ({ ...q, processFilter: e.target.value }))
+                  }
+                  placeholder="com.example.app:svc"
+                  className="w-44 font-mono"
+                />
+              </label>
+              <label className="grid gap-1.5">
+                <span className="text-xs font-medium text-anvil-400">
                   {t("logcat.queries.maxAge")}
                 </span>
                 <FieldInput
@@ -599,6 +663,26 @@ export default function LogcatRoute() {
                   }
                 />
                 {t("logcat.queries.negatePid")}
+              </label>
+              <label className="inline-flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={query.negatePackage}
+                  onChange={(e) =>
+                    setQuery((q) => ({ ...q, negatePackage: e.target.checked }))
+                  }
+                />
+                {t("logcat.queries.negatePackage")}
+              </label>
+              <label className="inline-flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={query.negateProcess}
+                  onChange={(e) =>
+                    setQuery((q) => ({ ...q, negateProcess: e.target.checked }))
+                  }
+                />
+                {t("logcat.queries.negateProcess")}
               </label>
             </div>
 

@@ -1457,12 +1457,16 @@ export type LogcatQuery = {
   tagFilter?: string;
   messageFilter?: string;
   pidFilter?: string;
+  packageFilter?: string;
+  processFilter?: string;
   minLevel: LogcatLevel;
   maxAgeSeconds?: number | null;
   useRegex?: boolean;
   negateTag?: boolean;
   negateMessage?: boolean;
   negatePid?: boolean;
+  negatePackage?: boolean;
+  negateProcess?: boolean;
 };
 export type LogcatQueryLibrary = {
   version: string;

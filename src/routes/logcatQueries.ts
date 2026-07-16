@@ -32,12 +32,16 @@ export type WorkingQuery = {
   tagFilter: string;
   messageFilter: string;
   pidFilter: string;
+  packageFilter: string;
+  processFilter: string;
   minLevel: LogcatLevel;
   maxAgeSeconds: number | null;
   useRegex: boolean;
   negateTag: boolean;
   negateMessage: boolean;
   negatePid: boolean;
+  negatePackage: boolean;
+  negateProcess: boolean;
 };
 
 export const DEFAULT_QUERY: WorkingQuery = {
@@ -46,12 +50,16 @@ export const DEFAULT_QUERY: WorkingQuery = {
   tagFilter: "",
   messageFilter: "",
   pidFilter: "",
+  packageFilter: "",
+  processFilter: "",
   minLevel: "V",
   maxAgeSeconds: null,
   useRegex: false,
   negateTag: false,
   negateMessage: false,
   negatePid: false,
+  negatePackage: false,
+  negateProcess: false,
 };
 
 /**
@@ -123,7 +131,12 @@ export function validateQuery(query: WorkingQuery): QueryFieldError | null {
   ) {
     return { field: "name", code: "name" };
   }
-  for (const field of ["tagFilter", "messageFilter"] as const) {
+  for (const field of [
+    "tagFilter",
+    "messageFilter",
+    "packageFilter",
+    "processFilter",
+  ] as const) {
     const value = query[field];
     if (value.length > MAX_LOGCAT_FILTER_LENGTH) {
       return { field, code: "tooLong" };
@@ -155,6 +168,10 @@ export function normalizeQuery(value: Partial<LogcatQuery>): WorkingQuery {
     messageFilter:
       typeof value.messageFilter === "string" ? value.messageFilter : "",
     pidFilter: typeof value.pidFilter === "string" ? value.pidFilter : "",
+    packageFilter:
+      typeof value.packageFilter === "string" ? value.packageFilter : "",
+    processFilter:
+      typeof value.processFilter === "string" ? value.processFilter : "",
     minLevel: LOGCAT_LEVELS.includes(value.minLevel as LogcatLevel)
       ? (value.minLevel as LogcatLevel)
       : "V",
@@ -166,6 +183,8 @@ export function normalizeQuery(value: Partial<LogcatQuery>): WorkingQuery {
     negateTag: value.negateTag === true,
     negateMessage: value.negateMessage === true,
     negatePid: value.negatePid === true,
+    negatePackage: value.negatePackage === true,
+    negateProcess: value.negateProcess === true,
   };
 }
 
@@ -177,12 +196,16 @@ export function toQueryDto(query: WorkingQuery): LogcatQuery {
     tagFilter: query.tagFilter,
     messageFilter: query.messageFilter,
     pidFilter: query.pidFilter,
+    packageFilter: query.packageFilter,
+    processFilter: query.processFilter,
     minLevel: query.minLevel,
     maxAgeSeconds: query.maxAgeSeconds,
     useRegex: query.useRegex,
     negateTag: query.negateTag,
     negateMessage: query.negateMessage,
     negatePid: query.negatePid,
+    negatePackage: query.negatePackage,
+    negateProcess: query.negateProcess,
   };
 }
 
@@ -203,11 +226,18 @@ function textMatches(
   return haystack.toLowerCase().includes(needle.toLowerCase());
 }
 
-/** Apply a query to one parsed line. `nowMs` anchors the age comparison. */
+/**
+ * Apply a query to one parsed line. `nowMs` anchors the age comparison;
+ * `processNames` maps a PID to its process name (from `ps`) so package/process
+ * filters can resolve the line's owner. A line whose PID is not in the map is
+ * surfaced (never hidden by a package/process filter) so a stale or incomplete
+ * process snapshot cannot silently drop log output.
+ */
 export function matchesLine(
   line: LogLine,
   query: WorkingQuery,
   nowMs: number,
+  processNames: ReadonlyMap<string, string> = EMPTY_PROCESS_MAP,
 ): boolean {
   const lineLevel = LOGCAT_LEVELS.indexOf(line.level as LogcatLevel);
   const minLevel = LOGCAT_LEVELS.indexOf(query.minLevel);
@@ -225,11 +255,29 @@ export function matchesLine(
     const hit = line.pid === query.pidFilter;
     if (hit === query.negatePid) return false;
   }
+  if (query.processFilter.length > 0) {
+    const processName = processNames.get(line.pid);
+    if (processName !== undefined) {
+      const hit = textMatches(processName, query.processFilter, query.useRegex);
+      if (hit === query.negateProcess) return false;
+    }
+  }
+  if (query.packageFilter.length > 0) {
+    const processName = processNames.get(line.pid);
+    if (processName !== undefined) {
+      // An app process name is the package plus an optional ":component" suffix.
+      const packageName = processName.split(":")[0] ?? processName;
+      const hit = textMatches(packageName, query.packageFilter, query.useRegex);
+      if (hit === query.negatePackage) return false;
+    }
+  }
   if (query.maxAgeSeconds !== null && line.timeMs !== null) {
     if (nowMs - line.timeMs > query.maxAgeSeconds * 1000) return false;
   }
   return true;
 }
+
+const EMPTY_PROCESS_MAP: ReadonlyMap<string, string> = new Map();
 
 const THREADTIME =
   /^(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})\.(\d{3})\s+(\d+)\s+\d+\s+([VDIWEF])\s+(.*?):\s?(.*)$/u;

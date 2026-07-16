@@ -144,6 +144,10 @@ pub struct LogcatQuery {
     pub message_filter: String,
     #[serde(default)]
     pub pid_filter: String,
+    #[serde(default)]
+    pub package_filter: String,
+    #[serde(default)]
+    pub process_filter: String,
     pub min_level: LogcatLevel,
     #[serde(default)]
     pub max_age_seconds: Option<u32>,
@@ -155,6 +159,10 @@ pub struct LogcatQuery {
     pub negate_message: bool,
     #[serde(default)]
     pub negate_pid: bool,
+    #[serde(default)]
+    pub negate_package: bool,
+    #[serde(default)]
+    pub negate_process: bool,
 }
 
 #[derive(specta::Type, Debug, Clone, PartialEq, Eq, Serialize)]
@@ -648,6 +656,8 @@ fn validate_logcat_query(query: &LogcatQuery) -> Result<(), SettingsError> {
     for (label, value) in [
         ("tagFilter", &query.tag_filter),
         ("messageFilter", &query.message_filter),
+        ("packageFilter", &query.package_filter),
+        ("processFilter", &query.process_filter),
     ] {
         if value.len() > MAX_LOGCAT_FILTER_BYTES || value.chars().any(char::is_control) {
             return Err(SettingsError::Invalid(format!(
@@ -1017,10 +1027,14 @@ mod tests {
             pid_filter: String::new(),
             min_level: LogcatLevel::Info,
             max_age_seconds: Some(3600),
+            package_filter: String::new(),
+            process_filter: String::new(),
             use_regex: false,
             negate_tag: false,
             negate_message: false,
             negate_pid: false,
+            negate_package: false,
+            negate_process: false,
         }
     }
 

@@ -1,4 +1,4 @@
-/* global window, document, getComputedStyle, HTMLElement */
+/* global window, document, getComputedStyle, HTMLElement, requestAnimationFrame */
 import fs from "node:fs";
 import http from "node:http";
 import net from "node:net";
@@ -704,7 +704,7 @@ async function runLocaleZoomFlow(browser) {
       .first()
       .click();
     await page.getByRole("heading", { name, exact: true }).first().waitFor();
-    await assertNoHorizontalOverflow(page, `ru+zoom ${name}`);
+    await assertNoDocumentOverflow(page, `ru+zoom ${name}`);
   }
 
   await page.screenshot({
@@ -933,7 +933,52 @@ async function assertFocusedButton(page, name) {
   }, name);
 }
 
+// The WCAG 1.4.10 reflow criterion: content must not require two-dimensional
+// scrolling. This checks the document itself rather than per-element scrollWidth
+// (native selects clip long option text and ellipsis text legitimately overflow
+// their own box without widening the page).
+async function assertNoDocumentOverflow(page, label) {
+  await settleLayout(page);
+  const overflow = await page.evaluate(() => {
+    const root = document.documentElement;
+    return root.scrollWidth - root.clientWidth;
+  });
+  if (overflow > 2) {
+    throw new Error(`${label} document overflow: ${overflow}px`);
+  }
+}
+
+async function settleLayout(page) {
+  await page.evaluate(
+    () =>
+      new Promise((resolve) => {
+        const settle = () =>
+          requestAnimationFrame(() => requestAnimationFrame(resolve));
+        if (document.fonts && document.fonts.ready) {
+          void document.fonts.ready.then(settle);
+        } else {
+          settle();
+        }
+      }),
+  );
+}
+
 async function assertNoHorizontalOverflow(page, label) {
+  // Let web-font metrics and layout settle before measuring so a mid-reflow
+  // paragraph (e.g. under a locale switch or zoom change) cannot report a
+  // transient overflow.
+  await page.evaluate(
+    () =>
+      new Promise((resolve) => {
+        const settle = () =>
+          requestAnimationFrame(() => requestAnimationFrame(resolve));
+        if (document.fonts && document.fonts.ready) {
+          void document.fonts.ready.then(settle);
+        } else {
+          settle();
+        }
+      }),
+  );
   const offenders = await page
     .locator(
       "button, select, input, label, h1, h2, h3, h4, p, [role='option'], [role='radio']",
