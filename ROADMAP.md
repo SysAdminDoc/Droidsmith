@@ -91,13 +91,6 @@ instead.
 
 ### P3
 
-- [ ] P3 — **IMP-53** Add a tested offline Windows installer variant
-  Why: Repair/refurbishing environments can lack reliable internet, while the default WebView2 bootstrap path may need a download on a clean machine.
-  Evidence: `src-tauri/tauri.conf.json` and release scripts; Tauri Windows installer/WebView2 distribution guidance.
-  Touches: `src-tauri/tauri.conf.json`, Windows bundle configuration, release smoke/checksum scripts, installation documentation.
-  Acceptance: Releases retain the normal installer and additionally produce a clearly labeled offline WebView2 variant with checksum; a clean network-disabled Windows VM installs, launches, locates or explains missing Platform Tools, and uninstalls successfully.
-  Complexity: M
-
 ## Research-Driven Additions
 
 ### P1
