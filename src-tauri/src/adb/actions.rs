@@ -19,7 +19,9 @@ use serde::{Deserialize, Serialize};
 use crate::adb::device::{valid_serial, DeviceTarget};
 use crate::adb::transport::{validate_device_target, AdbTransport, TransportError};
 
-#[derive(specta::Type, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(
+    schemars::JsonSchema, specta::Type, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize,
+)]
 #[serde(rename_all = "snake_case")]
 pub enum ActionKind {
     /// `pm disable-user --user 0 <pkg>` — reversible with `pm enable`.

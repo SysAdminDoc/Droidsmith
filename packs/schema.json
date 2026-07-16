@@ -1,0 +1,223 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Pack",
+  "type": "object",
+  "properties": {
+    "id": {
+      "description": "Stable machine identifier; never derived from the display name.",
+      "type": "string",
+      "default": ""
+    },
+    "revision": {
+      "description": "Monotonic content revision for audit records and cached assessments.",
+      "type": "integer",
+      "format": "uint32",
+      "minimum": 0,
+      "default": 0
+    },
+    "name": {
+      "description": "Human-friendly title shown in the pack picker.",
+      "type": "string"
+    },
+    "version": {
+      "description": "Bump on every breaking change; the loader checks\n`version == \"1\"` for now and refuses to load future revs.",
+      "type": "string",
+      "const": "1"
+    },
+    "description": {
+      "description": "One-paragraph description shown under the title.",
+      "type": "string"
+    },
+    "targets": {
+      "description": "Device and Android-user constraints assessed before the picker and\nrevalidated immediately before a pack plan is created.",
+      "$ref": "#/$defs/PackTargets",
+      "default": {
+        "manufacturer": [],
+        "rom": [],
+        "model": [],
+        "build_fingerprint": [],
+        "android_min": null,
+        "android_max": null,
+        "user_scope": "unspecified"
+      }
+    },
+    "packages": {
+      "description": "The packages this pack offers to remove.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/PackEntry"
+      }
+    },
+    "attribution": {
+      "description": "Free-form attribution / licence (e.g. \"Adapted from UAD-NG, GPL-3.0\").\nOptional, but pack-lint warns when missing for community packs.",
+      "type": [
+        "string",
+        "null"
+      ],
+      "default": null
+    },
+    "provenance": {
+      "description": "Structured source/license information retained in every operation plan.",
+      "$ref": "#/$defs/PackProvenance",
+      "default": {
+        "source": "",
+        "license": ""
+      }
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "name",
+    "version",
+    "description",
+    "packages"
+  ],
+  "$defs": {
+    "PackTargets": {
+      "type": "object",
+      "properties": {
+        "manufacturer": {
+          "description": "Manufacturer strings as reported by `ro.product.manufacturer`.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "rom": {
+          "description": "ROM family, e.g. [\"oneui\", \"stock\"]. Free-form, matched\ncase-insensitively.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "model": {
+          "description": "Optional case-insensitive model substrings.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "build_fingerprint": {
+          "description": "Optional case-insensitive build-fingerprint substrings.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "android_min": {
+          "description": "Inclusive minimum Android API level (e.g. 30 for Android 11).",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0,
+          "default": null
+        },
+        "android_max": {
+          "description": "Inclusive maximum Android API level.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0,
+          "default": null
+        },
+        "user_scope": {
+          "description": "Explicit Android-user policy. Packs must never silently inherit user 0.",
+          "$ref": "#/$defs/UserScope",
+          "default": "unspecified"
+        }
+      },
+      "additionalProperties": false
+    },
+    "UserScope": {
+      "type": "string",
+      "enum": [
+        "unspecified",
+        "owner",
+        "current",
+        "any"
+      ]
+    },
+    "PackEntry": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "description": "Android package identifier.",
+          "type": "string"
+        },
+        "removal": {
+          "description": "Severity tier; matches UAD-NG semantics.",
+          "$ref": "#/$defs/RemovalLevel"
+        },
+        "description": {
+          "description": "What the package does, in user-facing language. Pack-lint\nrequires this — no anonymous entries.",
+          "type": "string"
+        },
+        "depends_on": {
+          "description": "Optional list of package IDs whose removal forces this one off\ntoo. Surfaced in the diff preview.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "needed_by": {
+          "description": "Optional list of package IDs that need this one to stay enabled.\nWarned about during preview.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "labels": {
+          "description": "Free-form tags for search/grouping (\"ads\", \"telemetry\", \"bloat\",\n\"vendor-locked\").",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "removal",
+        "description"
+      ]
+    },
+    "RemovalLevel": {
+      "type": "string",
+      "enum": [
+        "recommended",
+        "advanced",
+        "expert",
+        "unsafe"
+      ]
+    },
+    "PackProvenance": {
+      "type": "object",
+      "properties": {
+        "source": {
+          "type": "string"
+        },
+        "license": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "source",
+        "license"
+      ]
+    }
+  },
+  "$id": "https://github.com/SysAdminDoc/Droidsmith/blob/master/packs/schema.json",
+  "x-droidsmith-document-version": "1"
+}

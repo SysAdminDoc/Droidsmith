@@ -1,0 +1,26 @@
+{
+  "policy_version": 1,
+  "schemas": {
+    "pack": {
+      "document_version": "1",
+      "schema_sha256": "e68a479fd9833ec962624cf7b1cc0cfc4ea61833237313411c6d7fcfbaed9c1e",
+      "migration": "convert the file to the v1 pack schema in src-tauri/src/packs/mod.rs, set version: \"1\", then run droidsmith-pack-lint",
+      "compatibility_fixture": "packs/_example.yaml",
+      "fixture_version": "1"
+    },
+    "profile": {
+      "document_version": "2",
+      "schema_sha256": "7932b8eecdd17f6b12a5f065e2cb5925a64ed6ab3e053d49278bef444897f756",
+      "migration": "profile v1 is inspected and migrated explicitly to v2; review the profile-level Android user target before saving or applying it",
+      "compatibility_fixture": "src-tauri/fixtures/profiles/v1-valid.yaml",
+      "fixture_version": "1"
+    },
+    "quirk": {
+      "document_version": "1",
+      "schema_sha256": "929c6b9c62e8c07feb55e372504ca2c8af5e7e2ae7ee957b543104702706a28c",
+      "migration": "wrap the quirk list as version: \"1\" plus quirks: [...], then validate it with the bundled quirk loader",
+      "compatibility_fixture": "quirks/hyperos.yaml",
+      "fixture_version": "1"
+    }
+  }
+}

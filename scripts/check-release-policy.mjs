@@ -394,6 +394,8 @@ function runSchemaLint() {
     "--bin",
     "droidsmith-schema-lint",
     "--",
+    "--check-generated",
+    repoRoot,
   ];
   appendSchemaFiles(args, "--pack", path.join(repoRoot, "packs"));
   appendSchemaFiles(args, "--quirk", path.join(repoRoot, "quirks"));

@@ -6,6 +6,7 @@ mod apk_metadata;
 mod backup;
 mod bugreport;
 mod commands;
+pub mod contribution_schema;
 mod diagnostics;
 mod fs_util;
 mod host_diagnostics;

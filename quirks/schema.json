@@ -1,0 +1,173 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "QuirkDocument",
+  "type": "object",
+  "properties": {
+    "version": {
+      "description": "Bump on every breaking change; this build accepts only v1 files.",
+      "type": "string",
+      "const": "1"
+    },
+    "quirks": {
+      "description": "Ordered rules. The first matching quirk wins.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Quirk"
+      },
+      "default": []
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "version"
+  ],
+  "$defs": {
+    "Quirk": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "description": "Stable id for cross-referencing in bug reports.",
+          "type": "string"
+        },
+        "title": {
+          "description": "Human-readable title — first line shown to the user.",
+          "type": "string"
+        },
+        "matches": {
+          "description": "The matcher. All conditions are AND-ed.",
+          "$ref": "#/$defs/QuirkMatch",
+          "default": {
+            "error_contains": [],
+            "manufacturer": [],
+            "rom": [],
+            "package_id": []
+          }
+        },
+        "explanation": {
+          "description": "Body of the explanation. Markdown allowed; the UI renders\ninline.",
+          "type": "string"
+        },
+        "mitigation": {
+          "description": "Optional suggested next step. The UI may render this as a\none-click action button if the kind is recognised.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Mitigation"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "title",
+        "explanation"
+      ]
+    },
+    "QuirkMatch": {
+      "type": "object",
+      "properties": {
+        "error_contains": {
+          "description": "Substrings to look for in the failing command's stderr or\nstdout. ANY-match within the field; ALL-match across fields.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "manufacturer": {
+          "description": "Manufacturer values that should be present (case-insensitive\nequality against `ro.product.manufacturer`).",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "rom": {
+          "description": "ROM family hints — free-form, case-insensitive substring match\nagainst `ro.build.version.incremental` or known fingerprints.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "package_id": {
+          "description": "Package id patterns the failed action was applied to (exact\nmatch on package id).",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        }
+      },
+      "additionalProperties": false
+    },
+    "Mitigation": {
+      "oneOf": [
+        {
+          "description": "Suggest re-running the action with a different `ActionKind`.\nMost common case: \"pm disable failed → try pm uninstall --user 0\".",
+          "type": "object",
+          "properties": {
+            "suggest_kind": {
+              "type": "string"
+            },
+            "rationale": {
+              "type": "string"
+            },
+            "kind": {
+              "type": "string",
+              "const": "try_alternative_action"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "suggest_kind",
+            "rationale"
+          ]
+        },
+        {
+          "description": "Surface a doc link or workaround the user has to perform off-app.",
+          "type": "object",
+          "properties": {
+            "url": {
+              "type": "string"
+            },
+            "note": {
+              "type": "string"
+            },
+            "kind": {
+              "type": "string",
+              "const": "documentation"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "url",
+            "note"
+          ]
+        },
+        {
+          "description": "No automated fix; this quirk is informational only.",
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "none"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    }
+  },
+  "$id": "https://github.com/SysAdminDoc/Droidsmith/blob/master/quirks/schema.json",
+  "x-droidsmith-document-version": "1"
+}

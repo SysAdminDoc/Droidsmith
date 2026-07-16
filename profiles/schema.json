@@ -1,0 +1,193 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Profile",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string"
+    },
+    "version": {
+      "type": "string",
+      "const": "2"
+    },
+    "description": {
+      "type": "string",
+      "default": ""
+    },
+    "device": {
+      "$ref": "#/$defs/ProfileDeviceMatch",
+      "default": {
+        "require_serial_prefix": "",
+        "require_manufacturer": "",
+        "require_model": "",
+        "require_android_min": null,
+        "require_android_max": null
+      }
+    },
+    "user": {
+      "$ref": "#/$defs/ProfileUserTarget",
+      "default": {
+        "mode": "owner",
+        "id": null
+      }
+    },
+    "actions": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/ProfileAction"
+      }
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "name",
+    "version",
+    "actions"
+  ],
+  "$defs": {
+    "ProfileDeviceMatch": {
+      "type": "object",
+      "properties": {
+        "require_serial_prefix": {
+          "type": "string",
+          "default": ""
+        },
+        "require_manufacturer": {
+          "type": "string",
+          "default": ""
+        },
+        "require_model": {
+          "type": "string",
+          "default": ""
+        },
+        "require_android_min": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0,
+          "default": null
+        },
+        "require_android_max": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0,
+          "default": null
+        }
+      },
+      "additionalProperties": false
+    },
+    "ProfileUserTarget": {
+      "type": "object",
+      "properties": {
+        "mode": {
+          "$ref": "#/$defs/ProfileUserMode",
+          "default": "owner"
+        },
+        "id": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0,
+          "default": null
+        }
+      },
+      "additionalProperties": false
+    },
+    "ProfileUserMode": {
+      "type": "string",
+      "enum": [
+        "owner",
+        "current",
+        "explicit"
+      ]
+    },
+    "ProfileAction": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/ActionKind"
+        },
+        "package": {
+          "type": "string"
+        },
+        "note": {
+          "type": "string",
+          "default": ""
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "package"
+      ]
+    },
+    "ActionKind": {
+      "oneOf": [
+        {
+          "description": "`pm disable-user --user 0 <pkg>` — reversible with `pm enable`.",
+          "type": "string",
+          "const": "disable"
+        },
+        {
+          "description": "`pm enable <pkg>` — reverses Disable.",
+          "type": "string",
+          "const": "enable"
+        },
+        {
+          "description": "Android 15+ `pm archive` keeps user data while removing APK/cache.",
+          "type": "string",
+          "const": "archive"
+        },
+        {
+          "description": "Android 15+ `pm request-unarchive` asks the responsible installer to\nrestore an archived package.",
+          "type": "string",
+          "const": "request_unarchive"
+        },
+        {
+          "description": "`pm uninstall --user 0 <pkg>` — effectively permanent for the\ncurrent user; the APK remains in `/system/` (system apps) but\nis removed from `/data/app/` (user apps).",
+          "type": "string",
+          "const": "uninstall_for_user"
+        },
+        {
+          "description": "Backend-only inverse for a verified retained system package.\n`cmd package install-existing` is followed by an explicit restoration\nand verification of the prior enabled state.",
+          "type": "string",
+          "const": "restore_existing_for_user"
+        },
+        {
+          "description": "`pm clear <pkg>` — wipes the package's data and cache.",
+          "type": "string",
+          "const": "clear_data"
+        },
+        {
+          "description": "`am force-stop <pkg>` — non-destructive; included for symmetry.",
+          "type": "string",
+          "const": "force_stop"
+        },
+        {
+          "description": "`pm grant --user <id> <pkg> <permission>`.",
+          "type": "string",
+          "const": "grant_permission"
+        },
+        {
+          "description": "`pm revoke --user <id> <pkg> <permission>`.",
+          "type": "string",
+          "const": "revoke_permission"
+        },
+        {
+          "description": "A reviewed arbitrary shell mutation. Read-only shell commands use the\nseparate `shell_run` path and never enter the mutation journal.",
+          "type": "string",
+          "const": "shell"
+        }
+      ]
+    }
+  },
+  "$id": "https://github.com/SysAdminDoc/Droidsmith/blob/master/profiles/schema.json",
+  "x-droidsmith-document-version": "2"
+}

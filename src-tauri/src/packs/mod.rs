@@ -53,10 +53,11 @@ use crate::adb::packages::valid_package_name;
 pub const PACK_SCHEMA_VERSION: &str = "1";
 
 const MAX_PACK_BYTES: u64 = 512 * 1024;
-const PACK_SCHEMA_MIGRATION: &str =
+pub(crate) const PACK_SCHEMA_MIGRATION: &str =
     "convert the file to the v1 pack schema in src-tauri/src/packs/mod.rs, set version: \"1\", then run droidsmith-pack-lint";
 
-#[derive(specta::Type, Debug, Clone, Serialize, Deserialize)]
+#[derive(schemars::JsonSchema, specta::Type, Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Pack {
     /// Stable machine identifier; never derived from the display name.
     #[serde(default)]
@@ -68,6 +69,7 @@ pub struct Pack {
     pub name: String,
     /// Bump on every breaking change; the loader checks
     /// `version == "1"` for now and refuses to load future revs.
+    #[schemars(extend("const" = PACK_SCHEMA_VERSION))]
     pub version: String,
     /// One-paragraph description shown under the title.
     pub description: String,
@@ -86,13 +88,15 @@ pub struct Pack {
     pub provenance: PackProvenance,
 }
 
-#[derive(specta::Type, Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(schemars::JsonSchema, specta::Type, Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct PackProvenance {
     pub source: String,
     pub license: String,
 }
 
-#[derive(specta::Type, Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(schemars::JsonSchema, specta::Type, Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct PackTargets {
     /// Manufacturer strings as reported by `ro.product.manufacturer`.
     #[serde(default)]
@@ -118,7 +122,18 @@ pub struct PackTargets {
     pub user_scope: UserScope,
 }
 
-#[derive(specta::Type, Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(
+    schemars::JsonSchema,
+    specta::Type,
+    Debug,
+    Clone,
+    Copy,
+    Default,
+    PartialEq,
+    Eq,
+    Serialize,
+    Deserialize,
+)]
 #[serde(rename_all = "lowercase")]
 pub enum UserScope {
     #[default]
@@ -128,7 +143,8 @@ pub enum UserScope {
     Any,
 }
 
-#[derive(specta::Type, Debug, Clone, Serialize, Deserialize)]
+#[derive(schemars::JsonSchema, specta::Type, Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct PackEntry {
     /// Android package identifier.
     pub id: String,
@@ -151,7 +167,9 @@ pub struct PackEntry {
     pub labels: Vec<String>,
 }
 
-#[derive(specta::Type, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(
+    schemars::JsonSchema, specta::Type, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize,
+)]
 #[serde(rename_all = "lowercase")]
 pub enum RemovalLevel {
     Recommended,
@@ -633,6 +651,24 @@ packages:
         assert_eq!(p.packages[0].removal, RemovalLevel::Recommended);
         assert_eq!(p.packages[1].labels, vec!["productivity"]);
         assert!(lint(&p).is_empty());
+    }
+
+    #[test]
+    fn rejects_unknown_pack_fields() {
+        let unknown_root = GOOD.replace("name: \"Pixel", "unexpected: true\nname: \"Pixel");
+        let error = serde_yaml_ng::from_str::<Pack>(&unknown_root)
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("unknown field"));
+
+        let unknown_target = GOOD.replace(
+            "  manufacturer: [\"Google\"]",
+            "  manufacturer: [\"Google\"]\n  unexpected: true",
+        );
+        let error = serde_yaml_ng::from_str::<Pack>(&unknown_target)
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("unknown field"));
     }
 
     #[test]

@@ -6,9 +6,9 @@
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
-use droidsmith_lib::{packs, profile, quirks};
+use droidsmith_lib::{contribution_schema, packs, profile, quirks};
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 enum SchemaKind {
     Pack,
     Quirk,
@@ -28,7 +28,18 @@ impl SchemaKind {
 fn main() -> ExitCode {
     let mut args = std::env::args().skip(1);
     let mut inputs = Vec::new();
+    let mut generated_action = None;
     while let Some(flag) = args.next() {
+        if matches!(flag.as_str(), "--check-generated" | "--write-generated") {
+            if generated_action.is_some() {
+                return usage("only one generated-schema action may be supplied");
+            }
+            let Some(root) = args.next() else {
+                return usage(&format!("{flag} requires the repository root"));
+            };
+            generated_action = Some((flag, PathBuf::from(root)));
+            continue;
+        }
         let kind = match flag.as_str() {
             "--pack" => SchemaKind::Pack,
             "--quirk" => SchemaKind::Quirk,
@@ -41,11 +52,34 @@ fn main() -> ExitCode {
         inputs.push((kind, PathBuf::from(path)));
     }
 
+    if let Some((action, root)) = generated_action.as_ref() {
+        let result = if action == "--check-generated" {
+            contribution_schema::check_generated(root)
+        } else {
+            contribution_schema::write_generated(root)
+        };
+        match result {
+            Ok(paths) => {
+                for path in paths {
+                    println!("[ok]    {}", path.display());
+                }
+            }
+            Err(error) => {
+                eprintln!("[ERROR] generated schemas: {error}");
+                return ExitCode::FAILURE;
+            }
+        }
+    }
+
+    if inputs.is_empty() {
+        if generated_action.is_some() {
+            return ExitCode::SUCCESS;
+        }
+        return usage("no schema inputs or generated-schema action supplied");
+    }
+
     for kind in [SchemaKind::Pack, SchemaKind::Quirk, SchemaKind::Profile] {
-        if !inputs
-            .iter()
-            .any(|(candidate, _)| candidate.flag() == kind.flag())
-        {
+        if !inputs.iter().any(|(candidate, _)| *candidate == kind) {
             return usage(&format!("at least one {} input is required", kind.flag()));
         }
     }
@@ -76,8 +110,13 @@ fn validate(kind: SchemaKind, path: &Path) -> Result<usize, String> {
         SchemaKind::Quirk => quirks::load_file(path)
             .map(|entries| entries.len())
             .map_err(|error| error.to_string()),
-        SchemaKind::Profile => profile::load(path)
-            .map(|profile| profile.actions.len())
+        SchemaKind::Profile => profile::inspect(path)
+            .map(|document| match document {
+                profile::ProfileDocument::Current { profile } => profile.actions.len(),
+                profile::ProfileDocument::MigrationAvailable { migration } => {
+                    migration.profile.actions.len()
+                }
+            })
             .map_err(|error| error.to_string()),
     }
 }
@@ -85,7 +124,7 @@ fn validate(kind: SchemaKind, path: &Path) -> Result<usize, String> {
 fn usage(error: &str) -> ExitCode {
     eprintln!("error: {error}");
     eprintln!(
-        "usage: droidsmith-schema-lint --pack <file>... --quirk <file>... --profile <file>..."
+        "usage: droidsmith-schema-lint [--check-generated|--write-generated] <repo-root> [--pack <file>... --quirk <file>... --profile <file>...]"
     );
     ExitCode::from(2)
 }

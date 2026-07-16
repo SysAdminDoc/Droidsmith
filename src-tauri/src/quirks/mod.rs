@@ -34,12 +34,14 @@ use serde::{Deserialize, Serialize};
 pub const QUIRK_SCHEMA_VERSION: &str = "1";
 
 const MAX_QUIRKS_BYTES: u64 = 512 * 1024;
-const QUIRK_SCHEMA_MIGRATION: &str =
+pub(crate) const QUIRK_SCHEMA_MIGRATION: &str =
     "wrap the quirk list as version: \"1\" plus quirks: [...], then validate it with the bundled quirk loader";
 
-#[derive(specta::Type, Debug, Clone, Serialize, Deserialize)]
+#[derive(schemars::JsonSchema, specta::Type, Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct QuirkDocument {
     /// Bump on every breaking change; this build accepts only v1 files.
+    #[schemars(extend("const" = QUIRK_SCHEMA_VERSION))]
     pub version: String,
     /// Ordered rules. The first matching quirk wins.
     #[serde(default)]
@@ -53,7 +55,8 @@ enum QuirkFile {
     Legacy(Vec<Quirk>),
 }
 
-#[derive(specta::Type, Debug, Clone, Serialize, Deserialize)]
+#[derive(schemars::JsonSchema, specta::Type, Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Quirk {
     /// Stable id for cross-referencing in bug reports.
     pub id: String,
@@ -71,7 +74,8 @@ pub struct Quirk {
     pub mitigation: Option<Mitigation>,
 }
 
-#[derive(specta::Type, Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(schemars::JsonSchema, specta::Type, Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct QuirkMatch {
     /// Substrings to look for in the failing command's stderr or
     /// stdout. ANY-match within the field; ALL-match across fields.
@@ -91,8 +95,8 @@ pub struct QuirkMatch {
     pub package_id: Vec<String>,
 }
 
-#[derive(specta::Type, Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "kind", rename_all = "snake_case")]
+#[derive(schemars::JsonSchema, specta::Type, Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum Mitigation {
     /// Suggest re-running the action with a different `ActionKind`.
     /// Most common case: "pm disable failed → try pm uninstall --user 0".
@@ -492,6 +496,24 @@ quirks:
             }
             other => panic!("unexpected mitigation: {other:?}"),
         }
+    }
+
+    #[test]
+    fn rejects_unknown_quirk_fields() {
+        let yaml = r#"
+version: "1"
+quirks:
+  - id: strict
+    title: "Strict"
+    matches:
+      error_contains: ["failure"]
+      unexpected: true
+    explanation: "Reject unknown matcher fields."
+"#;
+        let error = serde_yaml_ng::from_str::<QuirkDocument>(yaml)
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("unknown field"));
     }
 
     #[test]

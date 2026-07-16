@@ -15,14 +15,20 @@ use crate::adb::{
 
 pub const PROFILE_SCHEMA_VERSION: &str = "2";
 pub const LEGACY_PROFILE_SCHEMA_VERSION: &str = "1";
+pub(crate) const PROFILE_SCHEMA_MIGRATION: &str =
+    "profile v1 is inspected and migrated explicitly to v2; review the profile-level Android user target before saving or applying it";
 
 const MAX_PROFILE_BYTES: u64 = 256 * 1024;
 const MAX_PROFILE_ACTIONS: usize = 2_000;
 const MAX_PROFILE_TEXT: usize = 4_096;
 
-#[derive(specta::Type, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(
+    schemars::JsonSchema, specta::Type, Debug, Clone, PartialEq, Eq, Serialize, Deserialize,
+)]
+#[serde(deny_unknown_fields)]
 pub struct Profile {
     pub name: String,
+    #[schemars(extend("const" = PROFILE_SCHEMA_VERSION))]
     pub version: String,
     #[serde(default)]
     pub description: String,
@@ -33,7 +39,10 @@ pub struct Profile {
     pub actions: Vec<ProfileAction>,
 }
 
-#[derive(specta::Type, Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(
+    schemars::JsonSchema, specta::Type, Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize,
+)]
+#[serde(deny_unknown_fields)]
 pub struct ProfileDeviceMatch {
     #[serde(default)]
     pub require_serial_prefix: String,
@@ -47,7 +56,18 @@ pub struct ProfileDeviceMatch {
     pub require_android_max: Option<u32>,
 }
 
-#[derive(specta::Type, Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(
+    schemars::JsonSchema,
+    specta::Type,
+    Debug,
+    Clone,
+    Copy,
+    Default,
+    PartialEq,
+    Eq,
+    Serialize,
+    Deserialize,
+)]
 #[serde(rename_all = "snake_case")]
 pub enum ProfileUserMode {
     #[default]
@@ -56,7 +76,10 @@ pub enum ProfileUserMode {
     Explicit,
 }
 
-#[derive(specta::Type, Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(
+    schemars::JsonSchema, specta::Type, Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize,
+)]
+#[serde(deny_unknown_fields)]
 pub struct ProfileUserTarget {
     #[serde(default)]
     pub mode: ProfileUserMode,
@@ -64,7 +87,10 @@ pub struct ProfileUserTarget {
     pub id: Option<u32>,
 }
 
-#[derive(specta::Type, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(
+    schemars::JsonSchema, specta::Type, Debug, Clone, PartialEq, Eq, Serialize, Deserialize,
+)]
+#[serde(deny_unknown_fields)]
 pub struct ProfileAction {
     pub kind: ActionKind,
     pub package: String,
@@ -111,6 +137,7 @@ struct VersionProbe {
 }
 
 #[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 struct LegacyProfile {
     name: String,
     version: String,
@@ -122,6 +149,7 @@ struct LegacyProfile {
 }
 
 #[derive(Default, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct LegacyDeviceMatch {
     #[serde(default)]
     require_serial_prefix: String,
@@ -130,6 +158,7 @@ struct LegacyDeviceMatch {
 }
 
 #[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 struct LegacyAction {
     kind: ActionKind,
     package: String,
@@ -525,6 +554,24 @@ actions:
         assert_eq!(profile.actions.len(), 2);
         assert_eq!(profile.user.id, Some(10));
         assert!(lint(&profile).is_empty());
+    }
+
+    #[test]
+    fn current_and_legacy_profiles_reject_unknown_fields() {
+        let current = V2.replace(
+            "    note: YouTube Premium nag",
+            "    note: YouTube Premium nag\n    unexpected: true",
+        );
+        let error = inspect_text(&current, Path::new("profile.yaml"))
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("unknown field"));
+
+        let legacy = V1.replace("    user: 10", "    user: 10\n    unexpected: true");
+        let error = inspect_text(&legacy, Path::new("legacy.yaml"))
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("unknown field"));
     }
 
     #[test]
