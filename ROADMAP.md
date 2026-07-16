@@ -15,10 +15,6 @@ instead.
 
 ## Remaining
 
-- [ ] P3 — **IMP-36** Russian i18n missing plural form `_few`
-  Why: Russian has 3 plural forms (one, few, many). Keys like `deviceCount` only define `_one` and `_other`, producing grammatically incorrect output for counts 2-4.
-  Where: `src/locales/ru.json`
-
 ## Research-Driven Additions
 
 ### P0
