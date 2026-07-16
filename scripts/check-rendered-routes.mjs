@@ -30,6 +30,7 @@ try {
   try {
     await runDesktopFlow(browser);
     await runMobileFlow(browser);
+    await runLocaleZoomFlow(browser);
   } finally {
     await browser.close();
   }
@@ -653,6 +654,48 @@ async function runMobileFlow(browser) {
   });
   assertNoConsoleErrors(errors, "mobile route smoke");
   await context.close();
+}
+
+// IMP-51: assert every route renders cleanly under a non-English locale and a
+// 200% accessibility zoom, catching layout overflow and locale-only crashes the
+// English desktop/mobile flows miss.
+async function runLocaleZoomFlow(browser) {
+  // A 640px CSS viewport reflows a 1280px desktop at 200% accessibility zoom
+  // (WCAG 1.4.10 reflow), the layout an actual 200% zoom produces.
+  const page = await browser.newPage({ viewport: { width: 640, height: 900 } });
+  const errors = collectConsoleErrors(page);
+  await installTauriMock(page);
+  await page.goto(baseUrl, { waitUntil: "networkidle" });
+
+  await page.getByLabel("Language").selectOption("ru");
+  await page.waitForFunction(() => document.documentElement.lang === "ru");
+
+  const routes = [
+    "Устройства",
+    "Беспроводное",
+    "Приложения",
+    "Очистка",
+    "Профили",
+    "Зеркало",
+    "Консоль",
+    "Logcat",
+    "Fastboot",
+  ];
+  for (const name of routes) {
+    await page
+      .getByRole("button", { name: new RegExp(name, "u") })
+      .first()
+      .click();
+    await page.getByRole("heading", { name, exact: true }).first().waitFor();
+    await assertNoHorizontalOverflow(page, `ru+zoom ${name}`);
+  }
+
+  await page.screenshot({
+    path: path.join(screenshotDir, "locale-zoom-logcat.png"),
+    fullPage: false,
+  });
+  assertNoConsoleErrors(errors, "locale+zoom route smoke");
+  await page.close();
 }
 
 function collectConsoleErrors(page) {
