@@ -75,20 +75,6 @@ instead.
 
 ### P2
 
-- [ ] P2 — **IMP-49** Publish generated contribution schemas with migration checks
-  Why: Packs, profiles, and quirks are versioned, but unknown YAML fields can be ignored and `CONTRIBUTING.md` promises a missing `packs/schema.json`.
-  Evidence: pack/profile/quirk Rust DTOs and loaders, `CONTRIBUTING.md:100`; JSON Schema 2020-12.
-  Touches: Rust DTO derives/annotations, schema generator/check script, generated pack/profile/quirk schemas, fixtures, `CONTRIBUTING.md`.
-  Acceptance: DTOs reject unknown fields; deterministic JSON Schemas validate every shipped YAML and provide editor completion; local checks fail a breaking schema diff without a version bump, documented migration, and backward-compatibility fixture.
-  Complexity: M
-
-- [ ] P2 — **IMP-50** Migrate preferences to a versioned typed settings store
-  Why: Language and per-device mirror presets are unversioned raw `localStorage` keys with no backup, corruption recovery, export, or migration contract.
-  Evidence: `src/lib/i18n.ts`, `src/routes/Mirror.tsx:123-172`, `src/routes/mirrorPresets.ts`; Tauri Store guidance.
-  Touches: settings DTO/store service, Tauri capability/permission config, i18n and Mirror consumers, migration/recovery tests.
-  Acceptance: A versioned typed store performs an idempotent one-time import of current keys, backs up before migration, preserves valid settings across upgrades, quarantines corrupt data without blocking launch, and offers scoped export/reset without exposing arbitrary store paths.
-  Complexity: M
-
 - [ ] P2 — **IMP-51** Expand deterministic rendered-state and race regression coverage
   Why: Current route smoke misses Wireless, Mirror, Logcat, Fastboot, onboarding, non-English layouts, error/loading/empty states, target switches, route unmounts, accessibility zoom, and stale async responses.
   Evidence: `scripts/check-rendered-routes.mjs`, `src/**/*.test.ts*`, reproduced desktop/mobile fixtures; Android Studio detached-state pattern.

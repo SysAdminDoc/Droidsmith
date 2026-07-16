@@ -11,7 +11,7 @@ export const SUPPORTED_LANGUAGES = [
 ] as const;
 
 export type SupportedLanguage = (typeof SUPPORTED_LANGUAGES)[number]["code"];
-type LanguageStorage = Pick<Storage, "getItem" | "setItem">;
+type LanguageStorage = Pick<Storage, "getItem">;
 
 const resources = {
   en: { translation: en },
@@ -57,18 +57,6 @@ export function readStoredLanguage(
   } catch {
     return null;
   }
-}
-
-export function persistLanguage(
-  language: SupportedLanguage,
-  storage: LanguageStorage | null = getLanguageStorage(),
-): SupportedLanguage {
-  try {
-    storage?.setItem(LANGUAGE_STORAGE_KEY, language);
-  } catch {
-    // Persistence is best-effort; changing the runtime language still works.
-  }
-  return language;
 }
 
 export function detectInitialLanguage({

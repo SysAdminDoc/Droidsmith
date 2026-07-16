@@ -20,11 +20,14 @@ import {
   useTransportAuthorization,
 } from "../lib/useAuthorizedDevices";
 import { formatDateTime } from "../lib/i18n";
+import {
+  loadStoredMirrorPreset,
+  resetStoredMirrorPreset,
+  saveStoredMirrorPreset,
+} from "../lib/settings";
 
 import {
   DEFAULT_MIRROR_PRESET,
-  normalizePreset,
-  presetStorageKey,
   type KeyboardMode,
   type MirrorPreset,
 } from "./mirrorPresets";
@@ -116,6 +119,7 @@ export default function MirrorRoute() {
 
   useEffect(() => {
     if (!selectedTarget) return;
+    let cancelled = false;
     setPresetMessage(null);
     // A mirror session belongs to a specific device — reset tracking when
     // the target changes so the UI doesn't show device A's running session
@@ -123,15 +127,25 @@ export default function MirrorRoute() {
     // window keeps running independently.
     setSession({ kind: "idle" });
     setRecordingPath(null);
-    try {
-      const raw = window.localStorage.getItem(
-        presetStorageKey(selectedTarget.serial),
-      );
-      setPreset(raw ? normalizePreset(JSON.parse(raw)) : DEFAULT_MIRROR_PRESET);
-    } catch {
-      setPreset(DEFAULT_MIRROR_PRESET);
-    }
-  }, [selectedTarget]);
+    setPreset(DEFAULT_MIRROR_PRESET);
+    void loadStoredMirrorPreset(selectedTarget.serial)
+      .then((stored) => {
+        if (!cancelled) setPreset(stored);
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          setPreset(DEFAULT_MIRROR_PRESET);
+          setPresetMessage(
+            t("mirror.presetLoadFailed", {
+              message: error instanceof Error ? error.message : String(error),
+            }),
+          );
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedTarget, t]);
 
   const probeCapabilities = useCallback(async (target: DeviceTarget) => {
     setCapabilityState({ kind: "checking" });
@@ -203,23 +217,36 @@ export default function MirrorRoute() {
     return () => window.clearInterval(timer);
   }, [runningSessionId]);
 
-  const savePreset = useCallback(() => {
+  const savePreset = useCallback(async () => {
     if (!selectedTarget) return;
-    window.localStorage.setItem(
-      presetStorageKey(selectedTarget.serial),
-      JSON.stringify(preset),
-    );
-    setPresetMessage(
-      t("mirror.presetSaved", { serial: selectedTarget.serial }),
-    );
+    try {
+      await saveStoredMirrorPreset(selectedTarget.serial, preset);
+      setPresetMessage(
+        t("mirror.presetSaved", { serial: selectedTarget.serial }),
+      );
+    } catch (error) {
+      setPresetMessage(
+        t("mirror.presetSaveFailed", {
+          message: error instanceof Error ? error.message : String(error),
+        }),
+      );
+    }
   }, [preset, selectedTarget, t]);
 
-  const resetPreset = useCallback(() => {
+  const resetPreset = useCallback(async () => {
     setPreset(DEFAULT_MIRROR_PRESET);
-    if (selectedTarget) {
-      window.localStorage.removeItem(presetStorageKey(selectedTarget.serial));
+    try {
+      if (selectedTarget) {
+        await resetStoredMirrorPreset(selectedTarget.serial);
+      }
+      setPresetMessage(t("mirror.presetReset"));
+    } catch (error) {
+      setPresetMessage(
+        t("mirror.presetSaveFailed", {
+          message: error instanceof Error ? error.message : String(error),
+        }),
+      );
     }
-    setPresetMessage(t("mirror.presetReset"));
   }, [selectedTarget, t]);
 
   const launchMirror = useCallback(async () => {
@@ -445,14 +472,18 @@ export default function MirrorRoute() {
                     )}
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    <Button type="button" size="sm" onClick={savePreset}>
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={() => void savePreset()}
+                    >
                       {t("mirror.savePreset")}
                     </Button>
                     <Button
                       type="button"
                       size="sm"
                       variant="ghost"
-                      onClick={resetPreset}
+                      onClick={() => void resetPreset()}
                     >
                       {t("mirror.resetPreset")}
                     </Button>

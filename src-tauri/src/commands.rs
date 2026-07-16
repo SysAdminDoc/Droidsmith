@@ -41,6 +41,7 @@ use crate::profile;
 use crate::quirks::{self, DeviceContext, Quirk};
 use crate::recovery_baseline::{self, BaselineActionInput, BaselinePack, RecoveryBaselineDiff};
 use crate::remote_files;
+use crate::settings;
 use crate::support_bundle;
 
 #[derive(specta::Type, Serialize)]
@@ -1212,6 +1213,15 @@ impl From<apk_metadata::MetadataError> for CommandError {
     }
 }
 
+impl From<settings::SettingsError> for CommandError {
+    fn from(error: settings::SettingsError) -> Self {
+        Self {
+            code: error.code(),
+            message: error.to_string(),
+        }
+    }
+}
+
 async fn spawn_blocking_operation<T, F>(operation: F) -> Result<T, CommandError>
 where
     T: Send + 'static,
@@ -1223,6 +1233,111 @@ where
             code: "operation_join_failed",
             message: format!("background operation task failed: {error}"),
         })?
+}
+
+fn settings_app_data_dir(app: &tauri::AppHandle) -> Result<PathBuf, CommandError> {
+    app.path().app_data_dir().map_err(|error| CommandError {
+        code: "no_app_data_dir",
+        message: error.to_string(),
+    })
+}
+
+/// Load the fixed backend-owned settings document and perform the one-time
+/// import of bounded legacy renderer values when needed.
+#[tauri::command]
+#[specta::specta]
+pub async fn initialize_settings(
+    app: tauri::AppHandle,
+    legacy: settings::LegacySettingsImport,
+) -> Result<settings::SettingsLoadResult, CommandError> {
+    let app_data_dir = settings_app_data_dir(&app)?;
+    spawn_blocking_operation(move || Ok(settings::initialize(&app_data_dir, legacy)?)).await
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn set_settings_language(
+    app: tauri::AppHandle,
+    language: settings::SettingsLanguage,
+) -> Result<settings::SettingsSnapshot, CommandError> {
+    let app_data_dir = settings_app_data_dir(&app)?;
+    spawn_blocking_operation(move || Ok(settings::set_language(&app_data_dir, language)?)).await
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn get_settings_mirror_preset(
+    app: tauri::AppHandle,
+    device_identity: String,
+) -> Result<Option<settings::MirrorPreset>, CommandError> {
+    let app_data_dir = settings_app_data_dir(&app)?;
+    spawn_blocking_operation(move || {
+        Ok(settings::get_mirror_preset(
+            &app_data_dir,
+            &device_identity,
+        )?)
+    })
+    .await
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn set_settings_mirror_preset(
+    app: tauri::AppHandle,
+    device_identity: String,
+    preset: settings::MirrorPreset,
+) -> Result<settings::SettingsSnapshot, CommandError> {
+    let app_data_dir = settings_app_data_dir(&app)?;
+    spawn_blocking_operation(move || {
+        Ok(settings::set_mirror_preset(
+            &app_data_dir,
+            &device_identity,
+            preset,
+        )?)
+    })
+    .await
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn reset_settings_mirror_preset(
+    app: tauri::AppHandle,
+    device_identity: String,
+) -> Result<settings::SettingsSnapshot, CommandError> {
+    let app_data_dir = settings_app_data_dir(&app)?;
+    spawn_blocking_operation(move || {
+        Ok(settings::reset_mirror_preset(
+            &app_data_dir,
+            &device_identity,
+        )?)
+    })
+    .await
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn reset_settings(
+    app: tauri::AppHandle,
+    scope: settings::SettingsScope,
+) -> Result<settings::SettingsSnapshot, CommandError> {
+    let app_data_dir = settings_app_data_dir(&app)?;
+    spawn_blocking_operation(move || Ok(settings::reset(&app_data_dir, scope)?)).await
+}
+
+/// Export only a named settings scope through a backend-issued save grant.
+/// The internal settings path never crosses IPC.
+#[tauri::command]
+#[specta::specta]
+pub async fn export_settings(
+    app: tauri::AppHandle,
+    grants: tauri::State<'_, PathGrantStore>,
+    scope: settings::SettingsScope,
+    path_grant: String,
+) -> Result<settings::SettingsExportResult, CommandError> {
+    let destination = grants.consume(&path_grant, HostPathPurpose::SettingsExport)?;
+    let app_data_dir = settings_app_data_dir(&app)?;
+    spawn_blocking_operation(move || Ok(settings::export(&app_data_dir, scope, &destination)?))
+        .await
 }
 
 /// Open a backend-owned native file dialog and retain its result as a short-

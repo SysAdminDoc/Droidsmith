@@ -7,6 +7,57 @@ export const commands = {
     return await TAURI_INVOKE("heartbeat");
   },
   /**
+   * Load the fixed backend-owned settings document and perform the one-time
+   * import of bounded legacy renderer values when needed.
+   */
+  async initializeSettings(
+    legacy: LegacySettingsImport,
+  ): Promise<SettingsLoadResult> {
+    return await TAURI_INVOKE("initialize_settings", { legacy });
+  },
+  async setSettingsLanguage(
+    language: SettingsLanguage,
+  ): Promise<SettingsSnapshot> {
+    return await TAURI_INVOKE("set_settings_language", { language });
+  },
+  async getSettingsMirrorPreset(
+    deviceIdentity: string,
+  ): Promise<MirrorPreset | null> {
+    return await TAURI_INVOKE("get_settings_mirror_preset", { deviceIdentity });
+  },
+  async setSettingsMirrorPreset(
+    deviceIdentity: string,
+    preset: MirrorPreset,
+  ): Promise<SettingsSnapshot> {
+    return await TAURI_INVOKE("set_settings_mirror_preset", {
+      deviceIdentity,
+      preset,
+    });
+  },
+  async resetSettingsMirrorPreset(
+    deviceIdentity: string,
+  ): Promise<SettingsSnapshot> {
+    return await TAURI_INVOKE("reset_settings_mirror_preset", {
+      deviceIdentity,
+    });
+  },
+  async resetSettings(scope: SettingsScope): Promise<SettingsSnapshot> {
+    return await TAURI_INVOKE("reset_settings", { scope });
+  },
+  /**
+   * Export only a named settings scope through a backend-issued save grant.
+   * The internal settings path never crosses IPC.
+   */
+  async exportSettings(
+    scope: SettingsScope,
+    pathGrant: string,
+  ): Promise<SettingsExportResult> {
+    return await TAURI_INVOKE("export_settings", {
+      scope,
+      path_grant: pathGrant,
+    });
+  },
+  /**
    * Run a bounded, non-elevated, read-only host connection scan. The report
    * contains state counts and redacted configuration presence only; it never
    * persists device identifiers, USB instance IDs, environment values, or keys.
@@ -1212,6 +1263,7 @@ export type HostPathPurpose =
   | "extract_apk_save"
   | "recovery_baseline_save"
   | "profile_save"
+  | "settings_export"
   | "push_open"
   | "install_open"
   | "recovery_baseline_open"
@@ -1271,6 +1323,7 @@ export type JournalEntry = {
   failure?: string | null;
 };
 export type JournalOutcome = "pending" | "succeeded" | "failed" | "interrupted";
+export type KeyboardMode = "default" | "sdk" | "uhid" | "aoa" | "disabled";
 export type LaunchScrcpyRequest = {
   serial: string;
   target: DeviceTarget;
@@ -1292,6 +1345,14 @@ export type LegacyEligibilityEvidence = {
   allow_backup: boolean | null;
   reason: string;
 };
+export type LegacyMirrorPresetInput = {
+  deviceIdentity: string;
+  rawValue: string;
+};
+export type LegacySettingsImport = {
+  language: string | null;
+  mirrorPresets?: LegacyMirrorPresetInput[];
+};
 /**
  * Outcome envelope for `list_devices`. We surface adb-not-found as a
  * structured success-with-zero-devices + an `adb_resolved=false` flag
@@ -1307,6 +1368,18 @@ export type ListWirelessServicesResult = {
   adb_resolved: boolean;
   adb_path: string | null;
   services: WirelessAdbService[];
+};
+export type MirrorPreset = {
+  maxSize: string;
+  bitRate: string;
+  noAudio: boolean;
+  recording: boolean;
+  keyboardMode: KeyboardMode;
+  videoCodec: VideoCodec;
+  videoEncoder: string;
+  turnScreenOff: boolean;
+  stayAwake: boolean;
+  showTouches: boolean;
 };
 export type Mitigation =
   /**
@@ -1795,6 +1868,27 @@ export type ScrcpyVideoEncoder = {
   name: string;
   software: boolean;
 };
+export type SettingsExportResult = {
+  path: string;
+  byteSize: number;
+  scope: SettingsScope;
+};
+export type SettingsLanguage = "en" | "ru";
+export type SettingsLoadResult = {
+  settings: SettingsSnapshot;
+  recovery: SettingsRecovery;
+  legacyCleanupAllowed: boolean;
+};
+export type SettingsRecovery =
+  | "clean"
+  | "legacy_imported"
+  | "corrupt_quarantined";
+export type SettingsScope = "all" | "language" | "mirror_presets";
+export type SettingsSnapshot = {
+  version: string;
+  language: SettingsLanguage | null;
+  mirrorPresetCount: number;
+};
 export type ShellActionPlan = {
   mutating: boolean;
   dangerous: boolean;
@@ -1818,6 +1912,7 @@ export type SupportPreview = {
   local_only: boolean;
 };
 export type UserScope = "unspecified" | "owner" | "current" | "any";
+export type VideoCodec = "h264" | "h265" | "av1" | "vp8" | "vp9";
 export type WifiV2State = "supported" | "not_detected" | "probe_unavailable";
 export type WipeResult = {
   files_removed: number;

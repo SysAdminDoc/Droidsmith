@@ -42,6 +42,13 @@
     recover_adb: [["confirmed", "operation_id", "on_event"], []],
     select_host_path: [["purpose", "suggested_name"], []],
     reveal_in_folder: [["path"], []],
+    initialize_settings: [["legacy"], []],
+    set_settings_language: [["language"], []],
+    get_settings_mirror_preset: [["deviceIdentity"], []],
+    set_settings_mirror_preset: [["deviceIdentity", "preset"], []],
+    reset_settings_mirror_preset: [["deviceIdentity"], []],
+    reset_settings: [["scope"], []],
+    export_settings: [["scope", "path_grant"], []],
     save_diagnostics: [["path_grant"], []],
     wipe_diagnostics: [["confirmed"], []],
     pair_wireless: [["request"], []],
@@ -132,6 +139,7 @@
     "extract_apk_save",
     "recovery_baseline_save",
     "profile_save",
+    "settings_export",
     "push_open",
     "install_open",
     "recovery_baseline_open",
@@ -385,6 +393,94 @@
     }
   }
 
+  function validateMirrorPreset(preset) {
+    validateKeys(
+      preset,
+      [
+        "maxSize",
+        "bitRate",
+        "noAudio",
+        "recording",
+        "keyboardMode",
+        "videoCodec",
+        "videoEncoder",
+        "turnScreenOff",
+        "stayAwake",
+        "showTouches",
+      ],
+      [],
+      "settings_mirror_preset",
+    );
+    if (
+      typeof preset.maxSize !== "string" ||
+      !/^\d{1,5}$/u.test(preset.maxSize)
+    ) {
+      reject("settings_max_size");
+    }
+    if (
+      typeof preset.bitRate !== "string" ||
+      !/^[0-9]+[kKmM]?$/u.test(preset.bitRate) ||
+      preset.bitRate.length > 16
+    ) {
+      reject("settings_bit_rate");
+    }
+    if (
+      !["default", "sdk", "uhid", "aoa", "disabled"].includes(
+        preset.keyboardMode,
+      )
+    ) {
+      reject("settings_keyboard_mode");
+    }
+    if (!["h264", "h265", "av1", "vp8", "vp9"].includes(preset.videoCodec)) {
+      reject("settings_video_codec");
+    }
+    if (
+      typeof preset.videoEncoder !== "string" ||
+      preset.videoEncoder.length > 255 ||
+      !/^[A-Za-z0-9_.-]*$/u.test(preset.videoEncoder)
+    ) {
+      reject("settings_video_encoder");
+    }
+    for (const key of [
+      "noAudio",
+      "recording",
+      "turnScreenOff",
+      "stayAwake",
+      "showTouches",
+    ]) {
+      if (typeof preset[key] !== "boolean") reject(`settings_${key}`);
+    }
+  }
+
+  function validateLegacySettings(legacy) {
+    validateKeys(legacy, ["language"], ["mirrorPresets"], "legacy_settings");
+    if (
+      legacy.language !== null &&
+      (typeof legacy.language !== "string" || legacy.language.length > 64)
+    ) {
+      reject("legacy_settings_language");
+    }
+    const presets = legacy.mirrorPresets ?? [];
+    if (!Array.isArray(presets) || presets.length > 128) {
+      reject("legacy_settings_presets");
+    }
+    for (const preset of presets) {
+      validateKeys(
+        preset,
+        ["deviceIdentity", "rawValue"],
+        [],
+        "legacy_settings_preset",
+      );
+      ensureIdentifier(preset.deviceIdentity, "legacy_settings_device");
+      if (
+        typeof preset.rawValue !== "string" ||
+        preset.rawValue.length > MAX_STRING_LENGTH
+      ) {
+        reject("legacy_settings_value");
+      }
+    }
+  }
+
   function validateProfile(profile) {
     validateKeys(
       profile,
@@ -475,6 +571,28 @@
         ) {
           reject("suggested_name");
         }
+      }
+    }
+    if (command === "initialize_settings")
+      validateLegacySettings(payload.legacy);
+    if (command === "set_settings_language") {
+      if (!["en", "ru"].includes(payload.language)) reject("settings_language");
+    }
+    if (
+      [
+        "get_settings_mirror_preset",
+        "set_settings_mirror_preset",
+        "reset_settings_mirror_preset",
+      ].includes(command)
+    ) {
+      ensureIdentifier(payload.deviceIdentity, "settings_device");
+    }
+    if (command === "set_settings_mirror_preset") {
+      validateMirrorPreset(payload.preset);
+    }
+    if (["reset_settings", "export_settings"].includes(command)) {
+      if (!["all", "language", "mirror_presets"].includes(payload.scope)) {
+        reject("settings_scope");
       }
     }
     if (command === "recover_adb" || command === "wipe_diagnostics") {

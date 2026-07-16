@@ -868,6 +868,7 @@ async function installTauriMock(page) {
     const runtimeJournal = [];
     let installAttempts = 0;
     let scrcpyLaunches = 0;
+    let settingsLanguage = "en";
     let archiveApi = 35;
     window.__DROIDSMITH_MOCK_ARCHIVE_API__ = (api) => {
       archiveApi = api;
@@ -2029,6 +2030,47 @@ async function installTauriMock(page) {
         if (cmd === "locate_fastboot") return null;
         if (cmd === "list_fastboot_devices") return [];
         if (cmd === "list_permissions") return [];
+        if (cmd === "initialize_settings") {
+          return {
+            settings: {
+              version: "1",
+              language: settingsLanguage,
+              mirrorPresetCount: 0,
+            },
+            recovery: "clean",
+            legacyCleanupAllowed: false,
+          };
+        }
+        if (cmd === "set_settings_language") {
+          settingsLanguage = args.language;
+          return {
+            version: "1",
+            language: settingsLanguage,
+            mirrorPresetCount: 0,
+          };
+        }
+        if (cmd === "get_settings_mirror_preset") return null;
+        if (
+          cmd === "set_settings_mirror_preset" ||
+          cmd === "reset_settings_mirror_preset" ||
+          cmd === "reset_settings"
+        ) {
+          if (cmd === "reset_settings" && args.scope !== "mirror_presets") {
+            settingsLanguage = null;
+          }
+          return {
+            version: "1",
+            language: settingsLanguage,
+            mirrorPresetCount: 0,
+          };
+        }
+        if (cmd === "export_settings") {
+          return {
+            path: "C:/Users/QA/Desktop/droidsmith-settings-all.json",
+            byteSize: 128,
+            scope: args.scope,
+          };
+        }
         throw new Error(`Unhandled mocked command: ${cmd}`);
       },
       transformCallback(callback) {

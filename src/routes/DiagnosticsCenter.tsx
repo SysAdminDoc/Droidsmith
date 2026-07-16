@@ -13,6 +13,7 @@ import { useFocusTrap } from "../lib/useFocusTrap";
 import { Badge, Button, SkeletonLine, StatePanel } from "./common";
 import BugreportCapture from "./BugreportCapture";
 import HostDoctor from "./HostDoctor";
+import SettingsDataControls from "./SettingsDataControls";
 
 type PreviewState =
   | { kind: "loading" }
@@ -157,6 +158,8 @@ export default function DiagnosticsCenter({
         <div className="mt-5">
           <BugreportCapture />
         </div>
+
+        <SettingsDataControls />
 
         {state.kind === "loading" && (
           <div className="mt-5 space-y-3" aria-label={t("diagnostics.loading")}>

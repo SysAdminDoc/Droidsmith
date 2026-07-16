@@ -28,6 +28,7 @@ pub enum HostPathPurpose {
     ExtractApkSave,
     RecoveryBaselineSave,
     ProfileSave,
+    SettingsExport,
     PushOpen,
     InstallOpen,
     RecoveryBaselineOpen,
@@ -49,6 +50,7 @@ impl HostPathPurpose {
                 | Self::ExtractApkSave
                 | Self::RecoveryBaselineSave
                 | Self::ProfileSave
+                | Self::SettingsExport
         )
     }
 
@@ -65,6 +67,7 @@ impl HostPathPurpose {
             Self::ExtractApkSave => "Save extracted APK",
             Self::RecoveryBaselineSave => "Export recovery baseline",
             Self::ProfileSave => "Export Droidsmith profile",
+            Self::SettingsExport => "Export Droidsmith settings",
             Self::PushOpen => "Choose file to push",
             Self::InstallOpen => "Choose Android package",
             Self::RecoveryBaselineOpen => "Inspect recovery baseline",
@@ -86,6 +89,7 @@ impl HostPathPurpose {
                 Some(("Droidsmith recovery baseline", &["json"]))
             }
             Self::ProfileSave | Self::ProfileOpen => Some(("Droidsmith profile", &["yaml", "yml"])),
+            Self::SettingsExport => Some(("Droidsmith settings", &["json"])),
             Self::InstallOpen => Some(("Android package", &["apk", "apks", "xapk", "apkm"])),
             Self::PullSave | Self::PushOpen => None,
         }

@@ -31,6 +31,7 @@ import {
   type InstallPackageResult,
   type JournalEntry as GeneratedJournalEntry,
   type LaunchScrcpyRequest,
+  type LegacySettingsImport,
   type ListDevicesResult,
   type ListWirelessServicesResult,
   type NetworkConnection,
@@ -60,6 +61,12 @@ import {
   type ScrcpySession,
   type ScrcpyVideoEncoder as GeneratedScrcpyVideoEncoder,
   type ShellActionPlan as GeneratedShellActionPlan,
+  type SettingsExportResult,
+  type SettingsLanguage,
+  type SettingsLoadResult,
+  type SettingsScope,
+  type SettingsSnapshot,
+  type MirrorPreset as GeneratedSettingsMirrorPreset,
   type SupportPreview,
   type WipeResult,
   type WirelessCommandResult,
@@ -311,6 +318,52 @@ export function inTauri(): boolean {
 
 export async function callHeartbeat(): Promise<Heartbeat> {
   return commands.heartbeat();
+}
+
+export type SettingsMirrorPreset = GeneratedSettingsMirrorPreset;
+
+export async function callInitializeSettings(
+  legacy: LegacySettingsImport,
+): Promise<SettingsLoadResult> {
+  return commands.initializeSettings(legacy);
+}
+
+export async function callSetSettingsLanguage(
+  language: SettingsLanguage,
+): Promise<SettingsSnapshot> {
+  return commands.setSettingsLanguage(language);
+}
+
+export async function callGetSettingsMirrorPreset(
+  deviceIdentity: string,
+): Promise<SettingsMirrorPreset | null> {
+  return commands.getSettingsMirrorPreset(deviceIdentity);
+}
+
+export async function callSetSettingsMirrorPreset(
+  deviceIdentity: string,
+  preset: SettingsMirrorPreset,
+): Promise<SettingsSnapshot> {
+  return commands.setSettingsMirrorPreset(deviceIdentity, preset);
+}
+
+export async function callResetSettingsMirrorPreset(
+  deviceIdentity: string,
+): Promise<SettingsSnapshot> {
+  return commands.resetSettingsMirrorPreset(deviceIdentity);
+}
+
+export async function callResetSettings(
+  scope: SettingsScope,
+): Promise<SettingsSnapshot> {
+  return commands.resetSettings(scope);
+}
+
+export async function callExportSettings(
+  scope: SettingsScope,
+  pathGrant: string,
+): Promise<SettingsExportResult> {
+  return commands.exportSettings(scope, pathGrant);
 }
 
 export async function callRunHostDoctor(): Promise<HostDoctorReport> {

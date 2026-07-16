@@ -5,11 +5,8 @@ import { useTranslation } from "react-i18next";
 import { callHeartbeat, inTauri, type Heartbeat } from "./lib/tauri";
 import { startDeviceLifecycle, stopDeviceLifecycle } from "./lib/deviceStore";
 import { cn } from "./lib/cn";
-import {
-  normalizeLanguage,
-  persistLanguage,
-  SUPPORTED_LANGUAGES,
-} from "./lib/i18n";
+import { normalizeLanguage, SUPPORTED_LANGUAGES } from "./lib/i18n";
+import { setStoredLanguage } from "./lib/settings";
 import { CommandPalette, type PaletteItem } from "./routes/CommandPalette";
 import { useCommandPalette } from "./routes/useCommandPalette";
 import { useFocusTrap } from "./lib/useFocusTrap";
@@ -367,7 +364,7 @@ function LanguageSelector({ className }: { className?: string }) {
     (event: ChangeEvent<HTMLSelectElement>) => {
       const nextLanguage = normalizeLanguage(event.target.value);
       if (!nextLanguage) return;
-      persistLanguage(nextLanguage);
+      void setStoredLanguage(nextLanguage);
       void i18n.changeLanguage(nextLanguage);
     },
     [i18n],

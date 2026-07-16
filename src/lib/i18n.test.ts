@@ -8,8 +8,6 @@ import {
   formatNumber,
   LANGUAGE_STORAGE_KEY,
   languageMetadata,
-  persistLanguage,
-  readStoredLanguage,
 } from "./i18n";
 import en from "../locales/en.json";
 import ru from "../locales/ru.json";
@@ -44,15 +42,6 @@ describe("i18n resources", () => {
     expect(detectInitialLanguage({ storage, browserLanguage: "ru-RU" })).toBe(
       "ru",
     );
-  });
-
-  it("persists validated language choices", () => {
-    const storage = memoryStorage();
-
-    persistLanguage("ru", storage);
-
-    expect(readStoredLanguage(storage)).toBe("ru");
-    expect(storage.getItem(LANGUAGE_STORAGE_KEY)).toBe("ru");
   });
 
   it("propagates normalized language metadata to the document root", () => {

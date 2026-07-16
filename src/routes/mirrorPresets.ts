@@ -27,6 +27,8 @@ export const DEFAULT_MIRROR_PRESET: MirrorPreset = {
   showTouches: false,
 };
 
+export const LEGACY_MIRROR_PRESET_PREFIX = "droidsmith.mirror.preset.";
+
 export function normalizePreset(value: Partial<MirrorPreset>): MirrorPreset {
   return {
     maxSize:
@@ -82,7 +84,7 @@ function isVideoCodec(value: unknown): value is VideoCodec {
 }
 
 export function presetStorageKey(serial: string): string {
-  return `droidsmith.mirror.preset.${serial}`;
+  return `${LEGACY_MIRROR_PRESET_PREFIX}${serial}`;
 }
 
 function isKeyboardMode(value: unknown): value is KeyboardMode {

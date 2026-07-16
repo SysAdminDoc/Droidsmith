@@ -16,6 +16,26 @@
     "english": "English",
     "russian": "Русский"
   },
+  "settings": {
+    "title": "Preferences and presets",
+    "description": "Export or reset a typed settings scope. Droidsmith keeps its internal store path private and never includes raw device identifiers.",
+    "scope": "Settings scope",
+    "scopes": {
+      "all": "All preferences and presets",
+      "language": "Language preference",
+      "mirrorPresets": "Per-device mirror presets"
+    },
+    "export": "Export scope",
+    "exporting": "Exporting...",
+    "exportSaved": "Settings exported to {{path}}.",
+    "reset": "Reset scope",
+    "resetConfirmTitle": "Reset this settings scope?",
+    "resetConfirmBody": "{{scope}} will return to defaults. Other settings scopes stay unchanged.",
+    "confirmReset": "Reset selected scope",
+    "resetting": "Resetting...",
+    "resetComplete": "{{scope}} reset to defaults.",
+    "operationFailed": "Settings operation failed: {{message}}"
+  },
   "runtime": {
     "desktop": "Desktop runtime",
     "starting": "Starting",
@@ -747,6 +767,8 @@
     "resetPreset": "Reset",
     "presetSaved": "Preset saved for {{serial}}.",
     "presetReset": "Preset reset to defaults.",
+    "presetLoadFailed": "Saved preset could not be loaded; defaults are active. {{message}}",
+    "presetSaveFailed": "Preset settings could not be saved. {{message}}",
     "launch": "Launch mirror",
     "launching": "Launching...",
     "sessionActive": "Session active",
