@@ -18,6 +18,10 @@ const uiSmokePort =
   env.DROIDSMITH_UI_SMOKE_PORT ?? String(await findOpenPort());
 const baseUrl = `http://127.0.0.1:${uiSmokePort}`;
 const screenshotDir = path.join(repoRoot, "test-results", "rendered-routes");
+const docsScreenshotDir = path.join(repoRoot, "docs", "screenshots");
+// When set, refresh the committed README screenshots from the mocked-native
+// state instead of only asserting they are free of desktop-required placeholders.
+const captureDocs = process.argv.includes("--capture-docs");
 
 fs.mkdirSync(screenshotDir, { recursive: true });
 
@@ -32,6 +36,7 @@ try {
     await runMobileFlow(browser);
     await runLocaleZoomFlow(browser);
     await runResilienceFlow(browser);
+    await runDocCaptureFlow(browser);
   } finally {
     await browser.close();
   }
@@ -764,6 +769,70 @@ async function runResilienceFlow(browser) {
     fullPage: false,
   });
   assertNoConsoleErrors(errors, "resilience route smoke");
+  await page.close();
+}
+
+// Render the README's published routes from mocked-native state, assert none of
+// them show the browser-only "desktop shell required" placeholder, and — when
+// invoked with --capture-docs — refresh the committed screenshots. Also renders
+// each at a narrow width so the documented workflows are verified at both sizes.
+async function runDocCaptureFlow(browser) {
+  const shots = [
+    {
+      name: "droidsmith-overview",
+      nav: /Devices/,
+      anchor: (page) => page.getByText("ADB lifecycle health", { exact: true }),
+    },
+    {
+      name: "droidsmith-apps",
+      nav: /Apps/,
+      anchor: (page) => page.getByText("com.example.app").first(),
+    },
+    {
+      name: "droidsmith-mirror",
+      nav: /Mirror/,
+      anchor: (page) => page.getByText("scrcpy 4.0", { exact: true }),
+    },
+  ];
+
+  if (captureDocs) fs.mkdirSync(docsScreenshotDir, { recursive: true });
+
+  const page = await browser.newPage({
+    viewport: { width: 1366, height: 900 },
+  });
+  const errors = collectConsoleErrors(page);
+  await installTauriMock(page);
+  await page.goto(baseUrl, { waitUntil: "networkidle" });
+
+  for (const shot of shots) {
+    await page.getByRole("button", { name: shot.nav }).first().click();
+    await shot.anchor(page).waitFor();
+    if (
+      (await page
+        .getByText("Desktop shell required", { exact: true })
+        .count()) !== 0
+    ) {
+      throw new Error(
+        `${shot.name} still renders the desktop-required placeholder`,
+      );
+    }
+    if (captureDocs) {
+      await page.screenshot({
+        path: path.join(docsScreenshotDir, `${shot.name}.png`),
+        fullPage: false,
+      });
+    }
+  }
+
+  // The documented workflows must also survive a narrow viewport.
+  await page.setViewportSize({ width: 390, height: 844 });
+  for (const shot of shots) {
+    await page.getByRole("button", { name: shot.nav }).first().click();
+    await shot.anchor(page).waitFor();
+    await assertNoHorizontalOverflow(page, `narrow ${shot.name}`);
+  }
+
+  assertNoConsoleErrors(errors, "doc capture smoke");
   await page.close();
 }
 

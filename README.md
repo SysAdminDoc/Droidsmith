@@ -248,6 +248,11 @@ ADB health/recovery review, the redacted Diagnostics preview/save/wipe flow,
 the split-package install and explicit override-confirmation flow, cross-route
 disconnect/reconnect behavior, incremental Logcat reconnect/cancel behavior,
 unsafe-transport acknowledgement/reset behavior, and mobile/narrow overflow.
+It also sweeps every route under a non-English locale at a 200%-zoom reflow,
+drives the Apps loading/empty/error/stale-completion states, and asserts the
+documented screenshots never show the desktop-required placeholder.
+`npm run docs:screenshots` regenerates the committed README screenshots from that
+same mocked-native state.
 `npm run release:smoke` builds the frontend and Tauri bundle, checks bundled
 resource metadata, validates third-party notices, and fails if expected local
 installer artifacts are missing.

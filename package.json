@@ -14,6 +14,7 @@
     "tauri:build": "tauri build",
     "bundle:check": "node scripts/check-tauri-resources.mjs",
     "ui:smoke": "node scripts/check-rendered-routes.mjs",
+    "docs:screenshots": "node scripts/check-rendered-routes.mjs --capture-docs",
     "release:check": "node scripts/check-release-policy.mjs",
     "release:smoke": "node scripts/check-production-bundle.mjs",
     "security:audit": "npm audit --audit-level=moderate && node scripts/audit-rust.mjs && npm run security:isolation",

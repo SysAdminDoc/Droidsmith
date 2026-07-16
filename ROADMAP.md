@@ -25,13 +25,6 @@ instead.
 
 ### P3
 
-- [ ] P3 — Replace misleading documentation screenshots with deterministic native-state captures
-  Why: Current “Apps” and “Mirror” screenshots show the browser-only desktop-required state rather than the workflows their captions claim.
-  Evidence: `docs/screenshots/`, `README.md`; `scripts/check-rendered-routes.mjs`
-  Touches: `scripts/check-rendered-routes.mjs`, `docs/screenshots/`, `README.md`
-  Acceptance: A deterministic mocked-native capture task renders every major route at desktop and narrow widths, README captions match visible states, and a smoke assertion rejects desktop-required placeholders in published workflow screenshots.
-  Complexity: S
-
 - [ ] P3 — Desktop-polish plugin cluster: window-state, tray, and background notifications
   Why: The app forgets window size/position, has no tray presence while supervising scrcpy/logcat, and gives no OS-level feedback on device connect/disconnect or long-job completion.
   Evidence: `src-tauri/src/lib.rs:34` (dialog plugin only); Tauri v2 window-state / tray / notification plugin docs
