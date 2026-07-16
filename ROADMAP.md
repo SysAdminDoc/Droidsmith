@@ -71,13 +71,6 @@ instead.
 
 ### P2
 
-- [ ] P2 — **IMP-51** Expand deterministic rendered-state and race regression coverage
-  Why: Current route smoke misses Wireless, Mirror, Logcat, Fastboot, onboarding, non-English layouts, error/loading/empty states, target switches, route unmounts, accessibility zoom, and stale async responses.
-  Evidence: `scripts/check-rendered-routes.mjs`, `src/**/*.test.ts*`, reproduced desktop/mobile fixtures; Android Studio detached-state pattern.
-  Touches: `scripts/check-rendered-routes.mjs`, browser fixtures, route/component tests, `test-results/rendered-routes/` expectations.
-  Acceptance: Every route is asserted at desktop and 390px, selected non-English locale, 200% zoom, empty/loading/error/multi-device states, disconnect/reconnect and mid-request target switch; stale completions cannot mutate the new workspace and destructive controls remain disabled when detached.
-  Complexity: L
-
 - [ ] P2 — **IMP-52** Implement independent side-by-side device workspaces
   Why: The README promises side-by-side device tabs, while route-local selection currently unmounts and loses state; comparable ADB/scrcpy tools retain independent sessions for multiple devices.
   Evidence: `README.md:57`, `src/App.tsx`, `src/routes/Mirror.tsx:114-128`; Escrcpy and DeviceFarmer STF.

@@ -31,6 +31,7 @@ try {
     await runDesktopFlow(browser);
     await runMobileFlow(browser);
     await runLocaleZoomFlow(browser);
+    await runResilienceFlow(browser);
   } finally {
     await browser.close();
   }
@@ -698,6 +699,74 @@ async function runLocaleZoomFlow(browser) {
   await page.close();
 }
 
+// IMP-51: exercise the loading, error, and empty rendered states plus a
+// stale-completion race and a detached-workspace guard that the golden-path
+// desktop flow never reaches.
+async function runResilienceFlow(browser) {
+  const page = await browser.newPage({
+    viewport: { width: 1366, height: 900 },
+  });
+  const errors = collectConsoleErrors(page);
+  await installTauriMock(page);
+  await page.goto(baseUrl, { waitUntil: "networkidle" });
+  await page.getByRole("button", { name: /Apps/ }).waitFor();
+
+  // Loading state: hold the package listing so the skeleton renders, then
+  // release it and confirm the real content replaces it.
+  await page.evaluate(() => window.__DROIDSMITH_MOCK_GATE__("list_packages"));
+  await page.getByRole("button", { name: /Apps/ }).click();
+  await page.locator('[aria-label="Loading packages"]').waitFor();
+  await page.evaluate(() =>
+    window.__DROIDSMITH_MOCK_RELEASE__("list_packages"),
+  );
+  await page.getByText("com.example.app").waitFor();
+
+  // Empty state: an authorized device with zero packages must show the empty
+  // panel, not a bare table.
+  await page.evaluate(() => window.__DROIDSMITH_MOCK_EMPTY_PACKAGES__(true));
+  await page.getByRole("button", { name: "Refresh packages" }).click();
+  await page.getByText("No matching packages").waitFor();
+  await page.evaluate(() => window.__DROIDSMITH_MOCK_EMPTY_PACKAGES__(false));
+
+  // Error state: a failed enumeration surfaces a danger panel and recovers on
+  // the next successful refresh.
+  await page.evaluate(() =>
+    window.__DROIDSMITH_MOCK_FAIL_NEXT__("list_packages"),
+  );
+  await page.getByRole("button", { name: "Refresh packages" }).click();
+  await page.getByText("Package enumeration failed").waitFor();
+  await page.getByRole("button", { name: "Refresh packages" }).click();
+  await page.getByText("com.example.app").waitFor();
+
+  // Stale completion: hold a package listing, bump the device generation via a
+  // hotplug reconnect while it is in flight, then release the stale response.
+  // The workspace must reflect the reconnect, not the superseded request, and
+  // must not raise a console error.
+  await page.evaluate(() => window.__DROIDSMITH_MOCK_GATE__("list_packages"));
+  await page.getByRole("button", { name: "Refresh packages" }).click();
+  await page.locator('[aria-label="Loading packages"]').waitFor();
+  await page.evaluate(() => window.__DROIDSMITH_MOCK_HOTPLUG__(false));
+  await page.getByText("No authorized devices", { exact: true }).waitFor();
+  // A destructive control cannot be present once the workspace is detached.
+  if (
+    (await page.getByRole("button", { name: "Refresh packages" }).count()) !== 0
+  ) {
+    throw new Error("Detached Apps workspace still exposes package controls");
+  }
+  await page.evaluate(() =>
+    window.__DROIDSMITH_MOCK_RELEASE__("list_packages"),
+  );
+  await page.evaluate(() => window.__DROIDSMITH_MOCK_HOTPLUG__(true));
+  await page.getByText("com.example.app").waitFor();
+
+  await page.screenshot({
+    path: path.join(screenshotDir, "resilience-apps-states.png"),
+    fullPage: false,
+  });
+  assertNoConsoleErrors(errors, "resilience route smoke");
+  await page.close();
+}
+
 function collectConsoleErrors(page) {
   const errors = [];
   page.on("console", (msg) => {
@@ -917,6 +986,31 @@ async function installTauriMock(page) {
     window.__DROIDSMITH_MOCK_ARCHIVE_API__ = (api) => {
       archiveApi = api;
     };
+
+    // IMP-51 resilience controls: force the next call of a command to reject,
+    // hold a command's response until released (to reproduce loading and stale
+    // completions), and empty a listing to exercise empty states.
+    const failNext = new Set();
+    const gateResolvers = new Map();
+    const gatePromises = new Map();
+    let emptyPackages = false;
+    window.__DROIDSMITH_MOCK_FAIL_NEXT__ = (cmd) => failNext.add(cmd);
+    window.__DROIDSMITH_MOCK_GATE__ = (cmd) => {
+      gatePromises.set(
+        cmd,
+        new Promise((resolve) => gateResolvers.set(cmd, resolve)),
+      );
+    };
+    window.__DROIDSMITH_MOCK_RELEASE__ = (cmd) => {
+      const resolve = gateResolvers.get(cmd);
+      if (resolve) {
+        resolve();
+        gateResolvers.delete(cmd);
+      }
+    };
+    window.__DROIDSMITH_MOCK_EMPTY_PACKAGES__ = (value) => {
+      emptyPackages = value;
+    };
     const qaPackAssessment = {
       status: "compatible",
       override_required: false,
@@ -949,6 +1043,15 @@ async function installTauriMock(page) {
 
     window.__TAURI_INTERNALS__ = {
       async invoke(cmd, args = {}) {
+        if (failNext.has(cmd)) {
+          failNext.delete(cmd);
+          throw new Error(`mock-forced failure: ${cmd}`);
+        }
+        if (gatePromises.has(cmd)) {
+          const pending = gatePromises.get(cmd);
+          gatePromises.delete(cmd);
+          await pending;
+        }
         if (cmd === "select_host_path") {
           const selections = {
             diagnostics_save: {
@@ -1280,7 +1383,9 @@ async function installTauriMock(page) {
         }
         if (cmd === "list_packages") {
           return {
-            packages: filterPackages(packages, args.filter ?? "all"),
+            packages: emptyPackages
+              ? []
+              : filterPackages(packages, args.filter ?? "all"),
             archive: {
               supported: archiveApi >= 35,
               api_level: archiveApi,
