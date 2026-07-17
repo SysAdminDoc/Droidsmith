@@ -448,6 +448,7 @@ pub fn stream_logcat(
             return Ok(());
         }
 
+        let started = Instant::now();
         let result = execute_child(
             adb_path,
             args,
@@ -464,6 +465,12 @@ pub fn stream_logcat(
                 "Logcat stream stopped",
             ));
             return Ok(());
+        }
+        // A stream that ran for a while before dropping is healthy: clear the
+        // transient-failure budget so the cap counts consecutive rapid spawn
+        // failures rather than lifetime reconnects across a long session.
+        if started.elapsed() >= Duration::from_secs(30) {
+            attempt = 1;
         }
         if let Err(error @ (OperationError::Spawn { .. } | OperationError::Wait(_))) = result {
             if attempt >= 5 {
