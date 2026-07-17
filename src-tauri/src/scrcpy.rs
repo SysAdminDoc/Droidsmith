@@ -563,7 +563,13 @@ fn parse_tool_video_codecs(output: &str) -> Vec<String> {
     let Some(start) = lower.find("select a video codec") else {
         return vec!["h264".to_string()];
     };
-    let end = (start + 320).min(lower.len());
+    let mut end = (start + 320).min(lower.len());
+    // `to_ascii_lowercase` leaves multi-byte UTF-8 intact, so the 320-byte
+    // window can land mid-character; walk back to a char boundary before
+    // slicing to avoid a panic on non-ASCII scrcpy help text.
+    while !lower.is_char_boundary(end) {
+        end -= 1;
+    }
     let window = &lower[start..end];
     let codecs: Vec<String> = CODECS
         .iter()

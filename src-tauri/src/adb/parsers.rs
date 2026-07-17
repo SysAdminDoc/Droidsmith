@@ -76,7 +76,11 @@ fn parse_ls_line(line: &str) -> Option<RemoteFileEntry> {
         .iter()
         .enumerate()
         .skip(1)
-        .find_map(|(idx, token)| (is_iso_date(token) || is_month_name(token)).then_some(idx))?;
+        .find_map(|(idx, token)| {
+            let is_date = is_iso_date(token)
+                || (is_month_name(token) && is_month_date_sequence(&tokens, idx));
+            is_date.then_some(idx)
+        })?;
     let size_idx = date_idx.checked_sub(1)?;
     let date_tokens = if tokens.get(date_idx).is_some_and(|token| is_iso_date(token)) {
         2
@@ -111,6 +115,32 @@ fn is_iso_date(token: &str) -> bool {
         && token.as_bytes()[0..4].iter().all(u8::is_ascii_digit)
         && token.as_bytes()[5..7].iter().all(u8::is_ascii_digit)
         && token.as_bytes()[8..10].iter().all(u8::is_ascii_digit)
+}
+
+/// A bare month name is only a date column when it heads a `Mon DD YYYY|HH:MM`
+/// sequence. Without this, an owner/group literally named e.g. `May` would be
+/// mistaken for the date and shift the size/name columns silently.
+fn is_month_date_sequence(tokens: &[&str], idx: usize) -> bool {
+    let day_looks_valid = tokens
+        .get(idx + 1)
+        .and_then(|day| day.parse::<u8>().ok())
+        .is_some_and(|day| (1..=31).contains(&day));
+    let time_or_year = tokens
+        .get(idx + 2)
+        .is_some_and(|token| is_clock(token) || is_year(token));
+    day_looks_valid && time_or_year
+}
+
+fn is_clock(token: &str) -> bool {
+    let bytes = token.as_bytes();
+    token.len() == 5
+        && bytes[2] == b':'
+        && bytes[0..2].iter().all(u8::is_ascii_digit)
+        && bytes[3..5].iter().all(u8::is_ascii_digit)
+}
+
+fn is_year(token: &str) -> bool {
+    token.len() == 4 && token.as_bytes().iter().all(u8::is_ascii_digit)
 }
 
 fn is_month_name(token: &str) -> bool {
@@ -649,6 +679,18 @@ bad-coloros-row-without-columns
             .iter()
             .any(|row| row.name.contains("bad-coloros") && row.parse_error.is_some()));
         assert!(parse_ls_output("").is_empty());
+    }
+
+    #[test]
+    fn month_named_owner_does_not_shift_size_and_name_columns() {
+        // Owner "May" is a month abbreviation; the real date is the later
+        // `May 06 09:12` triple. The parser must not lock onto the owner.
+        let rows =
+            parse_ls_output("-rw-r--r-- 1 May staff 4096 May 06 09:12 notes.txt");
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].name, "notes.txt");
+        assert_eq!(rows[0].size, Some(4096));
+        assert!(rows[0].parse_error.is_none());
     }
 
     #[test]
