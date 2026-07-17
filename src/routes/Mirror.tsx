@@ -498,7 +498,7 @@ export default function MirrorRoute() {
                   </div>
                 </div>
                 {presetMessage && (
-                  <p className="mt-3 text-xs text-circuit-100">
+                  <p role="status" className="mt-3 text-xs text-circuit-100">
                     {presetMessage}
                   </p>
                 )}

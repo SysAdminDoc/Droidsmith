@@ -1526,6 +1526,7 @@ function DeviceControls({ target }: { target: DeviceTarget }) {
               </Button>
               {screenshotMsg && (
                 <span
+                  role="status"
                   className={`text-xs ${statusToneClass(screenshotMsg.tone)}`}
                 >
                   {screenshotMsg.text}
@@ -1589,7 +1590,10 @@ function DeviceControls({ target }: { target: DeviceTarget }) {
               </div>
             </div>
             {displayMsg && (
-              <p className={`mt-3 text-xs ${statusToneClass(displayMsg.tone)}`}>
+              <p
+                role="status"
+                className={`mt-3 text-xs ${statusToneClass(displayMsg.tone)}`}
+              >
                 {displayMsg.text}
               </p>
             )}
@@ -2779,7 +2783,10 @@ function LayoutInspector({ target }: { target: DeviceTarget }) {
         </div>
       )}
       {exportMsg && (
-        <p className={`px-4 py-2 text-xs ${statusToneClass(exportMsg.tone)}`}>
+        <p
+          role="status"
+          className={`px-4 py-2 text-xs ${statusToneClass(exportMsg.tone)}`}
+        >
           {exportMsg.text}
         </p>
       )}

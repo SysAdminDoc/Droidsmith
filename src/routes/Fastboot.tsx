@@ -80,9 +80,14 @@ export default function FastbootRoute() {
     try {
       const devices = await callListFastbootDevices();
       setDevicesState({ kind: "ok", devices });
-      if (devices.length === 1) {
-        setSelectedSerial((prev) => prev ?? devices[0]!.serial);
-      }
+      // Drop a selection that a rescan no longer lists (the device left
+      // bootloader mode), and auto-select when exactly one is present.
+      setSelectedSerial((prev) => {
+        if (prev && devices.some((device) => device.serial === prev)) {
+          return prev;
+        }
+        return devices.length === 1 ? devices[0]!.serial : null;
+      });
     } catch (e) {
       setDevicesState({
         kind: "error",
@@ -114,6 +119,15 @@ export default function FastbootRoute() {
         failures === GETVAR_KEYS.length
           ? t("fastboot.queryAllFailed")
           : t("fastboot.queryNoValues"),
+      );
+    } else if (failures > 0) {
+      // Some values read, some failed — don't let the populated table imply
+      // a complete result.
+      setVarsError(
+        t("fastboot.queryPartial", {
+          failed: failures,
+          total: GETVAR_KEYS.length,
+        }),
       );
     }
     setLoadingVars(false);
@@ -232,7 +246,7 @@ export default function FastbootRoute() {
                               <Badge tone="info">{d.mode}</Badge>
                               {d.parse_error && (
                                 <Badge tone="warning" className="ml-2">
-                                  Parse issue
+                                  {t("fastboot.parseIssue")}
                                 </Badge>
                               )}
                             </TableCell>
@@ -266,7 +280,7 @@ export default function FastbootRoute() {
                 )}
 
               {devicesState.kind === "error" && (
-                <p className="mt-4 text-sm text-red-300">
+                <p role="alert" className="mt-4 text-sm text-red-300">
                   {devicesState.message}
                 </p>
               )}
@@ -303,6 +317,15 @@ export default function FastbootRoute() {
                       </div>
                     ))}
                   </dl>
+                )}
+
+                {Object.keys(vars).length > 0 && varsError && (
+                  <div
+                    role="alert"
+                    className="mt-4 rounded-md border border-amber-300/20 bg-amber-950/20 p-3 text-xs text-amber-200"
+                  >
+                    {varsError}
+                  </div>
                 )}
 
                 {Object.keys(vars).length === 0 &&

@@ -1140,7 +1140,9 @@
     "querying": "Querying...",
     "queryHint": "Press Query vars to read device information.",
     "queryAllFailed": "Couldn't read any fastboot variables. The device may have left fastboot mode, or the bootloader rejected the query. Reconnect and try again.",
-    "queryNoValues": "The query completed but the device reported no values for these variables."
+    "queryNoValues": "The query completed but the device reported no values for these variables.",
+    "queryPartial": "{{failed}} of {{total}} variables could not be read.",
+    "parseIssue": "Parse issue"
   },
   "hostDoctor": {
     "title": "Host connection doctor",

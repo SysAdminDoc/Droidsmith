@@ -142,7 +142,7 @@ export function CommandPalette({
             aria-label={t("palette.searchLabel")}
             role="combobox"
             aria-autocomplete="list"
-            aria-expanded="true"
+            aria-expanded={filtered.length > 0}
             aria-controls={listboxId}
             aria-activedescendant={
               filtered[activeIndex]

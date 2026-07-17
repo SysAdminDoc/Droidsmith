@@ -787,7 +787,9 @@ export default function LogcatRoute() {
               </StatePanel>
             )}
             {exportMessage && (
-              <p className="text-xs text-anvil-300">{exportMessage}</p>
+              <p role="status" className="text-xs text-anvil-300">
+                {exportMessage}
+              </p>
             )}
 
             <Card className="overflow-hidden p-0">
