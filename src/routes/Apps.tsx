@@ -1194,7 +1194,7 @@ export default function AppsRoute() {
                 }}
               />
               {users.length > 1 && (
-                <label className="flex items-center gap-2 text-sm text-slate-300">
+                <label className="flex items-center gap-2 text-sm text-anvil-300">
                   <span>{t("apps.userLabel")}</span>
                   <select
                     value={selectedUser}
@@ -1204,7 +1204,7 @@ export default function AppsRoute() {
                       setRecoveryState({ kind: "idle" });
                     }}
                     aria-label={t("apps.userLabel")}
-                    className="rounded-md border border-slate-700 bg-slate-900 px-2 py-1 font-mono text-slate-100"
+                    className="rounded-md border border-white/10 bg-anvil-900 px-2 py-1 font-mono text-anvil-100"
                   >
                     {users.map((u) => (
                       <option key={u.id} value={u.id}>
@@ -2785,7 +2785,7 @@ function RecoveryBaselinePanel({
       </div>
       <div className="max-h-72 overflow-auto">
         <table className="w-full text-left text-xs">
-          <thead className="sticky top-0 bg-slate-950">
+          <thead className="sticky top-0 bg-anvil-900">
             <tr>
               <TableHeaderCell>{t("apps.package")}</TableHeaderCell>
               <TableHeaderCell>

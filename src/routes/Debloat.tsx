@@ -609,13 +609,13 @@ export default function DebloatRoute() {
         )}
 
         {selectedSerial && usersReady && users.length > 1 && (
-          <label className="flex items-center gap-2 text-sm text-slate-300">
+          <label className="flex items-center gap-2 text-sm text-anvil-300">
             <span>{t("apps.userLabel")}</span>
             <select
               value={selectedUser}
               onChange={(e) => setSelectedUser(Number(e.target.value))}
               aria-label={t("apps.userLabel")}
-              className="rounded-md border border-slate-700 bg-slate-900 px-2 py-1 font-mono text-slate-100"
+              className="rounded-md border border-white/10 bg-anvil-900 px-2 py-1 font-mono text-anvil-100"
             >
               {users.map((u) => (
                 <option key={u.id} value={u.id}>
