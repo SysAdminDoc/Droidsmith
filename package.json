@@ -1,7 +1,7 @@
 {
   "name": "droidsmith",
   "private": true,
-  "version": "0.5.1",
+  "version": "0.5.2",
   "type": "module",
   "description": "Cross-platform open-source GUI for managing Android devices over ADB",
   "license": "MIT",

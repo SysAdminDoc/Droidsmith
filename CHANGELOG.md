@@ -14,6 +14,57 @@ completion.
 Working batches live here. Sections collapse into a versioned release on
 each milestone tag.
 
+## [0.5.2] - 2026-07-17
+
+Engineering, security, and product-quality audit pass. No feature changes;
+correctness, accessibility, and design-consistency hardening throughout.
+
+### Fixed
+
+- Backend error messages now render their text instead of `[object Object]`.
+  Tauri command rejections arrive as plain `{ code, message }` objects, so the
+  app-wide `String(error)` fallback showed a useless placeholder for every
+  `CommandError`; a shared `errorMessage()` helper unwraps them and all 59 call
+  sites route through it.
+- Added the missing `common.unknown` and `apps.selectAll/selectPackage` locale
+  keys, so battery/storage/file-size fallbacks and package-checkbox screen-reader
+  labels no longer display raw i18n keys. A regression test now fails if any
+  static `t("literal")` key is unresolvable.
+- Aligned the renderer `regexError` and backend `validate_linear_regex` logcat
+  guards: both are now escape- and character-class-aware, so patterns like
+  `foo\)*` or `[)]+` are accepted (or rejected) identically instead of one
+  side blocking a save the other allowed.
+- Hardened ADB parsing: the scrcpy codec probe no longer panics when help text
+  slices mid-UTF-8-character, and `ls` rows whose owner/group is a month
+  abbreviation (e.g. `May`) no longer shift the size/name columns silently.
+- Guarded export writes (`save_logcat_export`, `save_layout_export`) against a
+  final-component symlink swap, matching `save_diagnostics`.
+- Guarded stale-completion races: journal single/batch undo no longer refresh a
+  switched device's state, and mirror session-status polling and record-launch
+  no longer clobber or mis-target a freshly-selected device.
+- Fastboot now clears a selection a rescan no longer lists and surfaces partial
+  getvar failures instead of implying a complete table.
+- Manual wireless pair/connect rejects malformed hosts before the ADB round-trip;
+  settings reset normalizes the browser locale to a supported language.
+- The logcat reconnect budget resets after a healthy run, so transient spawn
+  failures spread across a long session no longer terminate the stream.
+
+### Accessibility
+
+- Async result messages (screenshot, display control, layout/logcat export,
+  mirror preset, fastboot scan) are announced via `role="status"`/`"alert"`.
+- The package filter is now a keyboard-navigable radiogroup (roving tabindex +
+  Arrow/Home/End), the command palette's dialog role sits on its labelled
+  surface, `aria-expanded` reflects real results, and the diagnostics focus
+  trap no longer jumps focus behind a nested dialog.
+
+### Changed
+
+- Cached compiled logcat filter regexes and stopped refiltering the buffer on
+  every render.
+- Normalized off-theme `rose-*`/`slate-*` colors to the `red-*`/`anvil-*`
+  tokens, fixed a broken `forge-400` focus ring, and removed dead scaffolding.
+
 ## [0.5.1] - 2026-07-17
 
 ### Fixed
