@@ -36,6 +36,7 @@ try {
     await runMobileFlow(browser);
     await runLocaleZoomFlow(browser);
     await runResilienceFlow(browser);
+    await runWatcherFallbackFlow(browser);
     await runDocCaptureFlow(browser);
   } finally {
     await browser.close();
@@ -797,6 +798,21 @@ async function runResilienceFlow(browser) {
   await page.close();
 }
 
+async function runWatcherFallbackFlow(browser) {
+  const page = await browser.newPage({
+    viewport: { width: 1366, height: 900 },
+  });
+  const errors = collectConsoleErrors(page);
+  await installTauriMock(page, { failAlwaysCommands: ["watch_devices"] });
+  await page.goto(baseUrl, { waitUntil: "networkidle" });
+
+  await page.getByText("ADB ready", { exact: true }).waitFor();
+  await page.getByRole("button", { name: "Select Pixel QA" }).waitFor();
+  await page.getByText("Watcher stopped", { exact: true }).waitFor();
+  assertNoConsoleErrors(errors, "watcher fallback smoke");
+  await page.close();
+}
+
 // Render the README's published routes from mocked-native state, assert none of
 // them show the browser-only "desktop shell required" placeholder, and — when
 // invoked with --capture-docs — refresh the committed screenshots. Also renders
@@ -1018,8 +1034,19 @@ async function assertNoHorizontalOverflow(page, label) {
   }
 }
 
-async function installTauriMock(page) {
+async function installTauriMock(
+  page,
+  { failStartupCommands = [], failAlwaysCommands = [] } = {},
+) {
+  await page.addInitScript(
+    (options) => {
+      window.__DROIDSMITH_MOCK_OPTIONS__ = options;
+    },
+    { failStartupCommands, failAlwaysCommands },
+  );
   await page.addInitScript(() => {
+    const { failStartupCommands, failAlwaysCommands } =
+      window.__DROIDSMITH_MOCK_OPTIONS__;
     const callbacks = new Map();
     const channelIndexes = new Map();
     const pendingOperations = new Map();
@@ -1129,7 +1156,8 @@ async function installTauriMock(page) {
     // IMP-51 resilience controls: force the next call of a command to reject,
     // hold a command's response until released (to reproduce loading and stale
     // completions), and empty a listing to exercise empty states.
-    const failNext = new Set();
+    const failNext = new Set(failStartupCommands);
+    const failAlways = new Set(failAlwaysCommands);
     const gateResolvers = new Map();
     const gatePromises = new Map();
     let emptyPackages = false;
@@ -1182,6 +1210,9 @@ async function installTauriMock(page) {
 
     window.__TAURI_INTERNALS__ = {
       async invoke(cmd, args = {}) {
+        if (failAlways.has(cmd)) {
+          throw new Error(`mock-forced persistent failure: ${cmd}`);
+        }
         if (failNext.has(cmd)) {
           failNext.delete(cmd);
           throw new Error(`mock-forced failure: ${cmd}`);

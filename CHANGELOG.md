@@ -14,6 +14,16 @@ completion.
 Working batches live here. Sections collapse into a versioned release on
 each milestone tag.
 
+## [0.5.1] - 2026-07-17
+
+### Fixed
+
+- Device discovery now falls back to a one-shot ADB enumeration when the GUI's
+  live watcher channel is rejected or reports a transient scan error, keeping
+  authorized phones usable instead of leaving the Devices workspace blocked.
+- Added a headless production-path regression that forces the watcher to fail
+  persistently and verifies the fallback still renders the connected device.
+
 ## [0.5.0] - 2026-07-17
 
 Brings the Devices workspace into close parity with the premium desktop

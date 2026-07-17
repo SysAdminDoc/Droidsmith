@@ -2,6 +2,7 @@ import { useSyncExternalStore } from "react";
 
 import {
   callCancelOperation,
+  callListDevices,
   callWatchDevices,
   inTauri,
   newOperationId,
@@ -66,10 +67,48 @@ export function startDeviceLifecycle() {
   const generation = lifecycleGeneration + 1;
   lifecycleGeneration = generation;
   activeOperationId = operationId;
+  let fallbackInFlight = false;
   setDeviceStoreState({
     devicesState: { kind: "loading" },
     watching: true,
   });
+
+  const scanOnce = async (watchError: string, watcherStillActive: boolean) => {
+    if (fallbackInFlight) return;
+    fallbackInFlight = true;
+    try {
+      const value = await callListDevices();
+      if (
+        activeOperationId !== operationId ||
+        lifecycleGeneration !== generation
+      )
+        return;
+      setDeviceStoreState({
+        devicesState: { kind: "ok", value },
+        observedAt: new Date().toISOString(),
+        watching: watcherStillActive,
+      });
+    } catch (fallbackError) {
+      if (
+        activeOperationId !== operationId ||
+        lifecycleGeneration !== generation
+      )
+        return;
+      const fallbackMessage =
+        fallbackError instanceof Error
+          ? fallbackError.message
+          : String(fallbackError);
+      setDeviceStoreState({
+        devicesState: {
+          kind: "error",
+          message: `${watchError} ${fallbackMessage}`,
+        },
+        watching: watcherStillActive,
+      });
+    } finally {
+      fallbackInFlight = false;
+    }
+  };
 
   const onEvent = (event: DeviceLifecycleEvent) => {
     if (activeOperationId !== operationId || lifecycleGeneration !== generation)
@@ -87,22 +126,20 @@ export function startDeviceLifecycle() {
         observedAt: event.observed_at,
         watching: true,
       });
+      void scanOnce(event.message, true);
     }
   };
 
   void callWatchDevices({ operationId, onEvent })
-    .catch((error) => {
+    .catch(async (error) => {
       if (
         activeOperationId === operationId &&
         lifecycleGeneration === generation
       ) {
-        setDeviceStoreState({
-          devicesState: {
-            kind: "error",
-            message: error instanceof Error ? error.message : String(error),
-          },
-          watching: false,
-        });
+        await scanOnce(
+          error instanceof Error ? error.message : String(error),
+          false,
+        );
       }
     })
     .finally(() => {
