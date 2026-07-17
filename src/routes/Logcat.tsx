@@ -243,10 +243,17 @@ export default function LogcatRoute() {
     }
   }, [lines, paused]);
 
-  const nowMs = Date.now();
+  // Only anchor the memo to wall-clock time when an age filter is active;
+  // otherwise Date.now() would invalidate it on every render and refilter the
+  // whole buffer needlessly. When aging is on, a 1s bucket bounds recomputes.
+  const ageActive = query.maxAgeSeconds !== null;
+  const timeBucket = ageActive ? Math.floor(Date.now() / 1000) : 0;
   const filteredLines = useMemo(
-    () => lines.filter((line) => matchesLine(line, query, nowMs, processNames)),
-    [lines, query, nowMs, processNames],
+    () =>
+      lines.filter((line) =>
+        matchesLine(line, query, timeBucket * 1000, processNames),
+      ),
+    [lines, query, processNames, timeBucket],
   );
 
   useEffect(() => {

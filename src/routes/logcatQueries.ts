@@ -196,8 +196,9 @@ export function validateQuery(query: WorkingQuery): QueryFieldError | null {
     if (value.length > MAX_LOGCAT_FILTER_LENGTH) {
       return { field, code: "tooLong" };
     }
-    if (query.useRegex && value.length > 0 && regexError(value)) {
-      return { field, code: regexError(value) ?? "syntax" };
+    if (query.useRegex && value.length > 0) {
+      const code = regexError(value);
+      if (code) return { field, code };
     }
   }
   if (query.pidFilter.length > 0 && !/^[0-9]{1,7}$/u.test(query.pidFilter)) {
@@ -264,6 +265,28 @@ export function toQueryDto(query: WorkingQuery): LogcatQuery {
   };
 }
 
+// matchesLine runs across the whole (bounded) logcat buffer on every render,
+// so compiling a filter's RegExp once and reusing it avoids recompiling the
+// same pattern thousands of times per pass. A stateless (non-global) regex is
+// safe to share. Bounded so a churn of distinct patterns can't grow unbounded.
+const REGEX_CACHE = new Map<string, RegExp | null>();
+
+function compileFilterRegex(needle: string): RegExp | null {
+  const cached = REGEX_CACHE.get(needle);
+  if (cached !== undefined) return cached;
+  let compiled: RegExp | null = null;
+  if (!regexError(needle)) {
+    try {
+      compiled = new RegExp(needle, "u");
+    } catch {
+      compiled = null;
+    }
+  }
+  if (REGEX_CACHE.size >= 64) REGEX_CACHE.clear();
+  REGEX_CACHE.set(needle, compiled);
+  return compiled;
+}
+
 function textMatches(
   haystack: string,
   needle: string,
@@ -271,12 +294,8 @@ function textMatches(
 ): boolean {
   if (needle.length === 0) return true;
   if (useRegex) {
-    if (regexError(needle)) return false;
-    try {
-      return new RegExp(needle, "u").test(haystack);
-    } catch {
-      return false;
-    }
+    const compiled = compileFilterRegex(needle);
+    return compiled ? compiled.test(haystack) : false;
   }
   return haystack.toLowerCase().includes(needle.toLowerCase());
 }
