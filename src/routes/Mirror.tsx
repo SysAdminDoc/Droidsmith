@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import {
@@ -92,6 +92,9 @@ export default function MirrorRoute() {
   });
   const [preset, setPreset] = useState<MirrorPreset>(DEFAULT_MIRROR_PRESET);
   const [presetMessage, setPresetMessage] = useState<string | null>(null);
+  // Tracks the live selection so a launch that awaited the recording save
+  // dialog can detect a mid-dialog device change (e.g. an automatic reconnect).
+  const selectedTargetRef = useRef<DeviceTarget | null>(null);
 
   const checkScrcpy = useCallback(async () => {
     if (!inTauri()) return;
@@ -117,6 +120,10 @@ export default function MirrorRoute() {
       resolveAuthorizedTarget(previous, authorizedDevices),
     );
   }, [authorizedDevices]);
+
+  useEffect(() => {
+    selectedTargetRef.current = selectedTarget;
+  }, [selectedTarget]);
 
   useEffect(() => {
     if (!selectedTarget) return;
@@ -275,6 +282,14 @@ export default function MirrorRoute() {
         : null;
       if (preset.recording && !recordingGrant) {
         setSession({ kind: "idle" });
+        return;
+      }
+      // If the selection changed while the save dialog was open, abandon this
+      // launch so we don't start (and record) a session against a stale device.
+      if (selectedTargetRef.current?.serial !== selectedTarget.serial) {
+        setSession((current) =>
+          current.kind === "launching" ? { kind: "idle" } : current,
+        );
         return;
       }
       setRecordingPath(recordingGrant?.local_path ?? null);
