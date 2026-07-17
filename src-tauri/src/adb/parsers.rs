@@ -72,15 +72,11 @@ fn parse_ls_line(line: &str) -> Option<RemoteFileEntry> {
         return None;
     }
 
-    let date_idx = tokens
-        .iter()
-        .enumerate()
-        .skip(1)
-        .find_map(|(idx, token)| {
-            let is_date = is_iso_date(token)
-                || (is_month_name(token) && is_month_date_sequence(&tokens, idx));
-            is_date.then_some(idx)
-        })?;
+    let date_idx = tokens.iter().enumerate().skip(1).find_map(|(idx, token)| {
+        let is_date =
+            is_iso_date(token) || (is_month_name(token) && is_month_date_sequence(&tokens, idx));
+        is_date.then_some(idx)
+    })?;
     let size_idx = date_idx.checked_sub(1)?;
     let date_tokens = if tokens.get(date_idx).is_some_and(|token| is_iso_date(token)) {
         2
@@ -685,8 +681,7 @@ bad-coloros-row-without-columns
     fn month_named_owner_does_not_shift_size_and_name_columns() {
         // Owner "May" is a month abbreviation; the real date is the later
         // `May 06 09:12` triple. The parser must not lock onto the owner.
-        let rows =
-            parse_ls_output("-rw-r--r-- 1 May staff 4096 May 06 09:12 notes.txt");
+        let rows = parse_ls_output("-rw-r--r-- 1 May staff 4096 May 06 09:12 notes.txt");
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].name, "notes.txt");
         assert_eq!(rows[0].size, Some(4096));
