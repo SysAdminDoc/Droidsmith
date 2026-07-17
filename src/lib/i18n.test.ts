@@ -1,3 +1,7 @@
+import { readdirSync, readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+
 import { describe, expect, it } from "vitest";
 
 import { NAV_ITEMS } from "../App";
@@ -53,6 +57,23 @@ describe("i18n resources", () => {
     expect(languageMetadata("unsupported").locale).toBe("en-US");
   });
 
+  it("resolves every static t(\"literal\") key used in the app", () => {
+    const srcRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
+    const missing: string[] = [];
+    // Matches t("key") / t('key') / t(`key`) with a plain (interpolation-free)
+    // literal key. Keys built from variables/template expressions are skipped
+    // because they can't be resolved statically.
+    const callPattern = /\bt\(\s*(["'`])([A-Za-z0-9_.]+)\1/gu;
+    for (const file of sourceFiles(srcRoot)) {
+      const text = readFileSync(file, "utf8");
+      for (const match of text.matchAll(callPattern)) {
+        const key = match[2];
+        if (!hasResolvableKey(en, key)) missing.push(`${key} (${file})`);
+      }
+    }
+    expect(missing).toEqual([]);
+  });
+
   it("formats dates and numbers with the selected locale", () => {
     expect(formatNumber(1234, "en")).toBe("1,234");
     expect(formatNumber(1234, "ru")).toMatch(/^1\s234$/u);
@@ -62,6 +83,22 @@ describe("i18n resources", () => {
     );
   });
 });
+
+function sourceFiles(root: string): string[] {
+  const files: string[] = [];
+  for (const entry of readdirSync(root, { withFileTypes: true })) {
+    const full = join(root, entry.name);
+    if (entry.isDirectory()) {
+      files.push(...sourceFiles(full));
+    } else if (
+      /\.tsx?$/u.test(entry.name) &&
+      !/\.test\.tsx?$/u.test(entry.name)
+    ) {
+      files.push(full);
+    }
+  }
+  return files;
+}
 
 function memoryStorage(initial: Record<string, string> = {}) {
   const values = new Map(Object.entries(initial));
@@ -82,6 +119,15 @@ function flattenKeys(tree: LocaleTree, prefix = ""): string[] {
       return isLocaleTree(value) ? flattenKeys(value, path) : [path];
     })
     .sort();
+}
+
+// A key resolves if it exists directly or, for pluralized lookups, via any of
+// its CLDR count suffixes (`t("x.count", { count })` -> `x.count_one`, ...).
+function hasResolvableKey(tree: LocaleTree, path: string): boolean {
+  if (hasKey(tree, path)) return true;
+  return ["_zero", "_one", "_two", "_few", "_many", "_other"].some((suffix) =>
+    hasKey(tree, `${path}${suffix}`),
+  );
 }
 
 function hasKey(tree: LocaleTree, path: string): boolean {

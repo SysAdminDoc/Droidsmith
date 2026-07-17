@@ -452,6 +452,8 @@
   "apps": {
     "title": "Приложения",
     "description": "Находите пакеты, проверяйте изменения и управляйте приложениями.",
+    "selectAllPackages": "Выбрать все пакеты",
+    "selectPackage": "Выбрать {{package}}",
     "refreshPackages": "Обновить пакеты",
     "installPackage": "Установить пакет",
     "installIncremental": "Инкрементально",
@@ -1285,6 +1287,7 @@
     "packageCount_few": "{{count}} пакета",
     "packageCount_many": "{{count}} пакетов",
     "packageCount_other": "{{count}} пакетов",
-    "totalCount": "{{count}} всего"
+    "totalCount": "{{count}} всего",
+    "unknown": "Неизвестно"
   }
 }

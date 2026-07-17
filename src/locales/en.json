@@ -452,6 +452,8 @@
   "apps": {
     "title": "Apps",
     "description": "Find packages, review changes, and manage apps.",
+    "selectAllPackages": "Select all packages",
+    "selectPackage": "Select {{package}}",
     "refreshPackages": "Refresh packages",
     "installPackage": "Install package",
     "installIncremental": "Incremental",
@@ -1287,6 +1289,7 @@
     "packageCount_few": "{{count}} packages",
     "packageCount_many": "{{count}} packages",
     "packageCount_other": "{{count}} packages",
-    "totalCount": "{{count}} total"
+    "totalCount": "{{count}} total",
+    "unknown": "Unknown"
   }
 }
