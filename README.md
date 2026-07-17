@@ -1,4 +1,8 @@
-# Droidsmith
+<p align="center">
+  <img src="src-tauri/icons/128x128@2x.png" width="144" height="144" alt="Droidsmith logo">
+</p>
+
+<h1 align="center">Droidsmith</h1>
 
 ![Version](https://img.shields.io/badge/version-0.3.0-cyan)
 ![License](https://img.shields.io/badge/license-MIT-green)

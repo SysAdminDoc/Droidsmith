@@ -23,6 +23,7 @@ import LogcatRoute from "./routes/Logcat";
 import MirrorRoute from "./routes/Mirror";
 import FastbootRoute from "./routes/Fastboot";
 import { Badge, Button, SkeletonLine } from "./routes/common";
+import droidsmithLogo from "./assets/droidsmith-logo.png";
 
 export type NavItem = {
   id:
@@ -616,20 +617,12 @@ function StatusDot({ tone }: { tone: "neutral" | "success" | "danger" }) {
 
 function LogoMark() {
   return (
-    <span
-      className="grid h-10 w-10 shrink-0 place-items-center rounded-lg border border-circuit-300/20 bg-circuit-300/10 text-circuit-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]"
+    <img
+      src={droidsmithLogo}
+      alt=""
+      className="h-10 w-10 shrink-0 rounded-[10px]"
       aria-hidden="true"
-    >
-      <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none">
-        <path
-          d="M7 8.25h10M8.5 5.5h7M8 8.25v7.25a3 3 0 0 0 3 3h2a3 3 0 0 0 3-3V8.25M9 14h6M10 11.25h.01M14 11.25h.01"
-          stroke="currentColor"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth="1.7"
-        />
-      </svg>
-    </span>
+    />
   );
 }
 
