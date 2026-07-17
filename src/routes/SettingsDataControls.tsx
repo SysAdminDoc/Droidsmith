@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { normalizeLanguage } from "../lib/i18n";
 import { exportStoredSettings, resetStoredSettings } from "../lib/settings";
 import type { SettingsScope } from "../lib/tauri";
 import { Button, Card } from "./common";
@@ -43,7 +44,9 @@ export default function SettingsDataControls({
     try {
       const snapshot = await resetStoredSettings(scope);
       if ((scope === "all" || scope === "language") && !snapshot?.language) {
-        await i18n.changeLanguage(navigator.language);
+        // Keep i18next on a supported code; an unsupported browser locale
+        // (e.g. "fr-FR") would otherwise desync from the language selector.
+        await i18n.changeLanguage(normalizeLanguage(navigator.language) ?? "en");
       }
       setConfirmReset(false);
       setMessage(t("settings.resetComplete", { scope: t(scopeKey(scope)) }));

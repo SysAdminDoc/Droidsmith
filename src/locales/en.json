@@ -636,7 +636,7 @@
     "journalUndoCompleted": "Undo completed for {{package}}.",
     "journalPending": "In progress",
     "journalFailed": "Failed safely",
-    "journalInterrupted": "Outcome unknown - verify device",
+    "journalInterrupted": "Outcome unknown — verify device",
     "journalUndoInterrupted": "Undo #{{id}} outcome unknown",
     "journalUndoable": "Undo available",
     "journalUndoneBy": "Undone by #{{id}}",
@@ -755,7 +755,7 @@
     "errorCount_few": "{{count}} errors",
     "errorCount_many": "{{count}} errors",
     "errorCount_other": "{{count}} errors",
-    "completeTitle": "{{name}} - debloat complete",
+    "completeTitle": "{{name}} — debloat complete",
     "disabledCount_one": "{{count}} package disabled successfully.",
     "disabledCount_few": "{{count}} packages disabled successfully.",
     "disabledCount_many": "{{count}} packages disabled successfully.",
@@ -1208,7 +1208,7 @@
     "next": "Next",
     "steps": {
       "developerOptions": {
-        "title": "Enable Developer Options",
+        "title": "Enable developer options",
         "content": {
           "0": "Open Settings on your Android device.",
           "1": "Scroll to About phone or About tablet.",
@@ -1218,7 +1218,7 @@
         "tip": "On Samsung: Settings > About phone > Software information > Build number."
       },
       "usbDebugging": {
-        "title": "Enable USB Debugging",
+        "title": "Enable USB debugging",
         "content": {
           "0": "Open Settings > Developer options.",
           "1": "Scroll down to USB debugging and toggle it on.",
@@ -1227,7 +1227,7 @@
         "tip": "On Xiaomi/MIUI, also enable USB debugging security settings to allow app installs."
       },
       "drivers": {
-        "title": "Install USB Drivers (Windows)",
+        "title": "Install USB drivers (Windows)",
         "content": {
           "0": "Most devices work with the Google USB Driver from the Android SDK Manager.",
           "1": "Samsung devices use the Samsung USB Driver from samsung.com.",
@@ -1237,7 +1237,7 @@
         "tip": "On Linux, you may need a udev rule; Droidsmith shows the fix automatically when this happens."
       },
       "authorize": {
-        "title": "Connect and Authorize",
+        "title": "Connect and authorize",
         "content": {
           "0": "Connect your device via USB cable.",
           "1": "Your device will show an Allow USB debugging? dialog.",
@@ -1247,7 +1247,7 @@
         "tip": "If the dialog does not appear, try a different USB cable; charge-only cables do not support data."
       },
       "wireless": {
-        "title": "Wireless Debugging (Android 11+)",
+        "title": "Wireless debugging (Android 11+)",
         "content": {
           "0": "Open Settings > Developer options > Wireless debugging.",
           "1": "Toggle it on and confirm.",

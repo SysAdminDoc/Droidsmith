@@ -755,7 +755,7 @@
     "errorCount_few": "{{count}} ошибки",
     "errorCount_many": "{{count}} ошибок",
     "errorCount_other": "{{count}} ошибок",
-    "completeTitle": "{{name}} - очистка завершена",
+    "completeTitle": "{{name}} — очистка завершена",
     "disabledCount_one": "{{count}} пакет успешно отключен.",
     "disabledCount_few": "{{count}} пакета успешно отключены.",
     "disabledCount_many": "{{count}} пакетов успешно отключено.",
