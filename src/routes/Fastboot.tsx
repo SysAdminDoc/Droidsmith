@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import {
+  errorMessage,
   callFastbootGetvar,
   callListFastbootDevices,
   callLocateFastboot,
@@ -85,7 +86,7 @@ export default function FastbootRoute() {
     } catch (e) {
       setDevicesState({
         kind: "error",
-        message: e instanceof Error ? e.message : String(e),
+        message: errorMessage(e),
       });
     }
   }, []);

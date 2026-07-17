@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import {
+  errorMessage,
   callCancelOperation,
   callCaptureBugreport,
   callSelectHostPath,
@@ -118,7 +119,7 @@ export default function BugreportCapture() {
       operationRef.current = null;
       setState({
         kind: "error",
-        message: error instanceof Error ? error.message : String(error),
+        message: errorMessage(error),
       });
     }
   }, [authorizedTarget, busy, privacyAccepted, t, transportOverrideAccepted]);

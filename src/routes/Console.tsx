@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { useFocusTrap } from "../lib/useFocusTrap";
 
 import {
+  errorMessage,
   callApplyAction,
   callCancelOperation,
   callPlanShellAction,
@@ -185,7 +186,7 @@ export default function ConsoleRoute() {
         ...prev,
         {
           command: trimmed,
-          output: e instanceof Error ? e.message : String(e),
+          output: errorMessage(e),
           error: true,
           timestamp: Date.now(),
           id: nextEntryId++,
@@ -231,7 +232,7 @@ export default function ConsoleRoute() {
         ...previous,
         {
           command: pending.command,
-          output: error instanceof Error ? error.message : String(error),
+          output: errorMessage(error),
           error: true,
           timestamp: Date.now(),
           id: nextEntryId++,

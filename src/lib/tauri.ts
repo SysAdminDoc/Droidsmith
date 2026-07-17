@@ -458,6 +458,25 @@ export async function callConnectWireless(
   }
 }
 
+/**
+ * Extract a human-readable message from an unknown thrown value. Tauri command
+ * rejections arrive as plain `{ code, message }` objects (the serialized
+ * `CommandError`), not `Error` instances, so a naive `String(error)` renders
+ * the useless "[object Object]". Prefer this everywhere errors reach the UI.
+ */
+export function errorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    "message" in error &&
+    typeof (error as { message: unknown }).message === "string"
+  ) {
+    return (error as { message: string }).message;
+  }
+  return String(error);
+}
+
 export function normalizeWirelessFailure(
   error: unknown,
 ): WirelessCommandFailure {
@@ -483,9 +502,7 @@ export function normalizeWirelessFailure(
     return new WirelessCommandFailure(message, code, hintCode, diagnostics);
   }
 
-  return new WirelessCommandFailure(
-    error instanceof Error ? error.message : String(error),
-  );
+  return new WirelessCommandFailure(errorMessage(error));
 }
 
 function errorPayload(message: string): unknown | null {

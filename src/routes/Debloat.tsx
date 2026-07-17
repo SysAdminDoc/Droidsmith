@@ -2,6 +2,7 @@
 import { useTranslation } from "react-i18next";
 
 import {
+  errorMessage,
   callApplyAction,
   callExportRecoveryBaseline,
   callListPackages,
@@ -150,7 +151,7 @@ export default function DebloatRoute() {
     } catch (e) {
       setPacksState({
         kind: "error",
-        message: e instanceof Error ? e.message : String(e),
+        message: errorMessage(e),
       });
     }
   }, [selectedDevice, selectedUser, usersReady]);
@@ -174,7 +175,7 @@ export default function DebloatRoute() {
       setUsersReady(true);
     } catch (e) {
       setUsers([]);
-      setUserError(e instanceof Error ? e.message : String(e));
+      setUserError(errorMessage(e));
     }
   }, [selectedDevice]);
 
@@ -345,7 +346,7 @@ export default function DebloatRoute() {
           );
           error = verificationMessage(verifyDisabled(after));
         } catch (e) {
-          error = e instanceof Error ? e.message : String(e);
+          error = errorMessage(e);
         }
 
         queue = patchQueueRow(queue, row.entry.id, (current) => ({
@@ -447,7 +448,7 @@ export default function DebloatRoute() {
         wizard.overrideAccepted,
       );
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
+      const message = errorMessage(error);
       setWizard((previous) =>
         previous.step === "preview"
           ? { ...previous, planError: message }
@@ -499,7 +500,7 @@ export default function DebloatRoute() {
     } catch (error) {
       setBaselineNotice({
         kind: "error",
-        message: error instanceof Error ? error.message : String(error),
+        message: errorMessage(error),
       });
     }
   }, [authorizedTarget, selectedUser, t, usersReady, wizard]);

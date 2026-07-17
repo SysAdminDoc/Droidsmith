@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import {
+  errorMessage,
   callGetDeviceInfo,
   callInspectProfile,
   callListPackages,
@@ -171,7 +172,7 @@ export default function ProfilesRoute() {
         if (!current) return;
         setInventory({
           kind: "error",
-          message: error instanceof Error ? error.message : String(error),
+          message: errorMessage(error),
         });
       });
     return () => {
@@ -267,7 +268,7 @@ export default function ProfilesRoute() {
       setNotice({
         tone: "danger",
         title: t("profiles.saveFailed"),
-        body: error instanceof Error ? error.message : String(error),
+        body: errorMessage(error),
       });
     }
   }
@@ -309,7 +310,7 @@ export default function ProfilesRoute() {
     } catch (error) {
       setPreviewState({
         kind: "error",
-        message: error instanceof Error ? error.message : String(error),
+        message: errorMessage(error),
       });
     }
   }

@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from "react";
 
 import {
+  errorMessage,
   callCancelOperation,
   callListDevices,
   callWatchDevices,
@@ -136,10 +137,7 @@ export function startDeviceLifecycle() {
         activeOperationId === operationId &&
         lifecycleGeneration === generation
       ) {
-        await scanOnce(
-          error instanceof Error ? error.message : String(error),
-          false,
-        );
+        await scanOnce(errorMessage(error), false);
       }
     })
     .finally(() => {

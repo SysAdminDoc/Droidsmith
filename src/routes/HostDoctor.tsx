@@ -2,6 +2,7 @@ import { useId, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import {
+  errorMessage,
   callRunHostDoctor,
   type HostDoctorReport,
   type HostFinding,
@@ -27,7 +28,7 @@ export default function HostDoctor() {
     } catch (error) {
       setState({
         kind: "error",
-        message: error instanceof Error ? error.message : String(error),
+        message: errorMessage(error),
       });
     }
   };

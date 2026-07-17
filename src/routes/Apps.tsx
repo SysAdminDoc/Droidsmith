@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import {
+  errorMessage,
   callApplyAction,
   callApplyActionBatch,
   callBackupPackage,
@@ -234,7 +235,7 @@ export default function AppsRoute() {
       setUsersReady(true);
     } catch (e) {
       setUsers([]);
-      setUserError(e instanceof Error ? e.message : String(e));
+      setUserError(errorMessage(e));
     }
   }, [selectedDevice]);
 
@@ -258,7 +259,7 @@ export default function AppsRoute() {
     } catch (e) {
       setPkgState({
         kind: "error",
-        message: e instanceof Error ? e.message : String(e),
+        message: errorMessage(e),
       });
     }
   }, [selectedDevice, filter, selectedUser, usersReady]);
@@ -310,7 +311,7 @@ export default function AppsRoute() {
     } catch (e) {
       setJournalState({
         kind: "error",
-        message: e instanceof Error ? e.message : String(e),
+        message: errorMessage(e),
       });
     }
   }, [selectedSerial]);
@@ -403,7 +404,7 @@ export default function AppsRoute() {
       } catch (e) {
         setActionState({
           kind: "error",
-          message: e instanceof Error ? e.message : String(e),
+          message: errorMessage(e),
         });
       }
     },
@@ -433,7 +434,7 @@ export default function AppsRoute() {
       } catch (error) {
         setActionState({
           kind: "error",
-          message: error instanceof Error ? error.message : String(error),
+          message: errorMessage(error),
         });
       }
     },
@@ -606,7 +607,7 @@ export default function AppsRoute() {
         setBackupNotice({
           title: t("apps.exportFailedTitle"),
           message: t("apps.exportFailed", {
-            message: e instanceof Error ? e.message : String(e),
+            message: errorMessage(e),
           }),
           tone: "danger",
         });
@@ -642,7 +643,7 @@ export default function AppsRoute() {
         setBackupNotice({
           title: t("apps.exportFailedTitle"),
           message: t("apps.exportFailed", {
-            message: error instanceof Error ? error.message : String(error),
+            message: errorMessage(error),
           }),
           tone: "danger",
         });
@@ -822,7 +823,7 @@ export default function AppsRoute() {
     } catch (e) {
       setActionState({
         kind: "error",
-        message: e instanceof Error ? e.message : String(e),
+        message: errorMessage(e),
       });
     }
   }, [actionState, loadJournal, loadPackages, t]);
@@ -878,7 +879,7 @@ export default function AppsRoute() {
     } catch (error) {
       setRecoveryState({
         kind: "error",
-        message: error instanceof Error ? error.message : String(error),
+        message: errorMessage(error),
       });
     }
   }, [actionState, authorizedTarget, t]);
@@ -903,7 +904,7 @@ export default function AppsRoute() {
     } catch (error) {
       setRecoveryState({
         kind: "error",
-        message: error instanceof Error ? error.message : String(error),
+        message: errorMessage(error),
       });
     }
   }, [authorizedTarget, t]);
@@ -922,9 +923,7 @@ export default function AppsRoute() {
         await callApplyAction(plan);
         applied += 1;
       } catch (error) {
-        failures.push(
-          `${plan.request.package}: ${error instanceof Error ? error.message : String(error)}`,
-        );
+        failures.push(`${plan.request.package}: ${errorMessage(error)}`);
       }
     }
     setRecoveryState({ kind: "result", diff, applied, failures });
@@ -952,7 +951,7 @@ export default function AppsRoute() {
         if (selectedSerialRef.current !== serial) return;
         setActionState({
           kind: "error",
-          message: e instanceof Error ? e.message : String(e),
+          message: errorMessage(e),
         });
       } finally {
         setUndoingEntryId(null);
@@ -992,7 +991,7 @@ export default function AppsRoute() {
         if (selectedSerialRef.current !== serial) return;
         setActionState({
           kind: "error",
-          message: error instanceof Error ? error.message : String(error),
+          message: errorMessage(error),
         });
       } finally {
         setUndoingBatchId(null);
@@ -2906,7 +2905,7 @@ function PermissionsPanel({
       setPerms(result);
     } catch (e) {
       setPerms([]);
-      setPermError(e instanceof Error ? e.message : String(e));
+      setPermError(errorMessage(e));
     } finally {
       setLoading(false);
     }
@@ -2933,7 +2932,7 @@ function PermissionsPanel({
         // the toggle back, then reload to show the real state.
         setPermError(
           t("apps.permissionToggleFailed", {
-            message: e instanceof Error ? e.message : String(e),
+            message: errorMessage(e),
           }),
         );
         void load();

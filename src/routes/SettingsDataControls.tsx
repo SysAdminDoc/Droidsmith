@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 
 import { normalizeLanguage } from "../lib/i18n";
 import { exportStoredSettings, resetStoredSettings } from "../lib/settings";
-import type { SettingsScope } from "../lib/tauri";
+import { errorMessage, type SettingsScope } from "../lib/tauri";
 import { Button, Card } from "./common";
 
 const SCOPES: SettingsScope[] = ["all", "language", "mirror_presets"];
@@ -30,7 +30,7 @@ export default function SettingsDataControls({
     } catch (error) {
       setMessage(
         t("settings.operationFailed", {
-          message: error instanceof Error ? error.message : String(error),
+          message: errorMessage(error),
         }),
       );
     } finally {
@@ -46,14 +46,16 @@ export default function SettingsDataControls({
       if ((scope === "all" || scope === "language") && !snapshot?.language) {
         // Keep i18next on a supported code; an unsupported browser locale
         // (e.g. "fr-FR") would otherwise desync from the language selector.
-        await i18n.changeLanguage(normalizeLanguage(navigator.language) ?? "en");
+        await i18n.changeLanguage(
+          normalizeLanguage(navigator.language) ?? "en",
+        );
       }
       setConfirmReset(false);
       setMessage(t("settings.resetComplete", { scope: t(scopeKey(scope)) }));
     } catch (error) {
       setMessage(
         t("settings.operationFailed", {
-          message: error instanceof Error ? error.message : String(error),
+          message: errorMessage(error),
         }),
       );
     } finally {

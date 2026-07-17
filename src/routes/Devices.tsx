@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 
 import { cn } from "../lib/cn";
 import {
+  errorMessage,
   callApplyDeviceControl,
   callApplyRemoteFileMutation,
   callCancelOperation,
@@ -99,7 +100,7 @@ export default function DevicesRoute() {
       setDetail({
         kind: "error",
         target,
-        message: e instanceof Error ? e.message : String(e),
+        message: errorMessage(e),
       });
     }
   }, []);
@@ -139,7 +140,7 @@ export default function DevicesRoute() {
       if (recoveryGenerationRef.current !== generation) return;
       setRecovery({
         kind: "error",
-        message: error instanceof Error ? error.message : String(error),
+        message: errorMessage(error),
       });
     } finally {
       if (recoveryGenerationRef.current === generation) {
@@ -1394,7 +1395,7 @@ function DeviceControls({ target }: { target: DeviceTarget }) {
       setScreenshotMsg({
         tone: "danger",
         text: t("devices.controls.failed", {
-          message: e instanceof Error ? e.message : String(e),
+          message: errorMessage(e),
         }),
       });
     }
@@ -1416,7 +1417,7 @@ function DeviceControls({ target }: { target: DeviceTarget }) {
       setDisplayMsg({
         tone: "danger",
         text: t("devices.controls.failed", {
-          message: e instanceof Error ? e.message : String(e),
+          message: errorMessage(e),
         }),
       });
     }
@@ -1433,7 +1434,7 @@ function DeviceControls({ target }: { target: DeviceTarget }) {
       setDisplayMsg({
         tone: "danger",
         text: t("devices.controls.failed", {
-          message: e instanceof Error ? e.message : String(e),
+          message: errorMessage(e),
         }),
       });
     }
@@ -1459,7 +1460,7 @@ function DeviceControls({ target }: { target: DeviceTarget }) {
         setDisplayMsg({
           tone: "danger",
           text: t("devices.controls.failed", {
-            message: e instanceof Error ? e.message : String(e),
+            message: errorMessage(e),
           }),
         });
       }
@@ -1675,7 +1676,7 @@ function ProcessManager({ target }: { target: DeviceTarget }) {
       setProcesses(procs);
     } catch (e) {
       setProcesses([]);
-      setError(e instanceof Error ? e.message : String(e));
+      setError(errorMessage(e));
     } finally {
       setLoading(false);
     }
@@ -1903,7 +1904,7 @@ function FileManager({ target }: { target: DeviceTarget }) {
         setCurrentPath(path);
       } catch (e) {
         setListing(null);
-        setError(e instanceof Error ? e.message : String(e));
+        setError(errorMessage(e));
       } finally {
         setLoading(false);
       }
@@ -1989,7 +1990,7 @@ function FileManager({ target }: { target: DeviceTarget }) {
         setPullMsg({
           tone: "danger",
           text: t("devices.controls.failed", {
-            message: e instanceof Error ? e.message : String(e),
+            message: errorMessage(e),
           }),
         });
       }
@@ -2016,7 +2017,7 @@ function FileManager({ target }: { target: DeviceTarget }) {
       } catch (e) {
         setOperationMessage(
           t("devices.controls.fileOperationFailed", {
-            message: e instanceof Error ? e.message : String(e),
+            message: errorMessage(e),
           }),
         );
       }
@@ -2071,7 +2072,7 @@ function FileManager({ target }: { target: DeviceTarget }) {
     } catch (e) {
       setOperationMessage(
         t("devices.controls.fileOperationFailed", {
-          message: e instanceof Error ? e.message : String(e),
+          message: errorMessage(e),
         }),
       );
     }
@@ -2117,7 +2118,7 @@ function FileManager({ target }: { target: DeviceTarget }) {
       setFileOperationId(null);
       setOperationMessage(
         t("devices.controls.fileOperationFailed", {
-          message: e instanceof Error ? e.message : String(e),
+          message: errorMessage(e),
         }),
       );
     } finally {
@@ -2538,7 +2539,7 @@ function NetworkInspector({ target }: { target: DeviceTarget }) {
       setConnections(conns);
     } catch (e) {
       setConnections([]);
-      setError(e instanceof Error ? e.message : String(e));
+      setError(errorMessage(e));
     } finally {
       setLoading(false);
     }
@@ -2686,7 +2687,7 @@ function LayoutInspector({ target }: { target: DeviceTarget }) {
     } catch (e) {
       setNodes([]);
       setRawXml("");
-      setError(e instanceof Error ? e.message : String(e));
+      setError(errorMessage(e));
     } finally {
       setLoading(false);
     }
@@ -2710,7 +2711,7 @@ function LayoutInspector({ target }: { target: DeviceTarget }) {
       setExportMsg({
         tone: "danger",
         text: t("devices.layout.exportFailed", {
-          message: e instanceof Error ? e.message : String(e),
+          message: errorMessage(e),
         }),
       });
     }

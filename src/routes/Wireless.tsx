@@ -3,6 +3,7 @@ import qrcode from "qrcode-generator";
 import { useTranslation } from "react-i18next";
 
 import {
+  errorMessage,
   callConnectWireless,
   callListWirelessServices,
   callPairWireless,
@@ -82,7 +83,7 @@ export default function WirelessRoute() {
     } catch (e) {
       setServicesState({
         kind: "error",
-        message: e instanceof Error ? e.message : String(e),
+        message: errorMessage(e),
       });
     }
   }, []);
@@ -360,9 +361,7 @@ async function runWirelessAction(
       failure:
         e instanceof WirelessCommandFailure
           ? e
-          : new WirelessCommandFailure(
-              e instanceof Error ? e.message : String(e),
-            ),
+          : new WirelessCommandFailure(errorMessage(e)),
     });
   }
 }
@@ -620,7 +619,7 @@ function ActionStatus({ state }: { state: ActionState }) {
                 readOnly
                 spellCheck={false}
                 value={diagnostics}
-                className="mt-2 w-full resize-y rounded-md border border-white/10 bg-anvil-950/70 p-3 font-mono text-xs text-anvil-100 outline-none focus:border-forge-400/60 focus:ring-2 focus:ring-forge-400/20"
+                className="mt-2 w-full resize-y rounded-md border border-white/10 bg-anvil-950/70 p-3 font-mono text-xs text-anvil-100 outline-none focus:border-circuit-300/60 focus:ring-2 focus:ring-circuit-300/20"
               />
             </div>
           )}

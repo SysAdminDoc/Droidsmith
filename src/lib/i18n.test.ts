@@ -57,7 +57,7 @@ describe("i18n resources", () => {
     expect(languageMetadata("unsupported").locale).toBe("en-US");
   });
 
-  it("resolves every static t(\"literal\") key used in the app", () => {
+  it('resolves every static t("literal") key used in the app', () => {
     const srcRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
     const missing: string[] = [];
     // Matches t("key") / t('key') / t(`key`) with a plain (interpolation-free)

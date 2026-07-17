@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import {
+  errorMessage,
   callPreviewDiagnostics,
   callSaveDiagnostics,
   callSelectHostPath,
@@ -44,7 +45,7 @@ export default function DiagnosticsCenter({
     } catch (error) {
       setState({
         kind: "error",
-        message: error instanceof Error ? error.message : String(error),
+        message: errorMessage(error),
       });
     }
   }, []);
@@ -82,7 +83,7 @@ export default function DiagnosticsCenter({
     } catch (error) {
       setMessage(
         t("diagnostics.saveFailed", {
-          message: error instanceof Error ? error.message : String(error),
+          message: errorMessage(error),
         }),
       );
     } finally {
@@ -102,7 +103,7 @@ export default function DiagnosticsCenter({
     } catch (error) {
       setMessage(
         t("diagnostics.wipeFailed", {
-          message: error instanceof Error ? error.message : String(error),
+          message: errorMessage(error),
         }),
       );
     } finally {

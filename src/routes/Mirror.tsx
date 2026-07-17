@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import {
+  errorMessage,
   callLaunchScrcpy,
   callLocateScrcpy,
   callScrcpyCapabilities,
@@ -137,7 +138,7 @@ export default function MirrorRoute() {
           setPreset(DEFAULT_MIRROR_PRESET);
           setPresetMessage(
             t("mirror.presetLoadFailed", {
-              message: error instanceof Error ? error.message : String(error),
+              message: errorMessage(error),
             }),
           );
         }
@@ -155,7 +156,7 @@ export default function MirrorRoute() {
     } catch (error) {
       setCapabilityState({
         kind: "error",
-        message: commandErrorMessage(error),
+        message: errorMessage(error),
       });
     }
   }, []);
@@ -208,9 +209,16 @@ export default function MirrorRoute() {
           });
         })
         .catch((e) => {
-          setSession({
-            kind: "error",
-            message: commandErrorMessage(e),
+          // Guard like the success path: a status poll for a superseded
+          // session must not clobber a freshly-launched one.
+          setSession((current) => {
+            if (
+              current.kind !== "running" ||
+              current.session.id !== runningSessionId
+            ) {
+              return current;
+            }
+            return { kind: "error", message: errorMessage(e) };
           });
         });
     }, 2000);
@@ -227,7 +235,7 @@ export default function MirrorRoute() {
     } catch (error) {
       setPresetMessage(
         t("mirror.presetSaveFailed", {
-          message: error instanceof Error ? error.message : String(error),
+          message: errorMessage(error),
         }),
       );
     }
@@ -243,7 +251,7 @@ export default function MirrorRoute() {
     } catch (error) {
       setPresetMessage(
         t("mirror.presetSaveFailed", {
-          message: error instanceof Error ? error.message : String(error),
+          message: errorMessage(error),
         }),
       );
     }
@@ -290,7 +298,7 @@ export default function MirrorRoute() {
     } catch (e) {
       setSession({
         kind: "error",
-        message: commandErrorMessage(e),
+        message: errorMessage(e),
       });
     }
   }, [
@@ -309,7 +317,7 @@ export default function MirrorRoute() {
     } catch (e) {
       setSession({
         kind: "error",
-        message: commandErrorMessage(e),
+        message: errorMessage(e),
       });
     }
   }, [session]);
@@ -807,19 +815,6 @@ function SessionPanel({
       )}
     </StatePanel>
   );
-}
-
-function commandErrorMessage(error: unknown): string {
-  if (error instanceof Error) return error.message;
-  if (
-    typeof error === "object" &&
-    error !== null &&
-    "message" in error &&
-    typeof error.message === "string"
-  ) {
-    return error.message;
-  }
-  return String(error);
 }
 
 function parsePositiveInt(value: string): number | null {

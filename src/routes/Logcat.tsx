@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import {
+  errorMessage,
   callCancelOperation,
   callListProcesses,
   callSaveLogcatExport,
@@ -191,9 +192,7 @@ export default function LogcatRoute() {
           generationRef.current === generation &&
           operationRef.current === operationId
         ) {
-          setStreamError(
-            error instanceof Error ? error.message : String(error),
-          );
+          setStreamError(errorMessage(error));
         }
       })
       .finally(() => {
@@ -287,7 +286,7 @@ export default function LogcatRoute() {
       } catch (error) {
         setQueryMessage(
           t("logcat.queries.saveFailed", {
-            message: error instanceof Error ? error.message : String(error),
+            message: errorMessage(error),
           }),
         );
       }
@@ -418,7 +417,7 @@ export default function LogcatRoute() {
     } catch (error) {
       setExportMessage(
         t("logcat.exportFailed", {
-          message: error instanceof Error ? error.message : String(error),
+          message: errorMessage(error),
         }),
       );
     }

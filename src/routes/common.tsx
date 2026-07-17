@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 
 import { cn } from "../lib/cn";
 import {
+  errorMessage,
   callRevealInFolder,
   requiresTransportOverride,
   type Device,
@@ -126,7 +127,7 @@ export function RevealInFolderButton({
         onClick={() => {
           setError(null);
           void callRevealInFolder(path).catch((cause) =>
-            setError(cause instanceof Error ? cause.message : String(cause)),
+            setError(errorMessage(cause)),
           );
         }}
       >
