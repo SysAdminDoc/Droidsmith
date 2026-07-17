@@ -2961,7 +2961,7 @@ function PermissionsPanel({
       {permError && (
         <div
           role="alert"
-          className="border-b border-rose-500/20 bg-rose-500/10 px-4 py-3 text-xs text-rose-200"
+          className="border-b border-red-500/20 bg-red-500/10 px-4 py-3 text-xs text-red-200"
         >
           {permError}
         </div>

@@ -333,7 +333,7 @@ export default function FastbootRoute() {
                   (varsError && queried ? (
                     <div
                       role="alert"
-                      className="mt-4 rounded-md border border-rose-500/20 bg-rose-500/10 p-3 text-xs text-rose-200"
+                      className="mt-4 rounded-md border border-red-500/20 bg-red-500/10 p-3 text-xs text-red-200"
                     >
                       {varsError}
                     </div>

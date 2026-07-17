@@ -1730,7 +1730,7 @@ function ProcessManager({ target }: { target: DeviceTarget }) {
         </div>
       </div>
       {error && (
-        <div className="border-b border-rose-500/20 bg-rose-500/10 px-4 py-3 text-xs text-rose-200">
+        <div className="border-b border-red-500/20 bg-red-500/10 px-4 py-3 text-xs text-red-200">
           {t("devices.controls.processReadFailed", { message: error })}
         </div>
       )}
@@ -2333,7 +2333,7 @@ function FileManager({ target }: { target: DeviceTarget }) {
         </div>
 
         {error && (
-          <div className="border-b border-rose-500/20 bg-rose-500/10 px-4 py-3 text-xs text-rose-200">
+          <div className="border-b border-red-500/20 bg-red-500/10 px-4 py-3 text-xs text-red-200">
             {t("devices.controls.fileListFailed", {
               path: currentPath,
               message: error,
@@ -2594,7 +2594,7 @@ function NetworkInspector({ target }: { target: DeviceTarget }) {
         </div>
       </div>
       {error && (
-        <div className="border-b border-rose-500/20 bg-rose-500/10 px-4 py-3 text-xs text-rose-200">
+        <div className="border-b border-red-500/20 bg-red-500/10 px-4 py-3 text-xs text-red-200">
           {t("devices.controls.connectionsReadFailed", { message: error })}
         </div>
       )}
@@ -2778,7 +2778,7 @@ function LayoutInspector({ target }: { target: DeviceTarget }) {
         </div>
       </div>
       {error && (
-        <div className="border-b border-rose-500/20 bg-rose-500/10 px-4 py-3 text-xs text-rose-200">
+        <div className="border-b border-red-500/20 bg-red-500/10 px-4 py-3 text-xs text-red-200">
           {t("devices.layout.captureFailed", { message: error })}
         </div>
       )}
@@ -2804,7 +2804,7 @@ function LayoutInspector({ target }: { target: DeviceTarget }) {
               style={{ paddingLeft: `${16 + node.depth * 14}px` }}
             >
               {node.parse_error ? (
-                <span className="text-rose-300">
+                <span className="text-red-300">
                   ⚠ {t("devices.layout.nodeParseError")}: {node.parse_error}
                 </span>
               ) : (
