@@ -161,11 +161,11 @@ export default function WirelessRoute() {
   }, []);
 
   const manualPairValid =
-    manualHost.trim().length > 0 &&
+    validHost(manualHost) &&
     validPortText(manualPort) &&
     validPairingCode(manualCode);
   const manualConnectValid =
-    connectHost.trim().length > 0 && validPortText(connectPort);
+    validHost(connectHost) && validPortText(connectPort);
 
   return (
     <>
@@ -782,6 +782,15 @@ function serviceKindTone(
     return "success";
   }
   return "neutral";
+}
+
+// Permissive host gate: the backend does the authoritative IPv4/IPv6/mDNS
+// parsing (and rejects bare IPv6), so only block obviously-invalid input —
+// empty, whitespace, a URL scheme, or a path — before the round-trip.
+function validHost(value: string): boolean {
+  const host = value.trim();
+  if (host.length === 0 || host.length > 255) return false;
+  return !/[\s/\\]/.test(host) && !host.includes("://");
 }
 
 function validPairingCode(value: string): boolean {
