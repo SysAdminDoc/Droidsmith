@@ -14,6 +14,18 @@ completion.
 Working batches live here. Sections collapse into a versioned release on
 each milestone tag.
 
+## [0.5.3] - 2026-07-17
+
+### Fixed
+
+- Package enumeration no longer aborts with "package enumeration failed" on
+  devices whose `pm` rejects the enrichment flags. `pm list packages` was
+  always invoked with `-U` (package UID, Android 9+) and `-i` (installer);
+  a device that rejects an unknown flag exits non-zero and previously failed
+  the entire Apps list. Each pass now retries with the core `-f` flags when the
+  enriched set is rejected (losing only uid/installer on older devices), and
+  the archived/retained enrichment passes degrade instead of failing the list.
+
 ## [0.5.2] - 2026-07-17
 
 Engineering, security, and product-quality audit pass. No feature changes;

@@ -93,6 +93,41 @@ pub enum PackageFilter {
 /// Enumerate packages on `serial` for Android user `user_id`, applying
 /// `filter` after the union. Passing the explicit `--user` keeps the
 /// listed set consistent with the user that destructive actions target.
+/// Run one `pm list packages` filter pass, preferring the enriched flag set
+/// (`-U` UID, `-i` installer) but retrying with the core flags when a device
+/// rejects them. `-U` only exists on Android 9+ (and some OEM builds trim
+/// `-i`), and an unknown flag makes `pm` exit non-zero, which would otherwise
+/// abort the whole enumeration. Losing uid/installer on older devices is an
+/// acceptable degradation; a genuine failure of the reduced query propagates.
+fn list_packages_raw(
+    t: &dyn AdbTransport,
+    target: &DeviceTarget,
+    user: &str,
+    filter_flag: &str,
+) -> Result<String, TransportError> {
+    match t.shell_target(
+        target,
+        &[
+            "pm",
+            "list",
+            "packages",
+            "--user",
+            user,
+            filter_flag,
+            "-f",
+            "-U",
+            "-i",
+        ],
+    ) {
+        Ok(raw) => Ok(raw),
+        Err(TransportError::Exit { .. }) => t.shell_target(
+            target,
+            &["pm", "list", "packages", "--user", user, filter_flag, "-f"],
+        ),
+        Err(other) => Err(other),
+    }
+}
+
 pub fn list_packages_with_capability(
     t: &dyn AdbTransport,
     target: &DeviceTarget,
@@ -101,18 +136,8 @@ pub fn list_packages_with_capability(
 ) -> Result<PackageListing, TransportError> {
     let user = user_id.to_string();
     let archive = archive_capability(t, target);
-    let enabled_raw = t.shell_target(
-        target,
-        &[
-            "pm", "list", "packages", "--user", &user, "-e", "-f", "-U", "-i",
-        ],
-    )?;
-    let disabled_raw = t.shell_target(
-        target,
-        &[
-            "pm", "list", "packages", "--user", &user, "-d", "-f", "-U", "-i",
-        ],
-    )?;
+    let enabled_raw = list_packages_raw(t, target, &user, "-e")?;
+    let disabled_raw = list_packages_raw(t, target, &user, "-d")?;
 
     let mut packages = parse_pm_list(&enabled_raw, true);
     for entry in parse_pm_list(&disabled_raw, false) {
@@ -131,19 +156,24 @@ pub fn list_packages_with_capability(
     // data + installer retained for unarchive) or uninstalled-with-data
     // remnants. `-u` works on every Android version, so this pass runs
     // unconditionally; archive probing only runs where archiving exists.
-    let known_raw = t.shell_target(
-        target,
-        &[
-            "pm", "list", "packages", "--user", &user, "-u", "-f", "-U", "-i",
-        ],
-    )?;
-    let mut candidates = parse_pm_list(&known_raw, false);
-    candidates.retain(|candidate| {
-        !packages
-            .iter()
-            .any(|installed| installed.package == candidate.package)
-    });
-    let archived = if archive.supported {
+    // The `-u` (also-uninstalled) pass and the archive probe only enrich the
+    // list with archived/retained remnants. If a device or vendor `pm` rejects
+    // them, degrade to the core enabled/disabled list rather than failing the
+    // whole enumeration.
+    let candidates = match list_packages_raw(t, target, &user, "-u") {
+        Ok(known_raw) => {
+            let mut candidates = parse_pm_list(&known_raw, false);
+            candidates.retain(|candidate| {
+                !packages
+                    .iter()
+                    .any(|installed| installed.package == candidate.package)
+            });
+            candidates
+        }
+        Err(TransportError::Exit { .. }) => Vec::new(),
+        Err(other) => return Err(other),
+    };
+    let archived = if archive.supported && !candidates.is_empty() {
         archived_package_names(
             t,
             target,
@@ -152,7 +182,8 @@ pub fn list_packages_with_capability(
                 .iter()
                 .map(|candidate| candidate.package.clone())
                 .collect::<Vec<_>>(),
-        )?
+        )
+        .unwrap_or_default()
     } else {
         HashSet::new()
     };
@@ -515,6 +546,47 @@ package:/system/app/FacebookStub/FacebookStub.apk=com.facebook.appmanager uid:10
         assert_eq!(v.len(), 4);
         let enabled: Vec<_> = v.iter().filter(|p| p.enabled).collect();
         assert_eq!(enabled.len(), 3);
+    }
+
+    #[test]
+    fn list_packages_falls_back_when_enriched_flags_are_rejected() {
+        // A device on Android < 9 rejects `-U`; enumeration must degrade to the
+        // core `-f` flags instead of failing outright.
+        let mock = MockTransport::new();
+        let reject = || {
+            Err(TransportError::Exit {
+                code: 255,
+                stderr: "Error: Unknown option: -U".to_string(),
+            })
+        };
+        for filter in ["-e", "-d", "-u"] {
+            mock.expect_shell(
+                "abc",
+                &[
+                    "pm", "list", "packages", "--user", "0", filter, "-f", "-U", "-i",
+                ],
+                reject(),
+            );
+        }
+        mock.expect_shell(
+            "abc",
+            &["pm", "list", "packages", "--user", "0", "-e", "-f"],
+            Ok(ENABLED_FIXTURE.to_string()),
+        );
+        mock.expect_shell(
+            "abc",
+            &["pm", "list", "packages", "--user", "0", "-d", "-f"],
+            Ok(DISABLED_FIXTURE.to_string()),
+        );
+        mock.expect_shell(
+            "abc",
+            &["pm", "list", "packages", "--user", "0", "-u", "-f"],
+            Ok(String::new()),
+        );
+
+        let v = list_packages(&mock, &target(), PackageFilter::All, 0).unwrap();
+        assert_eq!(v.len(), 4);
+        assert_eq!(v.iter().filter(|p| p.enabled).count(), 3);
     }
 
     #[test]
