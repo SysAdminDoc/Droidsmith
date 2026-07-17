@@ -14,6 +14,25 @@ completion.
 Working batches live here. Sections collapse into a versioned release on
 each milestone tag.
 
+## [0.5.0] - 2026-07-17
+
+Brings the Devices workspace into close parity with the premium desktop
+reference while retaining the native window frame and existing operational
+workflows.
+
+### Changed
+
+- Reordered the Devices workspace around a compact selector and ADB-ready band,
+  an eight-column lifecycle-health strip, selected-device details, and a calmer
+  connected-device table with precise row selection.
+- Moved ADB recovery into the header overflow, shortened the primary refresh
+  action, and removed duplicate runtime/status treatments from the shell.
+- Replaced the sidebar utility stack with compact Settings, Help, and About
+  controls; language and persistence controls now live in Settings, while About
+  exposes version/runtime context and the diagnostics center.
+- Regenerated the README screenshots after desktop, mobile, command-palette,
+  and Russian 200% reflow verification.
+
 ## [0.4.0] - 2026-07-17
 
 Rebuilds the desktop visual system around readable typography, compact

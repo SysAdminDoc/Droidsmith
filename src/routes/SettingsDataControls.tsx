@@ -7,7 +7,11 @@ import { Button, Card } from "./common";
 
 const SCOPES: SettingsScope[] = ["all", "language", "mirror_presets"];
 
-export default function SettingsDataControls() {
+export default function SettingsDataControls({
+  embedded = false,
+}: {
+  embedded?: boolean;
+}) {
   const { t, i18n } = useTranslation();
   const [scope, setScope] = useState<SettingsScope>("all");
   const [busy, setBusy] = useState<"export" | "reset" | null>(null);
@@ -55,7 +59,9 @@ export default function SettingsDataControls() {
   };
 
   return (
-    <Card className="mt-5">
+    <Card
+      className={embedded ? "border-0 bg-transparent p-0 shadow-none" : "mt-5"}
+    >
       <h3 className="text-base font-semibold text-anvil-50">
         {t("settings.title")}
       </h3>

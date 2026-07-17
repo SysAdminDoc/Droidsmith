@@ -12,6 +12,7 @@ import { useCommandPalette } from "./routes/useCommandPalette";
 import { useFocusTrap } from "./lib/useFocusTrap";
 import OnboardingTour from "./routes/Onboarding";
 import DiagnosticsCenter from "./routes/DiagnosticsCenter";
+import SettingsDataControls from "./routes/SettingsDataControls";
 
 import DevicesRoute from "./routes/Devices";
 import WirelessRoute from "./routes/Wireless";
@@ -22,7 +23,7 @@ import ConsoleRoute from "./routes/Console";
 import LogcatRoute from "./routes/Logcat";
 import MirrorRoute from "./routes/Mirror";
 import FastbootRoute from "./routes/Fastboot";
-import { Badge, Button, SkeletonLine } from "./routes/common";
+import { Button } from "./routes/common";
 import droidsmithLogo from "./assets/droidsmith-logo.png";
 
 export type NavItem = {
@@ -122,6 +123,8 @@ export default function App() {
   const [active, setActive] = useState<NavItem["id"]>(NAV_ITEMS[0].id);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [showDiagnostics, setShowDiagnostics] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [showAbout, setShowAbout] = useState(false);
   const [routeAnnouncement, setRouteAnnouncement] = useState<
     NavItem["id"] | null
   >(null);
@@ -197,9 +200,6 @@ export default function App() {
         >
           <div className="flex items-start justify-between gap-4 lg:block">
             <Brand state={hb} />
-            <div className="lg:mt-3">
-              <RuntimeBadge state={hb} />
-            </div>
           </div>
 
           <nav
@@ -220,18 +220,10 @@ export default function App() {
 
           <div className="mt-3 lg:mt-auto lg:border-t lg:border-white/[0.08] lg:pt-3">
             <ShellActions
-              onOpenPalette={() => palette.setOpen(true)}
+              onOpenSettings={() => setShowSettings(true)}
               onOpenGuide={() => setShowOnboarding(true)}
-              onOpenDiagnostics={() => setShowDiagnostics(true)}
+              onOpenAbout={() => setShowAbout(true)}
             />
-            <LanguageSelector className="mt-2" />
-
-            <div className="runtime-panel mt-3 hidden lg:block">
-              <HeartbeatSidebarSummary
-                state={hb}
-                onRetry={() => void loadHeartbeat()}
-              />
-            </div>
           </div>
         </aside>
 
@@ -265,6 +257,20 @@ export default function App() {
       )}
       {showDiagnostics && (
         <DiagnosticsCenter onDismiss={() => setShowDiagnostics(false)} />
+      )}
+      {showSettings && (
+        <SettingsModal onDismiss={() => setShowSettings(false)} />
+      )}
+      {showAbout && (
+        <AboutModal
+          state={hb}
+          onRetry={() => void loadHeartbeat()}
+          onOpenDiagnostics={() => {
+            setShowAbout(false);
+            setShowDiagnostics(true);
+          }}
+          onDismiss={() => setShowAbout(false)}
+        />
       )}
       <CommandPalette
         open={palette.open}
@@ -305,50 +311,207 @@ function OnboardingModal({ onDismiss }: { onDismiss: () => void }) {
   );
 }
 
+function SettingsModal({ onDismiss }: { onDismiss: () => void }) {
+  const { t } = useTranslation();
+  const trapRef = useFocusTrap<HTMLDivElement>();
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onDismiss();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onDismiss]);
+
+  return (
+    <div
+      ref={trapRef}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="settings-modal-title"
+      tabIndex={-1}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 outline-none backdrop-blur-sm"
+    >
+      <div className="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-xl border border-white/[0.09] bg-[#151a21] p-5 shadow-2xl sm:p-6">
+        <div className="flex items-start justify-between gap-4 border-b border-white/[0.08] pb-4">
+          <div>
+            <h2
+              id="settings-modal-title"
+              className="text-lg font-semibold text-anvil-50"
+            >
+              {t("app.settings")}
+            </h2>
+            <p className="mt-1 text-sm text-anvil-400">
+              {t("app.settingsDescription")}
+            </p>
+          </div>
+          <Button type="button" variant="ghost" size="sm" onClick={onDismiss}>
+            {t("common.close")}
+          </Button>
+        </div>
+        <div className="border-b border-white/[0.08] py-5">
+          <p className="text-xs font-medium text-anvil-300">
+            {t("language.label")}
+          </p>
+          <LanguageSelector className="mt-2 max-w-sm" />
+        </div>
+        <div className="pt-5">
+          <SettingsDataControls embedded />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AboutModal({
+  state,
+  onRetry,
+  onOpenDiagnostics,
+  onDismiss,
+}: {
+  state: LoadState;
+  onRetry: () => void;
+  onOpenDiagnostics: () => void;
+  onDismiss: () => void;
+}) {
+  const { t } = useTranslation();
+  const trapRef = useFocusTrap<HTMLDivElement>();
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onDismiss();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onDismiss]);
+
+  return (
+    <div
+      ref={trapRef}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="about-modal-title"
+      tabIndex={-1}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 outline-none backdrop-blur-sm"
+    >
+      <div className="w-full max-w-md rounded-xl border border-white/[0.09] bg-[#151a21] p-6 shadow-2xl">
+        <div className="flex items-start gap-4">
+          <LogoMark />
+          <div className="min-w-0">
+            <h2
+              id="about-modal-title"
+              className="text-xl font-semibold text-anvil-50"
+            >
+              {t("app.name")}
+            </h2>
+            <p className="mt-1 text-sm text-anvil-400">{t("app.tagline")}</p>
+          </div>
+        </div>
+        <p className="mt-5 text-sm leading-6 text-anvil-300">
+          {t("app.aboutDescription")}
+        </p>
+        <AboutRuntime state={state} onRetry={onRetry} />
+        <div className="mt-6 flex flex-wrap justify-end gap-2 border-t border-white/[0.08] pt-4">
+          <Button type="button" variant="ghost" onClick={onDismiss}>
+            {t("common.close")}
+          </Button>
+          <Button type="button" onClick={onOpenDiagnostics}>
+            <DiagnosticsIcon />
+            {t("diagnostics.open")}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AboutRuntime({
+  state,
+  onRetry,
+}: {
+  state: LoadState;
+  onRetry: () => void;
+}) {
+  const { t } = useTranslation();
+
+  if (state.status === "loading") {
+    return (
+      <p className="mt-4 text-xs text-anvil-500">{t("runtime.checking")}</p>
+    );
+  }
+
+  if (state.status === "error") {
+    return (
+      <div className="mt-4 flex items-center justify-between gap-3 text-xs text-red-200">
+        <span>{t("runtime.failed")}</span>
+        <Button type="button" variant="ghost" size="sm" onClick={onRetry}>
+          {t("runtime.retry")}
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-anvil-500">
+      <span>
+        {state.status === "ok"
+          ? t("app.version", { version: state.value.version })
+          : t("runtime.browserPreview")}
+      </span>
+      <span aria-hidden="true">•</span>
+      <span>
+        {state.status === "ok"
+          ? t("runtime.desktop")
+          : t("runtime.notAttached")}
+      </span>
+    </div>
+  );
+}
+
 function ShellActions({
   className,
-  onOpenPalette,
+  onOpenSettings,
   onOpenGuide,
-  onOpenDiagnostics,
+  onOpenAbout,
 }: {
   className?: string;
-  onOpenPalette: () => void;
+  onOpenSettings: () => void;
   onOpenGuide: () => void;
-  onOpenDiagnostics: () => void;
+  onOpenAbout: () => void;
 }) {
   const { t } = useTranslation();
 
   return (
-    <div className={cn("grid grid-cols-2 gap-1", className)}>
+    <div className={cn("grid grid-cols-3 gap-1", className)}>
       <Button
         type="button"
         variant="ghost"
         size="sm"
-        className="col-span-2 w-full"
-        onClick={onOpenPalette}
+        className="w-full px-1.5"
+        onClick={onOpenSettings}
       >
-        <SearchIcon />
-        {t("palette.commandsButton")}
+        <SettingsIcon />
+        {t("app.settings")}
       </Button>
       <Button
         type="button"
         variant="ghost"
         size="sm"
-        className="w-full"
+        className="w-full px-1.5"
         onClick={onOpenGuide}
       >
-        <GuideIcon />
-        {t("app.guide")}
+        <HelpIcon />
+        {t("app.help")}
       </Button>
       <Button
         type="button"
         variant="ghost"
         size="sm"
-        className="w-full"
-        onClick={onOpenDiagnostics}
+        className="w-full px-1.5"
+        onClick={onOpenAbout}
       >
-        <DiagnosticsIcon />
-        {t("diagnostics.open")}
+        <AboutIcon />
+        {t("app.about")}
       </Button>
     </div>
   );
@@ -413,21 +576,6 @@ function Brand({ state }: { state: LoadState }) {
   );
 }
 
-function RuntimeBadge({ state }: { state: LoadState }) {
-  const { t } = useTranslation();
-
-  if (state.status === "ok") {
-    return <Badge tone="success">{t("runtime.desktop")}</Badge>;
-  }
-  if (state.status === "loading") {
-    return <Badge tone="info">{t("runtime.starting")}</Badge>;
-  }
-  if (state.status === "error") {
-    return <Badge tone="danger">{t("runtime.issue")}</Badge>;
-  }
-  return <Badge tone="neutral">{t("runtime.browserPreview")}</Badge>;
-}
-
 function NavStub({
   item,
   label,
@@ -468,92 +616,6 @@ function NavStub({
   );
 }
 
-function HeartbeatSidebarSummary({
-  state,
-  onRetry,
-}: {
-  state: LoadState;
-  onRetry: () => void;
-}) {
-  const { t } = useTranslation();
-
-  if (state.status === "loading") {
-    return (
-      <div className="px-2 py-1.5">
-        <p className="text-xs font-medium text-anvil-300">
-          {t("runtime.checking")}
-        </p>
-        <SkeletonLine className="mt-2 w-3/4" />
-      </div>
-    );
-  }
-
-  if (state.status === "desktop_unavailable") {
-    return (
-      <div className="px-2 py-1.5">
-        <div className="flex items-center gap-2">
-          <StatusDot tone="neutral" />
-          <p className="text-xs font-medium text-anvil-300">
-            {t("runtime.notAttached")}
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  if (state.status === "error") {
-    return (
-      <div className="rounded-md bg-red-950/15 px-2 py-2">
-        <div className="flex items-center gap-2">
-          <StatusDot tone="danger" />
-          <p role="alert" className="text-xs font-medium text-red-100">
-            {t("runtime.failed")}
-          </p>
-        </div>
-        <p className="mt-1.5 line-clamp-2 text-xs text-red-100/75">
-          {state.error}
-        </p>
-        <Button
-          type="button"
-          onClick={onRetry}
-          variant="danger"
-          size="sm"
-          className="mt-2"
-        >
-          {t("runtime.retry")}
-        </Button>
-      </div>
-    );
-  }
-
-  const v = state.value;
-  return (
-    <div className="px-2 py-1.5 text-xs">
-      <div className="flex items-center gap-2">
-        <StatusDot tone="success" />
-        <p className="font-medium text-anvil-300">{t("runtime.healthy")}</p>
-      </div>
-      <p className="mt-1 pl-4 text-anvil-500">
-        {t(`runtime.adbStatusValue.${v.adb.compatibility.status}`)}
-      </p>
-    </div>
-  );
-}
-
-function StatusDot({ tone }: { tone: "neutral" | "success" | "danger" }) {
-  return (
-    <span
-      className={cn(
-        "h-2 w-2 rounded-full",
-        tone === "neutral" && "bg-anvil-400",
-        tone === "success" && "bg-emerald-300",
-        tone === "danger" && "bg-red-300",
-      )}
-      aria-hidden="true"
-    />
-  );
-}
-
 function LogoMark() {
   return (
     <img
@@ -565,7 +627,7 @@ function LogoMark() {
   );
 }
 
-function SearchIcon() {
+function SettingsIcon() {
   return (
     <svg
       viewBox="0 0 24 24"
@@ -577,13 +639,13 @@ function SearchIcon() {
       strokeWidth="1.8"
       aria-hidden="true"
     >
-      <circle cx="11" cy="11" r="7" />
-      <path d="m16.2 16.2 3.3 3.3" />
+      <circle cx="12" cy="12" r="3" />
+      <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1a1.7 1.7 0 0 0 1.9.3A1.7 1.7 0 0 0 10 3v-.2h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1Z" />
     </svg>
   );
 }
 
-function GuideIcon() {
+function HelpIcon() {
   return (
     <svg
       viewBox="0 0 24 24"
@@ -595,8 +657,26 @@ function GuideIcon() {
       strokeWidth="1.8"
       aria-hidden="true"
     >
-      <path d="M5 5.5A2.5 2.5 0 0 1 7.5 3H19v16H7.5A2.5 2.5 0 0 0 5 21.5v-16Z" />
-      <path d="M9 7h6M9 10h5" />
+      <circle cx="12" cy="12" r="9" />
+      <path d="M9.8 9a2.3 2.3 0 1 1 3.3 2.1c-.8.4-1.1.9-1.1 1.7M12 16.5h.01" />
+    </svg>
+  );
+}
+
+function AboutIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className="h-4 w-4"
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="1.8"
+      aria-hidden="true"
+    >
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 10.5V17M12 7h.01" />
     </svg>
   );
 }

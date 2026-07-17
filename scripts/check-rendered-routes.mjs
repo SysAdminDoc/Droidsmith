@@ -56,13 +56,14 @@ async function runDesktopFlow(browser) {
 
   await page.getByRole("heading", { name: "Droidsmith" }).waitFor();
   await page.getByText("ADB lifecycle health", { exact: true }).waitFor();
-  await page.getByText("Upgrade advised", { exact: true }).waitFor();
+  await page.getByText("ADB ready", { exact: true }).waitFor();
   await page.getByText(/Platform Tools 37\.0\.0 makes libadbmdns/).waitFor();
   await page.getByRole("button", { name: "Select Pixel QA" }).waitFor();
   if ((await page.locator("tr[role='button']").count()) !== 0) {
     throw new Error("Device table rows must retain native table semantics");
   }
-  await page.getByRole("button", { name: "Review recovery" }).click();
+  await page.getByRole("button", { name: "More device options" }).click();
+  await page.getByRole("menuitem", { name: "Review recovery" }).click();
   await page
     .getByRole("dialog", { name: "Review ADB restart and reconnect" })
     .waitFor();
@@ -90,6 +91,7 @@ async function runDesktopFlow(browser) {
   await page.getByRole("button", { name: "Export XML" }).click();
   await page.getByText(/Layout saved to .*layout-QA123\.xml/).waitFor();
 
+  await page.getByRole("button", { name: "About", exact: true }).click();
   await page.getByRole("button", { name: "Diagnostics", exact: true }).click();
   const diagnosticsDialog = page.getByRole("dialog", {
     name: "Diagnostics center",
@@ -503,7 +505,7 @@ async function runDesktopFlow(browser) {
     fullPage: false,
   });
 
-  await page.getByRole("button", { name: "Commands", exact: true }).click();
+  await page.keyboard.press("Control+k");
   await page.getByRole("dialog", { name: "Command palette" }).waitFor();
   await assertFocusedLabel(page, "Command palette search");
   const paletteInput = page.getByRole("combobox", {
@@ -646,7 +648,8 @@ async function runDesktopFlow(browser) {
     .waitFor();
   await page.getByText(/MediaCodec encoder failed to initialize/).waitFor();
 
-  await page.getByLabel("Language").selectOption("ru");
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await page.getByLabel("Language", { exact: true }).selectOption("ru");
   await page.waitForFunction(
     () =>
       document.documentElement.lang === "ru" &&
@@ -666,6 +669,7 @@ async function runMobileFlow(browser) {
   const errors = collectConsoleErrors(page);
   await installTauriMock(page);
   await page.goto(baseUrl, { waitUntil: "networkidle" });
+  await page.getByRole("button", { name: "About", exact: true }).click();
   await page.getByRole("button", { name: "Diagnostics", exact: true }).click();
   await page.getByRole("dialog", { name: "Diagnostics center" }).waitFor();
   await assertNoHorizontalOverflow(page, "mobile Diagnostics center");
@@ -692,8 +696,10 @@ async function runLocaleZoomFlow(browser) {
   await installTauriMock(page);
   await page.goto(baseUrl, { waitUntil: "networkidle" });
 
-  await page.getByLabel("Language").selectOption("ru");
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await page.getByLabel("Language", { exact: true }).selectOption("ru");
   await page.waitForFunction(() => document.documentElement.lang === "ru");
+  await page.keyboard.press("Escape");
 
   const routes = [
     "Устройства",

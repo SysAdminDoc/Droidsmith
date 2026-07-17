@@ -26,6 +26,7 @@ import {
   type AdbRecoveryResult,
   type DeviceInfo,
   type DeviceTarget,
+  type DeviceTransportKind,
   type HostPathGrant,
   type LayoutNode,
   type ListDevicesResult,
@@ -41,11 +42,7 @@ import {
 import { useFocusTrap } from "../lib/useFocusTrap";
 import { formatDateTime } from "../lib/i18n";
 import { useTransportAuthorization } from "../lib/useAuthorizedDevices";
-import {
-  restartDeviceLifecycle,
-  useDeviceStore,
-  type SharedDevicesState,
-} from "../lib/deviceStore";
+import { restartDeviceLifecycle, useDeviceStore } from "../lib/deviceStore";
 
 import {
   Badge,
@@ -59,13 +56,10 @@ import {
   StatePanel,
   TableCell,
   TableHeaderCell,
-  TransportBadge,
   TransportTrustNotice,
 } from "./common";
 import HostDoctor from "./HostDoctor";
 import { ADB_RECOVERY_COMMANDS, formatAdbDiagnostics } from "./adbHealth";
-
-type State = SharedDevicesState;
 
 type DetailState =
   | { kind: "idle" }
@@ -187,18 +181,15 @@ export default function DevicesRoute() {
         milestone="R-012"
         description={t("devices.description")}
         actions={
-          <Button
-            type="button"
-            onClick={() => void refresh()}
-            disabled={state.kind === "loading"}
-            variant="primary"
-          >
-            {state.kind === "loading"
-              ? t("devices.scanning")
-              : t("devices.refresh")}
-          </Button>
+          <DeviceHeaderActions
+            refreshing={state.kind === "loading"}
+            onRefresh={() => void refresh()}
+            onReviewRecovery={() => {
+              setRecovery({ kind: "idle" });
+              setRecoveryOpen(true);
+            }}
+          />
         }
-        meta={<DeviceHeaderMeta state={state} />}
       />
 
       {state.kind === "ok" &&
@@ -221,10 +212,6 @@ export default function DevicesRoute() {
             health={health}
             observedAt={observedAt}
             watching={watching}
-            onReviewRecovery={() => {
-              setRecovery({ kind: "idle" });
-              setRecoveryOpen(true);
-            }}
           />
         )}
         {state.kind === "no_tauri" && (
@@ -310,6 +297,24 @@ export default function DevicesRoute() {
             </StatePanel>
           )}
 
+        {detail.kind !== "idle" && (
+          <DeviceDetail
+            state={detail}
+            onRetry={(target) => {
+              const device =
+                state.kind === "ok"
+                  ? state.value.devices.find(
+                      (candidate) =>
+                        candidate.transport_id === target.transport_id &&
+                        candidate.connection_generation ===
+                          target.connection_generation,
+                    )
+                  : undefined;
+              if (device) void selectDevice(device);
+            }}
+          />
+        )}
+
         {state.kind === "ok" && state.value.devices.length > 0 && (
           <DeviceTable
             devices={state.value.devices}
@@ -380,33 +385,15 @@ export default function DevicesRoute() {
           })()}
       </section>
 
-      {detail.kind !== "idle" && (
+      {detail.kind === "ok" && (
         <section className="mt-4 max-w-[88rem] space-y-4" aria-live="polite">
-          <DeviceDetail
-            state={detail}
-            onRetry={(target) => {
-              const device =
-                state.kind === "ok"
-                  ? state.value.devices.find(
-                      (candidate) =>
-                        candidate.transport_id === target.transport_id &&
-                        candidate.connection_generation ===
-                          target.connection_generation,
-                    )
-                  : undefined;
-              if (device) void selectDevice(device);
-            }}
+          {/* Key by serial so every sub-panel's internal state (process list,
+              file listing, network sockets, screenshot/density messages)
+              resets on device switch. */}
+          <DeviceControls
+            key={`${detail.target.transport_id ?? detail.target.serial}:${detail.target.connection_generation}`}
+            target={detail.target}
           />
-          {detail.kind === "ok" && (
-            // Key by serial so every sub-panel's internal state (process
-            // list, file listing, network sockets, screenshot/density
-            // messages) resets on device switch instead of showing device
-            // A's data while device B is selected.
-            <DeviceControls
-              key={`${detail.target.transport_id ?? detail.target.serial}:${detail.target.connection_generation}`}
-              target={detail.target}
-            />
-          )}
         </section>
       )}
       <div className="mt-4 max-w-[88rem]">
@@ -426,61 +413,201 @@ export default function DevicesRoute() {
   );
 }
 
+function DeviceHeaderActions({
+  refreshing,
+  onRefresh,
+  onReviewRecovery,
+}: {
+  refreshing: boolean;
+  onRefresh: () => void;
+  onReviewRecovery: () => void;
+}) {
+  const { t } = useTranslation();
+  const [open, setOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const dismiss = (event: PointerEvent) => {
+      if (!menuRef.current?.contains(event.target as Node)) setOpen(false);
+    };
+    document.addEventListener("pointerdown", dismiss);
+    return () => document.removeEventListener("pointerdown", dismiss);
+  }, [open]);
+
+  return (
+    <div className="flex items-center gap-2">
+      <Button
+        type="button"
+        onClick={onRefresh}
+        disabled={refreshing}
+        variant="primary"
+      >
+        <RefreshIcon spinning={refreshing} />
+        {refreshing ? t("devices.scanning") : t("devices.refresh")}
+      </Button>
+      <div ref={menuRef} className="relative">
+        <Button
+          type="button"
+          variant="secondary"
+          aria-label={t("devices.moreActions")}
+          aria-haspopup="menu"
+          aria-expanded={open}
+          className="w-10 px-0"
+          onClick={() => setOpen((value) => !value)}
+        >
+          <MoreIcon />
+        </Button>
+        {open && (
+          <div
+            role="menu"
+            className="absolute right-0 z-20 mt-2 min-w-48 rounded-lg border border-white/[0.09] bg-[#181d24] p-1.5 shadow-2xl"
+          >
+            <button
+              type="button"
+              role="menuitem"
+              className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-anvil-200 transition hover:bg-white/[0.07] hover:text-anvil-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-circuit-300"
+              onClick={() => {
+                setOpen(false);
+                onReviewRecovery();
+              }}
+            >
+              <RecoveryIcon />
+              {t("devices.health.reviewRecovery")}
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function RefreshIcon({ spinning }: { spinning: boolean }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className={cn("h-4 w-4", spinning && "animate-spin")}
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="1.8"
+      aria-hidden="true"
+    >
+      <path d="M20 11a8 8 0 0 0-14.8-4M4 4v5h5M4 13a8 8 0 0 0 14.8 4M20 20v-5h-5" />
+    </svg>
+  );
+}
+
+function MoreIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className="h-4 w-4"
+      fill="currentColor"
+      aria-hidden="true"
+    >
+      <circle cx="12" cy="5" r="1.5" />
+      <circle cx="12" cy="12" r="1.5" />
+      <circle cx="12" cy="19" r="1.5" />
+    </svg>
+  );
+}
+
+function RecoveryIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className="h-4 w-4"
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="1.8"
+      aria-hidden="true"
+    >
+      <path d="M5 7v5h5M19 17v-5h-5" />
+      <path d="M7.1 17A8 8 0 0 0 19 12M16.9 7A8 8 0 0 0 5 12" />
+    </svg>
+  );
+}
+
+function HealthCheckIcon({ healthy }: { healthy: boolean }) {
+  return (
+    <span
+      className={cn(
+        "flex h-5 w-5 shrink-0 items-center justify-center rounded-full border",
+        healthy
+          ? "border-emerald-300 text-emerald-300"
+          : "border-amber-300 text-amber-300",
+      )}
+      aria-hidden="true"
+    >
+      {healthy ? (
+        <svg
+          viewBox="0 0 20 20"
+          className="h-3 w-3"
+          fill="none"
+          stroke="currentColor"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth="2"
+        >
+          <path d="m5 10 3 3 7-7" />
+        </svg>
+      ) : (
+        <span className="h-1.5 w-1.5 rounded-full bg-current" />
+      )}
+    </span>
+  );
+}
+
 function AdbHealthPanel({
   health,
   observedAt,
   watching,
-  onReviewRecovery,
 }: {
   health: AdbHealth | null;
   observedAt: string | null;
   watching: boolean;
-  onReviewRecovery: () => void;
 }) {
   const { t, i18n } = useTranslation();
   return (
     <section
-      className="mb-4 border-b border-white/[0.08] py-4"
+      className="border-b border-white/[0.08] py-5"
       aria-labelledby="adb-health-title"
     >
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-2.5">
+          <HealthCheckIcon healthy={watching} />
+          <div>
             <h3
               id="adb-health-title"
               className="text-sm font-semibold text-anvil-50"
             >
               {t("devices.health.title")}
             </h3>
-            <Badge tone={watching ? "success" : "warning"}>
-              {watching
-                ? t("devices.health.live")
-                : t("devices.health.stopped")}
-            </Badge>
-            {health?.wifi_v2_state === "supported" && (
-              <Badge tone="success">
-                {t("devices.health.wifiTwoDetected")}
-              </Badge>
+            {!watching && (
+              <p className="mt-0.5 text-xs text-amber-200">
+                {t("devices.health.stopped")}
+              </p>
             )}
           </div>
-          <p className="mt-1 text-xs text-anvil-500">
-            {observedAt
-              ? t("devices.health.observed", {
-                  time: formatDateTime(
-                    observedAt,
-                    i18n.resolvedLanguage ?? i18n.language,
-                  ),
-                })
-              : t("devices.health.probing")}
-          </p>
         </div>
-        <Button type="button" size="sm" onClick={onReviewRecovery}>
-          {t("devices.health.reviewRecovery")}
-        </Button>
+        <p className="text-xs text-anvil-500">
+          {observedAt
+            ? t("devices.health.observed", {
+                time: formatDateTime(
+                  observedAt,
+                  i18n.resolvedLanguage ?? i18n.language,
+                ),
+              })
+            : t("devices.health.probing")}
+        </p>
       </div>
 
       {health ? (
-        <dl className="mt-4 grid gap-y-4 text-xs sm:grid-cols-2 lg:grid-cols-5">
+        <dl className="mt-4 grid gap-y-4 text-xs sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8">
           <HealthMetric
             label={t("devices.health.client")}
             value={health.client_version ?? t("common.notReported")}
@@ -488,12 +615,6 @@ function AdbHealthPanel({
           <HealthMetric
             label={t("devices.health.server")}
             value={health.server_version ?? t("common.notReported")}
-          />
-          <HealthMetric
-            label={t("devices.health.compatibility")}
-            value={t(
-              `devices.health.compatibilityStatus.${health.platform_tools.status}`,
-            )}
           />
           <HealthMetric
             label={t("devices.health.usbBackend")}
@@ -574,9 +695,9 @@ function AdbHealthPanel({
 
 function HealthMetric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="min-w-0 border-l border-white/[0.08] px-4 first:border-l-0 first:pl-0">
-      <dt className="text-anvil-500">{label}</dt>
-      <dd className="mt-1 break-words text-sm font-medium text-anvil-100">
+    <div className="min-w-0 border-l border-white/[0.08] px-3 first:border-l-0 first:pl-0">
+      <dt className="text-[11px] leading-4 text-anvil-500">{label}</dt>
+      <dd className="mt-1 break-words text-[13px] font-medium leading-5 text-anvil-100">
         {value}
       </dd>
     </div>
@@ -736,47 +857,6 @@ function RecoveryDialog({
   );
 }
 
-function DeviceHeaderMeta({ state }: { state: State }) {
-  const { t } = useTranslation();
-
-  if (state.kind === "loading") {
-    return (
-      <div className="flex flex-wrap gap-2">
-        <Badge tone="info">{t("devices.scanningBridge")}</Badge>
-        <Badge tone="neutral">{t("devices.waitingForAdb")}</Badge>
-      </div>
-    );
-  }
-
-  if (state.kind === "no_tauri") {
-    return (
-      <div className="flex flex-wrap gap-2">
-        <Badge tone="neutral">{t("runtime.browserPreview")}</Badge>
-        <Badge tone="info">{t("common.tauriIpcRequired")}</Badge>
-      </div>
-    );
-  }
-
-  if (state.kind === "error") {
-    return <Badge tone="danger">{t("devices.scanFailed")}</Badge>;
-  }
-
-  if (!state.value.adb_resolved) {
-    return <Badge tone="warning">{t("devices.adbMissing")}</Badge>;
-  }
-
-  return (
-    <div className="flex min-w-0 flex-wrap items-center gap-2">
-      <Badge tone="success">{t("devices.adbResolved")}</Badge>
-      {state.value.adb_path && (
-        <code className="max-w-full truncate font-mono text-xs">
-          {state.value.adb_path}
-        </code>
-      )}
-    </div>
-  );
-}
-
 function DeviceToolbar({
   devices,
   selectedDeviceKey,
@@ -823,7 +903,7 @@ function DeviceToolbar({
         ))}
       </select>
       <span className="hidden h-7 w-px bg-white/[0.08] sm:block" />
-      <Badge tone="success">{t("devices.adbResolved")}</Badge>
+      <Badge tone="success">{t("devices.adbReady")}</Badge>
     </div>
   );
 }
@@ -840,23 +920,29 @@ function DeviceTable({
   const { t } = useTranslation();
 
   return (
-    <Card className="overflow-hidden border-white/[0.08] bg-transparent p-0 shadow-none">
-      <div className="flex items-center justify-between gap-3 border-b border-white/[0.08] px-4 py-3">
+    <section className="border-t border-white/[0.08] pt-5">
+      <div className="mb-3 flex items-center justify-between gap-3">
         <h3 className="text-sm font-semibold text-anvil-50">
           {t("devices.connected")}
         </h3>
-        <Badge tone="success">
+        <span className="text-xs text-anvil-500">
           {t("common.deviceCount", { count: devices.length })}
-        </Badge>
+        </span>
       </div>
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto rounded-md border border-white/[0.08]">
         <table className="min-w-full text-sm">
           <thead className="bg-white/[0.025]">
             <tr>
+              <TableHeaderCell className="w-14">
+                <span className="sr-only">{t("common.selectDevice")}</span>
+              </TableHeaderCell>
               <TableHeaderCell>{t("devices.serial")}</TableHeaderCell>
               <TableHeaderCell>{t("devices.state")}</TableHeaderCell>
               <TableHeaderCell>{t("devices.identity")}</TableHeaderCell>
               <TableHeaderCell>{t("devices.transport")}</TableHeaderCell>
+              <TableHeaderCell className="w-14">
+                <span className="sr-only">{t("devices.moreActions")}</span>
+              </TableHeaderCell>
             </tr>
           </thead>
           <tbody className="divide-y divide-white/[0.07]">
@@ -873,10 +959,9 @@ function DeviceTable({
                     isDevice
                       ? "hover:bg-white/[0.055]"
                       : "bg-anvil-950/20 opacity-75",
-                    isSelected ? "bg-circuit-300/[0.06]" : "",
                   ].join(" ")}
                 >
-                  <TableCell>
+                  <TableCell className="pr-0">
                     <button
                       type="button"
                       disabled={!isDevice}
@@ -889,13 +974,18 @@ function DeviceTable({
                           : undefined
                       }
                       onClick={() => onSelect(device)}
-                      className="flex min-w-[13rem] items-center gap-2 rounded-sm text-left disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-circuit-300 focus-visible:ring-offset-2 focus-visible:ring-offset-anvil-900"
+                      className="flex h-7 w-7 items-center justify-center rounded-full text-anvil-600 transition hover:text-anvil-300 disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-circuit-300 focus-visible:ring-offset-2 focus-visible:ring-offset-anvil-900"
                     >
+                      <SelectionIcon selected={isSelected} />
+                    </button>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex min-w-[10rem] items-center gap-2">
                       <code className="font-mono text-xs text-anvil-50">
                         {device.serial}
                       </code>
-                      <TransportBadge kind={device.transport_kind} />
-                    </button>
+                      <TransportChip kind={device.transport_kind} />
+                    </div>
                   </TableCell>
                   <TableCell>
                     <Badge tone={deviceStateTone(device.state)}>
@@ -927,13 +1017,82 @@ function DeviceTable({
                       </span>
                     )}
                   </TableCell>
+                  <TableCell className="pl-0 text-right">
+                    <button
+                      type="button"
+                      disabled={!isDevice}
+                      aria-label={t("devices.moreDeviceActions", {
+                        device: device.model ?? device.serial,
+                      })}
+                      onClick={() => onSelect(device)}
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-md text-anvil-500 transition hover:bg-white/[0.07] hover:text-anvil-100 disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-circuit-300"
+                    >
+                      <MoreIcon />
+                    </button>
+                  </TableCell>
                 </tr>
               );
             })}
           </tbody>
         </table>
       </div>
-    </Card>
+    </section>
+  );
+}
+
+function SelectionIcon({ selected }: { selected: boolean }) {
+  if (!selected) {
+    return (
+      <span
+        className="h-5 w-5 rounded-full border border-white/[0.14]"
+        aria-hidden="true"
+      />
+    );
+  }
+
+  return (
+    <span
+      className="flex h-6 w-6 items-center justify-center rounded-full bg-circuit-300 text-anvil-950 shadow-sm"
+      aria-hidden="true"
+    >
+      <svg
+        viewBox="0 0 20 20"
+        className="h-3.5 w-3.5"
+        fill="none"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="2"
+      >
+        <path d="m5 10 3 3 7-7" />
+      </svg>
+    </span>
+  );
+}
+
+function TransportChip({ kind }: { kind: DeviceTransportKind }) {
+  const { t } = useTranslation();
+  const labelKey =
+    kind === "usb"
+      ? "devices.transportUsb"
+      : kind === "tls_wifi"
+        ? "devices.transportTlsWifi"
+        : kind === "legacy_tcp"
+          ? "devices.transportLegacyTcp"
+          : "devices.transportUnknownTcp";
+
+  return (
+    <span
+      className={cn(
+        "inline-flex rounded px-2 py-0.5 text-[11px] font-medium",
+        kind === "usb" && "bg-white/[0.07] text-anvil-300",
+        kind === "tls_wifi" && "bg-emerald-300/10 text-emerald-200",
+        (kind === "legacy_tcp" || kind === "unknown_tcp") &&
+          "bg-amber-300/10 text-amber-200",
+      )}
+    >
+      {t(labelKey)}
+    </span>
   );
 }
 
@@ -950,7 +1109,7 @@ function DeviceDetail({
 
   if (state.kind === "loading") {
     return (
-      <Card className="p-5">
+      <section className="border-b border-white/[0.08] py-5">
         <h3 className="text-sm font-semibold text-anvil-50">
           {t("devices.loadingDeviceInfo")}
         </h3>
@@ -965,7 +1124,7 @@ function DeviceDetail({
             </div>
           ))}
         </div>
-      </Card>
+      </section>
     );
   }
 
@@ -992,29 +1151,39 @@ function DeviceDetail({
 
   const info = state.info;
   return (
-    <Card className="p-5">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h3 className="text-lg font-semibold text-anvil-50">
-            {info.model ?? info.serial}
-          </h3>
-          {info.manufacturer && (
-            <p className="mt-1 text-sm text-anvil-400">{info.manufacturer}</p>
-          )}
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {info.android_version && (
-            <Badge tone="info">Android {info.android_version}</Badge>
-          )}
-          {info.sdk_level && (
-            <Badge tone="neutral">
-              {t("devices.apiLevel", { level: info.sdk_level })}
-            </Badge>
-          )}
-        </div>
-      </div>
-
-      <dl className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+    <section
+      className="border-b border-white/[0.08] py-5"
+      aria-labelledby="device-details-title"
+    >
+      <h3
+        id="device-details-title"
+        className="text-sm font-semibold text-anvil-50"
+      >
+        {t("devices.detailTitle")}
+      </h3>
+      <dl className="mt-4 grid gap-x-10 gap-y-4 sm:grid-cols-2 lg:grid-cols-3">
+        <InfoField
+          label={t("devices.model")}
+          value={info.model ?? t("devices.unknownModel")}
+        />
+        {info.manufacturer && (
+          <InfoField
+            label={t("devices.manufacturer")}
+            value={info.manufacturer}
+          />
+        )}
+        {info.android_version && (
+          <InfoField
+            label={t("devices.androidVersion")}
+            value={`Android ${info.android_version}`}
+          />
+        )}
+        {info.sdk_level && (
+          <InfoField
+            label={t("devices.apiLevelLabel")}
+            value={t("devices.apiLevel", { level: info.sdk_level })}
+          />
+        )}
         <InfoField label={t("devices.serial")} value={info.serial} mono />
         {info.hardware_serial && (
           <InfoField
@@ -1053,7 +1222,7 @@ function DeviceDetail({
           />
         )}
       </dl>
-    </Card>
+    </section>
   );
 }
 
