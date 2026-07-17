@@ -110,6 +110,14 @@ export default function DevicesRoute() {
     }
   }, []);
 
+  useEffect(() => {
+    if (detail.kind !== "idle" || state.kind !== "ok") return;
+    const authorized = state.value.devices.filter(
+      (device) => typeof device.state === "string" && device.state === "device",
+    );
+    if (authorized.length === 1) void selectDevice(authorized[0]!);
+  }, [detail.kind, selectDevice, state]);
+
   const runRecovery = useCallback(async () => {
     const operationId = newOperationId("adb-recovery");
     const generation = recoveryGenerationRef.current + 1;
@@ -193,7 +201,21 @@ export default function DevicesRoute() {
         meta={<DeviceHeaderMeta state={state} />}
       />
 
-      <section className="mt-6 max-w-6xl" aria-live="polite">
+      {state.kind === "ok" &&
+        state.value.adb_resolved &&
+        state.value.devices.length > 0 && (
+          <DeviceToolbar
+            devices={state.value.devices}
+            selectedDeviceKey={
+              detail.kind === "ok" || detail.kind === "loading"
+                ? String(detail.target.transport_id ?? detail.target.serial)
+                : null
+            }
+            onSelect={(device) => void selectDevice(device)}
+          />
+        )}
+
+      <section className="mt-4 max-w-[88rem]" aria-live="polite">
         {state.kind === "ok" && state.value.adb_resolved && (
           <AdbHealthPanel
             health={health}
@@ -273,15 +295,15 @@ export default function DevicesRoute() {
               }
             >
               <ol className="grid gap-2 text-sm sm:grid-cols-3">
-                <li className="rounded-md border border-white/10 bg-white/[0.04] p-3">
+                <li className="border-l border-white/10 pl-3 first:border-l-0 first:pl-0">
                   {t("devices.noDevicesStep1")}
                 </li>
-                <li className="rounded-md border border-white/10 bg-white/[0.04] p-3">
+                <li className="border-l border-white/10 pl-3 first:border-l-0 first:pl-0">
                   {t("devices.noDevicesStep2Prefix")}{" "}
                   <em>{t("devices.allowUsbDebugging")}</em>{" "}
                   {t("devices.noDevicesStep2Suffix")}
                 </li>
-                <li className="rounded-md border border-white/10 bg-white/[0.04] p-3">
+                <li className="border-l border-white/10 pl-3 first:border-l-0 first:pl-0">
                   {t("devices.noDevicesStep3")}
                 </li>
               </ol>
@@ -301,10 +323,6 @@ export default function DevicesRoute() {
             onSelect={(device) => void selectDevice(device)}
           />
         )}
-
-        <div className="mt-4">
-          <HostDoctor />
-        </div>
 
         {state.kind === "ok" &&
           state.value.devices.some(
@@ -363,7 +381,7 @@ export default function DevicesRoute() {
       </section>
 
       {detail.kind !== "idle" && (
-        <section className="mt-4 max-w-6xl space-y-4" aria-live="polite">
+        <section className="mt-4 max-w-[88rem] space-y-4" aria-live="polite">
           <DeviceDetail
             state={detail}
             onRetry={(target) => {
@@ -391,6 +409,9 @@ export default function DevicesRoute() {
           )}
         </section>
       )}
+      <div className="mt-4 max-w-[88rem]">
+        <HostDoctor />
+      </div>
       {recoveryOpen && (
         <RecoveryDialog
           health={health}
@@ -418,8 +439,11 @@ function AdbHealthPanel({
 }) {
   const { t, i18n } = useTranslation();
   return (
-    <Card className="mb-4 p-5" aria-labelledby="adb-health-title">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+    <section
+      className="mb-4 border-b border-white/[0.08] py-4"
+      aria-labelledby="adb-health-title"
+    >
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <div className="flex flex-wrap items-center gap-2">
             <h3
@@ -439,7 +463,7 @@ function AdbHealthPanel({
               </Badge>
             )}
           </div>
-          <p className="mt-1 text-xs leading-5 text-anvil-400">
+          <p className="mt-1 text-xs text-anvil-500">
             {observedAt
               ? t("devices.health.observed", {
                   time: formatDateTime(
@@ -456,7 +480,7 @@ function AdbHealthPanel({
       </div>
 
       {health ? (
-        <dl className="mt-4 grid gap-3 text-xs sm:grid-cols-2 lg:grid-cols-4">
+        <dl className="mt-4 grid gap-y-4 text-xs sm:grid-cols-2 lg:grid-cols-5">
           <HealthMetric
             label={t("devices.health.client")}
             value={health.client_version ?? t("common.notReported")}
@@ -515,7 +539,7 @@ function AdbHealthPanel({
       {health?.warning && (
         <p
           role="status"
-          className="mt-4 rounded-md border border-amber-300/20 bg-amber-400/10 px-3 py-2 text-xs leading-5 text-amber-100"
+          className="mt-4 border-l-2 border-amber-300/70 pl-3 text-xs text-amber-100"
         >
           {health.warning}
         </p>
@@ -523,12 +547,12 @@ function AdbHealthPanel({
       {health && (
         <p
           className={cn(
-            "mt-3 rounded-md border px-3 py-2 text-xs leading-5",
+            "mt-3 border-l-2 pl-3 text-xs",
             health.platform_tools.status === "blocked"
-              ? "border-red-300/20 bg-red-950/20 text-red-100"
+              ? "border-red-300/70 text-red-100"
               : health.platform_tools.status === "warn"
-                ? "border-amber-300/20 bg-amber-400/10 text-amber-100"
-                : "border-emerald-300/20 bg-emerald-950/20 text-emerald-100",
+                ? "border-amber-300/70 text-amber-100"
+                : "border-emerald-300/70 text-anvil-300",
           )}
         >
           {health.platform_tools.rationale}{" "}
@@ -544,15 +568,17 @@ function AdbHealthPanel({
           </a>
         </p>
       )}
-    </Card>
+    </section>
   );
 }
 
 function HealthMetric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-md border border-white/10 bg-white/[0.03] p-3">
+    <div className="min-w-0 border-l border-white/[0.08] px-4 first:border-l-0 first:pl-0">
       <dt className="text-anvil-500">{label}</dt>
-      <dd className="mt-1 break-words font-mono text-anvil-100">{value}</dd>
+      <dd className="mt-1 break-words text-sm font-medium text-anvil-100">
+        {value}
+      </dd>
     </div>
   );
 }
@@ -751,6 +777,57 @@ function DeviceHeaderMeta({ state }: { state: State }) {
   );
 }
 
+function DeviceToolbar({
+  devices,
+  selectedDeviceKey,
+  onSelect,
+}: {
+  devices: ListDevicesResult["devices"];
+  selectedDeviceKey: string | null;
+  onSelect: (device: Device) => void;
+}) {
+  const { t } = useTranslation();
+  const selectable = devices.filter(
+    (device) => typeof device.state === "string" && device.state === "device",
+  );
+
+  return (
+    <div className="mt-4 flex flex-col gap-3 border-b border-white/[0.08] pb-4 sm:flex-row sm:items-center">
+      <select
+        aria-label={t("common.selectDevice")}
+        value={selectedDeviceKey ?? ""}
+        onChange={(event) => {
+          const device = selectable.find(
+            (candidate) =>
+              String(candidate.transport_id ?? candidate.serial) ===
+              event.currentTarget.value,
+          );
+          if (device) onSelect(device);
+        }}
+        className="h-10 min-w-64 rounded-md border border-white/[0.08] bg-white/[0.045] px-3 text-sm font-medium text-anvil-100 outline-none transition hover:border-white/15 hover:bg-white/[0.065] focus:border-circuit-300/60 focus:ring-2 focus:ring-circuit-300/20"
+      >
+        <option value="" disabled>
+          {t("common.selectDevice")}
+        </option>
+        {selectable.map((device) => (
+          <option
+            key={
+              String(device.transport_id ?? device.serial) +
+              ":" +
+              device.connection_generation
+            }
+            value={String(device.transport_id ?? device.serial)}
+          >
+            {device.model ?? device.serial}
+          </option>
+        ))}
+      </select>
+      <span className="hidden h-7 w-px bg-white/[0.08] sm:block" />
+      <Badge tone="success">{t("devices.adbResolved")}</Badge>
+    </div>
+  );
+}
+
 function DeviceTable({
   devices,
   selectedSerial,
@@ -763,23 +840,18 @@ function DeviceTable({
   const { t } = useTranslation();
 
   return (
-    <Card className="overflow-hidden p-0">
-      <div className="flex flex-col gap-3 border-b border-white/10 p-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h3 className="text-sm font-semibold text-anvil-50">
-            {t("devices.connected")}
-          </h3>
-          <p className="mt-1 text-xs text-anvil-400">
-            {t("devices.selectHint")}
-          </p>
-        </div>
+    <Card className="overflow-hidden border-white/[0.08] bg-transparent p-0 shadow-none">
+      <div className="flex items-center justify-between gap-3 border-b border-white/[0.08] px-4 py-3">
+        <h3 className="text-sm font-semibold text-anvil-50">
+          {t("devices.connected")}
+        </h3>
         <Badge tone="success">
           {t("common.deviceCount", { count: devices.length })}
         </Badge>
       </div>
       <div className="overflow-x-auto">
         <table className="min-w-full text-sm">
-          <thead className="bg-white/[0.04]">
+          <thead className="bg-white/[0.025]">
             <tr>
               <TableHeaderCell>{t("devices.serial")}</TableHeaderCell>
               <TableHeaderCell>{t("devices.state")}</TableHeaderCell>
@@ -787,7 +859,7 @@ function DeviceTable({
               <TableHeaderCell>{t("devices.transport")}</TableHeaderCell>
             </tr>
           </thead>
-          <tbody className="divide-y divide-white/10">
+          <tbody className="divide-y divide-white/[0.07]">
             {devices.map((device) => {
               const isDevice =
                 typeof device.state === "string" && device.state === "device";

@@ -346,7 +346,7 @@ export default function MirrorRoute() {
         }
       />
 
-      <section className="mt-6 max-w-5xl space-y-4">
+      <section className="mt-4 max-w-5xl space-y-4">
         {devicesState.kind === "no_tauri" && (
           <StatePanel title={t("common.desktopRequired")} tone="info">
             <p>{t("mirror.desktopRequiredBody")}</p>
@@ -451,7 +451,7 @@ export default function MirrorRoute() {
               )}
 
             {selectedTarget && (
-              <Card className="p-5">
+              <Card className="p-4">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div>
                     <h3 className="text-sm font-semibold text-anvil-50">
@@ -529,7 +529,7 @@ export default function MirrorRoute() {
                         }))
                       }
                       disabled={capabilityState.kind !== "ready"}
-                      className="h-9 rounded-md border border-white/10 bg-white/[0.06] px-3 text-sm text-anvil-50 outline-none transition focus:border-circuit-300/60 focus:ring-2 focus:ring-circuit-300/20 disabled:opacity-50"
+                      className="h-10 rounded-md border border-white/[0.09] bg-white/[0.045] px-3 text-sm text-anvil-50 outline-none transition focus:border-circuit-300/60 focus:ring-2 focus:ring-circuit-300/20 disabled:opacity-50"
                     >
                       {(capabilityState.kind === "ready"
                         ? capabilityState.value.available_video_codecs
@@ -554,7 +554,7 @@ export default function MirrorRoute() {
                         }))
                       }
                       disabled={capabilityState.kind !== "ready"}
-                      className="h-9 rounded-md border border-white/10 bg-white/[0.06] px-3 font-mono text-xs text-anvil-50 outline-none transition focus:border-circuit-300/60 focus:ring-2 focus:ring-circuit-300/20 disabled:opacity-50"
+                      className="h-10 rounded-md border border-white/[0.09] bg-white/[0.045] px-3 font-mono text-xs text-anvil-50 outline-none transition focus:border-circuit-300/60 focus:ring-2 focus:ring-circuit-300/20 disabled:opacity-50"
                     >
                       <option value="">{t("mirror.encoderAutomatic")}</option>
                       {(capabilityState.kind === "ready"
@@ -601,7 +601,7 @@ export default function MirrorRoute() {
                           keyboardMode: e.target.value as KeyboardMode,
                         }))
                       }
-                      className="h-9 rounded-md border border-white/10 bg-white/[0.06] px-3 text-sm text-anvil-50 outline-none transition focus:border-circuit-300/60 focus:ring-2 focus:ring-circuit-300/20"
+                      className="h-10 rounded-md border border-white/[0.09] bg-white/[0.045] px-3 text-sm text-anvil-50 outline-none transition focus:border-circuit-300/60 focus:ring-2 focus:ring-circuit-300/20"
                     >
                       {KEYBOARD_MODES.map((mode) => (
                         <option key={mode.value} value={mode.value}>
@@ -739,7 +739,7 @@ function Toggle({
   label: string;
 }) {
   return (
-    <label className="flex items-center gap-2 rounded-md border border-white/10 bg-white/[0.03] px-3 py-2">
+    <label className="flex min-h-10 items-center gap-2 border-b border-white/[0.07] px-1 py-2">
       <input
         type="checkbox"
         checked={checked}

@@ -126,6 +126,7 @@ export default function App() {
     NavItem["id"] | null
   >(null);
   const mainRef = useRef<HTMLElement>(null);
+  const sidebarRef = useRef<HTMLElement>(null);
   const palette = useCommandPalette();
 
   const paletteItems: PaletteItem[] = useMemo(
@@ -172,35 +173,37 @@ export default function App() {
   const activateRoute = useCallback((route: NavItem["id"]) => {
     setActive(route);
     setRouteAnnouncement(route);
-    setTimeout(() => mainRef.current?.focus(), 0);
+    setTimeout(() => {
+      window.scrollTo({ top: 0, left: 0 });
+      sidebarRef.current?.scrollTo({ top: 0, left: 0 });
+      mainRef.current?.scrollTo({ top: 0, left: 0 });
+      mainRef.current?.focus();
+    }, 0);
   }, []);
 
   return (
-    <div className="min-h-full overflow-hidden bg-[#08090d] text-anvil-100">
+    <div className="min-h-full overflow-hidden bg-anvil-950 text-anvil-100 lg:h-full">
       <a
         href="#main-content"
         className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-md focus:bg-circuit-300 focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:text-anvil-950"
       >
         {t("app.skipToContent")}
       </a>
-      <div
-        className="pointer-events-none fixed inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.035),transparent_28rem),linear-gradient(90deg,rgba(34,211,238,0.055),transparent_36rem)]"
-        aria-hidden="true"
-      />
-      <div className="relative flex min-h-full flex-col lg:flex-row">
+      <div className="relative flex min-h-full flex-col lg:h-full lg:flex-row">
         <aside
-          className="border-b border-white/10 bg-anvil-950/90 p-4 backdrop-blur-xl lg:sticky lg:top-0 lg:flex lg:h-screen lg:w-80 lg:shrink-0 lg:flex-col lg:overflow-y-auto lg:border-b-0 lg:border-r lg:p-5"
+          ref={sidebarRef}
+          className="border-b border-white/[0.08] bg-[#11151b] p-4 lg:sticky lg:top-0 lg:flex lg:h-screen lg:w-[15.5rem] lg:shrink-0 lg:flex-col lg:overflow-y-auto lg:border-b-0 lg:border-r lg:p-4"
           aria-label={t("app.sidebarLabel")}
         >
           <div className="flex items-start justify-between gap-4 lg:block">
             <Brand state={hb} />
-            <div className="lg:mt-6">
+            <div className="lg:mt-3">
               <RuntimeBadge state={hb} />
             </div>
           </div>
 
           <nav
-            className="nav-strip mt-5 flex snap-x gap-2 overflow-x-auto pb-2 text-sm lg:block lg:space-y-1.5 lg:overflow-visible lg:pb-0"
+            className="nav-strip mt-4 flex snap-x gap-2 overflow-x-auto pb-2 text-sm lg:block lg:space-y-1 lg:overflow-visible lg:pb-0"
             aria-label={t("app.primaryNav")}
           >
             {NAV_ITEMS.map((item) => (
@@ -215,25 +218,20 @@ export default function App() {
             ))}
           </nav>
 
-          <ShellActions
-            className="mt-3 lg:hidden"
-            onOpenPalette={() => palette.setOpen(true)}
-            onOpenGuide={() => setShowOnboarding(true)}
-            onOpenDiagnostics={() => setShowDiagnostics(true)}
-          />
-          <ShellActions
-            className="mt-4 hidden lg:grid"
-            onOpenPalette={() => palette.setOpen(true)}
-            onOpenGuide={() => setShowOnboarding(true)}
-            onOpenDiagnostics={() => setShowDiagnostics(true)}
-          />
-          <LanguageSelector className="mt-3" />
-
-          <div className="runtime-panel mt-5 hidden lg:block lg:mt-auto lg:pt-8">
-            <HeartbeatSidebarSummary
-              state={hb}
-              onRetry={() => void loadHeartbeat()}
+          <div className="mt-3 lg:mt-auto lg:border-t lg:border-white/[0.08] lg:pt-3">
+            <ShellActions
+              onOpenPalette={() => palette.setOpen(true)}
+              onOpenGuide={() => setShowOnboarding(true)}
+              onOpenDiagnostics={() => setShowDiagnostics(true)}
             />
+            <LanguageSelector className="mt-2" />
+
+            <div className="runtime-panel mt-3 hidden lg:block">
+              <HeartbeatSidebarSummary
+                state={hb}
+                onRetry={() => void loadHeartbeat()}
+              />
+            </div>
           </div>
         </aside>
 
@@ -242,9 +240,9 @@ export default function App() {
           id="main-content"
           tabIndex={-1}
           aria-label={t(activeItem.labelKey)}
-          className="min-w-0 flex-1 overflow-auto px-4 py-5 sm:px-6 lg:px-8 lg:py-8"
+          className="min-w-0 flex-1 overflow-auto px-4 py-5 sm:px-6 lg:h-full lg:px-8 lg:py-6 xl:px-10"
         >
-          <div className="mx-auto max-w-7xl">{activeItem.render()}</div>
+          <div className="mx-auto max-w-[88rem]">{activeItem.render()}</div>
         </main>
       </div>
       <div
@@ -321,12 +319,12 @@ function ShellActions({
   const { t } = useTranslation();
 
   return (
-    <div className={cn("grid grid-cols-2 gap-2", className)}>
+    <div className={cn("grid grid-cols-2 gap-1", className)}>
       <Button
         type="button"
-        variant="secondary"
+        variant="ghost"
         size="sm"
-        className="w-full"
+        className="col-span-2 w-full"
         onClick={onOpenPalette}
       >
         <SearchIcon />
@@ -346,7 +344,7 @@ function ShellActions({
         type="button"
         variant="ghost"
         size="sm"
-        className="col-span-2 w-full"
+        className="w-full"
         onClick={onOpenDiagnostics}
       >
         <DiagnosticsIcon />
@@ -373,13 +371,12 @@ function LanguageSelector({ className }: { className?: string }) {
 
   return (
     <label className={cn("block", className)}>
-      <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.08em] text-anvil-500">
-        {t("language.label")}
-      </span>
+      <span className="sr-only">{t("language.label")}</span>
       <select
         value={currentLanguage}
         onChange={handleChange}
-        className="h-9 w-full rounded-md border border-white/10 bg-white/[0.06] px-3 text-sm text-anvil-50 outline-none transition hover:border-white/20 focus:border-circuit-300/60 focus:ring-2 focus:ring-circuit-300/20"
+        aria-label={t("language.label")}
+        className="h-9 w-full rounded-md border border-transparent bg-white/[0.035] px-3 text-xs text-anvil-300 outline-none transition hover:bg-white/[0.06] focus:border-circuit-300/60 focus:ring-2 focus:ring-circuit-300/20"
       >
         {SUPPORTED_LANGUAGES.map((language) => (
           <option key={language.code} value={language.code}>
@@ -407,13 +404,10 @@ function Brand({ state }: { state: LoadState }) {
           </p>
         </div>
       </div>
-      <p className="mt-4 hidden max-w-[17rem] text-xs leading-5 text-anvil-400 lg:block">
-        {t("app.description")}
-      </p>
       {state.status === "ok" && (
-        <p className="mt-3 text-xs text-anvil-400">
+        <span className="sr-only">
           {t("app.version", { version: state.value.version })}
-        </p>
+        </span>
       )}
     </div>
   );
@@ -454,34 +448,19 @@ function NavStub({
       aria-current={active ? "page" : undefined}
       aria-describedby={`${item.id}-description`}
       className={cn(
-        "group flex min-w-[12.5rem] items-start gap-3 rounded-lg border p-3 text-left transition duration-150 lg:min-w-0",
+        "group relative flex min-w-[11.5rem] items-center gap-3 rounded-md px-3 py-2.5 text-left transition duration-150 lg:min-w-0",
         "snap-start",
         "focus:outline-none focus-visible:ring-2 focus-visible:ring-circuit-300 focus-visible:ring-offset-2 focus-visible:ring-offset-anvil-950",
         active
-          ? "border-circuit-300/30 bg-circuit-300/10 text-anvil-50 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]"
-          : "border-transparent text-anvil-300 hover:border-white/10 hover:bg-white/[0.05] hover:text-anvil-50",
+          ? "bg-circuit-300/[0.11] text-anvil-50 before:absolute before:inset-y-2 before:left-0 before:w-0.5 before:rounded-full before:bg-circuit-300"
+          : "text-anvil-300 hover:bg-white/[0.045] hover:text-anvil-50",
       )}
     >
       <NavIcon id={item.id} active={active} />
       <span className="min-w-0 flex-1">
-        <span className="flex items-center justify-between gap-3">
-          <span className="font-medium">{label}</span>
-          <span
-            className={cn(
-              "font-mono text-[10px] uppercase tracking-[0.08em]",
-              active ? "text-circuit-100" : "text-anvil-500",
-            )}
-          >
-            {item.milestone}
-          </span>
-        </span>
-        <span
-          id={`${item.id}-description`}
-          className={cn(
-            "mt-1 text-xs leading-5 text-anvil-400",
-            active ? "hidden lg:block" : "sr-only",
-          )}
-        >
+        <span className="font-medium">{label}</span>
+        <span className="sr-only">{item.milestone}</span>
+        <span id={`${item.id}-description`} className="sr-only">
           {description}
         </span>
       </span>
@@ -500,45 +479,38 @@ function HeartbeatSidebarSummary({
 
   if (state.status === "loading") {
     return (
-      <div className="rounded-lg border border-white/10 bg-white/[0.04] p-4">
-        <p className="text-xs font-medium text-anvil-200">
+      <div className="px-2 py-1.5">
+        <p className="text-xs font-medium text-anvil-300">
           {t("runtime.checking")}
         </p>
-        <div className="mt-3 space-y-2" aria-hidden="true">
-          <SkeletonLine className="w-4/5" />
-          <SkeletonLine className="w-2/3" />
-          <SkeletonLine className="w-3/4" />
-        </div>
+        <SkeletonLine className="mt-2 w-3/4" />
       </div>
     );
   }
 
   if (state.status === "desktop_unavailable") {
     return (
-      <div className="rounded-lg border border-white/10 bg-white/[0.04] p-4">
+      <div className="px-2 py-1.5">
         <div className="flex items-center gap-2">
           <StatusDot tone="neutral" />
-          <p className="text-xs font-medium text-anvil-200">
+          <p className="text-xs font-medium text-anvil-300">
             {t("runtime.notAttached")}
           </p>
         </div>
-        <p className="mt-2 text-xs leading-5 text-anvil-400">
-          {t("runtime.notAttachedPrefix")} <code>npm run tauri:dev</code>.
-        </p>
       </div>
     );
   }
 
   if (state.status === "error") {
     return (
-      <div className="rounded-lg border border-red-300/20 bg-red-950/20 p-4">
+      <div className="rounded-md bg-red-950/15 px-2 py-2">
         <div className="flex items-center gap-2">
           <StatusDot tone="danger" />
           <p role="alert" className="text-xs font-medium text-red-100">
             {t("runtime.failed")}
           </p>
         </div>
-        <p className="mt-2 line-clamp-3 text-xs leading-5 text-red-100/75">
+        <p className="mt-1.5 line-clamp-2 text-xs text-red-100/75">
           {state.error}
         </p>
         <Button
@@ -546,7 +518,7 @@ function HeartbeatSidebarSummary({
           onClick={onRetry}
           variant="danger"
           size="sm"
-          className="mt-3"
+          className="mt-2"
         >
           {t("runtime.retry")}
         </Button>
@@ -556,47 +528,14 @@ function HeartbeatSidebarSummary({
 
   const v = state.value;
   return (
-    <div className="rounded-lg border border-white/10 bg-white/[0.04] p-4">
+    <div className="px-2 py-1.5 text-xs">
       <div className="flex items-center gap-2">
         <StatusDot tone="success" />
-        <p className="text-xs font-medium text-anvil-200">
-          {t("runtime.healthy")}
-        </p>
+        <p className="font-medium text-anvil-300">{t("runtime.healthy")}</p>
       </div>
-      <dl className="mt-3 grid gap-2 text-xs">
-        <Metric label={t("runtime.os")} value={`${v.os.family} ${v.os.arch}`} />
-        <Metric
-          label={t("runtime.adb")}
-          value={v.adb.path ? t("runtime.resolved") : t("runtime.missing")}
-        />
-        <Metric
-          label={t("runtime.adbStatus")}
-          value={t(`runtime.adbStatusValue.${v.adb.compatibility.status}`)}
-        />
-        <Metric
-          label={t("runtime.adbVersion")}
-          value={v.adb.version ?? t("common.notReported")}
-        />
-        <Metric
-          label={t("runtime.adbPath")}
-          value={v.adb.path ?? t("common.notReported")}
-        />
-        <Metric label="Tauri" value={`v${v.tauri_version}`} />
-      </dl>
-    </div>
-  );
-}
-
-function Metric({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex items-center justify-between gap-3">
-      <dt className="text-anvil-500">{label}</dt>
-      <dd
-        className="truncate text-right font-mono text-anvil-200"
-        title={value}
-      >
-        {value}
-      </dd>
+      <p className="mt-1 pl-4 text-anvil-500">
+        {t(`runtime.adbStatusValue.${v.adb.compatibility.status}`)}
+      </p>
     </div>
   );
 }
@@ -605,7 +544,7 @@ function StatusDot({ tone }: { tone: "neutral" | "success" | "danger" }) {
   return (
     <span
       className={cn(
-        "h-2 w-2 rounded-sm",
+        "h-2 w-2 rounded-full",
         tone === "neutral" && "bg-anvil-400",
         tone === "success" && "bg-emerald-300",
         tone === "danger" && "bg-red-300",
@@ -620,7 +559,7 @@ function LogoMark() {
     <img
       src={droidsmithLogo}
       alt=""
-      className="h-10 w-10 shrink-0 rounded-[10px]"
+      className="h-14 w-14 shrink-0 rounded-2xl"
       aria-hidden="true"
     />
   );

@@ -33,7 +33,10 @@ export default function HostDoctor() {
   };
 
   return (
-    <Card className="p-5" aria-labelledby={titleId}>
+    <Card
+      className="rounded-none border-t border-white/[0.08] bg-transparent px-0 py-4 shadow-none"
+      aria-labelledby={titleId}
+    >
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <div className="flex flex-wrap items-center gap-2">
@@ -42,7 +45,7 @@ export default function HostDoctor() {
             </h3>
             <Badge tone="success">{t("hostDoctor.readOnly")}</Badge>
           </div>
-          <p className="mt-2 max-w-3xl text-sm leading-6 text-anvil-300">
+          <p className="mt-1 max-w-3xl text-sm text-anvil-400">
             {t("hostDoctor.description")}
           </p>
         </div>
@@ -60,9 +63,7 @@ export default function HostDoctor() {
       </div>
 
       {state.kind === "idle" && (
-        <p className="mt-3 text-xs leading-5 text-anvil-400">
-          {t("hostDoctor.idle")}
-        </p>
+        <p className="mt-2 text-xs text-anvil-500">{t("hostDoctor.idle")}</p>
       )}
       {state.kind === "error" && (
         <div className="mt-4">

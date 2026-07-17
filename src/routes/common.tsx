@@ -25,19 +25,19 @@ export function PaneHeader({
   meta?: ReactNode;
 }) {
   return (
-    <header className="border-b border-white/10 pb-6 sm:pb-7">
-      <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
+    <header className="border-b border-white/[0.08] pb-4 sm:pb-5">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-3">
-            <h2 className="text-2xl font-semibold tracking-tight text-anvil-50 sm:text-3xl">
+          <div className="flex flex-wrap items-center gap-2.5">
+            <h2 className="text-2xl font-semibold tracking-[-0.025em] text-anvil-50">
               {title}
             </h2>
             <MilestoneBadge milestone={milestone} />
           </div>
-          <p className="mt-3 max-w-3xl text-sm leading-6 text-anvil-300">
+          <p className="mt-1.5 max-w-3xl text-sm text-anvil-400">
             {description}
           </p>
-          {meta && <div className="mt-4">{meta}</div>}
+          {meta && <div className="mt-3">{meta}</div>}
         </div>
         {actions && (
           <div className="flex shrink-0 flex-wrap items-center gap-2 sm:justify-end">
@@ -129,7 +129,7 @@ export function Card({
   return (
     <div
       className={cn(
-        "rounded-lg border border-white/10 bg-anvil-900/70 shadow-glow backdrop-blur",
+        "rounded-lg border border-transparent bg-white/[0.035] shadow-panel",
         className ?? "p-4",
       )}
       {...props}
@@ -156,11 +156,11 @@ export function Button({
         "inline-flex items-center justify-center gap-2 rounded-md font-medium transition duration-150",
         "focus:outline-none focus-visible:ring-2 focus-visible:ring-circuit-300 focus-visible:ring-offset-2 focus-visible:ring-offset-anvil-950",
         "disabled:cursor-not-allowed disabled:opacity-50",
-        size === "sm" ? "min-h-8 px-2.5 text-xs" : "min-h-9 px-3.5 text-sm",
+        size === "sm" ? "min-h-9 px-3 text-xs" : "min-h-10 px-4 text-sm",
         variant === "primary" &&
-          "bg-circuit-300 text-anvil-950 shadow-[0_0_22px_rgba(34,211,238,0.22)] hover:bg-circuit-200 active:bg-circuit-400",
+          "bg-circuit-300 text-anvil-950 shadow-sm hover:bg-circuit-200 active:bg-circuit-400",
         variant === "secondary" &&
-          "border border-white/10 bg-white/[0.07] text-anvil-50 hover:border-white/20 hover:bg-white/[0.11] active:bg-white/[0.14]",
+          "bg-white/[0.06] text-anvil-100 hover:bg-white/[0.1] active:bg-white/[0.13]",
         variant === "ghost" &&
           "text-anvil-200 hover:bg-white/[0.07] hover:text-anvil-50 active:bg-white/[0.1]",
         variant === "danger" &&
@@ -230,11 +230,11 @@ export function DevicePicker({
   const { t } = useTranslation();
 
   return (
-    <Card className="p-4">
-      <h3 className="text-sm font-semibold text-anvil-50">
+    <section className="border-b border-white/[0.08] pb-4">
+      <h3 className="text-xs font-medium text-anvil-400">
         {t("common.selectDevice")}
       </h3>
-      <div className="mt-3 flex flex-wrap gap-2">
+      <div className="mt-2 flex flex-wrap gap-2">
         {devices.map((d) => (
           <Button
             key={`${d.transport_id ?? d.serial}:${d.connection_generation}`}
@@ -255,7 +255,7 @@ export function DevicePicker({
           </Button>
         ))}
       </div>
-    </Card>
+    </section>
   );
 }
 
@@ -271,18 +271,26 @@ export function Badge({
   return (
     <span
       className={cn(
-        "inline-flex min-h-6 items-center rounded-md border px-2 py-0.5 text-xs font-medium",
-        tone === "neutral" && "border-white/10 bg-white/[0.05] text-anvil-300",
-        tone === "info" &&
-          "border-circuit-300/25 bg-circuit-300/10 text-circuit-100",
-        tone === "success" &&
-          "border-emerald-300/25 bg-emerald-300/10 text-emerald-100",
-        tone === "warning" &&
-          "border-amber-300/25 bg-amber-300/10 text-amber-100",
-        tone === "danger" && "border-red-300/25 bg-red-300/10 text-red-100",
+        "inline-flex min-h-6 items-center gap-1.5 whitespace-nowrap text-xs font-medium",
+        tone === "neutral" && "text-anvil-400",
+        tone === "info" && "text-circuit-200",
+        tone === "success" && "text-emerald-200",
+        tone === "warning" && "text-amber-200",
+        tone === "danger" && "text-red-200",
         className,
       )}
     >
+      <span
+        className={cn(
+          "h-1.5 w-1.5 shrink-0 rounded-full",
+          tone === "neutral" && "bg-anvil-500",
+          tone === "info" && "bg-circuit-300",
+          tone === "success" && "bg-emerald-300",
+          tone === "warning" && "bg-amber-300",
+          tone === "danger" && "bg-red-300",
+        )}
+        aria-hidden="true"
+      />
       {children}
     </span>
   );
@@ -291,11 +299,7 @@ export function Badge({
 export function MilestoneBadge({ milestone }: { milestone: string }) {
   const { t } = useTranslation();
 
-  return (
-    <Badge tone="neutral" className="font-mono uppercase tracking-[0.08em]">
-      {t("common.roadmap", { milestone })}
-    </Badge>
-  );
+  return <span className="sr-only">{t("common.roadmap", { milestone })}</span>;
 }
 
 const transportLabels: Record<DeviceTransportKind, string> = {
@@ -359,20 +363,19 @@ export function StatePanel({
     <Card
       role={tone === "danger" ? "alert" : "status"}
       className={cn(
-        "p-5",
-        tone === "info" && "border-circuit-300/20 bg-circuit-950/35",
-        tone === "success" && "border-emerald-300/20 bg-emerald-950/20",
-        tone === "warning" && "border-amber-300/20 bg-amber-950/20",
-        tone === "danger" && "border-red-300/20 bg-red-950/20",
+        "rounded-md border-l-2 p-4 shadow-none",
+        tone === "neutral" && "border-l-white/20 bg-white/[0.025]",
+        tone === "info" && "border-l-circuit-300/60 bg-circuit-950/20",
+        tone === "success" && "border-l-emerald-300/60 bg-emerald-950/15",
+        tone === "warning" && "border-l-amber-300/70 bg-amber-950/15",
+        tone === "danger" && "border-l-red-300/70 bg-red-950/15",
       )}
     >
-      <div className="flex gap-4">
+      <div className="flex gap-3">
         <StatusGlyph tone={tone} />
         <div className="min-w-0 flex-1">
           <h3 className="text-sm font-semibold text-anvil-50">{title}</h3>
-          <div className="mt-2 text-sm leading-6 text-anvil-300">
-            {children}
-          </div>
+          <div className="mt-1.5 text-sm text-anvil-300">{children}</div>
           {actions && (
             <div className="mt-4 flex flex-wrap gap-2">{actions}</div>
           )}
@@ -400,7 +403,7 @@ export function FieldInput({
   return (
     <input
       className={cn(
-        "h-9 rounded-md border border-white/10 bg-white/[0.06] px-3 text-sm text-anvil-50 outline-none transition",
+        "h-10 rounded-md border border-white/[0.09] bg-white/[0.045] px-3 text-sm text-anvil-50 outline-none transition",
         "placeholder:text-anvil-600 hover:border-white/20 focus:border-circuit-300/60 focus:ring-2 focus:ring-circuit-300/20",
         "disabled:cursor-not-allowed disabled:opacity-50",
         className,
@@ -453,7 +456,7 @@ export function TableHeaderCell({
   return (
     <th
       className={cn(
-        "px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.08em] text-anvil-400",
+        "px-4 py-3 text-xs font-medium text-anvil-400",
         align === "right" ? "text-right" : "text-left",
         className,
       )}
@@ -493,21 +496,18 @@ function StatusGlyph({
   return (
     <span
       className={cn(
-        "mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-md border",
-        tone === "neutral" && "border-white/10 bg-white/[0.05] text-anvil-300",
-        tone === "info" &&
-          "border-circuit-300/25 bg-circuit-300/10 text-circuit-100",
-        tone === "success" &&
-          "border-emerald-300/25 bg-emerald-300/10 text-emerald-100",
-        tone === "warning" &&
-          "border-amber-300/25 bg-amber-300/10 text-amber-100",
-        tone === "danger" && "border-red-300/25 bg-red-300/10 text-red-100",
+        "mt-0.5 grid h-5 w-5 shrink-0 place-items-center",
+        tone === "neutral" && "text-anvil-400",
+        tone === "info" && "text-circuit-200",
+        tone === "success" && "text-emerald-200",
+        tone === "warning" && "text-amber-200",
+        tone === "danger" && "text-red-200",
       )}
       aria-hidden="true"
     >
       <svg
         viewBox="0 0 24 24"
-        className="h-4 w-4"
+        className="h-3.5 w-3.5"
         fill="none"
         stroke="currentColor"
         strokeLinecap="round"

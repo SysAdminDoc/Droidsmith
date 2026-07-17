@@ -14,8 +14,21 @@
   }
 
   body {
-    @apply bg-[#08090d] font-sans text-anvil-100 antialiased;
+    @apply bg-anvil-950 font-sans text-anvil-100 antialiased;
+    font-size: 15px;
+    font-feature-settings:
+      "cv02" 1,
+      "cv03" 1,
+      "cv04" 1,
+      "cv11" 1;
     text-rendering: optimizeLegibility;
+  }
+
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
   }
 
   ::selection {
@@ -24,7 +37,12 @@
   }
 
   code {
-    @apply rounded bg-black/20 px-1 py-0.5 text-[0.92em] text-anvil-100;
+    @apply rounded bg-black/20 px-1 py-0.5 text-[0.9em] text-anvil-100;
+  }
+
+  * {
+    scrollbar-color: rgb(152 162 180 / 0.45) transparent;
+    scrollbar-width: thin;
   }
 
   .queue-progress {

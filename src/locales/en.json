@@ -137,7 +137,7 @@
   },
   "devices": {
     "title": "Devices",
-    "description": "Scan USB and TCP/IP targets, confirm ADB readiness, and see enough context to choose the right device before any action runs.",
+    "description": "Inspect, connect, and manage Android devices.",
     "transportUsb": "USB",
     "transportTlsWifi": "Paired TLS Wi-Fi",
     "transportLegacyTcp": "Legacy TCP",
@@ -379,7 +379,7 @@
   },
   "wireless": {
     "title": "Wireless",
-    "description": "Pair Android 11+ devices over Wi-Fi, discover mDNS pairing/connect endpoints, and attach paired devices without leaving Droidsmith.",
+    "description": "Pair and connect Android devices over Wi-Fi.",
     "scanMdns": "Scan mDNS",
     "scanning": "Scanning...",
     "scanningMdns": "Scanning mDNS",
@@ -438,7 +438,7 @@
   },
   "apps": {
     "title": "Apps",
-    "description": "Review installed packages with precise filters, and a preview-before-apply workflow for disable, enable, uninstall, and data-clear actions.",
+    "description": "Find packages, review changes, and manage apps.",
     "refreshPackages": "Refresh packages",
     "installPackage": "Install package",
     "installIncremental": "Incremental",
@@ -651,7 +651,7 @@
   },
   "debloat": {
     "title": "Debloat",
-    "description": "Choose an OEM-aware pack, understand the risk before applying it, and keep every change reversible through the journal.",
+    "description": "Review vendor-aware cleanup plans before applying them.",
     "choosePack": "Choose a debloat pack",
     "choosePackBody": "Each pack targets a specific OEM or ROM. Packages are grouped by removal safety tier.",
     "recommended": "Recommended",
@@ -794,7 +794,7 @@
   },
   "mirror": {
     "title": "Mirror",
-    "description": "Launch scrcpy sessions to mirror and control Android devices. Requires scrcpy installed on your system.",
+    "description": "Configure and launch supervised scrcpy sessions.",
     "options": "Mirror options",
     "maxSize": "Max size (px)",
     "bitRate": "Video bit rate",
@@ -885,7 +885,7 @@
   },
   "console": {
     "title": "Console",
-    "description": "Run read-only ADB shell commands directly; review and journal every mutation before it executes.",
+    "description": "Run ADB commands with mutation review and journaling.",
     "clearHistory": "Clear history",
     "placeholder": "getprop ro.product.model",
     "run": "Run",
@@ -910,7 +910,7 @@
   },
   "logcat": {
     "title": "Logcat",
-    "description": "Stream device logs incrementally with bounded history, reconnect markers, filters, and export.",
+    "description": "Stream, filter, save, and export device logs.",
     "tagFilter": "Tag filter",
     "minLevel": "Min level",
     "textSearch": "Text search",
@@ -1009,7 +1009,7 @@
   },
   "profiles": {
     "title": "Profiles",
-    "description": "Compose repeatable package workflows, bind them to a device and Android user, and inspect every imported change before execution.",
+    "description": "Build and review repeatable package workflows.",
     "schemaBadge": "Profile schema v2",
     "desktopRequiredBody": "Native file grants and live ADB state are required to author or preview profiles.",
     "noAuthorizedBody": "Authorize an Android device before building constraints or previewing an imported profile.",
@@ -1104,7 +1104,7 @@
   },
   "fastboot": {
     "title": "Fastboot",
-    "description": "Inspect bootloader-mode devices, partition state, slots, and safety-critical variables before any destructive operation.",
+    "description": "Inspect bootloader devices and safety-critical state.",
     "scan": "Scan",
     "bootloaderDevices": "Bootloader devices",
     "queryVars": "Query vars",
@@ -1130,7 +1130,7 @@
   "hostDoctor": {
     "title": "Host connection doctor",
     "readOnly": "Read-only",
-    "description": "Check Platform Tools, ADB server configuration, anonymized transport states, and bounded Windows/Linux USB prerequisites without changing the host or device.",
+    "description": "Check ADB, USB, drivers, and host prerequisites without changing anything.",
     "run": "Run connection doctor",
     "scanning": "Scanning host...",
     "idle": "No scan has run. The doctor does not install drivers, edit rules, restart ADB, or retain serials and keys.",
