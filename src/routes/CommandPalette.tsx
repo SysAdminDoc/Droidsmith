@@ -77,13 +77,13 @@ export function CommandPalette({
     <div
       className="fixed inset-0 z-50 flex items-start justify-center bg-black/65 px-4 pt-[12vh] backdrop-blur-sm"
       onClick={onClose}
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="command-palette-title"
     >
       <div
         ref={trapRef}
         tabIndex={-1}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="command-palette-title"
         className="w-full max-w-xl overflow-hidden rounded-lg border border-white/10 bg-anvil-900 shadow-2xl outline-none"
         onClick={(e) => e.stopPropagation()}
         onKeyDown={handleKeyDown}

@@ -1,4 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type KeyboardEvent as ReactKeyboardEvent,
+} from "react";
 import { useTranslation } from "react-i18next";
 
 import {
@@ -726,7 +732,7 @@ export default function AppsRoute() {
         activeInstallRef.current = null;
         setInstallState({
           kind: "error",
-          message: installErrorMessage(error),
+          message: errorMessage(error),
         });
       }
     },
@@ -748,7 +754,7 @@ export default function AppsRoute() {
     } catch (error) {
       setInstallState({
         kind: "error",
-        message: installErrorMessage(error),
+        message: errorMessage(error),
       });
     }
   }, [incrementalInstall, runInstall, selectedDevice]);
@@ -1716,18 +1722,6 @@ function BackupStatePanel({
   );
 }
 
-function installErrorMessage(error: unknown): string {
-  if (error instanceof Error) return error.message;
-  if (
-    typeof error === "object" &&
-    error !== null &&
-    "message" in error &&
-    typeof error.message === "string"
-  )
-    return error.message;
-  return String(error);
-}
-
 function FilterChips({
   active,
   onChange,
@@ -1736,6 +1730,26 @@ function FilterChips({
   onChange: (f: PackageFilter) => void;
 }) {
   const { t } = useTranslation();
+  const buttonsRef = useRef<(HTMLButtonElement | null)[]>([]);
+
+  // Radiogroup keyboard contract: one tab stop (roving tabindex) plus
+  // arrow/Home/End navigation that moves selection and focus together.
+  const onKeyDown = (event: ReactKeyboardEvent, index: number) => {
+    let next: number | null = null;
+    if (event.key === "ArrowRight" || event.key === "ArrowDown") {
+      next = (index + 1) % FILTERS.length;
+    } else if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
+      next = (index - 1 + FILTERS.length) % FILTERS.length;
+    } else if (event.key === "Home") {
+      next = 0;
+    } else if (event.key === "End") {
+      next = FILTERS.length - 1;
+    }
+    if (next === null) return;
+    event.preventDefault();
+    onChange(FILTERS[next]!.value);
+    buttonsRef.current[next]?.focus();
+  };
 
   return (
     <div
@@ -1743,13 +1757,18 @@ function FilterChips({
       role="radiogroup"
       aria-label={t("apps.packageFilterLabel")}
     >
-      {FILTERS.map((f) => (
+      {FILTERS.map((f, index) => (
         <button
           key={f.value}
           type="button"
           role="radio"
           aria-checked={active === f.value}
+          tabIndex={active === f.value ? 0 : -1}
+          ref={(element) => {
+            buttonsRef.current[index] = element;
+          }}
           onClick={() => onChange(f.value)}
+          onKeyDown={(event) => onKeyDown(event, index)}
           className={[
             "rounded-md border px-3 py-1.5 text-xs font-medium transition",
             "focus:outline-none focus-visible:ring-2 focus-visible:ring-circuit-300",
