@@ -196,6 +196,9 @@ export default function AppsRoute() {
   const installGenerationRef = useRef(0);
   const metadataGenerationRef = useRef(0);
   const metadataRequestedRef = useRef(new Set<string>());
+  // Tracks the live selection so an in-flight journal undo can detect a
+  // mid-operation device switch before refreshing shared package/journal state.
+  const selectedSerialRef = useRef<string | null>(null);
 
   const selectedDevice =
     authorizedDevices.find((device) =>
@@ -290,6 +293,10 @@ export default function AppsRoute() {
     },
     [selectedDevice, selectedUser, usersReady],
   );
+
+  useEffect(() => {
+    selectedSerialRef.current = selectedSerial;
+  }, [selectedSerial]);
 
   const loadJournal = useCallback(async () => {
     if (!selectedSerial) {
@@ -927,9 +934,13 @@ export default function AppsRoute() {
   const undoJournalEntry = useCallback(
     async (entry: JournalEntry) => {
       if (!selectedDevice || !authorizedTarget || !usersReady) return;
+      const serial = selectedDevice.serial;
       setUndoingEntryId(entry.id);
       try {
         await callJournalUndo(authorizedTarget, entry.id);
+        // Bail if the device switched mid-undo: refreshing here would clobber
+        // the newly selected device's package/journal state.
+        if (selectedSerialRef.current !== serial) return;
         setActionState({
           kind: "success",
           message: t("apps.journalUndoCompleted", {
@@ -938,6 +949,7 @@ export default function AppsRoute() {
         });
         await Promise.all([loadPackages(), loadJournal()]);
       } catch (e) {
+        if (selectedSerialRef.current !== serial) return;
         setActionState({
           kind: "error",
           message: e instanceof Error ? e.message : String(e),
@@ -959,9 +971,11 @@ export default function AppsRoute() {
   const undoJournalBatch = useCallback(
     async (batchId: string) => {
       if (!selectedDevice || !authorizedTarget || !usersReady) return;
+      const serial = selectedDevice.serial;
       setUndoingBatchId(batchId);
       try {
         const result = await callJournalUndoBatch(authorizedTarget, batchId);
+        if (selectedSerialRef.current !== serial) return;
         const failures = batchFailures(result);
         setActionState({
           kind: "success",
@@ -975,6 +989,7 @@ export default function AppsRoute() {
         });
         await Promise.all([loadPackages(), loadJournal()]);
       } catch (error) {
+        if (selectedSerialRef.current !== serial) return;
         setActionState({
           kind: "error",
           message: error instanceof Error ? error.message : String(error),

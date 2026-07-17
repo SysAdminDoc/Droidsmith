@@ -2171,6 +2171,12 @@ pub async fn save_logcat_export(
             message: "Logcat export parent directory does not exist".to_string(),
         });
     }
+    if fs::symlink_metadata(&path).is_ok_and(|metadata| metadata.file_type().is_symlink()) {
+        return Err(CommandError {
+            code: "invalid_path",
+            message: "Logcat export target must not be a symbolic link".to_string(),
+        });
+    }
     let display_path = path.display().to_string();
     spawn_blocking_operation(move || {
         std::fs::write(&path, contents.as_bytes())?;
@@ -3127,6 +3133,12 @@ pub async fn save_layout_export(
         return Err(CommandError {
             code: "invalid_path",
             message: "Layout export parent directory does not exist".to_string(),
+        });
+    }
+    if fs::symlink_metadata(&path).is_ok_and(|metadata| metadata.file_type().is_symlink()) {
+        return Err(CommandError {
+            code: "invalid_path",
+            message: "Layout export target must not be a symbolic link".to_string(),
         });
     }
     let display_path = path.display().to_string();
