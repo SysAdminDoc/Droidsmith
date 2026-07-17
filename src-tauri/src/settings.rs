@@ -717,6 +717,21 @@ fn validate_linear_regex(label: &str, pattern: &str) -> Result<(), SettingsError
                 prev_was_group_close = false;
                 continue;
             }
+            b'[' => {
+                // Character-class contents (including parens and quantifier
+                // characters) are literals; skip to the first unescaped `]`.
+                // Mirrors the renderer's `regexError` scanner so both agree.
+                index += 1;
+                while index < bytes.len() && bytes[index] != b']' {
+                    index += if bytes[index] == b'\\' { 2 } else { 1 };
+                }
+                if index >= bytes.len() {
+                    return reject("unterminated character class");
+                }
+                index += 1; // consume the closing ']'
+                prev_was_group_close = false;
+                continue;
+            }
             b'(' => {
                 if bytes.get(index + 1) == Some(&b'?') {
                     match bytes.get(index + 2) {
@@ -1099,6 +1114,26 @@ mod tests {
         ok.message_filter = "FATAL EXCEPTION|ANR in".to_string();
         assert!(save_logcat_queries(&dir, LogcatQueryScope::Global, None, vec![ok]).is_ok());
         fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn linear_regex_matches_renderer_subset() {
+        // Rejected: catastrophic backtracking, backreferences, lookaround.
+        assert!(validate_linear_regex("m", "(a+)+").is_err());
+        assert!(validate_linear_regex("m", "(ab)+").is_err());
+        assert!(validate_linear_regex("m", r"(\w)\1").is_err());
+        assert!(validate_linear_regex("m", "(?=foo)").is_err());
+        assert!(validate_linear_regex("m", "(unterminated").is_err());
+        assert!(validate_linear_regex("m", "[unterminated").is_err());
+        // Accepted: literal parens (escaped or in a class) may be quantified;
+        // these previously diverged from the renderer's `regexError`.
+        assert!(validate_linear_regex("m", r"foo\)*").is_ok());
+        assert!(validate_linear_regex("m", r"foo\)+").is_ok());
+        assert!(validate_linear_regex("m", r"err\){2}").is_ok());
+        assert!(validate_linear_regex("m", "[)]+").is_ok());
+        assert!(validate_linear_regex("m", "[(]+").is_ok());
+        assert!(validate_linear_regex("m", "[a-z()]+").is_ok());
+        assert!(validate_linear_regex("m", "FATAL EXCEPTION|ANR in").is_ok());
     }
 
     #[test]

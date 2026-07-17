@@ -108,11 +108,66 @@ export function newQueryId(): string {
 export function regexError(
   pattern: string,
 ): "backreference" | "lookaround" | "nestedQuantifier" | "syntax" | null {
-  if (/\\[0-9]/u.test(pattern) || /\\k/u.test(pattern)) return "backreference";
-  if (/\(\?[=!]/u.test(pattern) || /\(\?<[=!]/u.test(pattern))
-    return "lookaround";
-  if (/\)[*+]/u.test(pattern) || /\)\{/u.test(pattern))
-    return "nestedQuantifier";
+  // Byte-for-byte port of the Rust `validate_linear_regex` scanner so the
+  // renderer and the durable settings store accept exactly the same subset.
+  // Escapes and character-class interiors are honored, so a literal `\)` or a
+  // `[)]`/`[(]` class is not mistaken for a group boundary.
+  let index = 0;
+  let depth = 0;
+  let prevWasGroupClose = false;
+  const length = pattern.length;
+  while (index < length) {
+    const char = pattern[index];
+    if (char === "\\") {
+      const next = pattern[index + 1];
+      if (next === undefined) return "syntax"; // dangling escape
+      if ((next >= "0" && next <= "9") || next === "k") return "backreference";
+      index += 2;
+      prevWasGroupClose = false;
+      continue;
+    }
+    if (char === "[") {
+      // Character-class contents (including parens and quantifier characters)
+      // are literals; skip to the first unescaped `]`.
+      index += 1;
+      while (index < length && pattern[index] !== "]") {
+        index += pattern[index] === "\\" ? 2 : 1;
+      }
+      if (index >= length) return "syntax"; // unterminated class
+      index += 1;
+      prevWasGroupClose = false;
+      continue;
+    }
+    if (char === "(") {
+      if (pattern[index + 1] === "?") {
+        const third = pattern[index + 2];
+        if (third === "=" || third === "!") return "lookaround";
+        if (
+          third === "<" &&
+          (pattern[index + 3] === "=" || pattern[index + 3] === "!")
+        ) {
+          return "lookaround";
+        }
+      }
+      depth += 1;
+      prevWasGroupClose = false;
+      index += 1;
+      continue;
+    }
+    if (char === ")") {
+      depth -= 1;
+      if (depth < 0) return "syntax"; // unbalanced
+      prevWasGroupClose = true;
+      index += 1;
+      continue;
+    }
+    if ((char === "*" || char === "+" || char === "{") && prevWasGroupClose) {
+      return "nestedQuantifier";
+    }
+    prevWasGroupClose = false;
+    index += 1;
+  }
+  if (depth !== 0) return "syntax"; // unbalanced
   try {
     void new RegExp(pattern, "u");
   } catch {

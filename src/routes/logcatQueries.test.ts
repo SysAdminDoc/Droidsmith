@@ -29,6 +29,21 @@ describe("logcat query regex guard", () => {
   it("accepts a bounded alternation", () => {
     expect(regexError("FATAL EXCEPTION|ANR in ")).toBeNull();
   });
+
+  it("treats escaped parens and character classes as literals", () => {
+    // A literal `)` (escaped or in a class) quantified is safe and must match
+    // the Rust `validate_linear_regex` verdict — previously false-rejected.
+    expect(regexError("foo\\)*")).toBeNull();
+    expect(regexError("foo\\)+")).toBeNull();
+    expect(regexError("err\\){2}")).toBeNull();
+    expect(regexError("[)]+")).toBeNull();
+    expect(regexError("[(]+")).toBeNull();
+    expect(regexError("[a-z()]+")).toBeNull();
+    // Real groups still can't be quantified (catastrophic backtracking).
+    expect(regexError("(ab)+")).toBe("nestedQuantifier");
+    expect(regexError("[a-z]")).toBeNull();
+    expect(regexError("[unterminated")).toBe("syntax");
+  });
 });
 
 describe("logcat query validation", () => {
