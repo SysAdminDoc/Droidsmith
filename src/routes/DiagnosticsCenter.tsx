@@ -31,7 +31,10 @@ export default function DiagnosticsCenter({
   const [message, setMessage] = useState<string | null>(null);
   const [wipeConfirm, setWipeConfirm] = useState(false);
   const [wiping, setWiping] = useState(false);
-  const trapRef = useFocusTrap<HTMLDivElement>(!wipeConfirm);
+  // Keep the trap active while the nested wipe confirmation is open — that
+  // dialog is a sibling subtree with its own trap, so deactivating here only
+  // caused a spurious focus jump to the element behind both overlays.
+  const trapRef = useFocusTrap<HTMLDivElement>();
 
   const loadPreview = useCallback(async () => {
     setState({ kind: "loading" });
