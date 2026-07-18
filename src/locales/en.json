@@ -75,6 +75,7 @@
     "noUploadBody": "The bundle is generated on this computer. Raw serials, network device addresses, pairing secrets, credential-like values, and host paths are removed by the Rust backend before preview or save.",
     "saveTitle": "Save Droidsmith support bundle",
     "saved": "Saved {{size}} support bundle to {{path}}",
+    "saveCancelled": "Save cancelled.",
     "saveFailed": "Could not save the support bundle: {{message}}",
     "loading": "Building diagnostics preview",
     "loadFailed": "Could not build diagnostics",

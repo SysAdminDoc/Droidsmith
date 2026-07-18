@@ -72,7 +72,11 @@ export default function DiagnosticsCenter({
         "diagnostics_save",
         `droidsmith-support-${date}.json`,
       );
-      if (!pathGrant) return;
+      if (!pathGrant) {
+        setSaving(false);
+        setMessage(t("diagnostics.saveCancelled"));
+        return;
+      }
       const result = await callSaveDiagnostics(pathGrant.id);
       setMessage(
         t("diagnostics.saved", {
