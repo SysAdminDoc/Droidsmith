@@ -28,7 +28,6 @@ import {
   type AdbRecoveryResult,
   type DeviceInfo,
   type DeviceTarget,
-  type DeviceTransportKind,
   type HostPathGrant,
   type LayoutNode,
   type ListDevicesResult,
@@ -60,6 +59,7 @@ import {
   StatePanel,
   TableCell,
   TableHeaderCell,
+  TransportBadge,
   TransportTrustNotice,
 } from "./common";
 import HostDoctor from "./HostDoctor";
@@ -988,7 +988,7 @@ function DeviceTable({
                       <code className="font-mono text-xs text-anvil-50">
                         {device.serial}
                       </code>
-                      <TransportChip kind={device.transport_kind} />
+                      <TransportBadge kind={device.transport_kind} />
                     </div>
                   </TableCell>
                   <TableCell>
@@ -1074,31 +1074,6 @@ function SelectionIcon({ selected }: { selected: boolean }) {
   );
 }
 
-function TransportChip({ kind }: { kind: DeviceTransportKind }) {
-  const { t } = useTranslation();
-  const labelKey =
-    kind === "usb"
-      ? "devices.transportUsb"
-      : kind === "tls_wifi"
-        ? "devices.transportTlsWifi"
-        : kind === "legacy_tcp"
-          ? "devices.transportLegacyTcp"
-          : "devices.transportUnknownTcp";
-
-  return (
-    <span
-      className={cn(
-        "inline-flex rounded px-2 py-0.5 text-[11px] font-medium",
-        kind === "usb" && "bg-white/[0.07] text-anvil-300",
-        kind === "tls_wifi" && "bg-emerald-300/10 text-emerald-200",
-        (kind === "legacy_tcp" || kind === "unknown_tcp") &&
-          "bg-amber-300/10 text-amber-200",
-      )}
-    >
-      {t(labelKey)}
-    </span>
-  );
-}
 
 function DeviceDetail({
   state,
