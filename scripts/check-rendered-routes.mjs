@@ -657,6 +657,15 @@ async function runDesktopFlow(browser) {
       document.documentElement.dir === "ltr",
   );
 
+  // IMP-68: exercise Settings export and reset flows
+  await page.getByLabel("Language", { exact: true }).selectOption("en");
+  await page.waitForFunction(() => document.documentElement.lang === "en");
+  await page.getByRole("button", { name: "Export scope" }).click();
+  await page.getByText(/Settings exported to/).waitFor();
+  await page.getByRole("button", { name: "Reset scope" }).click();
+  await page.getByRole("button", { name: "Reset selected scope" }).click();
+  await page.getByText(/reset to defaults/).waitFor();
+
   assertNoConsoleErrors(errors, "desktop route smoke");
   await page.close();
 }
