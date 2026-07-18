@@ -3054,8 +3054,10 @@ function PermissionsPanel({
               <code className="min-w-0 truncate font-mono text-xs text-anvil-200">
                 {p.permission}
               </code>
-              <button
+              <Button
                 type="button"
+                size="sm"
+                variant={p.granted ? "secondary" : "danger"}
                 onClick={() => void togglePerm(p.permission, !p.granted)}
                 disabled={toggling === p.permission}
                 aria-pressed={p.granted}
@@ -3063,16 +3065,9 @@ function PermissionsPanel({
                   p.granted ? "apps.revokePermission" : "apps.grantPermission",
                   { permission: p.permission },
                 )}
-                className={[
-                  "shrink-0 rounded-md border px-3 py-1 text-xs font-medium transition",
-                  p.granted
-                    ? "border-emerald-300/20 bg-emerald-300/10 text-emerald-100 hover:bg-emerald-300/20"
-                    : "border-red-300/20 bg-red-300/10 text-red-100 hover:bg-red-300/20",
-                  toggling === p.permission ? "opacity-50" : "",
-                ].join(" ")}
               >
                 {p.granted ? t("apps.granted") : t("apps.denied")}
-              </button>
+              </Button>
             </div>
           ))}
         </div>
