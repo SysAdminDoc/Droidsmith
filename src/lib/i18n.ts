@@ -1,21 +1,30 @@
 import i18n from "i18next";
 import { initReactI18next } from "react-i18next";
 
+import de from "../locales/de.json";
 import en from "../locales/en.json";
+import es from "../locales/es.json";
 import ru from "../locales/ru.json";
+import zh from "../locales/zh.json";
 
 export const LANGUAGE_STORAGE_KEY = "droidsmith.language";
 export const SUPPORTED_LANGUAGES = [
+  { code: "de", labelKey: "language.german", dir: "ltr", locale: "de-DE" },
   { code: "en", labelKey: "language.english", dir: "ltr", locale: "en-US" },
+  { code: "es", labelKey: "language.spanish", dir: "ltr", locale: "es-ES" },
   { code: "ru", labelKey: "language.russian", dir: "ltr", locale: "ru-RU" },
+  { code: "zh", labelKey: "language.chinese", dir: "ltr", locale: "zh-CN" },
 ] as const;
 
 export type SupportedLanguage = (typeof SUPPORTED_LANGUAGES)[number]["code"];
 type LanguageStorage = Pick<Storage, "getItem">;
 
 const resources = {
+  de: { translation: de },
   en: { translation: en },
+  es: { translation: es },
   ru: { translation: ru },
+  zh: { translation: zh },
 };
 
 const initialLanguage = detectInitialLanguage();

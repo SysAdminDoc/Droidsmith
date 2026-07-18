@@ -2048,7 +2048,7 @@ export type SettingsExportResult = {
   byteSize: number;
   scope: SettingsScope;
 };
-export type SettingsLanguage = "en" | "ru";
+export type SettingsLanguage = "de" | "en" | "es" | "ru" | "zh";
 export type SettingsLoadResult = {
   settings: SettingsSnapshot;
   recovery: SettingsRecovery;

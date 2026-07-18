@@ -13,22 +13,32 @@ import {
   LANGUAGE_STORAGE_KEY,
   languageMetadata,
 } from "./i18n";
+import de from "../locales/de.json";
 import en from "../locales/en.json";
+import es from "../locales/es.json";
 import ru from "../locales/ru.json";
+import zh from "../locales/zh.json";
 
 type LocaleTree = Record<string, unknown>;
 
+const locales: Record<string, LocaleTree> = { de, es, ru, zh };
+
 describe("i18n resources", () => {
-  it("keeps Russian keys aligned with English keys", () => {
-    expect(flattenKeys(ru)).toEqual(flattenKeys(en));
-  });
+  it.each(Object.keys(locales))(
+    "keeps %s keys aligned with English keys",
+    (code) => {
+      expect(flattenKeys(locales[code])).toEqual(flattenKeys(en));
+    },
+  );
 
   it("covers every navigation item label and description", () => {
     for (const item of NAV_ITEMS) {
       expect(hasKey(en, item.labelKey)).toBe(true);
       expect(hasKey(en, item.descriptionKey)).toBe(true);
-      expect(hasKey(ru, item.labelKey)).toBe(true);
-      expect(hasKey(ru, item.descriptionKey)).toBe(true);
+      for (const locale of Object.values(locales)) {
+        expect(hasKey(locale, item.labelKey)).toBe(true);
+        expect(hasKey(locale, item.descriptionKey)).toBe(true);
+      }
     }
   });
 

@@ -18,8 +18,11 @@
   },
   "language": {
     "label": "Язык",
+    "chinese": "中文",
     "english": "English",
-    "russian": "Русский"
+    "german": "Deutsch",
+    "russian": "Русский",
+    "spanish": "Español"
   },
   "settings": {
     "title": "Настройки и пресеты",
@@ -1172,27 +1175,39 @@
     "privacy": "Контракт приватности и отсутствия изменений",
     "officialGuidance": "Открыть официальную инструкцию",
     "findings": {
-      "adb_missing": { "title": "ADB не найден" },
+      "adb_missing": {
+        "title": "ADB не найден"
+      },
       "adb_unrunnable": {
         "title": "ADB найден, но не может перечислить transports"
       },
-      "adb_version_unknown": { "title": "Версию ADB не удалось проверить" },
-      "adb_ready": { "title": "Исполняемый файл ADB готов" },
+      "adb_version_unknown": {
+        "title": "Версию ADB не удалось проверить"
+      },
+      "adb_ready": {
+        "title": "Исполняемый файл ADB готов"
+      },
       "platform_tools_blocked": {
         "title": "Эта версия Platform Tools имеет известную проблему"
       },
       "platform_tools_warning": {
         "title": "Совместимость Platform Tools требует внимания"
       },
-      "unauthorized": { "title": "Android ожидает авторизации USB debugging" },
-      "offline": { "title": "ADB transports находятся offline" },
+      "unauthorized": {
+        "title": "Android ожидает авторизации USB debugging"
+      },
+      "offline": {
+        "title": "ADB transports находятся offline"
+      },
       "no_permissions": {
         "title": "Linux не может открыть Android USB device"
       },
       "usb_visible_adb_missing": {
         "title": "Android USB виден ОС, но отсутствует в ADB"
       },
-      "no_usb_transport": { "title": "Android USB transport не обнаружен" },
+      "no_usb_transport": {
+        "title": "Android USB transport не обнаружен"
+      },
       "windows_driver_missing": {
         "title": "Windows не распознает ADB interface"
       },
@@ -1205,7 +1220,9 @@
       "client_server_mismatch": {
         "title": "Версии ADB client и server различаются"
       },
-      "server_status_unavailable": { "title": "Детали ADB server недоступны" }
+      "server_status_unavailable": {
+        "title": "Детали ADB server недоступны"
+      }
     }
   },
   "onboarding": {

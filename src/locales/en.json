@@ -18,8 +18,11 @@
   },
   "language": {
     "label": "Language",
+    "chinese": "中文",
     "english": "English",
-    "russian": "Русский"
+    "german": "Deutsch",
+    "russian": "Русский",
+    "spanish": "Español"
   },
   "settings": {
     "title": "Preferences and presets",

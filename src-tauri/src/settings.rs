@@ -34,8 +34,11 @@ const LOGCAT_GLOBAL_KEY: &str = "global";
 #[derive(specta::Type, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum SettingsLanguage {
+    De,
     En,
+    Es,
     Ru,
+    Zh,
 }
 
 #[derive(specta::Type, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -844,8 +847,11 @@ fn device_scope(device_identity: &str) -> Result<String, SettingsError> {
 
 fn parse_language(value: &str) -> Option<SettingsLanguage> {
     match value.to_ascii_lowercase().split(['-', '_']).next() {
+        Some("de") => Some(SettingsLanguage::De),
         Some("en") => Some(SettingsLanguage::En),
+        Some("es") => Some(SettingsLanguage::Es),
         Some("ru") => Some(SettingsLanguage::Ru),
+        Some("zh") => Some(SettingsLanguage::Zh),
         _ => None,
     }
 }
