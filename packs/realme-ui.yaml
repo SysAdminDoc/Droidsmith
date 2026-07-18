@@ -1,0 +1,113 @@
+id: "realme-ui"
+revision: 1
+name: "Realme — Realme UI"
+version: "1"
+description: >
+  Debloat pack for Realme devices running Realme UI 4–6. Targets
+  Realme-specific apps and OPPO/HeyTap services inherited from
+  the shared ColorOS base.
+attribution: |
+  Original Droidsmith authoring based on public Realme package lists,
+  UAD-ng community data, and Realme UI documentation. MIT licensed.
+provenance:
+  source: "https://github.com/SysAdminDoc/Droidsmith"
+  license: "MIT"
+
+targets:
+  manufacturer: ["realme", "Realme"]
+  rom: ["realmeui", "Realme UI", "RealmeUI"]
+  build_fingerprint: ["realme/", "Realme/"]
+  android_min: 33
+  user_scope: owner
+
+packages:
+  # ── Realme bloatware: safe to remove ─────────────────────────────
+
+  - id: com.heytap.browser
+    removal: recommended
+    description: >
+      HeyTap Browser. Shared OPPO/Realme browser. Chrome or any
+      third-party browser is unaffected by removal.
+    labels: ["realme", "browser"]
+
+  - id: com.heytap.music
+    removal: recommended
+    description: >
+      HeyTap Music. Streaming player inherited from ColorOS.
+      Safe to disable; local and third-party music apps are unaffected.
+    labels: ["realme", "media"]
+
+  - id: com.nearme.gamecenter
+    removal: recommended
+    description: >
+      Game Center. OPPO/Realme app store for games.
+      Safe to remove; Play Store games are unaffected.
+    labels: ["realme", "gaming"]
+
+  - id: com.realme.link
+    removal: recommended
+    description: >
+      Realme Link. IoT companion app for Realme wearables and smart
+      devices. Safe to remove if you don't own Realme accessories.
+    labels: ["realme", "iot"]
+
+  - id: com.coloros.gamespace
+    removal: recommended
+    description: >
+      Game Space. Gaming mode with performance profiles inherited
+      from ColorOS. Safe to remove if you don't use gaming modes.
+    labels: ["realme", "gaming"]
+
+  - id: com.finshell.wallet
+    removal: recommended
+    description: >
+      Finshell/HeyTap Pay wallet. Mobile payment service active
+      mainly in Asia. Google Pay is unaffected by removal.
+    labels: ["realme", "finance"]
+
+  - id: com.realme.magazine
+    removal: recommended
+    description: >
+      Realme Magazine lock screen. Displays rotating wallpapers and
+      promotional content on the lock screen. Removing stops the
+      promotional content; a static wallpaper remains.
+    labels: ["realme", "bloat"]
+
+  # ── Advanced removals ────────────────────────────────────────────
+
+  - id: com.heytap.cloud
+    removal: advanced
+    description: >
+      HeyTap Cloud. OPPO/Realme cloud backup. Removing disables
+      cloud sync through OPPO servers. Google backup is unaffected.
+    labels: ["realme", "cloud"]
+
+  - id: com.coloros.weather2
+    removal: advanced
+    description: >
+      ColorOS Weather. Removing disables the built-in weather app
+      and its widget. Third-party weather apps are unaffected.
+    labels: ["realme", "utility"]
+
+  - id: com.coloros.note
+    removal: advanced
+    description: >
+      ColorOS Notes. Removing disables the built-in notes app.
+      Other note-taking apps work independently.
+    labels: ["realme", "productivity"]
+
+  - id: com.coloros.filemanager
+    removal: advanced
+    description: >
+      ColorOS File Manager. Removing this disables the built-in file
+      browser. Files remain intact on device.
+    labels: ["realme", "utility"]
+
+  # ── Expert-level removals ────────────────────────────────────────
+
+  - id: com.oplus.cosa
+    removal: expert
+    description: >
+      OPLUS carrier-customization service. May break carrier-specific
+      features like VoLTE provisioning on some networks.
+    labels: ["realme", "carrier"]

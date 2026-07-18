@@ -1,0 +1,138 @@
+id: "oneplus-oxygenos"
+revision: 1
+name: "OnePlus — OxygenOS"
+version: "1"
+description: >
+  Debloat pack for OnePlus devices running OxygenOS 13–15. Targets
+  OnePlus-specific apps, duplicate Google services, and
+  ColorOS-inherited bloatware from the OPPO merger.
+attribution: |
+  Original Droidsmith authoring based on public OnePlus package lists,
+  UAD-ng community data, and OxygenOS documentation. MIT licensed.
+provenance:
+  source: "https://github.com/SysAdminDoc/Droidsmith"
+  license: "MIT"
+
+targets:
+  manufacturer: ["OnePlus", "oneplus"]
+  rom: ["OxygenOS", "oxygen"]
+  build_fingerprint: ["OnePlus/"]
+  android_min: 33
+  user_scope: owner
+
+packages:
+  # ── OnePlus bloatware: safe to remove ────────────────────────────
+
+  - id: com.oneplus.brickmode
+    removal: recommended
+    description: >
+      OnePlus Shelf widget. News and weather widget on the left home
+      screen panel. Purely cosmetic; no core functionality depends on it.
+    labels: ["oneplus", "bloat"]
+
+  - id: com.oneplus.gamespace
+    removal: recommended
+    description: >
+      Game Space. Gaming mode launcher with performance profiles.
+      Safe to remove if you do not use gaming performance features.
+    labels: ["oneplus", "gaming"]
+
+  - id: com.oneplus.membership
+    removal: recommended
+    description: >
+      OnePlus Community/Membership app. Account and loyalty program.
+      No impact on device functionality.
+    labels: ["oneplus", "account"]
+
+  - id: com.oneplus.store
+    removal: recommended
+    description: >
+      OnePlus Store. Hardware store and accessory catalog.
+      Purely promotional with no device function.
+    labels: ["oneplus", "store"]
+
+  - id: com.oneplus.card
+    removal: recommended
+    description: >
+      OnePlus Card/Wallet promo. Payment and membership card integration.
+      Safe to remove; Google Pay is unaffected.
+    labels: ["oneplus", "account"]
+
+  - id: com.heytap.browser
+    removal: recommended
+    description: >
+      HeyTap Browser. OPPO/OnePlus shared browser inherited from
+      ColorOS. Chrome or any third-party browser is unaffected.
+    labels: ["oneplus", "browser"]
+
+  - id: com.heytap.music
+    removal: recommended
+    description: >
+      HeyTap Music. OPPO/OnePlus streaming music player.
+      Safe to disable; local and third-party music apps are unaffected.
+    labels: ["oneplus", "media"]
+
+  - id: com.nearme.gamecenter
+    removal: recommended
+    description: >
+      Game Center. OPPO/OnePlus app store for games.
+      Safe to remove; Play Store games are unaffected.
+    labels: ["oneplus", "gaming"]
+
+  # ── OnePlus services: advanced removal ───────────────────────────
+
+  - id: com.oneplus.weather
+    removal: advanced
+    description: >
+      OnePlus Weather. Removing this disables the built-in weather
+      widget. Third-party weather apps are unaffected.
+    labels: ["oneplus", "utility"]
+
+  - id: com.oneplus.note
+    removal: advanced
+    description: >
+      OnePlus Notes. Removing disables the built-in notes app.
+      Exported notes and other note-taking apps are unaffected.
+    labels: ["oneplus", "productivity"]
+
+  - id: com.oneplus.calculator
+    removal: advanced
+    description: >
+      OnePlus Calculator. Removing this loses the built-in calculator.
+      Third-party calculator apps work independently.
+    labels: ["oneplus", "utility"]
+
+  - id: com.oneplus.filemanager
+    removal: advanced
+    description: >
+      OnePlus File Manager. Removing this disables the built-in file
+      browser. Files on device remain intact; use a third-party
+      file manager as a replacement.
+    labels: ["oneplus", "utility"]
+
+  - id: com.heytap.cloud
+    removal: advanced
+    description: >
+      HeyTap Cloud. OPPO cloud backup service. Removing this disables
+      cloud backup through OnePlus/OPPO servers. Google backup is
+      unaffected.
+    labels: ["oneplus", "cloud"]
+
+  # ── Expert-level removals ────────────────────────────────────────
+
+  - id: com.oneplus.opbugreportlite
+    removal: expert
+    description: >
+      OnePlus bug report tool. Used for submitting device diagnostics
+      to OnePlus support. Removing does not affect normal operation
+      but prevents filing device-level bug reports.
+    labels: ["oneplus", "diagnostics"]
+
+  - id: com.oplus.cosa
+    removal: expert
+    description: >
+      OPLUS carrier-customization service. May break carrier-specific
+      features like VoLTE provisioning or APN configuration on some
+      networks. Only remove if you are certain your carrier does not
+      require OPLUS configuration.
+    labels: ["oneplus", "carrier"]

@@ -1,0 +1,70 @@
+id: "nothing-os"
+revision: 1
+name: "Nothing — Nothing OS"
+version: "1"
+description: >
+  Debloat pack for Nothing Phone devices running Nothing OS 2–3.
+  Nothing OS is close to stock Android with a thin overlay; this pack
+  targets the few Nothing-specific additions and any bundled third-party
+  apps.
+attribution: |
+  Original Droidsmith authoring based on public Nothing package lists,
+  UAD-ng community data, and Nothing OS documentation. MIT licensed.
+provenance:
+  source: "https://github.com/SysAdminDoc/Droidsmith"
+  license: "MIT"
+
+targets:
+  manufacturer: ["Nothing", "nothing"]
+  rom: ["NothingOS", "Nothing OS"]
+  build_fingerprint: ["Nothing/"]
+  android_min: 33
+  user_scope: owner
+
+packages:
+  # ── Nothing bloatware: safe to remove ────────────────────────────
+
+  - id: com.nothing.smartcenter
+    removal: recommended
+    description: >
+      Nothing Smart Center. Widget hub for Nothing-ecosystem devices
+      (earbuds, sub-phone). Safe to remove if you don't own Nothing
+      accessories.
+    labels: ["nothing", "iot"]
+
+  - id: com.nothing.membercenter
+    removal: recommended
+    description: >
+      Nothing Community/Member Center. Community forum and loyalty
+      program app. No device functionality depends on it.
+    labels: ["nothing", "account"]
+
+  - id: com.nothing.experience
+    removal: recommended
+    description: >
+      Nothing Experience. Promotional app showcasing Nothing features
+      and tips. Purely marketing content.
+    labels: ["nothing", "bloat"]
+
+  # ── Advanced removals ────────────────────────────────────────────
+
+  - id: com.nothing.weather
+    removal: advanced
+    description: >
+      Nothing Weather. Removing this disables the built-in weather
+      app and widget. Third-party weather apps are unaffected.
+    labels: ["nothing", "utility"]
+
+  - id: com.nothing.recorder
+    removal: advanced
+    description: >
+      Nothing Recorder. Voice recorder app. Removing disables the
+      built-in recorder; existing recordings are not deleted.
+    labels: ["nothing", "utility"]
+
+  - id: com.nothing.calculator
+    removal: advanced
+    description: >
+      Nothing Calculator. Removing loses the built-in calculator.
+      Third-party calculators work independently.
+    labels: ["nothing", "utility"]
