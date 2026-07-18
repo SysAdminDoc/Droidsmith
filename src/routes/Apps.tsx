@@ -79,6 +79,7 @@ import {
   StatePanel,
   TableCell,
   TableHeaderCell,
+  FieldSelect,
   TransportBadge,
   TransportTrustNotice,
 } from "./common";
@@ -1242,7 +1243,7 @@ export default function AppsRoute() {
               {users.length > 1 && (
                 <label className="flex items-center gap-2 text-sm text-anvil-300">
                   <span>{t("apps.userLabel")}</span>
-                  <select
+                  <FieldSelect
                     value={selectedUser}
                     onChange={(e) => {
                       setSelectedUser(Number(e.target.value));
@@ -1250,7 +1251,7 @@ export default function AppsRoute() {
                       setRecoveryState({ kind: "idle" });
                     }}
                     aria-label={t("apps.userLabel")}
-                    className="rounded-md border border-white/10 bg-anvil-900 px-2 py-1 font-mono text-anvil-100"
+                    className="h-auto px-2 py-1 font-mono"
                   >
                     {users.map((u) => (
                       <option key={u.id} value={u.id}>
@@ -1258,7 +1259,7 @@ export default function AppsRoute() {
                         {u.current ? ` (${t("apps.userCurrent")})` : ""}
                       </option>
                     ))}
-                  </select>
+                  </FieldSelect>
                 </label>
               )}
               <Button

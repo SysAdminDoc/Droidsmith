@@ -4,7 +4,7 @@ import { useTranslation } from "react-i18next";
 import { normalizeLanguage } from "../lib/i18n";
 import { exportStoredSettings, resetStoredSettings } from "../lib/settings";
 import { errorMessage, type SettingsScope } from "../lib/tauri";
-import { Button, Card } from "./common";
+import { Button, Card, FieldSelect } from "./common";
 
 const SCOPES: SettingsScope[] = ["all", "language", "mirror_presets"];
 
@@ -77,18 +77,18 @@ export default function SettingsDataControls({
         <span className="text-xs font-medium text-anvil-300">
           {t("settings.scope")}
         </span>
-        <select
+        <FieldSelect
           value={scope}
           onChange={(event) => setScope(event.target.value as SettingsScope)}
           disabled={busy !== null}
-          className="mt-2 h-9 w-full rounded-md border border-white/10 bg-anvil-900 px-3 text-sm text-anvil-50 outline-none focus:border-circuit-300/60 focus:ring-2 focus:ring-circuit-300/20"
+          className="mt-2 h-9 w-full"
         >
           {SCOPES.map((candidate) => (
             <option key={candidate} value={candidate}>
               {t(scopeKey(candidate))}
             </option>
           ))}
-        </select>
+        </FieldSelect>
       </label>
 
       {confirmReset ? (

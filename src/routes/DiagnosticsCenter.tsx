@@ -11,7 +11,7 @@ import {
   type WipeDiagnosticsResult,
 } from "../lib/tauri";
 import { useFocusTrap } from "../lib/useFocusTrap";
-import { Badge, Button, SkeletonLine, StatePanel } from "./common";
+import { Badge, Button, FieldTextArea, SkeletonLine, StatePanel } from "./common";
 import BugreportCapture from "./BugreportCapture";
 import HostDoctor from "./HostDoctor";
 import SettingsDataControls from "./SettingsDataControls";
@@ -220,12 +220,12 @@ export default function DiagnosticsCenter({
               <span className="text-xs font-medium text-anvil-300">
                 {t("diagnostics.preview")}
               </span>
-              <textarea
+              <FieldTextArea
                 readOnly
                 value={state.preview.content}
                 rows={20}
                 aria-label={t("diagnostics.preview")}
-                className="mt-2 w-full resize-y rounded-md border border-white/10 bg-black/35 p-3 font-mono text-xs leading-5 text-anvil-200 outline-none focus:border-circuit-300/60 focus:ring-2 focus:ring-circuit-300/20"
+                className="mt-2 resize-y bg-black/35 p-3 font-mono text-xs leading-5 text-anvil-200"
               />
             </label>
           </>

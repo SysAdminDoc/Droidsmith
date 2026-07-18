@@ -52,6 +52,8 @@ import {
   Card,
   EmptyState,
   FieldInput,
+  FieldSelect,
+  FieldTextArea,
   PaneHeader,
   RevealInFolderButton,
   SkeletonLine,
@@ -820,12 +822,12 @@ function RecoveryDialog({
             >
               {t("devices.health.copyableDiagnostics")}
             </label>
-            <textarea
+            <FieldTextArea
               id="adb-recovery-diagnostics"
               readOnly
               value={diagnostics}
               rows={11}
-              className="mt-2 w-full resize-y rounded-md border border-white/10 bg-black/30 p-3 font-mono text-xs leading-5 text-anvil-200 outline-none focus:border-circuit-300/60 focus:ring-2 focus:ring-circuit-300/20"
+              className="mt-2 resize-y bg-black/30 p-3 font-mono text-xs leading-5 text-anvil-200"
             />
             {copyStatus && (
               <p className="mt-2 text-xs text-anvil-400">{copyStatus}</p>
@@ -875,7 +877,7 @@ function DeviceToolbar({
 
   return (
     <div className="mt-4 flex flex-col gap-3 border-b border-white/[0.08] pb-4 sm:flex-row sm:items-center">
-      <select
+      <FieldSelect
         aria-label={t("common.selectDevice")}
         value={selectedDeviceKey ?? ""}
         onChange={(event) => {
@@ -886,7 +888,7 @@ function DeviceToolbar({
           );
           if (device) onSelect(device);
         }}
-        className="h-10 min-w-64 rounded-md border border-white/[0.08] bg-white/[0.045] px-3 text-sm font-medium text-anvil-100 outline-none transition hover:border-white/15 hover:bg-white/[0.065] focus:border-circuit-300/60 focus:ring-2 focus:ring-circuit-300/20"
+        className="min-w-64 font-medium"
       >
         <option value="" disabled>
           {t("common.selectDevice")}
@@ -903,7 +905,7 @@ function DeviceToolbar({
             {device.model ?? device.serial}
           </option>
         ))}
-      </select>
+      </FieldSelect>
       <span className="hidden h-7 w-px bg-white/[0.08] sm:block" />
       <Badge tone="success">{t("devices.adbReady")}</Badge>
     </div>

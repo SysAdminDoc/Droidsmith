@@ -31,6 +31,8 @@ import {
   Card,
   EmptyState,
   FieldInput,
+  FieldSelect,
+  FieldTextArea,
   PaneHeader,
   SkeletonLine,
   StatePanel,
@@ -509,8 +511,8 @@ function AuthorWorkspace(props: {
               />
             </LabeledField>
             <LabeledField label={t("profiles.descriptionLabel")}>
-              <textarea
-                className="min-h-24 rounded-md border border-white/10 bg-white/[0.06] px-3 py-2 text-sm text-anvil-50 outline-none placeholder:text-anvil-600 focus:border-circuit-300/60 focus:ring-2 focus:ring-circuit-300/20"
+              <FieldTextArea
+                className="min-h-24"
                 value={props.description}
                 onChange={(event) => props.setDescription(event.target.value)}
                 placeholder={t("profiles.descriptionPlaceholder")}
@@ -1069,14 +1071,14 @@ function SelectField({
   ariaLabel?: string;
 }) {
   return (
-    <select
+    <FieldSelect
       aria-label={ariaLabel}
-      className="h-9 rounded-md border border-white/10 bg-anvil-900 px-3 text-sm text-anvil-50 outline-none transition hover:border-white/20 focus:border-circuit-300/60 focus:ring-2 focus:ring-circuit-300/20"
+      className="h-9"
       value={value}
       onChange={(event) => onChange(event.target.value)}
     >
       {children}
-    </select>
+    </FieldSelect>
   );
 }
 

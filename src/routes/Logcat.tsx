@@ -45,6 +45,8 @@ import {
   Button,
   Card,
   FieldInput,
+  FieldSelect,
+  FieldTextArea,
   PaneHeader,
   StatePanel,
   TransportBadge,
@@ -526,7 +528,7 @@ export default function LogcatRoute() {
                 <span className="text-xs font-medium text-anvil-400">
                   {t("logcat.minLevel")}
                 </span>
-                <select
+                <FieldSelect
                   value={query.minLevel}
                   onChange={(e) =>
                     setQuery((q) => ({
@@ -534,14 +536,14 @@ export default function LogcatRoute() {
                       minLevel: e.target.value as WorkingQuery["minLevel"],
                     }))
                   }
-                  className="h-9 rounded-md border border-white/10 bg-white/[0.06] px-3 text-sm text-anvil-50 outline-none transition hover:border-white/20 focus:border-circuit-300/60 focus:ring-2 focus:ring-circuit-300/20"
+                  className="h-9"
                 >
                   {LOGCAT_LEVELS.map((l) => (
                     <option key={l} value={l}>
                       {t(levelNameKey(l))}
                     </option>
                   ))}
-                </select>
+                </FieldSelect>
               </label>
               <label className="grid gap-1.5">
                 <span className="text-xs font-medium text-anvil-400">
@@ -898,16 +900,16 @@ function QueryManager(props: QueryManagerProps) {
           <span className="text-xs font-medium text-anvil-400">
             {t("logcat.queries.scope")}
           </span>
-          <select
+          <FieldSelect
             value={props.saveScope}
             onChange={(e) =>
               props.onSaveScopeChange(e.target.value as LogcatQueryScope)
             }
-            className="h-9 rounded-md border border-white/10 bg-white/[0.06] px-3 text-sm text-anvil-50 outline-none focus:border-circuit-300/60 focus:ring-2 focus:ring-circuit-300/20"
+            className="h-9"
           >
             <option value="global">{t("logcat.queries.scopeGlobal")}</option>
             <option value="device">{t("logcat.queries.scopeDevice")}</option>
-          </select>
+          </FieldSelect>
         </label>
         <Button type="button" size="sm" onClick={props.onSaveCurrent}>
           {t("logcat.queries.save")}
@@ -916,12 +918,12 @@ function QueryManager(props: QueryManagerProps) {
 
       {props.transferOpen && (
         <div className="mt-4 rounded-md border border-white/10 bg-anvil-900/60 p-3">
-          <textarea
+          <FieldTextArea
             value={props.importText}
             onChange={(e) => props.onImportTextChange(e.target.value)}
             spellCheck={false}
             aria-label={t("logcat.queries.transfer")}
-            className="h-40 w-full rounded-md border border-white/10 bg-[#0c0d12] p-2 font-mono text-[11px] text-anvil-100 outline-none focus:border-circuit-300/60"
+            className="h-40 bg-[#0c0d12] p-2 font-mono text-[11px] text-anvil-100"
             placeholder={t("logcat.queries.importPlaceholder")}
           />
           <div className="mt-2 flex justify-end">

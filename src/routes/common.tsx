@@ -342,6 +342,40 @@ export function FieldInput({
   );
 }
 
+export function FieldSelect({
+  className,
+  ...props
+}: ComponentPropsWithoutRef<"select">) {
+  return (
+    <select
+      className={cn(
+        "h-10 rounded-md border border-white/[0.09] bg-white/[0.045] px-3 text-sm text-anvil-50 outline-none transition",
+        "hover:border-white/20 focus:border-circuit-300/60 focus:ring-2 focus:ring-circuit-300/20",
+        "disabled:cursor-not-allowed disabled:opacity-50",
+        className,
+      )}
+      {...props}
+    />
+  );
+}
+
+export function FieldTextArea({
+  className,
+  ...props
+}: ComponentPropsWithoutRef<"textarea">) {
+  return (
+    <textarea
+      className={cn(
+        "w-full rounded-md border border-white/[0.09] bg-white/[0.045] px-3 py-2 text-sm text-anvil-50 outline-none transition",
+        "placeholder:text-anvil-600 hover:border-white/20 focus:border-circuit-300/60 focus:ring-2 focus:ring-circuit-300/20",
+        "disabled:cursor-not-allowed disabled:opacity-50",
+        className,
+      )}
+      {...props}
+    />
+  );
+}
+
 export function EmptyState({
   title,
   children,

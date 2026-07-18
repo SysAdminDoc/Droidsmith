@@ -19,6 +19,7 @@ import {
   Button,
   Card,
   FieldInput,
+  FieldTextArea,
   PaneHeader,
   SkeletonLine,
   StatePanel,
@@ -613,13 +614,13 @@ function ActionStatus({ state }: { state: ActionState }) {
               <p className="mt-1 text-xs text-anvil-400">
                 {t("wireless.failureDiagnosticsPrivacy")}
               </p>
-              <textarea
+              <FieldTextArea
                 id="wireless-failure-diagnostics"
                 rows={8}
                 readOnly
                 spellCheck={false}
                 value={diagnostics}
-                className="mt-2 w-full resize-y rounded-md border border-white/10 bg-anvil-950/70 p-3 font-mono text-xs text-anvil-100 outline-none focus:border-circuit-300/60 focus:ring-2 focus:ring-circuit-300/20"
+                className="mt-2 resize-y bg-anvil-950/70 p-3 font-mono text-xs text-anvil-100"
               />
             </div>
           )}

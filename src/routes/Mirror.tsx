@@ -38,6 +38,7 @@ import {
   Button,
   Card,
   FieldInput,
+  FieldSelect,
   PaneHeader,
   RevealInFolderButton,
   StatePanel,
@@ -543,7 +544,7 @@ export default function MirrorRoute() {
                     <span className="text-xs font-medium text-anvil-400">
                       {t("mirror.videoCodec")}
                     </span>
-                    <select
+                    <FieldSelect
                       value={preset.videoCodec}
                       onChange={(event) =>
                         setPreset((previous) => ({
@@ -554,7 +555,6 @@ export default function MirrorRoute() {
                         }))
                       }
                       disabled={capabilityState.kind !== "ready"}
-                      className="h-10 rounded-md border border-white/[0.09] bg-white/[0.045] px-3 text-sm text-anvil-50 outline-none transition focus:border-circuit-300/60 focus:ring-2 focus:ring-circuit-300/20 disabled:opacity-50"
                     >
                       {(capabilityState.kind === "ready"
                         ? capabilityState.value.available_video_codecs
@@ -564,13 +564,13 @@ export default function MirrorRoute() {
                           {codec.toUpperCase()}
                         </option>
                       ))}
-                    </select>
+                    </FieldSelect>
                   </label>
                   <label className="grid gap-1.5">
                     <span className="text-xs font-medium text-anvil-400">
                       {t("mirror.videoEncoder")}
                     </span>
-                    <select
+                    <FieldSelect
                       value={preset.videoEncoder}
                       onChange={(event) =>
                         setPreset((previous) => ({
@@ -579,7 +579,7 @@ export default function MirrorRoute() {
                         }))
                       }
                       disabled={capabilityState.kind !== "ready"}
-                      className="h-10 rounded-md border border-white/[0.09] bg-white/[0.045] px-3 font-mono text-xs text-anvil-50 outline-none transition focus:border-circuit-300/60 focus:ring-2 focus:ring-circuit-300/20 disabled:opacity-50"
+                      className="font-mono text-xs"
                     >
                       <option value="">{t("mirror.encoderAutomatic")}</option>
                       {(capabilityState.kind === "ready"
@@ -595,7 +595,7 @@ export default function MirrorRoute() {
                             : ""}
                         </option>
                       ))}
-                    </select>
+                    </FieldSelect>
                   </label>
                   <label className="grid gap-1.5">
                     <span className="text-xs font-medium text-anvil-400">
@@ -618,7 +618,7 @@ export default function MirrorRoute() {
                     <span className="text-xs font-medium text-anvil-400">
                       {t("mirror.keyboardMode")}
                     </span>
-                    <select
+                    <FieldSelect
                       value={preset.keyboardMode}
                       onChange={(e) =>
                         setPreset((prev) => ({
@@ -626,14 +626,13 @@ export default function MirrorRoute() {
                           keyboardMode: e.target.value as KeyboardMode,
                         }))
                       }
-                      className="h-10 rounded-md border border-white/[0.09] bg-white/[0.045] px-3 text-sm text-anvil-50 outline-none transition focus:border-circuit-300/60 focus:ring-2 focus:ring-circuit-300/20"
                     >
                       {KEYBOARD_MODES.map((mode) => (
                         <option key={mode.value} value={mode.value}>
                           {t(mode.labelKey)}
                         </option>
                       ))}
-                    </select>
+                    </FieldSelect>
                   </label>
                 </div>
 
