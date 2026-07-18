@@ -418,6 +418,12 @@ export async function callSelectHostPath(
   return commands.selectHostPath(purpose, suggestedName ?? null);
 }
 
+export async function callGrantDroppedPath(
+  path: string,
+): Promise<HostPathGrant> {
+  return commands.grantDroppedPath(path);
+}
+
 export async function callRevealInFolder(path: string): Promise<void> {
   await commands.revealInFolder(path);
 }

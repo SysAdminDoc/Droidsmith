@@ -1423,6 +1423,45 @@ pub async fn select_host_path(
     Ok(Some(grants.issue(&selected_path, purpose)?))
 }
 
+/// Issue a one-shot path grant for a file dropped onto the window by the OS.
+/// Only `InstallOpen` purpose is accepted, and the path must exist, be absolute,
+/// and carry a supported extension (.apk, .apks, .xapk, .apkm). This does not
+/// bypass the grant model: the install command still consumes the grant normally.
+#[tauri::command]
+#[specta::specta]
+pub fn grant_dropped_path(
+    grants: tauri::State<'_, PathGrantStore>,
+    path: String,
+) -> Result<HostPathGrant, CommandError> {
+    let path = std::path::PathBuf::from(&path);
+    if !path.is_absolute() {
+        return Err(CommandError {
+            code: "dropped_path_relative",
+            message: "dropped path must be absolute".to_string(),
+        });
+    }
+    if !path.is_file() {
+        return Err(CommandError {
+            code: "dropped_path_not_file",
+            message: "dropped path does not exist or is not a regular file".to_string(),
+        });
+    }
+    let extension = path
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    if !matches!(extension.as_str(), "apk" | "apks" | "xapk" | "apkm") {
+        return Err(CommandError {
+            code: "dropped_path_wrong_type",
+            message: format!(
+                "dropped file must be an Android package (.apk, .apks, .xapk, .apkm), got .{extension}"
+            ),
+        });
+    }
+    Ok(grants.issue(&path, HostPathPurpose::InstallOpen)?)
+}
+
 /// Open the OS file manager at an artifact Droidsmith produced this session.
 /// `path` must equal a save-dialog destination the backend itself issued; any
 /// other renderer-supplied path is rejected, so the renderer can never drive an

@@ -28,7 +28,9 @@ import {
   callPlanActionBatch,
   callPreflightPackageBackup,
   callSelectHostPath,
+  callGrantDroppedPath,
   callSetPermission,
+  inTauri,
   deviceTarget,
   newOperationId,
   type ActionKind,
@@ -757,6 +759,44 @@ export default function AppsRoute() {
         message: errorMessage(error),
       });
     }
+  }, [incrementalInstall, runInstall, selectedDevice]);
+
+  useEffect(() => {
+    if (!inTauri() || !selectedDevice) return;
+    let cancelled = false;
+    let unlisten: (() => void) | undefined;
+    void import("@tauri-apps/api/webview").then(({ getCurrentWebview }) => {
+      if (cancelled) return;
+      void getCurrentWebview()
+        .onDragDropEvent(async (event) => {
+          if (event.payload.type !== "drop" || cancelled) return;
+          const apkPaths = event.payload.paths.filter((p) => {
+            const ext = p.split(".").pop()?.toLowerCase() ?? "";
+            return ["apk", "apks", "xapk", "apkm"].includes(ext);
+          });
+          if (apkPaths.length === 0) return;
+          const path = apkPaths[0];
+          try {
+            const grant = await callGrantDroppedPath(path);
+            await runInstall(grant.id, grant.local_path, {
+              incremental: incrementalInstall,
+            });
+          } catch (error) {
+            setInstallState({
+              kind: "error",
+              message: errorMessage(error),
+            });
+          }
+        })
+        .then((fn) => {
+          if (cancelled) fn();
+          else unlisten = fn;
+        });
+    });
+    return () => {
+      cancelled = true;
+      unlisten?.();
+    };
   }, [incrementalInstall, runInstall, selectedDevice]);
 
   const cancelInstall = useCallback(async () => {

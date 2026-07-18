@@ -158,6 +158,15 @@ export const commands = {
     });
   },
   /**
+   * Issue a one-shot path grant for a file dropped onto the window by the OS.
+   * Only `InstallOpen` purpose is accepted, and the path must exist, be absolute,
+   * and carry a supported extension (.apk, .apks, .xapk, .apkm). This does not
+   * bypass the grant model: the install command still consumes the grant normally.
+   */
+  async grantDroppedPath(path: string): Promise<HostPathGrant> {
+    return await TAURI_INVOKE("grant_dropped_path", { path });
+  },
+  /**
    * Open the OS file manager at an artifact Droidsmith produced this session.
    * `path` must equal a save-dialog destination the backend itself issued; any
    * other renderer-supplied path is rejected, so the renderer can never drive an
