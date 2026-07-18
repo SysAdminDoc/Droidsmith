@@ -457,7 +457,7 @@ export default function LogcatRoute() {
         }
       />
 
-      <section className="mt-6 max-w-6xl space-y-4">
+      <section className="mt-6 max-w-7xl space-y-4">
         {devicesState.kind === "no_tauri" && (
           <StatePanel title={t("common.desktopRequired")} tone="info">
             <p>{t("logcat.desktopRequiredBody")}</p>

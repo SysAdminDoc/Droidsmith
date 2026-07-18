@@ -160,7 +160,7 @@ export default function FastbootRoute() {
         }
       />
 
-      <section className="mt-6 max-w-5xl space-y-4">
+      <section className="mt-6 max-w-7xl space-y-4">
         {fbState.kind === "not_found" && (
           <StatePanel title={t("fastboot.fastbootMissing")} tone="warning">
             <p>

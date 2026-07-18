@@ -210,7 +210,7 @@ export default function DevicesRoute() {
           />
         )}
 
-      <section className="mt-4 max-w-[88rem]" aria-live="polite">
+      <section className="mt-4 max-w-7xl" aria-live="polite">
         {state.kind === "ok" && state.value.adb_resolved && (
           <AdbHealthPanel
             health={health}
@@ -390,7 +390,7 @@ export default function DevicesRoute() {
       </section>
 
       {detail.kind === "ok" && (
-        <section className="mt-4 max-w-[88rem] space-y-4" aria-live="polite">
+        <section className="mt-4 max-w-7xl space-y-4" aria-live="polite">
           {/* Key by serial so every sub-panel's internal state (process list,
               file listing, network sockets, screenshot/density messages)
               resets on device switch. */}
@@ -400,7 +400,7 @@ export default function DevicesRoute() {
           />
         </section>
       )}
-      <div className="mt-4 max-w-[88rem]">
+      <div className="mt-4 max-w-7xl">
         <HostDoctor />
       </div>
       {recoveryOpen && (
