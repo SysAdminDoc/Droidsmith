@@ -167,6 +167,14 @@ export const commands = {
     return await TAURI_INVOKE("grant_dropped_path", { path });
   },
   /**
+   * Disconnect a device safely. Wireless devices are disconnected via
+   * `adb disconnect`; USB devices cannot be disconnected programmatically
+   * but the user is advised that it is safe to unplug.
+   */
+  async disconnectDevice(target: DeviceTarget): Promise<DisconnectResult> {
+    return await TAURI_INVOKE("disconnect_device", { target });
+  },
+  /**
    * Open the OS file manager at an artifact Droidsmith produced this session.
    * `path` must equal a save-dialog destination the backend itself issued; any
    * other renderer-supplied path is rejected, so the renderer can never drive an
@@ -1212,6 +1220,11 @@ export type DeviceTransportKind =
   | "tls_wifi"
   | "legacy_tcp"
   | "unknown_tcp";
+export type DisconnectResult = {
+  serial: string;
+  disconnected: boolean;
+  message: string;
+};
 /**
  * Request shape for [`explain_failure`].
  */

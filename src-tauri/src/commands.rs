@@ -1462,6 +1462,46 @@ pub fn grant_dropped_path(
     Ok(grants.issue(&path, HostPathPurpose::InstallOpen)?)
 }
 
+#[derive(specta::Type, Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DisconnectResult {
+    pub serial: String,
+    pub disconnected: bool,
+    pub message: String,
+}
+
+/// Disconnect a device safely. Wireless devices are disconnected via
+/// `adb disconnect`; USB devices cannot be disconnected programmatically
+/// but the user is advised that it is safe to unplug.
+#[tauri::command]
+#[specta::specta]
+pub fn disconnect_device(
+    target: adb::DeviceTarget,
+) -> Result<DisconnectResult, CommandError> {
+    let (transport, _) = privileged_transport(&target)?;
+    if target.transport_kind == adb::DeviceTransportKind::Usb {
+        return Ok(DisconnectResult {
+            serial: target.serial,
+            disconnected: false,
+            message: "USB device cannot be disconnected via ADB. It is safe to unplug the cable."
+                .to_string(),
+        });
+    }
+    let result = transport.adb(&["disconnect", &target.serial]);
+    match result {
+        Ok(stdout) => Ok(DisconnectResult {
+            serial: target.serial,
+            disconnected: true,
+            message: stdout.trim().to_string(),
+        }),
+        Err(error) => Ok(DisconnectResult {
+            serial: target.serial,
+            disconnected: false,
+            message: format!("disconnect failed: {error}"),
+        }),
+    }
+}
+
 /// Open the OS file manager at an artifact Droidsmith produced this session.
 /// `path` must equal a save-dialog destination the backend itself issued; any
 /// other renderer-supplied path is rejected, so the renderer can never drive an

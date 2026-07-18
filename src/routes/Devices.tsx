@@ -15,6 +15,7 @@ import {
   callCaptureLayout,
   callPushFile,
   callPlanRemoteFileMutation,
+  callDisconnectDevice,
   callRecoverAdb,
   callSaveLayoutExport,
   callSelectHostPath,
@@ -1105,6 +1106,28 @@ function DeviceDetail({
   onRetry: (target: DeviceTarget) => void;
 }) {
   const { t } = useTranslation();
+  const [disconnectMessage, setDisconnectMessage] = useState<string | null>(
+    null,
+  );
+  const doDisconnect = useCallback(
+    async (target: DeviceTarget) => {
+      try {
+        const result = await callDisconnectDevice(target);
+        if (result.disconnected) {
+          setDisconnectMessage(t("devices.disconnectSuccess"));
+        } else {
+          setDisconnectMessage(result.message);
+        }
+      } catch (error) {
+        setDisconnectMessage(
+          t("devices.disconnectFailed", {
+            message: errorMessage(error),
+          }),
+        );
+      }
+    },
+    [t],
+  );
 
   if (state.kind === "idle") return null;
 
@@ -1156,12 +1179,27 @@ function DeviceDetail({
       className="border-b border-white/[0.08] py-5"
       aria-labelledby="device-details-title"
     >
-      <h3
-        id="device-details-title"
-        className="text-sm font-semibold text-anvil-50"
-      >
-        {t("devices.detailTitle")}
-      </h3>
+      <div className="flex items-center justify-between">
+        <h3
+          id="device-details-title"
+          className="text-sm font-semibold text-anvil-50"
+        >
+          {t("devices.detailTitle")}
+        </h3>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={() => void doDisconnect(state.target)}
+        >
+          {t("devices.disconnect")}
+        </Button>
+      </div>
+      {disconnectMessage && (
+        <p role="status" className="mt-2 text-xs text-anvil-300">
+          {disconnectMessage}
+        </p>
+      )}
       <dl className="mt-4 grid gap-x-10 gap-y-4 sm:grid-cols-2 lg:grid-cols-3">
         <InfoField
           label={t("devices.model")}

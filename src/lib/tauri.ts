@@ -21,6 +21,7 @@ import {
   type DeviceLifecycleEvent,
   type DeviceState,
   type DeviceTarget as GeneratedDeviceTarget,
+  type DisconnectResult,
   type FastbootDevice,
   type Heartbeat,
   type HostArtifact,
@@ -422,6 +423,12 @@ export async function callGrantDroppedPath(
   path: string,
 ): Promise<HostPathGrant> {
   return commands.grantDroppedPath(path);
+}
+
+export async function callDisconnectDevice(
+  target: DeviceTarget,
+): Promise<DisconnectResult> {
+  return commands.disconnectDevice(target);
 }
 
 export async function callRevealInFolder(path: string): Promise<void> {
