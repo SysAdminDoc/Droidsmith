@@ -1406,6 +1406,8 @@ export type LaunchScrcpyRequest = {
   turn_screen_off: boolean;
   stay_awake: boolean;
   show_touches: boolean;
+  flex_display: boolean;
+  keep_active: boolean;
 };
 /**
  * One node of a `uiautomator dump` UI hierarchy, flattened with its nesting
@@ -1509,6 +1511,8 @@ export type MirrorPreset = {
   turnScreenOff: boolean;
   stayAwake: boolean;
   showTouches: boolean;
+  flexDisplay?: boolean;
+  keepActive?: boolean;
 };
 export type Mitigation =
   /**
@@ -1970,6 +1974,8 @@ export type ScrcpyCapabilities = {
   video_encoders: ScrcpyVideoEncoder[];
   probe_warning: string | null;
   cache_hit: boolean;
+  supports_flex_display: boolean;
+  supports_keep_active: boolean;
 };
 export type ScrcpyExitReason =
   | "user_stopped"

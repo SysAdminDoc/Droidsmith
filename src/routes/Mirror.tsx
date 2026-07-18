@@ -306,6 +306,8 @@ export default function MirrorRoute() {
           turn_screen_off: preset.turnScreenOff,
           stay_awake: preset.stayAwake,
           show_touches: preset.showTouches,
+          flex_display: preset.flexDisplay,
+          keep_active: preset.keepActive,
         },
         recordingGrant?.id,
       );
@@ -674,6 +676,32 @@ export default function MirrorRoute() {
                     }
                     label={t("mirror.showTouches")}
                   />
+                  {capabilityState.kind === "ready" &&
+                    capabilityState.value.supports_flex_display && (
+                      <Toggle
+                        checked={preset.flexDisplay}
+                        onChange={(checked) =>
+                          setPreset((prev) => ({
+                            ...prev,
+                            flexDisplay: checked,
+                          }))
+                        }
+                        label={t("mirror.flexDisplay")}
+                      />
+                    )}
+                  {capabilityState.kind === "ready" &&
+                    capabilityState.value.supports_keep_active && (
+                      <Toggle
+                        checked={preset.keepActive}
+                        onChange={(checked) =>
+                          setPreset((prev) => ({
+                            ...prev,
+                            keepActive: checked,
+                          }))
+                        }
+                        label={t("mirror.keepActive")}
+                      />
+                    )}
                 </div>
 
                 {preset.recording && (

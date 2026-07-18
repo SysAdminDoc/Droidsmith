@@ -12,6 +12,8 @@ export type MirrorPreset = {
   turnScreenOff: boolean;
   stayAwake: boolean;
   showTouches: boolean;
+  flexDisplay: boolean;
+  keepActive: boolean;
 };
 
 export const DEFAULT_MIRROR_PRESET: MirrorPreset = {
@@ -25,6 +27,8 @@ export const DEFAULT_MIRROR_PRESET: MirrorPreset = {
   turnScreenOff: false,
   stayAwake: false,
   showTouches: false,
+  flexDisplay: false,
+  keepActive: false,
 };
 
 export const LEGACY_MIRROR_PRESET_PREFIX = "droidsmith.mirror.preset.";
@@ -70,6 +74,14 @@ export function normalizePreset(value: Partial<MirrorPreset>): MirrorPreset {
       typeof value.showTouches === "boolean"
         ? value.showTouches
         : DEFAULT_MIRROR_PRESET.showTouches,
+    flexDisplay:
+      typeof value.flexDisplay === "boolean"
+        ? value.flexDisplay
+        : DEFAULT_MIRROR_PRESET.flexDisplay,
+    keepActive:
+      typeof value.keepActive === "boolean"
+        ? value.keepActive
+        : DEFAULT_MIRROR_PRESET.keepActive,
   };
 }
 

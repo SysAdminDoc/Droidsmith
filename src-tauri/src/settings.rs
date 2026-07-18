@@ -67,6 +67,10 @@ pub struct MirrorPreset {
     pub turn_screen_off: bool,
     pub stay_awake: bool,
     pub show_touches: bool,
+    #[serde(default)]
+    pub flex_display: bool,
+    #[serde(default)]
+    pub keep_active: bool,
 }
 
 impl Default for MirrorPreset {
@@ -82,6 +86,8 @@ impl Default for MirrorPreset {
             turn_screen_off: false,
             stay_awake: false,
             show_touches: false,
+            flex_display: false,
+            keep_active: false,
         }
     }
 }
@@ -816,6 +822,8 @@ fn normalize_legacy_preset(value: LegacyMirrorPreset) -> MirrorPreset {
         turn_screen_off: value.turn_screen_off.unwrap_or(defaults.turn_screen_off),
         stay_awake: value.stay_awake.unwrap_or(defaults.stay_awake),
         show_touches: value.show_touches.unwrap_or(defaults.show_touches),
+        flex_display: defaults.flex_display,
+        keep_active: defaults.keep_active,
     }
 }
 

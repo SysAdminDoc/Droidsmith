@@ -30,6 +30,8 @@ pub struct LaunchScrcpyRequest {
     pub turn_screen_off: bool,
     pub stay_awake: bool,
     pub show_touches: bool,
+    pub flex_display: bool,
+    pub keep_active: bool,
 }
 
 #[derive(specta::Type, Debug, Clone, Serialize, PartialEq, Eq)]
@@ -47,6 +49,8 @@ pub struct ScrcpyCapabilities {
     pub video_encoders: Vec<ScrcpyVideoEncoder>,
     pub probe_warning: Option<String>,
     pub cache_hit: bool,
+    pub supports_flex_display: bool,
+    pub supports_keep_active: bool,
 }
 
 #[derive(specta::Type, Debug, Clone, Serialize, PartialEq, Eq)]
@@ -251,6 +255,7 @@ pub fn capabilities(
         available_video_codecs.push("h264".to_string());
     }
 
+    let version_at_least_4 = version_gte(&version, 4, 0);
     let value = ScrcpyCapabilities {
         path: scrcpy_path.display().to_string(),
         version,
@@ -258,6 +263,8 @@ pub fn capabilities(
         video_encoders,
         probe_warning: (!warnings.is_empty()).then(|| warnings.join(" ")),
         cache_hit: false,
+        supports_flex_display: version_at_least_4,
+        supports_keep_active: version_at_least_4,
     };
     let mut cache = capability_cache()
         .lock()
@@ -483,6 +490,18 @@ pub fn build_args(
     if request.show_touches {
         args.push("--show-touches".to_string());
     }
+    if request.flex_display {
+        if !version_gte(&capabilities.version, 4, 0) {
+            return Err("flex display requires scrcpy 4.0 or later".to_string());
+        }
+        args.push("--flex-display".to_string());
+    }
+    if request.keep_active {
+        if !version_gte(&capabilities.version, 4, 0) {
+            return Err("keep active requires scrcpy 4.0 or later".to_string());
+        }
+        args.push("--keep-active".to_string());
+    }
     Ok(args)
 }
 
@@ -649,6 +668,19 @@ fn classify_exit_reason(code: Option<i32>, stderr: &str) -> ScrcpyExitReason {
     }
 }
 
+fn version_gte(version: &str, major: u32, minor: u32) -> bool {
+    let mut parts = version.split('.');
+    let parsed_major = parts
+        .next()
+        .and_then(|s| s.parse::<u32>().ok())
+        .unwrap_or(0);
+    let parsed_minor = parts
+        .next()
+        .and_then(|s| s.parse::<u32>().ok())
+        .unwrap_or(0);
+    (parsed_major, parsed_minor) >= (major, minor)
+}
+
 fn probe_failure_text(output: &ProbeOutput) -> String {
     let text = sanitize_log(&output.combined());
     if text.trim().is_empty() {
@@ -718,6 +750,8 @@ mod tests {
             turn_screen_off: true,
             stay_awake: true,
             show_touches: true,
+            flex_display: false,
+            keep_active: false,
         }
     }
 
@@ -733,6 +767,8 @@ mod tests {
             }],
             probe_warning: None,
             cache_hit: false,
+            supports_flex_display: true,
+            supports_keep_active: true,
         }
     }
 
@@ -827,6 +863,51 @@ mod tests {
         assert!(build_args(&request, None, &capabilities())
             .unwrap_err()
             .contains("unsupported scrcpy keyboard mode"));
+    }
+
+    #[test]
+    fn emits_flex_display_and_keep_active_for_scrcpy_4() {
+        let mut req = request();
+        req.flex_display = true;
+        req.keep_active = true;
+        let args = build_args(&req, None, &capabilities()).unwrap();
+        assert!(args.contains(&"--flex-display".to_string()));
+        assert!(args.contains(&"--keep-active".to_string()));
+    }
+
+    #[test]
+    fn rejects_flex_display_on_old_scrcpy() {
+        let mut caps = capabilities();
+        caps.version = "3.3.4".to_string();
+        caps.supports_flex_display = false;
+        caps.supports_keep_active = false;
+        let mut req = request();
+        req.flex_display = true;
+        assert!(build_args(&req, None, &caps)
+            .unwrap_err()
+            .contains("scrcpy 4.0"));
+    }
+
+    #[test]
+    fn rejects_keep_active_on_old_scrcpy() {
+        let mut caps = capabilities();
+        caps.version = "3.3.4".to_string();
+        caps.supports_flex_display = false;
+        caps.supports_keep_active = false;
+        let mut req = request();
+        req.keep_active = true;
+        assert!(build_args(&req, None, &caps)
+            .unwrap_err()
+            .contains("scrcpy 4.0"));
+    }
+
+    #[test]
+    fn version_comparison() {
+        assert!(super::version_gte("4.0", 4, 0));
+        assert!(super::version_gte("4.1", 4, 0));
+        assert!(super::version_gte("5.0", 4, 0));
+        assert!(!super::version_gte("3.3.4", 4, 0));
+        assert!(!super::version_gte("3.99", 4, 0));
     }
 
     #[test]
