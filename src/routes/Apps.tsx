@@ -1814,7 +1814,7 @@ function FilterChips({
             "rounded-md border px-3 py-1.5 text-xs font-medium transition",
             "focus:outline-none focus-visible:ring-2 focus-visible:ring-circuit-300",
             active === f.value
-              ? "border-circuit-300/30 bg-circuit-300/12 text-circuit-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]"
+              ? "border-circuit-300/30 bg-circuit-300/12 text-circuit-100 shadow-panel"
               : "border-transparent text-anvil-300 hover:bg-white/[0.05] hover:text-anvil-100",
           ].join(" ")}
         >

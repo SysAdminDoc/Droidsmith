@@ -193,7 +193,7 @@ export default function WirelessRoute() {
         <Card className="p-5">
           <div className="flex flex-col gap-5 lg:flex-row xl:flex-col 2xl:flex-row">
             <div className="shrink-0">
-              <div className="grid aspect-square w-full max-w-52 place-items-center rounded-lg bg-slate-50 p-3 shadow-[0_20px_55px_rgba(0,0,0,0.28)]">
+              <div className="grid aspect-square w-full max-w-52 place-items-center rounded-lg bg-slate-50 p-3 shadow-glow">
                 {qrDataUrl ? (
                   <img
                     src={qrDataUrl}
