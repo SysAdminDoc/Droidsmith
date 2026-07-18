@@ -21,9 +21,9 @@ use tauri::Manager;
 use crate::adb::device::valid_serial;
 use crate::adb::packages::valid_package_name;
 use crate::adb::parsers::{
-    parse_fastboot_devices, parse_ls_output, parse_ps_output, parse_ss_output,
-    parse_uiautomator_dump, FastbootDevice, LayoutNode, NetworkConnection, ProcessInfo,
-    RemoteFileEntry,
+    parse_fastboot_devices, parse_ls_output, parse_ps_output, parse_running_services,
+    parse_ss_output, parse_uiautomator_dump, FastbootDevice, LayoutNode, NetworkConnection,
+    ProcessInfo, RemoteFileEntry, RunningService,
 };
 use crate::adb::transport::AdbTransport;
 use crate::adb::{self, actions};
@@ -3148,6 +3148,27 @@ pub fn list_processes(target: adb::DeviceTarget) -> Result<Vec<ProcessInfo>, Com
     let transport = validated_transport(&target)?;
     let stdout = transport.shell_target(&target, &["ps", "-A", "-o", "PID,USER,VSZ,RSS,NAME"])?;
     Ok(parse_ps_output(&stdout))
+}
+
+/// Running services for a specific package on the device, parsed from
+/// `dumpsys activity services <package>`.
+#[tauri::command]
+#[specta::specta]
+pub fn list_running_services(
+    target: adb::DeviceTarget,
+    package: String,
+) -> Result<Vec<RunningService>, CommandError> {
+    if !valid_package_name(&package) {
+        return Err(CommandError {
+            code: "invalid_package",
+            message: "invalid package name".to_string(),
+        });
+    }
+    let transport = validated_transport(&target)?;
+    let stdout = transport
+        .shell_target(&target, &["dumpsys", "activity", "services", &package])
+        .unwrap_or_default();
+    Ok(parse_running_services(&stdout))
 }
 
 /// A read-only snapshot of the current on-screen UI hierarchy plus the raw

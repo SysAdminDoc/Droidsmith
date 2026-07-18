@@ -55,6 +55,7 @@ import {
   type PlannedAction as GeneratedPlannedAction,
   type PlannedPack as GeneratedPlannedPack,
   type ProcessInfo,
+  type RunningService,
   type Profile,
   type ProfilePreview,
   type RecoveryBaselineDiff as GeneratedRecoveryBaselineDiff,
@@ -812,6 +813,13 @@ export async function callListProcesses(
   target: DeviceTarget,
 ): Promise<ProcessInfo[]> {
   return commands.listProcesses(target);
+}
+
+export async function callListRunningServices(
+  target: DeviceTarget,
+  pkg: string,
+): Promise<RunningService[]> {
+  return commands.listRunningServices(target, pkg);
 }
 
 export async function callTakeScreenshot(

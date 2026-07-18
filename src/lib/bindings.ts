@@ -610,6 +610,19 @@ export const commands = {
     return await TAURI_INVOKE("list_processes", { target });
   },
   /**
+   * Running services for a specific package on the device, parsed from
+   * `dumpsys activity services <package>`.
+   */
+  async listRunningServices(
+    target: DeviceTarget,
+    packageName: string,
+  ): Promise<RunningService[]> {
+    return await TAURI_INVOKE("list_running_services", {
+      target,
+      package: packageName,
+    });
+  },
+  /**
    * Take a screenshot on the device and pull it to a local path.
    */
   async takeScreenshot(
@@ -1988,6 +2001,7 @@ export type ResolveSource =
    * Not found anywhere we know to look.
    */
   | "not_found";
+export type RunningService = { component: string };
 export type SavedResult = {
   path: string;
   byte_size: number;

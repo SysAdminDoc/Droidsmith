@@ -435,6 +435,31 @@ fn degraded_process(line: &str) -> ProcessInfo {
     }
 }
 
+#[derive(specta::Type, Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct RunningService {
+    pub component: String,
+}
+
+pub fn parse_running_services(stdout: &str) -> Vec<RunningService> {
+    let mut services = Vec::new();
+    for line in stdout.lines() {
+        let trimmed = line.trim();
+        if let Some(rest) = trimmed.strip_prefix("* ServiceRecord{") {
+            let tokens: Vec<&str> = rest.split_whitespace().collect();
+            let component = tokens
+                .iter()
+                .find(|t| t.contains('/'))
+                .map(|t| t.trim_end_matches('}'));
+            if let Some(component) = component {
+                services.push(RunningService {
+                    component: component.to_string(),
+                });
+            }
+        }
+    }
+    services
+}
+
 /// One node of a `uiautomator dump` UI hierarchy, flattened with its nesting
 /// `depth` so the renderer can indent it. Malformed structure yields a node
 /// with `parse_error` set instead of being silently dropped.
@@ -767,5 +792,27 @@ u0_a55 789 1 51200 4096 0 0 S com.samsung.android.app
         assert_eq!(emulator[0].pid, 0);
         assert!(emulator[0].parse_error.is_some());
         assert!(parse_ps_output("").is_empty());
+    }
+
+    #[test]
+    fn parses_running_service_records() {
+        let output = r#"ACTIVITY MANAGER SERVICES (dumpsys activity services)
+  User 0 active services:
+  * ServiceRecord{abc1234 u0 com.example.app/.sync.SyncService}
+    intent={cmp=com.example.app/.sync.SyncService}
+    packageName=com.example.app
+    processName=com.example.app
+    app=ProcessRecord{def5678 1234:com.example.app/u0a55}
+  * ServiceRecord{ghi9012 u0 com.example.app/.push.PushService}
+    intent={cmp=com.example.app/.push.PushService}
+    packageName=com.example.app
+    processName=com.example.app:push
+"#;
+        let services = parse_running_services(output);
+        assert_eq!(services.len(), 2);
+        assert_eq!(services[0].component, "com.example.app/.sync.SyncService");
+        assert_eq!(services[1].component, "com.example.app/.push.PushService");
+        assert!(parse_running_services("").is_empty());
+        assert!(parse_running_services("No services\n").is_empty());
     }
 }
