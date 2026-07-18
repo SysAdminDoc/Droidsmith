@@ -563,7 +563,7 @@ fn run_probe(program: &Path, args: &[&str], timeout: Duration) -> Result<ProbeOu
     })
 }
 
-fn parse_version(output: &str) -> Option<String> {
+pub(crate) fn parse_version(output: &str) -> Option<String> {
     output.lines().find_map(|line| {
         let mut fields = line.split_whitespace();
         (fields.next()?.eq_ignore_ascii_case("scrcpy"))
@@ -576,7 +576,7 @@ fn parse_version(output: &str) -> Option<String> {
     })
 }
 
-fn parse_tool_video_codecs(output: &str) -> Vec<String> {
+pub(crate) fn parse_tool_video_codecs(output: &str) -> Vec<String> {
     const CODECS: [&str; 5] = ["h264", "h265", "av1", "vp8", "vp9"];
     let lower = output.to_ascii_lowercase();
     let Some(start) = lower.find("select a video codec") else {
@@ -602,7 +602,7 @@ fn parse_tool_video_codecs(output: &str) -> Vec<String> {
     }
 }
 
-fn parse_video_encoders(output: &str) -> Vec<ScrcpyVideoEncoder> {
+pub(crate) fn parse_video_encoders(output: &str) -> Vec<ScrcpyVideoEncoder> {
     let mut encoders = Vec::new();
     for line in output.lines() {
         let Some(codec) = option_value(line, "--video-codec=") else {

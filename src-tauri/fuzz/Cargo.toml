@@ -35,3 +35,10 @@ path = "fuzz_targets/journal_jsonl.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "scrcpy_text"
+path = "fuzz_targets/scrcpy_text.rs"
+test = false
+doc = false
+bench = false
