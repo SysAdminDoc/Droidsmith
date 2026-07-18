@@ -4,7 +4,7 @@
 
 <h1 align="center">Droidsmith</h1>
 
-![Version](https://img.shields.io/badge/version-0.6.0-cyan)
+![Version](https://img.shields.io/badge/version-0.7.0-cyan)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Platforms](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-blue)
 
@@ -102,7 +102,7 @@ ADB front end, but it has hard limits that an open project can fix:
 | Wireless ADB | Manual `adb pair` in console | First-class Android 11+ pairing, exact mDNS TLS provenance, explicit legacy/unknown TCP warnings, and privacy-bounded VPN/mDNS failure guidance |
 | Automation | None | GUI-authored YAML profiles, explicit v1 migration, live dry-run diffs, and a JSON-capable headless CLI |
 | Extensibility | None | Versioned local pack, quirk, and profile schemas; plugin API and marketplace are deferred |
-| i18n | EN + RU | i18next-driven, contributor-friendly |
+| i18n | EN + RU | i18next-driven (DE, EN, ES, RU, ZH), contributor-friendly |
 | Multi-device | One at a time | Device selector and per-device workflows; side-by-side device tabs remain planned |
 
 ## Current tech stack
