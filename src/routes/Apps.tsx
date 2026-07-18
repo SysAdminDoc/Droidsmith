@@ -2754,6 +2754,7 @@ function RecoveryBaselinePanel({
 
   const { diff } = state;
   const ready = diff.rows.filter((row) => row.status === "ready").length;
+  const drifted = diff.rows.filter((row) => row.status === "drifted").length;
   const skipped = diff.rows.filter((row) => row.status === "skipped").length;
   const matching = diff.rows.filter(
     (row) => row.status === "already_matches",
@@ -2794,6 +2795,11 @@ function RecoveryBaselinePanel({
               : t("apps.recoveryBuildChanged")}
           </Badge>
           <Badge tone="info">{t("apps.recoveryReady", { count: ready })}</Badge>
+          {drifted > 0 && (
+            <Badge tone="danger">
+              {t("apps.recoveryDrifted", { count: drifted })}
+            </Badge>
+          )}
           <Badge tone="neutral">
             {t("apps.recoveryMatching", { count: matching })}
           </Badge>
@@ -2831,9 +2837,11 @@ function RecoveryBaselinePanel({
                     tone={
                       row.status === "ready"
                         ? "info"
-                        : row.status === "skipped"
-                          ? "warning"
-                          : "success"
+                        : row.status === "drifted"
+                          ? "danger"
+                          : row.status === "skipped"
+                            ? "warning"
+                            : "success"
                     }
                   >
                     {t(`apps.recoveryStatus.${row.status}`)}

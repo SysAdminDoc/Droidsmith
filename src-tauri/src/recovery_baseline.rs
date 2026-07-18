@@ -97,6 +97,7 @@ pub struct BaselineCompatibility {
 pub enum BaselineDiffStatus {
     Ready,
     AlreadyMatches,
+    Drifted,
     Skipped,
 }
 
@@ -332,12 +333,25 @@ pub fn inspect(
                 "package changed between system and user-installed classification",
             )
         } else if current.map(|entry| entry.enabled) == package.enabled {
-            (
-                BaselineDiffStatus::AlreadyMatches,
-                None,
-                "live package already matches the pre-change baseline".to_string(),
-                None,
-            )
+            let action_would_change_enabled = matches!(
+                (package.requested_action, package.enabled),
+                (ActionKind::Disable, Some(true)) | (ActionKind::Enable, Some(false))
+            );
+            if action_would_change_enabled {
+                (
+                    BaselineDiffStatus::Drifted,
+                    Some("post_change_reverted"),
+                    "package state was reverted, likely by a system update".to_string(),
+                    Some(package.requested_action),
+                )
+            } else {
+                (
+                    BaselineDiffStatus::AlreadyMatches,
+                    None,
+                    "live package already matches the pre-change baseline".to_string(),
+                    None,
+                )
+            }
         } else {
             let kind = if package.enabled == Some(true) {
                 ActionKind::Enable
@@ -712,6 +726,61 @@ mod tests {
             missing_user.rows[0].reason_code,
             Some("android_user_missing")
         );
+    }
+
+    #[test]
+    fn detects_post_ota_drift_when_disable_is_reverted() {
+        let baseline = build(
+            &target("serial-a", "build/v1"),
+            0,
+            None,
+            &[
+                package("com.example.held", true, true),
+                package("com.example.drifted", true, true),
+            ],
+            vec![
+                BaselineActionInput {
+                    package: "com.example.held".to_string(),
+                    kind: ActionKind::Disable,
+                },
+                BaselineActionInput {
+                    package: "com.example.drifted".to_string(),
+                    kind: ActionKind::Disable,
+                },
+            ],
+            "2026-07-18T10:00:00Z".to_string(),
+        )
+        .unwrap();
+        let diff = inspect(
+            baseline,
+            &target("serial-a", "build/v2"),
+            &[user(0)],
+            &[
+                package("com.example.held", false, true),
+                package("com.example.drifted", true, true),
+            ],
+        )
+        .unwrap();
+        let drifted_row = diff
+            .rows
+            .iter()
+            .find(|row| row.package == "com.example.drifted")
+            .unwrap();
+        assert_eq!(drifted_row.status, BaselineDiffStatus::Drifted);
+        assert_eq!(drifted_row.reason_code, Some("post_change_reverted"));
+        let held_row = diff
+            .rows
+            .iter()
+            .find(|row| row.package == "com.example.held")
+            .unwrap();
+        assert_eq!(held_row.status, BaselineDiffStatus::Ready);
+        let drifted_plans: Vec<_> = diff
+            .plans
+            .iter()
+            .filter(|plan| plan.request.package == "com.example.drifted")
+            .collect();
+        assert_eq!(drifted_plans.len(), 1);
+        assert_eq!(drifted_plans[0].request.kind, ActionKind::Disable);
     }
 
     #[test]

@@ -568,6 +568,7 @@
     "recoveryBuildMatch": "Build matches",
     "recoveryBuildChanged": "Build changed / OTA drift",
     "recoveryReady": "{{count}} ready",
+    "recoveryDrifted": "{{count}} drifted",
     "recoveryMatching": "{{count}} already match",
     "recoverySkipped": "{{count}} skipped",
     "recoveryBaselineState": "Pre-change state",
@@ -579,6 +580,7 @@
     "recoveryStatus": {
       "ready": "Ready after review",
       "already_matches": "Already matches",
+      "drifted": "Drifted (reverted by update)",
       "skipped": "Skipped safely"
     },
     "recoveryApply": "Apply {{count}} reviewed actions",

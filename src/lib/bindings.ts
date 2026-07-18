@@ -1000,7 +1000,11 @@ export type BaselineDiffRow = {
   reason_code: string | null;
   reason: string;
 };
-export type BaselineDiffStatus = "ready" | "already_matches" | "skipped";
+export type BaselineDiffStatus =
+  | "ready"
+  | "already_matches"
+  | "drifted"
+  | "skipped";
 export type BaselinePack = { id: string; revision: number };
 export type BaselinePackage = {
   package: string;

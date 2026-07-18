@@ -568,6 +568,7 @@
     "recoveryBuildMatch": "Сборка совпадает",
     "recoveryBuildChanged": "Сборка изменилась / OTA drift",
     "recoveryReady": "Готово: {{count}}",
+    "recoveryDrifted": "Откат: {{count}}",
     "recoveryMatching": "Уже совпадает: {{count}}",
     "recoverySkipped": "Пропущено: {{count}}",
     "recoveryBaselineState": "Состояние до изменения",
@@ -579,6 +580,7 @@
     "recoveryStatus": {
       "ready": "Готово после проверки",
       "already_matches": "Уже совпадает",
+      "drifted": "Откат (отменено обновлением)",
       "skipped": "Безопасно пропущено"
     },
     "recoveryApply": "Применить проверенные действия: {{count}}",
