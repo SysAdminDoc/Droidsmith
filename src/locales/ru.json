@@ -913,7 +913,7 @@
     "clearHistory": "Очистить историю",
     "placeholder": "getprop ro.product.model",
     "run": "Выполнить",
-    "hint": "Введите команду ниже. Стрелки вызывают историю.",
+    "hint": "Введите команду ниже. Стрелки вызывают успешные команды; неудачные пропускаются.",
     "commandCount_one": "{{count}} команда",
     "commandCount_few": "{{count}} команды",
     "commandCount_many": "{{count}} команд",

@@ -913,7 +913,7 @@
     "clearHistory": "Clear history",
     "placeholder": "getprop ro.product.model",
     "run": "Run",
-    "hint": "Type a command below. Arrow keys recall history.",
+    "hint": "Type a command below. Arrow keys recall successful commands; failed entries are skipped.",
     "commandCount_one": "{{count}} command",
     "commandCount_few": "{{count}} commands",
     "commandCount_many": "{{count}} commands",
