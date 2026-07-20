@@ -23,7 +23,8 @@ APK/APKS/XAPK/APKM installation with guarded failure remedies and an opt-in
 `--incremental` single-APK mode that falls back cleanly when unsupported,
 hashed base/split APK export, audited permission/device-control mutations, reviewed shell
 mutations, journal undo, debloat queue recovery, scrcpy launch and session
-supervision, cancellable background shell/export/file operations, incremental
+supervision, optional gnirehtet reverse-tethering ("Share Internet") when the
+binary is on PATH, cancellable background shell/export/file operations, incremental
 Logcat streaming and export, live cross-route device hot-plug updates, ADB
 server/mDNS/Wi-Fi 2.0 health with audited guided recovery, provenance-classified
 USB/TLS/legacy/unknown transports with fail-closed unsafe-TCP acknowledgement,

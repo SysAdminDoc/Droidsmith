@@ -17,18 +17,6 @@ instead.
 
 ### P3
 
-- [ ] P3 — R-084: Gnirehtet reverse tethering integration
-  Why: Gnirehtet (7,779 stars, same dev as scrcpy) shares PC internet with
-  Android via USB. Escrcpy integrates this. Useful when device has no Wi-Fi
-  or in restricted networks.
-  Evidence: Gnirehtet GitHub; Escrcpy feature list
-  Touches: `src-tauri/src/` (new `gnirehtet.rs` module for binary detection
-  and session supervision, similar to `scrcpy.rs`), `src/routes/Devices.tsx`
-  or new route, locale files
-  Acceptance: If Gnirehtet is on PATH, Devices shows a "Share Internet" toggle.
-  Clicking it starts/stops the reverse tethering session with status feedback.
-  Complexity: M
-
 - [ ] P3 — R-085: RTL language architecture
   Why: Arabic (ar), Hebrew (he), and Persian (fa) are RTL languages. The i18n
   system supports `dir` metadata per locale, but the CSS uses physical

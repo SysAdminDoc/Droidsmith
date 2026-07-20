@@ -14,6 +14,17 @@ completion.
 Working batches live here. Sections collapse into a versioned release on
 each milestone tag.
 
+### Added
+
+- Gnirehtet reverse-tethering ("Share Internet") toggle in the Devices controls
+  surface (R-084). When the `gnirehtet` binary is on PATH, a per-device toggle
+  starts/stops a supervised `gnirehtet run <serial>` session that shares the
+  PC's internet with the device over USB; stopping restores the device's
+  default network. Session start/poll/stop is supervised in
+  `src-tauri/src/gnirehtet.rs`, mirroring the scrcpy lifecycle, with a
+  duplicate-serial guard and classified exit reasons. The toggle stays hidden
+  when the binary is absent.
+
 ### Refactored
 
 - Completed the Devices/Apps god-file split (IMP-67). `Devices.tsx`
