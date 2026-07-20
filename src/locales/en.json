@@ -763,6 +763,14 @@
     "noUnsafeSelected": "No unsafe-tier packages are selected.",
     "searchPlaceholder": "Search packages or descriptions...",
     "searchLabel": "Filter pack entries by id, description, or label",
+    "presets": {
+      "title": "Presets",
+      "hint": "Pre-check a themed group, then review before applying.",
+      "privacy": "Privacy Max",
+      "bloatware": "Bloatware Sweep",
+      "degoogle": "Minimal Google",
+      "carrier": "Carrier Cleanup"
+    },
     "searchMatches": "{{count}} matching",
     "noMatches": "No matching packages",
     "noMatchesBody": "No entries in this pack match your search. Clear the search to see every tier.",

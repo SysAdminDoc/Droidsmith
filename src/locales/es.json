@@ -430,6 +430,14 @@
     "retryFailed_other": "Reintentar {{count}} fallidos",
     "reviewBeforeApply": "Revisión de seguridad final",
     "searchLabel": "Filtrar entradas del paquete por id, descripción o etiqueta",
+    "presets": {
+      "title": "Ajustes preestablecidos",
+      "hint": "Preselecciona un grupo temático y revísalo antes de aplicar.",
+      "privacy": "Privacidad máxima",
+      "bloatware": "Limpieza de bloatware",
+      "degoogle": "Google mínimo",
+      "carrier": "Limpieza del operador"
+    },
     "searchMatches": "{{count}} coincidentes",
     "searchPlaceholder": "Buscar paquetes o descripciones...",
     "selected_few": "{{count}} seleccionados",

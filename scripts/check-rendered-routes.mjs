@@ -588,6 +588,12 @@ async function runDesktopFlow(browser) {
     path: path.join(screenshotDir, "desktop-debloat-preview.png"),
     fullPage: false,
   });
+  // IMP-63: a curated preset pre-checks only its matching packages. "Privacy
+  // Max" matches the telemetry-labelled com.example.app (1 of the pack).
+  await page.getByRole("button", { name: /Privacy Max/ }).click();
+  await page.getByRole("button", { name: /Apply 1 package/ }).waitFor();
+  // Restore the broader selection the rest of this flow exercises.
+  await page.getByRole("checkbox", { name: /com\.example\.fail/ }).check();
   await page.getByRole("checkbox", { name: /com\.android\.settings/ }).check();
   await page
     .getByRole("button", { name: "Export baseline before applying" })
@@ -2417,7 +2423,7 @@ async function installTauriMock(
                       description: "Safe QA package.",
                       depends_on: [],
                       needed_by: [],
-                      labels: ["qa"],
+                      labels: ["qa", "telemetry"],
                     },
                     {
                       id: "com.example.fail",

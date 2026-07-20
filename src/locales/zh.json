@@ -763,6 +763,14 @@
     "noUnsafeSelected": "未选择不安全等级的包。",
     "searchPlaceholder": "搜索包或描述...",
     "searchLabel": "按 ID、描述或标签筛选方案包条目",
+    "presets": {
+      "title": "预设",
+      "hint": "预先勾选一个主题分组，应用前再检查。",
+      "privacy": "隐私最大化",
+      "bloatware": "垃圾软件清理",
+      "degoogle": "精简 Google",
+      "carrier": "运营商清理"
+    },
     "searchMatches": "{{count}} 个匹配",
     "noMatches": "没有匹配的包",
     "noMatchesBody": "此方案包中没有匹配您搜索的条目。清除搜索以查看所有等级。",

@@ -763,6 +763,14 @@
     "noUnsafeSelected": "Keine Pakete der Stufe Unsicher sind ausgewählt.",
     "searchPlaceholder": "Pakete oder Beschreibungen suchen...",
     "searchLabel": "Paketeinträge nach ID, Beschreibung oder Label filtern",
+    "presets": {
+      "title": "Voreinstellungen",
+      "hint": "Eine thematische Gruppe vorwählen, dann vor dem Anwenden prüfen.",
+      "privacy": "Maximale Privatsphäre",
+      "bloatware": "Bloatware-Bereinigung",
+      "degoogle": "Minimales Google",
+      "carrier": "Anbieter-Bereinigung"
+    },
     "searchMatches": "{{count}} passend",
     "noMatches": "Keine passenden Pakete",
     "noMatchesBody": "Keine Einträge in diesem Paket entsprechen Ihrer Suche. Löschen Sie die Suche, um jede Stufe zu sehen.",

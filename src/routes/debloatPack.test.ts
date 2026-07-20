@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
 
 import type { Pack } from "../lib/tauri";
-import { expandPackDependencies, summarizePackSelection } from "./debloatPack";
+import {
+  DEBLOAT_PRESETS,
+  expandPackDependencies,
+  packagesForPreset,
+  summarizePackSelection,
+} from "./debloatPack";
 
 const pack: Pack = {
   id: "test-pack",
@@ -86,5 +91,34 @@ describe("summarizePackSelection", () => {
     expect(() => summarizePackSelection(pack, ["com.example.unknown"])).toThrow(
       "is not in pack",
     );
+  });
+});
+
+describe("packagesForPreset", () => {
+  const labelled: Pack = {
+    ...pack,
+    packages: [
+      { ...pack.packages[0], id: "a", labels: ["telemetry"] },
+      { ...pack.packages[0], id: "b", labels: ["google", "media"] },
+      { ...pack.packages[0], id: "c", labels: ["bloat"] },
+      { ...pack.packages[0], id: "d", labels: ["telemetry"] },
+    ],
+  };
+  const ready = new Set(["a", "b", "c"]);
+
+  it("matches ready packages whose labels intersect the preset tags", () => {
+    const privacy = DEBLOAT_PRESETS.find((p) => p.id === "privacy")!;
+    // `d` also has telemetry but is not ready, so it is excluded.
+    expect([...packagesForPreset(labelled, privacy, ready)]).toEqual(["a"]);
+  });
+
+  it("matches the de-Google preset by the google label", () => {
+    const degoogle = DEBLOAT_PRESETS.find((p) => p.id === "degoogle")!;
+    expect([...packagesForPreset(labelled, degoogle, ready)]).toEqual(["b"]);
+  });
+
+  it("returns an empty set when nothing matches", () => {
+    const carrier = DEBLOAT_PRESETS.find((p) => p.id === "carrier")!;
+    expect(packagesForPreset(labelled, carrier, ready).size).toBe(0);
   });
 });

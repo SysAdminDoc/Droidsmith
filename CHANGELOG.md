@@ -61,6 +61,12 @@ each milestone tag.
   land in a session change log with one-click revert. Backed by a new
   `adb/device_settings.rs` module and `list_device_settings`/
   `put_device_setting` commands, with de/es/ru/zh locales (R-082).
+- Curated debloat presets: the Debloat pack preview offers named presets
+  (Privacy Max, Bloatware Sweep, Minimal Google, Carrier Cleanup) that
+  pre-check the ready packages whose labels match the preset's theme, using the
+  existing per-entry `labels`. Only presets with at least one match are shown,
+  each with its match count, and the selection remains fully reviewable/editable
+  before applying (IMP-63).
 
 ## [0.7.0] - 2026-07-18
 

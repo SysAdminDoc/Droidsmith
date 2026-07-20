@@ -39,7 +39,13 @@ import {
   type PackageSnapshot,
   type QueueStatus,
 } from "./debloatQueue";
-import { expandPackDependencies, summarizePackSelection } from "./debloatPack";
+import {
+  DEBLOAT_PRESETS,
+  expandPackDependencies,
+  packagesForPreset,
+  summarizePackSelection,
+  type DebloatPreset,
+} from "./debloatPack";
 import {
   Badge,
   Button,
@@ -250,6 +256,26 @@ export default function DebloatRoute() {
       return {
         ...prev,
         selected: expandPackDependencies(prev.pack, next),
+        planError: null,
+      };
+    });
+  }, []);
+
+  // IMP-63: replace the current selection with the packages a named preset
+  // matches, then let the user review/edit before applying.
+  const applyPreset = useCallback((preset: DebloatPreset) => {
+    setBaselineNotice(null);
+    setWizard((prev) => {
+      if (prev.step !== "preview") return prev;
+      const ready = new Set(
+        prev.assessment.entries
+          .filter((entry) => entry.status === "ready")
+          .map((entry) => entry.id),
+      );
+      const matched = packagesForPreset(prev.pack, preset, ready);
+      return {
+        ...prev,
+        selected: expandPackDependencies(prev.pack, matched),
         planError: null,
       };
     });
@@ -670,6 +696,7 @@ export default function DebloatRoute() {
               overrideAccepted={wizard.overrideAccepted}
               planError={wizard.planError}
               onToggle={toggleEntry}
+              onApplyPreset={applyPreset}
               onOverrideChange={(accepted) => {
                 setBaselineNotice(null);
                 setWizard((previous) =>
@@ -996,6 +1023,7 @@ function PackPreview({
   overrideAccepted,
   planError,
   onToggle,
+  onApplyPreset,
   onOverrideChange,
   onExportBaseline,
   exportingBaseline,
@@ -1008,6 +1036,7 @@ function PackPreview({
   overrideAccepted: boolean;
   planError: string | null;
   onToggle: (id: string) => void;
+  onApplyPreset: (preset: DebloatPreset) => void;
   onOverrideChange: (accepted: boolean) => void;
   onExportBaseline: () => void;
   exportingBaseline: boolean;
@@ -1016,6 +1045,15 @@ function PackPreview({
 }) {
   const { t } = useTranslation();
   const [entrySearch, setEntrySearch] = useState("");
+  const readyIds = new Set(
+    assessment.entries
+      .filter((entry) => entry.status === "ready")
+      .map((entry) => entry.id),
+  );
+  const presetMatches = DEBLOAT_PRESETS.map((preset) => ({
+    preset,
+    count: packagesForPreset(pack, preset, readyIds).size,
+  })).filter((item) => item.count > 0);
   const query = entrySearch.trim().toLowerCase();
   const visiblePackages = query
     ? pack.packages.filter((entry) =>
@@ -1060,6 +1098,33 @@ function PackPreview({
       </Card>
 
       <CompatibilityChecks assessment={assessment} />
+
+      {presetMatches.length > 0 && (
+        <Card className="p-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h4 className="text-sm font-semibold text-anvil-50">
+              {t("debloat.presets.title")}
+            </h4>
+            <span className="text-xs text-anvil-400">
+              {t("debloat.presets.hint")}
+            </span>
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {presetMatches.map(({ preset, count }) => (
+              <Button
+                key={preset.id}
+                type="button"
+                size="sm"
+                variant="secondary"
+                onClick={() => onApplyPreset(preset)}
+              >
+                {t(`debloat.presets.${preset.id}`)}
+                <Badge tone="neutral">{count}</Badge>
+              </Button>
+            ))}
+          </div>
+        </Card>
+      )}
 
       {planError && (
         <StatePanel title={t("debloat.planFailed")} tone="danger">
