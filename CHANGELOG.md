@@ -27,6 +27,16 @@ each milestone tag.
   `transformCallback`, so unlisten was evicting the live `watch_devices`
   channel and starving device-snapshot delivery (IMP-69).
 
+### Accessibility
+
+- Windows High Contrast / forced-colors support (WCAG 2.2 AA). Focus indicators
+  now fall back to a system-colored `outline` in forced-colors mode (where
+  Tailwind's box-shadow focus rings are stripped), container/control borders
+  pin to `ButtonBorder` so cards, inputs, and menus keep visible edges, native
+  checkboxes/radios track the system `Highlight`, and progress fills stay
+  legible. Native checkboxes/radios are also floored to a 20px box so the 24px
+  target-spacing exception (2.5.8) is met alongside their label gap (IMP-61).
+
 ### Added
 
 - Device health dashboard: the Devices detail panel now surfaces battery

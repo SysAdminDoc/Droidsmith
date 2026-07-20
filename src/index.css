@@ -31,6 +31,17 @@
     font: inherit;
   }
 
+  /*
+   * IMP-61: WCAG 2.2 AA target size (2.5.8). Native checkboxes/radios ship at
+   * 16px across the routes; floor them to 20px so that, combined with the
+   * >=8px label gap they sit in, the 24px target-spacing exception is met.
+   */
+  input[type="checkbox"],
+  input[type="radio"] {
+    min-block-size: 1.25rem;
+    min-inline-size: 1.25rem;
+  }
+
   ::selection {
     background-color: rgb(103 232 249 / 0.25);
     color: #ecfeff;
@@ -89,6 +100,53 @@
       animation-iteration-count: 1 !important;
       scroll-behavior: auto !important;
       transition-duration: 0.01ms !important;
+    }
+  }
+
+  /*
+   * IMP-61: Windows High Contrast / forced-colors support (WCAG 2.2 AA).
+   * In forced-colors mode the OS replaces our palette with system colors and
+   * strips box-shadows, so ring-based focus indicators (Tailwind's
+   * focus-visible:ring-*) become invisible. Restore a system-colored outline
+   * for every focusable control (2.4.13 Focus Appearance) and keep
+   * state-bearing surfaces from collapsing into a single flat color.
+   */
+  @media (forced-colors: active) {
+    :focus-visible {
+      outline: 2px solid Highlight;
+      outline-offset: 2px;
+    }
+
+    /* Semi-transparent borders resolve to `transparent` under forced colors,
+       erasing the outline of cards, inputs, and menus. Pin a system border so
+       container edges stay visible. */
+    button,
+    input,
+    select,
+    textarea,
+    [role="button"],
+    [role="menu"],
+    [role="dialog"],
+    [role="listbox"],
+    [role="radiogroup"] {
+      border-color: ButtonBorder;
+    }
+
+    /* Native form controls should track the system highlight color. */
+    input[type="checkbox"],
+    input[type="radio"] {
+      accent-color: Highlight;
+    }
+
+    /* Progress fills lose their background color; keep the geometry legible by
+       letting the system paint them and marking the track boundary. */
+    .queue-progress::-webkit-progress-value,
+    .queue-progress::-moz-progress-bar {
+      background-color: Highlight;
+    }
+
+    [role="progressbar"] {
+      border: 1px solid ButtonBorder;
     }
   }
 }

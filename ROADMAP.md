@@ -44,19 +44,6 @@ instead.
   preview of the ADB command. Changes are journaled and undoable.
   Complexity: M
 
-- [ ] P2 — IMP-61: Forced-colors / high-contrast mode (WCAG 2.2 AA)
-  Why: No ADB tool has accessibility support (UAD-ng #605, 10 comments). Windows
-  11 Contrast Themes are increasingly common. WCAG 2.2 AA requires 2.4.11
-  (focus not obscured), 2.4.13 (focus appearance), and 2.5.8 (target size >=24px).
-  Evidence: WCAG 2.2 spec; Smashing Magazine forced-colors guide; UAD-ng #605
-  Touches: `tailwind.config.ts` (forced-colors media query tokens),
-  `src/routes/common.tsx` (component adjustments), all route files (verify
-  minimum target sizes on checkboxes, action buttons)
-  Acceptance: App renders correctly under Windows 11 "Desert" and "Dusk"
-  contrast themes. All interactive targets are >=24x24 CSS px. Focus rings are
-  >=2px thick with >=3:1 contrast.
-  Complexity: M
-
 - [ ] P2 — IMP-62: ARIA grid pattern for package data table
   Why: The Apps package table contains interactive elements (checkboxes, action
   buttons) but uses basic `<table>` semantics. The W3C ARIA grid pattern
