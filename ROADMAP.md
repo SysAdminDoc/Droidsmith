@@ -15,22 +15,6 @@ instead.
 
 ## Remaining
 
-### P2
-
-- [ ] P2 — R-081: Keyboard-to-touch mapping GUI for scrcpy
-  Why: scrcpy's most-requested feature (issue #712, 55 comments). QtScrcpy's
-  most popular feature. Escrcpy ships keyboard mapping scripts. Users want to
-  map keyboard keys to touch locations for gaming and accessibility.
-  Evidence: scrcpy #712 (55 comments); QtScrcpy README; Escrcpy keyboard docs
-  Touches: `src-tauri/src/scrcpy.rs` (pass `--keyboard=uhid` or mapping file),
-  `src/routes/Mirror.tsx` (mapping editor UI), `src-tauri/src/settings.rs`
-  (persist per-device mappings), locale files
-  Acceptance: Mirror route offers a visual mapping editor where users place
-  virtual buttons on a device screenshot and bind them to keyboard keys. The
-  mapping persists per-device and is passed to scrcpy on launch. At minimum,
-  tap-at-coordinates bindings work; swipe/joystick are stretch goals.
-  Complexity: L
-
 ### P3
 
 - [ ] P3 — R-084: Gnirehtet reverse tethering integration
