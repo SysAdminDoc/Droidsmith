@@ -14,6 +14,20 @@ completion.
 Working batches live here. Sections collapse into a versioned release on
 each milestone tag.
 
+### Refactored
+
+- Completed the Devices/Apps god-file split (IMP-67). `Devices.tsx`
+  (2,695 LOC → 1,633) now delegates its device-controls surface to
+  `src/routes/devices/DeviceControls.tsx` and its remote file browser to
+  `src/routes/devices/FileManager.tsx`, joining the earlier
+  Network/Layout/Process inspector extractions. `Apps.tsx` (3,063 LOC → 1,591)
+  split its independent sub-panels into `src/routes/apps/`: `PackageTable`
+  (ARIA grid + roving-tabindex), `JournalPanel`, `PermissionsPanel`,
+  `RecoveryBaselinePanel`, `FilterControls` (filter chips + batch action bar),
+  and `InstallPanels` (install status/override + backup status), with shared
+  route-state types collected in `src/routes/apps/types.ts`. Behavior, rendered
+  output, and the `ui:smoke` flows are unchanged.
+
 ## [0.8.0] - 2026-07-20
 
 Device health + tuning batch: a battery/storage/thermal dashboard, a new

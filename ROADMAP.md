@@ -31,17 +31,6 @@ instead.
   tap-at-coordinates bindings work; swipe/joystick are stretch goals.
   Complexity: L
 
-- [ ] P2 — IMP-67: Extract Devices.tsx and Apps.tsx into sub-route modules
-  Why: `Devices.tsx` (2,975 LOC) and `Apps.tsx` (3,063 LOC) each contain 4-6
-  independent sub-panels. Extracting to `src/routes/devices/*.tsx` and
-  `src/routes/apps/*.tsx` improves navigability without changing behavior.
-  Evidence: LOC analysis; sub-panel inventory in architecture assessment
-  Touches: `src/routes/Devices.tsx` → `src/routes/devices/`,
-  `src/routes/Apps.tsx` → `src/routes/apps/`
-  Acceptance: Same rendered output and smoke test results. Each sub-panel is a
-  separate file. No new dependencies.
-  Complexity: M
-
 ### P3
 
 - [ ] P3 — R-084: Gnirehtet reverse tethering integration
