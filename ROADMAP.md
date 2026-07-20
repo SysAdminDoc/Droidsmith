@@ -15,20 +15,6 @@ instead.
 
 ## Remaining
 
-### P1
-
-- [ ] P1 — IMP-69: Repair the `ui:smoke` desktop debloat flow
-  Why: `npm run ui:smoke` times out at the desktop debloat step, waiting for
-  "QA Debloat Pack - debloat complete" after clicking "Disable 3 packages"
-  (`scripts/check-rendered-routes.mjs:586`). Pre-existing at HEAD (predates the
-  v0.7.0 finalize), so the smoke gate is currently red. Devices/Apps/Wireless
-  flows render fine — the batch-action mock response or its result rendering is
-  the suspect.
-  Touches: `scripts/check-rendered-routes.mjs` (batch debloat mock + assertions),
-  possibly `src/routes/Debloat.tsx` result surface.
-  Acceptance: `npm run ui:smoke` passes end-to-end on Windows.
-  Complexity: M
-
 ### P2
 
 - [ ] P2 — R-081: Keyboard-to-touch mapping GUI for scrcpy

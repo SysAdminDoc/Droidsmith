@@ -14,6 +14,19 @@ completion.
 Working batches live here. Sections collapse into a versioned release on
 each milestone tag.
 
+### Fixed
+
+- Repaired the `ui:smoke` desktop route flow, which had been red since before
+  the v0.7.0 finalize and never completed end-to-end. Four latent breaks: the
+  debloat-complete assertion matched a hyphen where the locale renders an
+  em-dash; the Settings language round-trip re-queried the selector by its
+  English label after switching to Russian; the Tauri mock lacked the
+  `settings_export` host-path purpose plus the webview/event-plugin globals
+  (`metadata`, `__TAURI_EVENT_PLUGIN_INTERNALS__`) the Apps drag-drop listener
+  needs; and the mock's `unregisterListener` shared the `callbacks` map with
+  `transformCallback`, so unlisten was evicting the live `watch_devices`
+  channel and starving device-snapshot delivery (IMP-69).
+
 ### Added
 
 - Device health dashboard: the Devices detail panel now surfaces battery

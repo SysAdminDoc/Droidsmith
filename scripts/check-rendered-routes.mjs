@@ -583,7 +583,10 @@ async function runDesktopFlow(browser) {
     );
   }
   await debloatDisable.click();
-  await page.getByText(/QA Debloat Pack - debloat complete/).waitFor();
+  // The completion title uses an em-dash separator ("{{name}} — debloat
+  // complete"); match any single separator char so the assertion survives
+  // dash-style normalization in the locale files.
+  await page.getByText(/QA Debloat Pack . debloat complete/).waitFor();
   await page.getByText("Failed", { exact: true }).waitFor();
   await page.getByRole("button", { name: /Retry 1 failed/ }).waitFor();
   await assertNoHorizontalOverflow(page, "desktop Debloat queue");
@@ -657,8 +660,10 @@ async function runDesktopFlow(browser) {
       document.documentElement.dir === "ltr",
   );
 
-  // IMP-68: exercise Settings export and reset flows
-  await page.getByLabel("Language", { exact: true }).selectOption("en");
+  // IMP-68: exercise Settings export and reset flows. The selector's
+  // accessible name follows the active locale, so after switching to Russian
+  // above it is now labelled "Язык"; target that to switch back to English.
+  await page.getByLabel("Язык", { exact: true }).selectOption("en");
   await page.waitForFunction(() => document.documentElement.lang === "en");
   await page.getByRole("button", { name: "Export scope" }).click();
   await page.getByText(/Settings exported to/).waitFor();
@@ -1060,6 +1065,7 @@ async function installTauriMock(
     const channelIndexes = new Map();
     const pendingOperations = new Map();
     let nextCallbackId = 1;
+    let nextEventId = 1;
     const device = {
       serial: "QA123",
       state: "device",
@@ -1231,6 +1237,15 @@ async function installTauriMock(
           gatePromises.delete(cmd);
           await pending;
         }
+        // Tauri event-plugin plumbing used by the Apps drag-drop listener
+        // (getCurrentWebview().onDragDropEvent). The smoke harness never emits
+        // a real drop, so registration just needs to resolve without throwing.
+        if (cmd === "plugin:event|listen") {
+          return nextEventId++;
+        }
+        if (cmd === "plugin:event|unlisten") {
+          return null;
+        }
         if (cmd === "select_host_path") {
           const selections = {
             diagnostics_save: {
@@ -1283,6 +1298,10 @@ async function installTauriMock(
             layout_export_save: {
               id: "123e4567-e89b-42d3-a456-42661417400d",
               local_path: "C:/Users/QA/Desktop/layout-QA123.xml",
+            },
+            settings_export: {
+              id: "123e4567-e89b-42d3-a456-42661417400e",
+              local_path: "C:/Users/QA/Desktop/droidsmith-settings-all.json",
             },
           };
           const selection = selections[args.purpose];
@@ -2519,6 +2538,22 @@ async function installTauriMock(
       convertFileSrc(filePath) {
         return filePath;
       },
+      // getCurrentWindow()/getCurrentWebview() read these labels; without the
+      // metadata block they throw "reading 'currentWindow'".
+      metadata: {
+        currentWindow: { label: "main" },
+        currentWebview: { windowLabel: "main", label: "main" },
+      },
+    };
+
+    // The event plugin's unlisten path lives on its own global; without it the
+    // Apps drag-drop cleanup throws "reading 'unregisterListener'". This is a
+    // no-op: `plugin:event|listen` returns a dedicated event id (nextEventId)
+    // that is NOT a `callbacks` key, so deleting by it here would evict an
+    // unrelated transformCallback entry (e.g. the watch_devices channel) and
+    // silently break device-snapshot delivery.
+    window.__TAURI_EVENT_PLUGIN_INTERNALS__ = {
+      unregisterListener() {},
     };
 
     function emitChannel(channel, message) {
