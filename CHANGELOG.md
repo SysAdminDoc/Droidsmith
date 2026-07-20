@@ -14,6 +14,12 @@ completion.
 Working batches live here. Sections collapse into a versioned release on
 each milestone tag.
 
+## [0.9.0] - 2026-07-20
+
+Reverse-tethering + maintainability batch: a gnirehtet "Share Internet" toggle,
+the completed Devices/Apps god-file split, and an RTL logical-property
+foundation across every route.
+
 ### Added
 
 - Gnirehtet reverse-tethering ("Share Internet") toggle in the Devices controls
