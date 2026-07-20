@@ -2147,6 +2147,58 @@ pub fn get_device_info(target: adb::DeviceTarget) -> Result<adb::DeviceInfo, Com
     Ok(adb::get_device_info(&transport, &target)?)
 }
 
+/// R-082: read the curated system-settings allow-list (`settings get`). Read
+/// only; safe over any authorized transport.
+#[tauri::command]
+#[specta::specta]
+pub fn list_device_settings(
+    target: adb::DeviceTarget,
+) -> Result<Vec<adb::DeviceSetting>, CommandError> {
+    let transport = validated_transport(&target)?;
+    Ok(adb::read_device_settings(&transport, &target)?)
+}
+
+/// R-082: write one allow-listed setting (`settings put`). The `setting_id` and
+/// `value` are validated against the catalog before anything is shelled out, so
+/// arbitrary keys or out-of-range values are rejected. Runs over the privileged
+/// transport boundary because it mutates device state; the previous value is
+/// returned so the renderer can offer a one-click revert.
+#[tauri::command]
+#[specta::specta]
+pub fn put_device_setting(
+    target: adb::DeviceTarget,
+    setting_id: String,
+    value: String,
+) -> Result<adb::DeviceSettingChange, CommandError> {
+    let spec = adb::validate_write(&setting_id, &value).map_err(|message| CommandError {
+        code: "invalid_setting",
+        message,
+    })?;
+    let normalized = value.trim().to_string();
+    let (transport, _override) = privileged_transport(&target)?;
+
+    let previous = adb::read_device_settings(&transport, &target)
+        .ok()
+        .and_then(|settings| {
+            settings
+                .into_iter()
+                .find(|setting| setting.id == setting_id)
+                .and_then(|setting| setting.value)
+        });
+
+    let argv = adb::put_argv(spec, &normalized);
+    transport.shell_target(&target, &argv)?;
+
+    Ok(adb::DeviceSettingChange {
+        id: setting_id,
+        namespace: adb::spec_namespace(spec),
+        key: adb::spec_key(spec).to_string(),
+        previous_value: previous,
+        new_value: normalized.clone(),
+        command: adb::command_preview(spec, &normalized),
+    })
+}
+
 /// Run a one-shot read-only shell command outside the webview thread and
 /// stream progress/output through a Tauri channel. Mutations continue to use
 /// the reviewed audited executor.

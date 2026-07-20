@@ -142,7 +142,52 @@
     "mirror": "Mirror",
     "console": "Console",
     "logcat": "Logcat",
-    "fastboot": "Fastboot"
+    "fastboot": "Fastboot",
+    "tuning": "Tuning"
+  },
+  "tuning": {
+    "title": "Tuning",
+    "description": "Adjust safe Android system settings over ADB.",
+    "refresh": "Refresh",
+    "loading": "Reading device settings…",
+    "desktopRequiredBody": "Device tuning is available in the Droidsmith desktop app.",
+    "noAuthorizedBody": "Authorize a device to read and change its system settings.",
+    "errorTitle": "Settings error",
+    "current": "Current",
+    "unset": "unset",
+    "choose": "Choose a value",
+    "apply": "Apply",
+    "applying": "Applying…",
+    "revert": "Revert",
+    "changeLog": "Change log",
+    "previousUnset": "was unset",
+    "previousValue": "was {{value}}",
+    "items": {
+      "window_animation_scale": {
+        "label": "Window animation scale",
+        "help": "Speed of window open and close animations. 0 disables them."
+      },
+      "transition_animation_scale": {
+        "label": "Transition animation scale",
+        "help": "Speed of activity transition animations. 0 disables them."
+      },
+      "animator_duration_scale": {
+        "label": "Animator duration scale",
+        "help": "Speed of in-app animator animations. 0 disables them."
+      },
+      "screen_off_timeout": {
+        "label": "Screen timeout",
+        "help": "Idle time in milliseconds before the display turns off."
+      },
+      "font_scale": {
+        "label": "Font scale",
+        "help": "System font size multiplier (1.0 is the default)."
+      },
+      "stay_on_while_plugged_in": {
+        "label": "Stay awake while charging",
+        "help": "Keep the screen on while the device is charging."
+      }
+    }
   },
   "devices": {
     "title": "Devices",

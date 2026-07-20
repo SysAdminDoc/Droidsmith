@@ -142,7 +142,52 @@
     "mirror": "Spiegeln",
     "console": "Konsole",
     "logcat": "Logcat",
-    "fastboot": "Fastboot"
+    "fastboot": "Fastboot",
+    "tuning": "Feinabstimmung"
+  },
+  "tuning": {
+    "title": "Feinabstimmung",
+    "description": "Sichere Android-Systemeinstellungen über ADB anpassen.",
+    "refresh": "Aktualisieren",
+    "loading": "Geräteeinstellungen werden gelesen…",
+    "desktopRequiredBody": "Die Gerätefeinabstimmung ist in der Droidsmith-Desktop-App verfügbar.",
+    "noAuthorizedBody": "Autorisieren Sie ein Gerät, um dessen Systemeinstellungen zu lesen und zu ändern.",
+    "errorTitle": "Einstellungsfehler",
+    "current": "Aktuell",
+    "unset": "nicht gesetzt",
+    "choose": "Wert auswählen",
+    "apply": "Anwenden",
+    "applying": "Wird angewendet…",
+    "revert": "Zurücksetzen",
+    "changeLog": "Änderungsprotokoll",
+    "previousUnset": "war nicht gesetzt",
+    "previousValue": "war {{value}}",
+    "items": {
+      "window_animation_scale": {
+        "label": "Fensteranimationsskala",
+        "help": "Geschwindigkeit der Fenster-Öffnungs- und Schließanimationen. 0 deaktiviert sie."
+      },
+      "transition_animation_scale": {
+        "label": "Übergangsanimationsskala",
+        "help": "Geschwindigkeit der Aktivitätsübergangsanimationen. 0 deaktiviert sie."
+      },
+      "animator_duration_scale": {
+        "label": "Animatordauerskala",
+        "help": "Geschwindigkeit der In-App-Animatoranimationen. 0 deaktiviert sie."
+      },
+      "screen_off_timeout": {
+        "label": "Bildschirm-Timeout",
+        "help": "Leerlaufzeit in Millisekunden, bevor sich das Display ausschaltet."
+      },
+      "font_scale": {
+        "label": "Schriftskala",
+        "help": "Multiplikator der Systemschriftgröße (1.0 ist Standard)."
+      },
+      "stay_on_while_plugged_in": {
+        "label": "Beim Laden aktiv bleiben",
+        "help": "Bildschirm eingeschaltet lassen, während das Gerät lädt."
+      }
+    }
   },
   "devices": {
     "title": "Geräte",

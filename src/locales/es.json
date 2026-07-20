@@ -1062,7 +1062,52 @@
     "logcat": "Logcat",
     "mirror": "Espejo",
     "profiles": "Perfiles",
+    "tuning": "Ajuste",
     "wireless": "Inalámbrico"
+  },
+  "tuning": {
+    "title": "Ajuste",
+    "description": "Ajusta configuraciones seguras del sistema Android por ADB.",
+    "refresh": "Actualizar",
+    "loading": "Leyendo la configuración del dispositivo…",
+    "desktopRequiredBody": "El ajuste del dispositivo está disponible en la app de escritorio de Droidsmith.",
+    "noAuthorizedBody": "Autoriza un dispositivo para leer y cambiar su configuración del sistema.",
+    "errorTitle": "Error de configuración",
+    "current": "Actual",
+    "unset": "sin definir",
+    "choose": "Elige un valor",
+    "apply": "Aplicar",
+    "applying": "Aplicando…",
+    "revert": "Revertir",
+    "changeLog": "Registro de cambios",
+    "previousUnset": "estaba sin definir",
+    "previousValue": "era {{value}}",
+    "items": {
+      "window_animation_scale": {
+        "label": "Escala de animación de ventanas",
+        "help": "Velocidad de las animaciones de apertura y cierre de ventanas. 0 las desactiva."
+      },
+      "transition_animation_scale": {
+        "label": "Escala de animación de transición",
+        "help": "Velocidad de las animaciones de transición entre actividades. 0 las desactiva."
+      },
+      "animator_duration_scale": {
+        "label": "Escala de duración del animador",
+        "help": "Velocidad de las animaciones del animador dentro de la app. 0 las desactiva."
+      },
+      "screen_off_timeout": {
+        "label": "Tiempo de espera de pantalla",
+        "help": "Tiempo de inactividad en milisegundos antes de que la pantalla se apague."
+      },
+      "font_scale": {
+        "label": "Escala de fuente",
+        "help": "Multiplicador del tamaño de fuente del sistema (1.0 es el valor predeterminado)."
+      },
+      "stay_on_while_plugged_in": {
+        "label": "Mantener activa al cargar",
+        "help": "Mantén la pantalla encendida mientras el dispositivo se carga."
+      }
+    }
   },
   "onboarding": {
     "done": "Listo",

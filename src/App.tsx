@@ -23,6 +23,7 @@ import ConsoleRoute from "./routes/Console";
 import LogcatRoute from "./routes/Logcat";
 import MirrorRoute from "./routes/Mirror";
 import FastbootRoute from "./routes/Fastboot";
+import DeviceSettingsRoute from "./routes/DeviceSettings";
 import { Button } from "./routes/common";
 import droidsmithLogo from "./assets/droidsmith-logo.png";
 
@@ -36,7 +37,8 @@ export type NavItem = {
     | "mirror"
     | "console"
     | "logcat"
-    | "fastboot";
+    | "fastboot"
+    | "tuning";
   labelKey: string;
   milestone: string;
   descriptionKey: string;
@@ -108,6 +110,13 @@ export const NAV_ITEMS: ReadonlyArray<NavItem> = [
     milestone: "R-052",
     descriptionKey: "fastboot.description",
     render: () => <FastbootRoute />,
+  },
+  {
+    id: "tuning",
+    labelKey: "nav.tuning",
+    milestone: "R-082",
+    descriptionKey: "tuning.description",
+    render: () => <DeviceSettingsRoute />,
   },
 ] as const;
 

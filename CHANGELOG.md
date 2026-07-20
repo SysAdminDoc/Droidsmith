@@ -52,6 +52,15 @@ each milestone tag.
   used/free bars), and thermal-zone temperatures with throttling-status
   badges. Backed by new `dumpsys battery`/`df -k`/`dumpsys thermalservice`
   parsers in `device_info.rs` (R-079).
+- Tuning route: a new sidebar pane that edits a curated allow-list of safe
+  Android system settings over ADB (animation scales, screen-off timeout, font
+  scale, stay-awake-while-charging). Each control shows the current value, an
+  editable field/selector with range or choice validation, and a live preview
+  of the `adb shell settings put …` command. Writes go through the privileged
+  transport boundary, are validated against the catalog before execution, and
+  land in a session change log with one-click revert. Backed by a new
+  `adb/device_settings.rs` module and `list_device_settings`/
+  `put_device_setting` commands, with de/es/ru/zh locales (R-082).
 
 ## [0.7.0] - 2026-07-18
 

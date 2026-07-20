@@ -26,6 +26,7 @@
 pub mod actions;
 pub mod device;
 pub mod device_info;
+pub mod device_settings;
 pub mod health;
 pub mod packages;
 pub mod parsers;
@@ -43,6 +44,10 @@ pub use device::{
     DeviceTransportKind,
 };
 pub use device_info::{get_device_info, DeviceInfo};
+pub use device_settings::{
+    command_preview, put_argv, read_device_settings, spec_key, spec_namespace, validate_write,
+    DeviceSetting, DeviceSettingChange,
+};
 pub use packages::{
     list_packages, list_packages_with_capability, AppPackage, PackageArchiveCapability,
     PackageFilter, PackageListing,

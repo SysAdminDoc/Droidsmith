@@ -142,7 +142,52 @@
     "mirror": "镜像",
     "console": "控制台",
     "logcat": "Logcat",
-    "fastboot": "Fastboot"
+    "fastboot": "Fastboot",
+    "tuning": "调优"
+  },
+  "tuning": {
+    "title": "调优",
+    "description": "通过 ADB 调整安全的 Android 系统设置。",
+    "refresh": "刷新",
+    "loading": "正在读取设备设置…",
+    "desktopRequiredBody": "设备调优在 Droidsmith 桌面应用中可用。",
+    "noAuthorizedBody": "授权设备以读取和更改其系统设置。",
+    "errorTitle": "设置错误",
+    "current": "当前",
+    "unset": "未设置",
+    "choose": "选择一个值",
+    "apply": "应用",
+    "applying": "正在应用…",
+    "revert": "还原",
+    "changeLog": "更改日志",
+    "previousUnset": "原为未设置",
+    "previousValue": "原为 {{value}}",
+    "items": {
+      "window_animation_scale": {
+        "label": "窗口动画缩放",
+        "help": "窗口打开和关闭动画的速度。0 表示禁用。"
+      },
+      "transition_animation_scale": {
+        "label": "过渡动画缩放",
+        "help": "活动过渡动画的速度。0 表示禁用。"
+      },
+      "animator_duration_scale": {
+        "label": "动画程序时长缩放",
+        "help": "应用内动画程序动画的速度。0 表示禁用。"
+      },
+      "screen_off_timeout": {
+        "label": "屏幕超时",
+        "help": "显示屏关闭前的空闲时间（毫秒）。"
+      },
+      "font_scale": {
+        "label": "字体缩放",
+        "help": "系统字体大小倍数（1.0 为默认值）。"
+      },
+      "stay_on_while_plugged_in": {
+        "label": "充电时保持唤醒",
+        "help": "设备充电时保持屏幕开启。"
+      }
+    }
   },
   "devices": {
     "title": "设备",

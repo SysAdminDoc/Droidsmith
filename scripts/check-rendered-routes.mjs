@@ -710,6 +710,34 @@ async function runDesktopFlow(browser) {
   await page.getByRole("button", { name: "Reset selected scope" }).click();
   await page.getByText(/reset to defaults/).waitFor();
 
+  // Close the app settings modal opened above so it stops intercepting clicks.
+  await page.keyboard.press("Escape");
+  await page
+    .getByRole("dialog", { name: /settings/i })
+    .waitFor({ state: "hidden" });
+
+  // R-082: the Tuning route reads and writes the curated system-settings
+  // catalog and keeps a revertable change log.
+  await page.getByRole("button", { name: /Tuning/ }).click();
+  await page.getByRole("heading", { name: "Tuning", exact: true }).waitFor();
+  const animationCard = page
+    .getByRole("heading", { name: "Window animation scale", exact: true })
+    .locator("../../..");
+  await animationCard.waitFor();
+  await animationCard
+    .getByLabel("Window animation scale", { exact: true })
+    .fill("0.5");
+  await animationCard.getByRole("button", { name: "Apply" }).click();
+  await page
+    .getByText("adb shell settings put global window_animation_scale 0.5")
+    .first()
+    .waitFor();
+  await page.getByRole("button", { name: "Revert" }).first().click();
+  await page
+    .getByText("adb shell settings put global window_animation_scale 1.0")
+    .first()
+    .waitFor();
+
   assertNoConsoleErrors(errors, "desktop route smoke");
   await page.close();
 }
@@ -765,6 +793,7 @@ async function runLocaleZoomFlow(browser) {
     "Консоль",
     "Logcat",
     "Fastboot",
+    "Настройка",
   ];
   for (const name of routes) {
     await page
@@ -1232,6 +1261,58 @@ async function installTauriMock(
     window.__DROIDSMITH_MOCK_EMPTY_PACKAGES__ = (value) => {
       emptyPackages = value;
     };
+    // R-082 tuning: curated device-settings catalog with mutable values so
+    // put_device_setting round-trips through the subsequent list.
+    const deviceSettingsCatalog = [
+      {
+        id: "window_animation_scale",
+        namespace: "global",
+        key: "window_animation_scale",
+        control: { kind: "float", min: 0, max: 10 },
+        value: "1.0",
+      },
+      {
+        id: "transition_animation_scale",
+        namespace: "global",
+        key: "transition_animation_scale",
+        control: { kind: "float", min: 0, max: 10 },
+        value: "1.0",
+      },
+      {
+        id: "animator_duration_scale",
+        namespace: "global",
+        key: "animator_duration_scale",
+        control: { kind: "float", min: 0, max: 10 },
+        value: "1.0",
+      },
+      {
+        id: "screen_off_timeout",
+        namespace: "system",
+        key: "screen_off_timeout",
+        control: { kind: "int", min: 15000, max: 1800000 },
+        value: "30000",
+      },
+      {
+        id: "font_scale",
+        namespace: "system",
+        key: "font_scale",
+        control: { kind: "float", min: 0.5, max: 2 },
+        value: null,
+      },
+      {
+        id: "stay_on_while_plugged_in",
+        namespace: "global",
+        key: "stay_on_while_plugged_in",
+        control: {
+          kind: "choice",
+          options: [
+            { value: "0", label: "Off" },
+            { value: "7", label: "On (any charger)" },
+          ],
+        },
+        value: "0",
+      },
+    ];
     const qaPackAssessment = {
       status: "compatible",
       override_required: false,
@@ -1620,6 +1701,27 @@ async function installTauriMock(
             files_removed: 2,
             bytes_removed: 4096,
             device_journals_preserved: true,
+          };
+        }
+        if (cmd === "list_device_settings") {
+          return deviceSettingsCatalog.map((setting) => ({ ...setting }));
+        }
+        if (cmd === "put_device_setting") {
+          const setting = deviceSettingsCatalog.find(
+            (item) => item.id === args.settingId,
+          );
+          if (!setting) {
+            throw new Error(`unknown setting: ${args.settingId}`);
+          }
+          const previous = setting.value;
+          setting.value = String(args.value);
+          return {
+            id: setting.id,
+            namespace: setting.namespace,
+            key: setting.key,
+            previous_value: previous,
+            new_value: setting.value,
+            command: `adb shell settings put ${setting.namespace} ${setting.key} ${setting.value}`,
           };
         }
         if (cmd === "list_packages") {

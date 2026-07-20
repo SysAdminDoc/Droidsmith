@@ -209,6 +209,31 @@ export const commands = {
   async getDeviceInfo(target: DeviceTarget): Promise<DeviceInfo> {
     return await TAURI_INVOKE("get_device_info", { target });
   },
+  /**
+   * R-082: read the curated system-settings allow-list (`settings get`). Read
+   * only; safe over any authorized transport.
+   */
+  async listDeviceSettings(target: DeviceTarget): Promise<DeviceSetting[]> {
+    return await TAURI_INVOKE("list_device_settings", { target });
+  },
+  /**
+   * R-082: write one allow-listed setting (`settings put`). The `setting_id` and
+   * `value` are validated against the catalog before anything is shelled out, so
+   * arbitrary keys or out-of-range values are rejected. Runs over the privileged
+   * transport boundary because it mutates device state; the previous value is
+   * returned so the renderer can offer a one-click revert.
+   */
+  async putDeviceSetting(
+    target: DeviceTarget,
+    settingId: string,
+    value: string,
+  ): Promise<DeviceSettingChange> {
+    return await TAURI_INVOKE("put_device_setting", {
+      target,
+      settingId,
+      value,
+    });
+  },
   async listWirelessServices(): Promise<ListWirelessServicesResult> {
     return await TAURI_INVOKE("list_wireless_services");
   },
@@ -1197,6 +1222,28 @@ export type DeviceLifecycleEvent =
       observed_at: string;
     }
   | { kind: "error"; message: string; observed_at: string };
+export type DeviceSetting = {
+  id: string;
+  namespace: SettingNamespace;
+  key: string;
+  control: SettingControl;
+  /**
+   * Current on-device value, or `None` if unset / unreadable.
+   */
+  value: string | null;
+};
+export type DeviceSettingChange = {
+  id: string;
+  namespace: SettingNamespace;
+  key: string;
+  previous_value: string | null;
+  new_value: string;
+  /**
+   * The exact `adb shell settings put …` command that was run, for the audit
+   * log / preview.
+   */
+  command: string;
+};
 export type DeviceState =
   /**
    * `device` — fully authorized.
@@ -2071,6 +2118,26 @@ export type ScrcpyVideoEncoder = {
   name: string;
   software: boolean;
 };
+export type SettingChoice = { value: string; label: string };
+/**
+ * How a value is validated and presented. Kept intentionally narrow so the
+ * renderer can render an appropriate control and the backend can reject
+ * out-of-range writes.
+ */
+export type SettingControl =
+  /**
+   * Bounded decimal (e.g. animation scales 0.0–10.0).
+   */
+  | { kind: "float"; min: number; max: number }
+  /**
+   * Bounded integer (e.g. screen-off timeout in milliseconds).
+   */
+  | { kind: "int"; min: number; max: number }
+  /**
+   * A fixed set of allowed integer values with human labels.
+   */
+  | { kind: "choice"; options: SettingChoice[] };
+export type SettingNamespace = "system" | "secure" | "global";
 export type SettingsExportResult = {
   path: string;
   byteSize: number;

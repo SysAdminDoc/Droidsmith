@@ -18,6 +18,8 @@ import {
   type BugreportCaptureResult,
   type Device,
   type DeviceInfo,
+  type DeviceSetting,
+  type DeviceSettingChange,
   type DeviceLifecycleEvent,
   type DeviceState,
   type DeviceTarget as GeneratedDeviceTarget,
@@ -552,6 +554,20 @@ export async function callGetDeviceInfo(
   target: DeviceTarget,
 ): Promise<DeviceInfo> {
   return commands.getDeviceInfo(target);
+}
+
+export async function callListDeviceSettings(
+  target: DeviceTarget,
+): Promise<DeviceSetting[]> {
+  return commands.listDeviceSettings(target);
+}
+
+export async function callPutDeviceSetting(
+  target: DeviceTarget,
+  settingId: string,
+  value: string,
+): Promise<DeviceSettingChange> {
+  return commands.putDeviceSetting(target, settingId, value);
 }
 
 export async function callListPackages(

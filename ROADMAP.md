@@ -31,19 +31,6 @@ instead.
   tap-at-coordinates bindings work; swipe/joystick are stretch goals.
   Complexity: L
 
-- [ ] P2 — R-082: ADB system settings editor
-  Why: UAD-ng #1226 (6 comments) requests GUI for changing system settings over
-  ADB. Common use cases: disable animations (speed up device), change display
-  DPI, toggle developer options. ADB AppControl paywalls DPI changes.
-  Evidence: UAD-ng #1226; ADB AppControl features; adb-enhanced scenarios
-  Touches: `src-tauri/src/adb/` (new `settings.rs` module for `adb shell
-  settings get/put`), new route or Devices sub-panel, locale files
-  Acceptance: Settings panel shows a curated list of safe system/secure/global
-  settings (animation scales, display density, stay-on-while-charging, USB
-  debugging timeout). Each shows current value and allows editing with a
-  preview of the ADB command. Changes are journaled and undoable.
-  Complexity: M
-
 - [ ] P2 — IMP-63: Curated debloat presets (Privacy Max, Battery Saver, etc.)
   Why: Users face decision fatigue choosing individual packages. UAD-ng #583
   requests a verified "Safe" list. Named presets like "Privacy Max" (remove all
