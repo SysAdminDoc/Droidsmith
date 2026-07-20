@@ -15,18 +15,5 @@ instead.
 
 ## Remaining
 
-### P3
-
-- [ ] P3 — R-085: RTL language architecture
-  Why: Arabic (ar), Hebrew (he), and Persian (fa) are RTL languages. The i18n
-  system supports `dir` metadata per locale, but the CSS uses physical
-  properties (`margin-left`, `padding-right`) throughout, which break under
-  RTL. CSS logical properties (`margin-inline-start`, `padding-inline-end`)
-  are the correct foundation.
-  Evidence: i18next RTL docs; MDN CSS logical properties
-  Touches: all `src/routes/*.tsx` (replace physical with logical CSS
-  properties), `tailwind.config.ts` (logical property utilities),
-  `src/lib/i18n.ts` (direction propagation)
-  Acceptance: Adding an RTL locale (e.g., ar) correctly mirrors the layout.
-  No physical margin/padding properties remain in route files.
-  Complexity: L
+_No actionable items. Blocked/deferred work lives in
+[Roadmap_Blocked.md](Roadmap_Blocked.md)._

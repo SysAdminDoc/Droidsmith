@@ -27,6 +27,14 @@ each milestone tag.
 
 ### Refactored
 
+- Laid the RTL layout foundation (R-085). Every route and shared component now
+  uses CSS logical properties instead of physical ones — `ml/mr → ms/me`,
+  `pl/pr → ps/pe`, `left/right → start/end`, `text-left/right → text-start/end`,
+  and `border-l/r → border-s/e` (including logical border colors) — so a future
+  RTL locale mirrors the layout automatically. Direction already propagates to
+  `<html dir>` from each locale's `dir` metadata (`src/lib/i18n.ts`); Tailwind
+  3.4's built-in logical utilities need no config change. No physical
+  margin/padding directional utilities remain in the route files.
 - Completed the Devices/Apps god-file split (IMP-67). `Devices.tsx`
   (2,695 LOC → 1,633) now delegates its device-controls surface to
   `src/routes/devices/DeviceControls.tsx` and its remote file browser to
