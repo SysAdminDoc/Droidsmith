@@ -584,7 +584,7 @@ export function FileManager({ target }: { target: DeviceTarget }) {
                   {entry.is_dir ? (
                     <button
                       type="button"
-                      className="min-w-0 flex-1 truncate text-left font-mono text-circuit-200 hover:underline"
+                      className="min-w-0 flex-1 truncate text-start font-mono text-circuit-200 hover:underline"
                       onClick={() =>
                         void browse(
                           currentPath === "/"

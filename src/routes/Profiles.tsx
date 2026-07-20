@@ -844,7 +844,7 @@ function ProfileDiff({
         >
           <p>{t("profiles.migrationBody")}</p>
           {preview.migration.warnings.length > 0 && (
-            <ul className="mt-2 list-disc space-y-1 pl-5">
+            <ul className="mt-2 list-disc space-y-1 ps-5">
               {preview.migration.warnings.map((warning) => (
                 <li key={warning}>{warning}</li>
               ))}
@@ -890,7 +890,7 @@ function ProfileDiff({
             <p className="text-sm font-semibold text-red-100">
               {t("profiles.compatibilityIssues")}
             </p>
-            <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-red-100/90">
+            <ul className="mt-2 list-disc space-y-1 ps-5 text-sm text-red-100/90">
               {preview.compatibility_issues.map((issue) => (
                 <li key={issue}>{issue}</li>
               ))}

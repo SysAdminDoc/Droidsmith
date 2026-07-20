@@ -1516,7 +1516,7 @@ function ActionOverlay({
       >
         <p>{state.message}</p>
         {state.details && state.details.length > 0 && (
-          <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-anvil-200">
+          <ul className="mt-3 list-disc space-y-1 ps-5 text-sm text-anvil-200">
             {state.details.map((detail) => (
               <li key={detail} className="break-words font-mono text-xs">
                 {detail}

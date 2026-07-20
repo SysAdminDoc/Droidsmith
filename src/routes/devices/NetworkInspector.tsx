@@ -96,19 +96,19 @@ export function NetworkInspector({ target }: { target: DeviceTarget }) {
           <table className="min-w-full text-xs">
             <thead className="sticky top-0 bg-anvil-900">
               <tr>
-                <th className="px-3 py-2 text-left font-semibold text-anvil-400">
+                <th className="px-3 py-2 text-start font-semibold text-anvil-400">
                   {t("devices.controls.colProto")}
                 </th>
-                <th className="px-3 py-2 text-left font-semibold text-anvil-400">
+                <th className="px-3 py-2 text-start font-semibold text-anvil-400">
                   {t("devices.controls.colState")}
                 </th>
-                <th className="px-3 py-2 text-left font-semibold text-anvil-400">
+                <th className="px-3 py-2 text-start font-semibold text-anvil-400">
                   {t("devices.controls.colLocal")}
                 </th>
-                <th className="px-3 py-2 text-left font-semibold text-anvil-400">
+                <th className="px-3 py-2 text-start font-semibold text-anvil-400">
                   {t("devices.controls.colRemote")}
                 </th>
-                <th className="px-3 py-2 text-left font-semibold text-anvil-400">
+                <th className="px-3 py-2 text-start font-semibold text-anvil-400">
                   {t("devices.controls.colProcess")}
                 </th>
               </tr>
@@ -132,7 +132,7 @@ export function NetworkInspector({ target }: { target: DeviceTarget }) {
                   <td className="px-3 py-1.5 font-mono text-anvil-400">
                     {c.process ?? t("devices.controls.notReported")}
                     {c.parse_error && (
-                      <Badge tone="warning" className="ml-2">
+                      <Badge tone="warning" className="ms-2">
                         {t("devices.controls.parseIssue")}
                       </Badge>
                     )}

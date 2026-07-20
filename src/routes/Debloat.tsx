@@ -978,7 +978,7 @@ function PackPicker({
               key={pack.id}
               type="button"
               onClick={() => onSelect(candidate)}
-              className="group rounded-lg border border-white/10 bg-white/[0.02] p-4 text-left transition hover:border-circuit-300/30 hover:bg-circuit-300/[0.04] focus:outline-none focus-visible:ring-2 focus-visible:ring-circuit-300"
+              className="group rounded-lg border border-white/10 bg-white/[0.02] p-4 text-start transition hover:border-circuit-300/30 hover:bg-circuit-300/[0.04] focus:outline-none focus-visible:ring-2 focus-visible:ring-circuit-300"
             >
               <div className="flex items-start justify-between gap-3">
                 <h4 className="text-sm font-semibold text-anvil-50">
@@ -1202,7 +1202,7 @@ function PackPreview({
                         {support && (
                           <Badge
                             tone={entryStatusTone(support.status)}
-                            className="ml-2"
+                            className="ms-2"
                           >
                             {t(`debloat.entryStatus.${support.status}`)}
                           </Badge>

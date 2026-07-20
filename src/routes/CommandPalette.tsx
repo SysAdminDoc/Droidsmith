@@ -183,7 +183,7 @@ export function CommandPalette({
               }}
               onMouseEnter={() => setActiveIndex(index)}
               className={cn(
-                "flex w-full items-center gap-3 px-4 py-2.5 text-left transition-colors",
+                "flex w-full items-center gap-3 px-4 py-2.5 text-start transition-colors",
                 index === activeIndex
                   ? "bg-circuit-300/10 text-anvil-50"
                   : "text-anvil-300 hover:bg-white/[0.04]",

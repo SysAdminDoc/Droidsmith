@@ -197,14 +197,14 @@ export default function App() {
     <div className="min-h-full overflow-hidden bg-anvil-950 text-anvil-100 lg:h-full">
       <a
         href="#main-content"
-        className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-md focus:bg-circuit-300 focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:text-anvil-950"
+        className="sr-only focus:not-sr-only focus:fixed focus:start-4 focus:top-4 focus:z-50 focus:rounded-md focus:bg-circuit-300 focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:text-anvil-950"
       >
         {t("app.skipToContent")}
       </a>
       <div className="relative flex min-h-full flex-col lg:h-full lg:flex-row">
         <aside
           ref={sidebarRef}
-          className="border-b border-white/[0.08] bg-[#11151b] p-4 lg:sticky lg:top-0 lg:flex lg:h-screen lg:w-[15.5rem] lg:shrink-0 lg:flex-col lg:overflow-y-auto lg:border-b-0 lg:border-r lg:p-4"
+          className="border-b border-white/[0.08] bg-[#11151b] p-4 lg:sticky lg:top-0 lg:flex lg:h-screen lg:w-[15.5rem] lg:shrink-0 lg:flex-col lg:overflow-y-auto lg:border-b-0 lg:border-e lg:p-4"
           aria-label={t("app.sidebarLabel")}
         >
           <div className="flex items-start justify-between gap-4 lg:block">
@@ -605,11 +605,11 @@ function NavStub({
       aria-current={active ? "page" : undefined}
       aria-describedby={`${item.id}-description`}
       className={cn(
-        "group relative flex min-w-[11.5rem] items-center gap-3 rounded-md px-3 py-2.5 text-left transition duration-150 lg:min-w-0",
+        "group relative flex min-w-[11.5rem] items-center gap-3 rounded-md px-3 py-2.5 text-start transition duration-150 lg:min-w-0",
         "snap-start",
         "focus:outline-none focus-visible:ring-2 focus-visible:ring-circuit-300 focus-visible:ring-offset-2 focus-visible:ring-offset-anvil-950",
         active
-          ? "bg-circuit-300/[0.11] text-anvil-50 before:absolute before:inset-y-2 before:left-0 before:w-0.5 before:rounded-full before:bg-circuit-300"
+          ? "bg-circuit-300/[0.11] text-anvil-50 before:absolute before:inset-y-2 before:start-0 before:w-0.5 before:rounded-full before:bg-circuit-300"
           : "text-anvil-300 hover:bg-white/[0.045] hover:text-anvil-50",
       )}
     >

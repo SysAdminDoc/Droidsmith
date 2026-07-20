@@ -262,15 +262,15 @@ export default function DevicesRoute() {
               }
             >
               <ol className="grid gap-2 text-sm sm:grid-cols-3">
-                <li className="border-l border-white/10 pl-3 first:border-l-0 first:pl-0">
+                <li className="border-s border-white/10 ps-3 first:border-s-0 first:ps-0">
                   {t("devices.noDevicesStep1")}
                 </li>
-                <li className="border-l border-white/10 pl-3 first:border-l-0 first:pl-0">
+                <li className="border-s border-white/10 ps-3 first:border-s-0 first:ps-0">
                   {t("devices.noDevicesStep2Prefix")}{" "}
                   <em>{t("devices.allowUsbDebugging")}</em>{" "}
                   {t("devices.noDevicesStep2Suffix")}
                 </li>
-                <li className="border-l border-white/10 pl-3 first:border-l-0 first:pl-0">
+                <li className="border-s border-white/10 ps-3 first:border-s-0 first:ps-0">
                   {t("devices.noDevicesStep3")}
                 </li>
               </ol>
@@ -354,7 +354,7 @@ export default function DevicesRoute() {
                       <code className="font-mono text-anvil-100">
                         {device.serial}
                       </code>
-                      <span className="ml-2 text-anvil-400">
+                      <span className="ms-2 text-anvil-400">
                         {formatStateLabel(device.state)}
                       </span>
                     </li>
@@ -441,12 +441,12 @@ function DeviceHeaderActions({
         {open && (
           <div
             role="menu"
-            className="absolute right-0 z-20 mt-2 min-w-48 rounded-lg border border-white/[0.09] bg-[#181d24] p-1.5 shadow-2xl"
+            className="absolute end-0 z-20 mt-2 min-w-48 rounded-lg border border-white/[0.09] bg-[#181d24] p-1.5 shadow-2xl"
           >
             <button
               type="button"
               role="menuitem"
-              className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-anvil-200 transition hover:bg-white/[0.07] hover:text-anvil-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-circuit-300"
+              className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-start text-sm text-anvil-200 transition hover:bg-white/[0.07] hover:text-anvil-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-circuit-300"
               onClick={() => {
                 setOpen(false);
                 onReviewRecovery();
@@ -640,7 +640,7 @@ function AdbHealthPanel({
       {health?.warning && (
         <p
           role="status"
-          className="mt-4 border-l-2 border-amber-300/70 pl-3 text-xs text-amber-100"
+          className="mt-4 border-s-2 border-amber-300/70 ps-3 text-xs text-amber-100"
         >
           {health.warning}
         </p>
@@ -648,7 +648,7 @@ function AdbHealthPanel({
       {health && (
         <p
           className={cn(
-            "mt-3 border-l-2 pl-3 text-xs",
+            "mt-3 border-s-2 ps-3 text-xs",
             health.platform_tools.status === "blocked"
               ? "border-red-300/70 text-red-100"
               : health.platform_tools.status === "warn"
@@ -675,7 +675,7 @@ function AdbHealthPanel({
 
 function HealthMetric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="min-w-0 border-l border-white/[0.08] px-3 first:border-l-0 first:pl-0">
+    <div className="min-w-0 border-s border-white/[0.08] px-3 first:border-s-0 first:ps-0">
       <dt className="text-[11px] leading-4 text-anvil-500">{label}</dt>
       <dd className="mt-1 break-words text-[13px] font-medium leading-5 text-anvil-100">
         {value}
@@ -941,7 +941,7 @@ function DeviceTable({
                       : "bg-anvil-950/20 opacity-75",
                   ].join(" ")}
                 >
-                  <TableCell className="pr-0">
+                  <TableCell className="pe-0">
                     <button
                       type="button"
                       disabled={!isDevice}
@@ -997,7 +997,7 @@ function DeviceTable({
                       </span>
                     )}
                   </TableCell>
-                  <TableCell className="pl-0 text-right">
+                  <TableCell className="ps-0 text-end">
                     <button
                       type="button"
                       disabled={!isDevice}
@@ -1546,7 +1546,7 @@ function AuthorizePrompt({
                       {d.serial}
                     </code>
                     {d.model && (
-                      <span className="ml-2 text-xs text-anvil-400">
+                      <span className="ms-2 text-xs text-anvil-400">
                         ({d.model})
                       </span>
                     )}

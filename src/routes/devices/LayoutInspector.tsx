@@ -169,7 +169,7 @@ export function LayoutInspector({ target }: { target: DeviceTarget }) {
                   {node.clickable && (
                     <Badge tone="info">{t("devices.layout.clickable")}</Badge>
                   )}
-                  <span className="ml-auto pl-3 text-anvil-600">
+                  <span className="ms-auto ps-3 text-anvil-600">
                     {node.bounds}
                   </span>
                 </>

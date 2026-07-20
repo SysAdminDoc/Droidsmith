@@ -114,7 +114,7 @@ export default function HostDoctor() {
             <summary className="cursor-pointer font-medium text-anvil-200">
               {t("hostDoctor.privacy")}
             </summary>
-            <ul className="mt-2 list-disc space-y-1 pl-5">
+            <ul className="mt-2 list-disc space-y-1 ps-5">
               {state.report.privacy.map((item) => (
                 <li key={item}>{item}</li>
               ))}
@@ -142,13 +142,13 @@ function Finding({ finding }: { finding: HostFinding }) {
     <StatePanel title={title} tone={tone}>
       <p>{finding.summary}</p>
       {finding.evidence.length > 0 && (
-        <ul className="mt-2 list-disc space-y-1 pl-5 font-mono text-xs text-anvil-300">
+        <ul className="mt-2 list-disc space-y-1 ps-5 font-mono text-xs text-anvil-300">
           {finding.evidence.map((item) => (
             <li key={item}>{item}</li>
           ))}
         </ul>
       )}
-      <ol className="mt-3 list-decimal space-y-1 pl-5">
+      <ol className="mt-3 list-decimal space-y-1 ps-5">
         {finding.remediation.map((item) => (
           <li key={item}>{item}</li>
         ))}

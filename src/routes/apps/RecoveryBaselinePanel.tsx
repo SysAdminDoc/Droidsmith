@@ -125,7 +125,7 @@ export function RecoveryBaselinePanel({
         </div>
       </div>
       <div className="max-h-72 overflow-auto">
-        <table className="w-full text-left text-xs">
+        <table className="w-full text-start text-xs">
           <thead className="sticky top-0 bg-anvil-900">
             <tr>
               <TableHeaderCell>{t("apps.package")}</TableHeaderCell>
@@ -171,7 +171,7 @@ export function RecoveryBaselinePanel({
       </div>
       <div className="flex flex-wrap justify-end gap-2 border-t border-white/10 p-4">
         {state.kind === "result" && (
-          <p className="mr-auto text-xs text-anvil-300">
+          <p className="me-auto text-xs text-anvil-300">
             {t("apps.recoveryResult", {
               applied: state.applied,
               failed: state.failures.length,

@@ -292,12 +292,12 @@ export function StatePanel({
     <Card
       role={tone === "danger" ? "alert" : "status"}
       className={cn(
-        "rounded-md border-l-2 p-4 shadow-none",
-        tone === "neutral" && "border-l-white/20 bg-white/[0.025]",
-        tone === "info" && "border-l-circuit-300/60 bg-circuit-950/20",
-        tone === "success" && "border-l-emerald-300/60 bg-emerald-950/15",
-        tone === "warning" && "border-l-amber-300/70 bg-amber-950/15",
-        tone === "danger" && "border-l-red-300/70 bg-red-950/15",
+        "rounded-md border-s-2 p-4 shadow-none",
+        tone === "neutral" && "border-s-white/20 bg-white/[0.025]",
+        tone === "info" && "border-s-circuit-300/60 bg-circuit-950/20",
+        tone === "success" && "border-s-emerald-300/60 bg-emerald-950/15",
+        tone === "warning" && "border-s-amber-300/70 bg-amber-950/15",
+        tone === "danger" && "border-s-red-300/70 bg-red-950/15",
       )}
     >
       <div className="flex gap-3">
@@ -421,7 +421,7 @@ export function TableHeaderCell({
     <th
       className={cn(
         "px-4 py-3 text-xs font-medium text-anvil-400",
-        align === "right" ? "text-right" : "text-left",
+        align === "right" ? "text-end" : "text-start",
         // Grid-mode cells (role="columnheader") show a focus ring when they
         // become the roving tab stop; native table headers are unaffected.
         rest.role === "columnheader" &&
@@ -449,7 +449,7 @@ export function TableCell({
     <td
       className={cn(
         "px-4 py-4 align-middle text-anvil-200",
-        align === "right" && "text-right",
+        align === "right" && "text-end",
         rest.role === "gridcell" &&
           "focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-circuit-300",
         className,

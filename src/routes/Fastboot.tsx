@@ -245,7 +245,7 @@ export default function FastbootRoute() {
                             <TableCell>
                               <Badge tone="info">{d.mode}</Badge>
                               {d.parse_error && (
-                                <Badge tone="warning" className="ml-2">
+                                <Badge tone="warning" className="ms-2">
                                   {t("fastboot.parseIssue")}
                                 </Badge>
                               )}

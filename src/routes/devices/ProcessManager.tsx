@@ -97,27 +97,27 @@ export function ProcessManager({ target }: { target: DeviceTarget }) {
           <table className="min-w-full text-xs">
             <thead className="sticky top-0 bg-anvil-900">
               <tr>
-                <th className="px-3 py-2 text-left font-semibold text-anvil-400">
+                <th className="px-3 py-2 text-start font-semibold text-anvil-400">
                   {t("devices.controls.colPid")}
                 </th>
-                <th className="px-3 py-2 text-left font-semibold text-anvil-400">
+                <th className="px-3 py-2 text-start font-semibold text-anvil-400">
                   {t("devices.controls.colUser")}
                 </th>
                 <th
-                  className="px-3 py-2 text-right font-semibold text-anvil-400"
+                  className="px-3 py-2 text-end font-semibold text-anvil-400"
                   aria-sort={sortBy === "rss" ? "descending" : "none"}
                 >
                   <button
                     type="button"
                     onClick={() => setSortBy("rss")}
-                    className="ml-auto flex items-center gap-1 hover:text-anvil-200"
+                    className="ms-auto flex items-center gap-1 hover:text-anvil-200"
                   >
                     {t("devices.controls.colRss")}
                     {sortBy === "rss" && <span aria-hidden="true">&darr;</span>}
                   </button>
                 </th>
                 <th
-                  className="px-3 py-2 text-left font-semibold text-anvil-400"
+                  className="px-3 py-2 text-start font-semibold text-anvil-400"
                   aria-sort={sortBy === "name" ? "ascending" : "none"}
                 >
                   <button
@@ -143,13 +143,13 @@ export function ProcessManager({ target }: { target: DeviceTarget }) {
                     {p.pid}
                   </td>
                   <td className="px-3 py-1.5 text-anvil-400">{p.user}</td>
-                  <td className="px-3 py-1.5 text-right font-mono text-anvil-200">
+                  <td className="px-3 py-1.5 text-end font-mono text-anvil-200">
                     {formatKb(p.rss_kb)}
                   </td>
                   <td className="px-3 py-1.5 font-mono text-anvil-100">
                     <span>{p.name}</span>
                     {p.parse_error && (
-                      <Badge tone="warning" className="ml-2">
+                      <Badge tone="warning" className="ms-2">
                         {t("devices.controls.parseIssue")}
                       </Badge>
                     )}

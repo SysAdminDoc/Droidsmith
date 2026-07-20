@@ -676,7 +676,7 @@ function WirelessFailureHint({
       <p className="mt-1 text-sm text-anvil-200">
         {t(`wireless.${prefix}Body`)}
       </p>
-      <ol className="mt-3 list-decimal space-y-1 pl-5 text-sm text-anvil-200">
+      <ol className="mt-3 list-decimal space-y-1 ps-5 text-sm text-anvil-200">
         <li>{t(`wireless.${prefix}Step1`)}</li>
         <li>{t(`wireless.${prefix}Step2`)}</li>
       </ol>
