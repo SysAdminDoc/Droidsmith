@@ -11,7 +11,13 @@ import {
   type WipeDiagnosticsResult,
 } from "../lib/tauri";
 import { useFocusTrap } from "../lib/useFocusTrap";
-import { Badge, Button, FieldTextArea, SkeletonLine, StatePanel } from "./common";
+import {
+  Badge,
+  Button,
+  FieldTextArea,
+  SkeletonLine,
+  StatePanel,
+} from "./common";
 import BugreportCapture from "./BugreportCapture";
 import HostDoctor from "./HostDoctor";
 import SettingsDataControls from "./SettingsDataControls";

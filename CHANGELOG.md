@@ -14,6 +14,83 @@ completion.
 Working batches live here. Sections collapse into a versioned release on
 each milestone tag.
 
+## [0.7.0] - 2026-07-18
+
+Design-system unification, locale expansion, and OEM pack coverage batch.
+
+### Added
+
+- German (de), Spanish (es), and Simplified Chinese (zh) locale support
+  with full 1163-key parity. The i18n test suite now validates all 5
+  shipped locales via `it.each` (R-077).
+- OnePlus OxygenOS, Realme UI, and Nothing OS debloat packs (33 entries
+  total) covering previously unrepresented OEMs. All pass
+  `droidsmith-pack-lint` and the bundled-pack contract test (R-078).
+- Background service inspector: `list_running_services` command parses
+  `dumpsys activity services` to extract running ServiceRecord components
+  per package (R-086).
+- Settings export/reset smoke coverage in `ui:smoke` (IMP-68).
+
+### Changed
+
+- Extracted `FieldSelect` and `FieldTextArea` shared primitives into
+  `common.tsx`, replacing 10 raw `<select>` and 5 raw `<textarea>` elements
+  across 8 route files. Eliminates per-route style drift (bg, height,
+  hover, transition inconsistencies).
+- Replaced the hand-rolled `TransportChip` in Devices with the shared
+  `TransportBadge` from common.tsx (-25 LOC).
+- Replaced the one-off permission grant/deny toggle with the standard
+  `Button` component using secondary/danger variants.
+- Converged all route content panes from a mix of max-w-5xl/6xl/7xl/[88rem]
+  to a consistent max-w-7xl (80rem).
+- Replaced two arbitrary `shadow-[rgba(...)]` utilities with the theme
+  `shadow-panel` and `shadow-glow` tokens.
+
+### Fixed
+
+- Diagnostics save dialog cancellation now shows a "Save cancelled."
+  status message instead of leaving the UI in a silent state.
+- Console hint text now explains that arrow-key history recall skips
+  failed commands.
+
+## [0.6.0] - 2026-07-18
+
+Research-driven feature batch from the 2026-07-18 competitive analysis
+(25+ competitors, 38+ community signals, Android 16 / scrcpy 4.1 /
+platform-tools 37.0.1 updates reviewed).
+
+### Added
+
+- Mirror route gained scrcpy 4.x toggles: flex display (resizable virtual
+  display) and keep-active (prevent device sleep). Both are capability-gated
+  and hidden when the installed scrcpy is pre-4.0. VP8/VP9 codecs were
+  already wired end-to-end (R-074).
+- Recovery baseline inspection detects post-OTA debloat drift: packages
+  whose applied action was reverted (e.g. disabled then re-enabled by a
+  system update) show a "Drifted" status with a danger badge and a re-apply
+  plan, instead of the confusing "Already matches" they showed before (R-076).
+- Drag-and-drop APK installation: dropping an .apk/.apks/.xapk/.apkm file
+  onto the Apps route triggers the full install flow with validation, preview,
+  and journal recording. A new `grant_dropped_path` backend command validates
+  and issues a one-shot path grant for the dropped file (R-080).
+- Safe device disconnect: a Disconnect button in the Devices detail panel
+  sends `adb disconnect` for wireless devices and advises safe-to-unplug for
+  USB. The command never issues destructive ADB operations (R-083).
+
+### Testing
+
+- Added CLI smoke tests for `droidsmith-cli` argument parsing and the
+  `migrate-v1` subcommand against a v1 profile fixture (IMP-64).
+- Added a `scrcpy_text` fuzz target covering version, help-text, and encoder
+  listing parsers; promoted those parsers to `pub(crate)` visibility (IMP-66).
+- Stale documentation references in CONTRIBUTING.md, LICENSE-THIRD-PARTY.md,
+  and docs/DEVELOPMENT.md updated to reflect shipped and blocked state (IMP-65).
+
+### Changed
+
+- Auto-update (R-075) moved to Roadmap_Blocked.md: requires an Ed25519
+  keypair and release-manifest hosting that depend on R-006.
+
 ## [0.5.3] - 2026-07-17
 
 ### Fixed
