@@ -8,16 +8,12 @@ import {
   callApplyRemoteFileMutation,
   callCancelOperation,
   callGetDeviceInfo,
-  callListNetworkConnections,
-  callListProcesses,
   callListRemoteFiles,
   callPullFile,
-  callCaptureLayout,
   callPushFile,
   callPlanRemoteFileMutation,
   callDisconnectDevice,
   callRecoverAdb,
-  callSaveLayoutExport,
   callSelectHostPath,
   callTakeScreenshot,
   deviceTarget,
@@ -29,11 +25,8 @@ import {
   type DeviceInfo,
   type DeviceTarget,
   type HostPathGrant,
-  type LayoutNode,
   type ListDevicesResult,
-  type NetworkConnection,
   type OperationEvent,
-  type ProcessInfo,
   type RemoteFileEntry,
   type RemoteFileMutationPlan,
   type RemoteFileMutationRequest,
@@ -64,6 +57,15 @@ import {
 } from "./common";
 import HostDoctor from "./HostDoctor";
 import { ADB_RECOVERY_COMMANDS, formatAdbDiagnostics } from "./adbHealth";
+import { NetworkInspector } from "./devices/NetworkInspector";
+import { LayoutInspector } from "./devices/LayoutInspector";
+import { ProcessManager } from "./devices/ProcessManager";
+import {
+  formatBytes,
+  formatKb,
+  statusToneClass,
+  type StatusMessage as DeviceStatusMessage,
+} from "./devices/common";
 
 type DetailState =
   | { kind: "idle" }
@@ -1532,17 +1534,10 @@ function formatStateLabel(state: SerializedDeviceState): string {
   return label.charAt(0).toUpperCase() + label.slice(1);
 }
 
-type StatusTone = "neutral" | "success" | "danger";
-type StatusMessage = { text: string; tone: StatusTone } | null;
+type StatusMessage = DeviceStatusMessage;
 
 // Inline device-control results confirm real mutations, so a success and a
 // failure must not read as the same faint line.
-function statusToneClass(tone: StatusTone): string {
-  if (tone === "success") return "text-emerald-200";
-  if (tone === "danger") return "text-red-200";
-  return "text-anvil-300";
-}
-
 const REMOTE_BUTTONS: { id: string; labelKey: string; keycode: number }[] = [
   { id: "Home", labelKey: "devices.controls.remoteHome", keycode: 3 },
   { id: "Back", labelKey: "devices.controls.remoteBack", keycode: 4 },
@@ -1882,179 +1877,6 @@ function RemoteGlyph({ label }: { label: string }) {
       )}
     </svg>
   );
-}
-
-function ProcessManager({ target }: { target: DeviceTarget }) {
-  const { t } = useTranslation();
-  const [processes, setProcesses] = useState<ProcessInfo[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [search, setSearch] = useState("");
-  const [sortBy, setSortBy] = useState<"rss" | "name">("rss");
-
-  const refresh = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const procs = await callListProcesses(target);
-      setProcesses(procs);
-    } catch (e) {
-      setProcesses([]);
-      setError(errorMessage(e));
-    } finally {
-      setLoading(false);
-    }
-  }, [target]);
-
-  const filtered = processes
-    .filter((p) =>
-      search ? p.name.toLowerCase().includes(search.toLowerCase()) : true,
-    )
-    .sort((a, b) =>
-      sortBy === "rss" ? b.rss_kb - a.rss_kb : a.name.localeCompare(b.name),
-    );
-
-  return (
-    <Card className="overflow-hidden p-0">
-      <div className="flex flex-col gap-3 border-b border-white/10 p-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h3 className="text-sm font-semibold text-anvil-50">
-            {t("devices.controls.processManager")}
-          </h3>
-          <p className="mt-1 text-xs text-anvil-400">
-            {t("devices.controls.processManagerBody")}
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <FieldInput
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder={t("devices.controls.filter")}
-            aria-label={t("devices.controls.filterProcesses")}
-            className="h-8 w-40 px-2 font-mono text-xs"
-          />
-          <Button
-            type="button"
-            size="sm"
-            variant="primary"
-            onClick={() => void refresh()}
-            disabled={loading}
-          >
-            {loading
-              ? t("devices.controls.loading")
-              : processes.length > 0
-                ? t("devices.controls.refresh")
-                : t("devices.controls.load")}
-          </Button>
-        </div>
-      </div>
-      {error && (
-        <div className="border-b border-red-500/20 bg-red-500/10 px-4 py-3 text-xs text-red-200">
-          {t("devices.controls.processReadFailed", { message: error })}
-        </div>
-      )}
-      {processes.length === 0 && !loading && !error && (
-        <EmptyState title={t("devices.controls.noProcesses")}>
-          <p>{t("devices.controls.noProcessesBody")}</p>
-        </EmptyState>
-      )}
-      {processes.length > 0 && filtered.length === 0 && (
-        <EmptyState title={t("devices.controls.noMatchingProcesses")}>
-          <p>{t("devices.controls.noMatchingProcessesBody")}</p>
-        </EmptyState>
-      )}
-      {processes.length > 0 && filtered.length > 0 && (
-        <div className="max-h-96 overflow-x-auto">
-          <table className="min-w-full text-xs">
-            <thead className="sticky top-0 bg-anvil-900">
-              <tr>
-                <th className="px-3 py-2 text-left font-semibold text-anvil-400">
-                  {t("devices.controls.colPid")}
-                </th>
-                <th className="px-3 py-2 text-left font-semibold text-anvil-400">
-                  {t("devices.controls.colUser")}
-                </th>
-                <th
-                  className="px-3 py-2 text-right font-semibold text-anvil-400"
-                  aria-sort={sortBy === "rss" ? "descending" : "none"}
-                >
-                  <button
-                    type="button"
-                    onClick={() => setSortBy("rss")}
-                    className="ml-auto flex items-center gap-1 hover:text-anvil-200"
-                  >
-                    {t("devices.controls.colRss")}
-                    {sortBy === "rss" && <span aria-hidden="true">&darr;</span>}
-                  </button>
-                </th>
-                <th
-                  className="px-3 py-2 text-left font-semibold text-anvil-400"
-                  aria-sort={sortBy === "name" ? "ascending" : "none"}
-                >
-                  <button
-                    type="button"
-                    onClick={() => setSortBy("name")}
-                    className="flex items-center gap-1 hover:text-anvil-200"
-                  >
-                    {t("devices.controls.colName")}
-                    {sortBy === "name" && (
-                      <span aria-hidden="true">&uarr;</span>
-                    )}
-                  </button>
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-white/5">
-              {filtered.slice(0, 100).map((p, i) => (
-                <tr
-                  key={`${p.pid}-${p.name}-${i}`}
-                  className="hover:bg-white/[0.03]"
-                >
-                  <td className="px-3 py-1.5 font-mono text-anvil-300">
-                    {p.pid}
-                  </td>
-                  <td className="px-3 py-1.5 text-anvil-400">{p.user}</td>
-                  <td className="px-3 py-1.5 text-right font-mono text-anvil-200">
-                    {formatKb(p.rss_kb)}
-                  </td>
-                  <td className="px-3 py-1.5 font-mono text-anvil-100">
-                    <span>{p.name}</span>
-                    {p.parse_error && (
-                      <Badge tone="warning" className="ml-2">
-                        {t("devices.controls.parseIssue")}
-                      </Badge>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {filtered.length > 100 && (
-            <p className="px-3 py-2 text-xs text-anvil-500">
-              {t("devices.controls.showingProcesses", {
-                count: filtered.length,
-              })}
-            </p>
-          )}
-        </div>
-      )}
-    </Card>
-  );
-}
-
-function formatKb(kb: number): string {
-  if (kb >= 1048576) return `${(kb / 1048576).toFixed(1)} GB`;
-  if (kb >= 1024) return `${(kb / 1024).toFixed(1)} MB`;
-  return `${kb} KB`;
-}
-
-function formatBytes(bytes: number | null, unknown: string): string {
-  if (bytes == null) return unknown;
-  if (bytes >= 1073741824) return `${(bytes / 1073741824).toFixed(1)} GB`;
-  if (bytes >= 1048576) return `${(bytes / 1048576).toFixed(1)} MB`;
-  if (bytes >= 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${bytes} B`;
 }
 
 type FileNameDraft =
@@ -2746,327 +2568,6 @@ function FileGlyph({ directory }: { directory: boolean }) {
       )}
     </svg>
   );
-}
-
-function NetworkInspector({ target }: { target: DeviceTarget }) {
-  const { t } = useTranslation();
-  const [connections, setConnections] = useState<NetworkConnection[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [search, setSearch] = useState("");
-
-  const refresh = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const conns = await callListNetworkConnections(target);
-      setConnections(conns);
-    } catch (e) {
-      setConnections([]);
-      setError(errorMessage(e));
-    } finally {
-      setLoading(false);
-    }
-  }, [target]);
-
-  const filtered = connections.filter((c) =>
-    search
-      ? c.local_addr.includes(search) ||
-        c.remote_addr.includes(search) ||
-        (c.process?.includes(search) ?? false) ||
-        c.state.toLowerCase().includes(search.toLowerCase())
-      : true,
-  );
-
-  return (
-    <Card className="overflow-hidden p-0">
-      <div className="flex flex-col gap-3 border-b border-white/10 p-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h3 className="text-sm font-semibold text-anvil-50">
-            {t("devices.controls.networkConnections")}
-          </h3>
-          <p className="mt-1 text-xs text-anvil-400">
-            {t("devices.controls.networkBody")} <code>ss -tunp</code>.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <FieldInput
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder={t("devices.controls.filter")}
-            aria-label={t("devices.controls.filterConnections")}
-            className="h-8 w-40 px-2 font-mono text-xs"
-          />
-          <Button
-            type="button"
-            size="sm"
-            variant="primary"
-            onClick={() => void refresh()}
-            disabled={loading}
-          >
-            {loading
-              ? t("devices.controls.loading")
-              : connections.length > 0
-                ? t("devices.controls.refresh")
-                : t("devices.controls.load")}
-          </Button>
-        </div>
-      </div>
-      {error && (
-        <div className="border-b border-red-500/20 bg-red-500/10 px-4 py-3 text-xs text-red-200">
-          {t("devices.controls.connectionsReadFailed", { message: error })}
-        </div>
-      )}
-      {connections.length === 0 && !loading && !error && (
-        <EmptyState title={t("devices.controls.noConnections")}>
-          <p>{t("devices.controls.noConnectionsBody")}</p>
-        </EmptyState>
-      )}
-      {connections.length > 0 && filtered.length === 0 && (
-        <EmptyState title={t("devices.controls.noMatchingConnections")}>
-          <p>{t("devices.controls.noMatchingConnectionsBody")}</p>
-        </EmptyState>
-      )}
-      {connections.length > 0 && filtered.length > 0 && (
-        <div className="max-h-80 overflow-x-auto">
-          <table className="min-w-full text-xs">
-            <thead className="sticky top-0 bg-anvil-900">
-              <tr>
-                <th className="px-3 py-2 text-left font-semibold text-anvil-400">
-                  {t("devices.controls.colProto")}
-                </th>
-                <th className="px-3 py-2 text-left font-semibold text-anvil-400">
-                  {t("devices.controls.colState")}
-                </th>
-                <th className="px-3 py-2 text-left font-semibold text-anvil-400">
-                  {t("devices.controls.colLocal")}
-                </th>
-                <th className="px-3 py-2 text-left font-semibold text-anvil-400">
-                  {t("devices.controls.colRemote")}
-                </th>
-                <th className="px-3 py-2 text-left font-semibold text-anvil-400">
-                  {t("devices.controls.colProcess")}
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-white/5">
-              {filtered.slice(0, 100).map((c, i) => (
-                <tr
-                  key={`${c.protocol}-${c.local_addr}-${c.remote_addr}-${i}`}
-                  className="hover:bg-white/[0.03]"
-                >
-                  <td className="px-3 py-1.5 font-mono text-anvil-300">
-                    {c.protocol}
-                  </td>
-                  <td className="px-3 py-1.5 text-anvil-200">{c.state}</td>
-                  <td className="px-3 py-1.5 font-mono text-anvil-100">
-                    {c.local_addr}
-                  </td>
-                  <td className="px-3 py-1.5 font-mono text-anvil-100">
-                    {c.remote_addr}
-                  </td>
-                  <td className="px-3 py-1.5 font-mono text-anvil-400">
-                    {c.process ?? t("devices.controls.notReported")}
-                    {c.parse_error && (
-                      <Badge tone="warning" className="ml-2">
-                        {t("devices.controls.parseIssue")}
-                      </Badge>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {filtered.length > 100 && (
-            <p className="px-3 py-2 text-xs text-anvil-500">
-              {t("devices.controls.showingConnections", {
-                count: filtered.length,
-              })}
-            </p>
-          )}
-        </div>
-      )}
-    </Card>
-  );
-}
-
-function LayoutInspector({ target }: { target: DeviceTarget }) {
-  const { t } = useTranslation();
-  const [nodes, setNodes] = useState<LayoutNode[]>([]);
-  const [rawXml, setRawXml] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [exportMsg, setExportMsg] = useState<StatusMessage>(null);
-  const [search, setSearch] = useState("");
-
-  const capture = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    setExportMsg(null);
-    try {
-      const snapshot = await callCaptureLayout(target);
-      setNodes(snapshot.nodes);
-      setRawXml(snapshot.raw_xml);
-    } catch (e) {
-      setNodes([]);
-      setRawXml("");
-      setError(errorMessage(e));
-    } finally {
-      setLoading(false);
-    }
-  }, [target]);
-
-  const exportXml = useCallback(async () => {
-    if (!rawXml) return;
-    setExportMsg(null);
-    try {
-      const grant = await callSelectHostPath(
-        "layout_export_save",
-        `layout-${target.serial.replace(/[<>:"/\\|?*]/gu, "_")}-${Date.now()}.xml`,
-      );
-      if (!grant) return;
-      const savedPath = await callSaveLayoutExport(grant.id, rawXml);
-      setExportMsg({
-        text: t("devices.layout.exported", { path: savedPath }),
-        tone: "success",
-      });
-    } catch (e) {
-      setExportMsg({
-        tone: "danger",
-        text: t("devices.layout.exportFailed", {
-          message: errorMessage(e),
-        }),
-      });
-    }
-  }, [rawXml, target.serial, t]);
-
-  const term = search.trim().toLowerCase();
-  const filtered = term
-    ? nodes.filter(
-        (node) =>
-          node.class.toLowerCase().includes(term) ||
-          node.text.toLowerCase().includes(term) ||
-          node.content_desc.toLowerCase().includes(term) ||
-          node.resource_id.toLowerCase().includes(term) ||
-          Boolean(node.parse_error),
-      )
-    : nodes;
-
-  return (
-    <Card className="overflow-hidden p-0">
-      <div className="flex flex-col gap-3 border-b border-white/10 p-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h3 className="text-sm font-semibold text-anvil-50">
-            {t("devices.layout.title")}
-          </h3>
-          <p className="mt-1 text-xs text-anvil-400">
-            {t("devices.layout.body")} <code>uiautomator dump</code>.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <FieldInput
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder={t("devices.controls.filter")}
-            aria-label={t("devices.layout.filterNodes")}
-            className="h-8 w-40 px-2 font-mono text-xs"
-          />
-          <Button
-            type="button"
-            size="sm"
-            variant="ghost"
-            onClick={() => void exportXml()}
-            disabled={!rawXml || loading}
-          >
-            {t("devices.layout.export")}
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            variant="primary"
-            onClick={() => void capture()}
-            disabled={loading}
-          >
-            {loading
-              ? t("devices.controls.loading")
-              : nodes.length > 0
-                ? t("devices.layout.recapture")
-                : t("devices.layout.capture")}
-          </Button>
-        </div>
-      </div>
-      {error && (
-        <div className="border-b border-red-500/20 bg-red-500/10 px-4 py-3 text-xs text-red-200">
-          {t("devices.layout.captureFailed", { message: error })}
-        </div>
-      )}
-      {exportMsg && (
-        <p
-          role="status"
-          className={`px-4 py-2 text-xs ${statusToneClass(exportMsg.tone)}`}
-        >
-          {exportMsg.text}
-        </p>
-      )}
-      {nodes.length === 0 && !loading && !error && (
-        <EmptyState title={t("devices.layout.empty")}>
-          <p>{t("devices.layout.emptyBody")}</p>
-        </EmptyState>
-      )}
-      {filtered.length > 0 && (
-        <div className="max-h-96 overflow-auto py-1">
-          {filtered.slice(0, 500).map((node, i) => (
-            <div
-              key={`${node.resource_id}-${node.bounds}-${i}`}
-              className="flex items-baseline gap-2 px-4 py-1 font-mono text-xs hover:bg-white/[0.03]"
-              style={{ paddingLeft: `${16 + node.depth * 14}px` }}
-            >
-              {node.parse_error ? (
-                <span className="text-red-300">
-                  ⚠ {t("devices.layout.nodeParseError")}: {node.parse_error}
-                </span>
-              ) : (
-                <>
-                  <span className="text-circuit-200/80">
-                    {shortClass(node.class)}
-                  </span>
-                  {node.resource_id && (
-                    <span className="text-anvil-400">#{node.resource_id}</span>
-                  )}
-                  {node.text && (
-                    <span className="text-anvil-100">“{node.text}”</span>
-                  )}
-                  {node.content_desc && (
-                    <span className="text-anvil-300">
-                      [{node.content_desc}]
-                    </span>
-                  )}
-                  {node.clickable && (
-                    <Badge tone="info">{t("devices.layout.clickable")}</Badge>
-                  )}
-                  <span className="ml-auto pl-3 text-anvil-600">
-                    {node.bounds}
-                  </span>
-                </>
-              )}
-            </div>
-          ))}
-          {filtered.length > 500 && (
-            <p className="px-4 py-2 text-xs text-anvil-500">
-              {t("devices.layout.truncated", { count: filtered.length })}
-            </p>
-          )}
-        </div>
-      )}
-    </Card>
-  );
-}
-
-function shortClass(value: string): string {
-  const parts = value.split(".");
-  return parts.length > 1 ? parts.slice(-2).join(".") : value;
 }
 
 function AuthorizePrompt({
