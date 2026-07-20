@@ -1589,8 +1589,39 @@ async function installTauriMock(
             build_fingerprint: args.target.build_fingerprint,
             security_patch: "2026-07-01",
             hardware_serial: null,
-            battery: null,
-            storage: null,
+            battery: {
+              level: 82,
+              status: "Discharging",
+              temperature: 30.5,
+              health: "Good",
+              voltage_mv: 4187,
+              technology: "Li-ion",
+              cycle_count: 148,
+              charge_counter_uah: 3450000,
+            },
+            storage: {
+              total_kb: 113021876,
+              used_kb: 87654320,
+              available_kb: 25367556,
+            },
+            storage_partitions: [
+              {
+                mount: "/system",
+                total_kb: 2500000,
+                used_kb: 2400000,
+                available_kb: 100000,
+              },
+              {
+                mount: "/data",
+                total_kb: 113021876,
+                used_kb: 87654320,
+                available_kb: 25367556,
+              },
+            ],
+            thermal_zones: [
+              { name: "CPU", temperature_c: 31.4, status: "None" },
+              { name: "battery", temperature_c: 30.5, status: "Light" },
+            ],
             wifi_ip: null,
           };
         }

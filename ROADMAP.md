@@ -15,21 +15,21 @@ instead.
 
 ## Remaining
 
-### P2
+### P1
 
-- [ ] P2 — R-079: Device health dashboard (battery, storage, thermal)
-  Why: ADB exposes battery cycle count, temperature, voltage, storage partition
-  breakdown, and thermal zone data via `dumpsys`. No lightweight GUI tool
-  surfaces this. Aya shows real-time CPU/memory/FPS; ADB AppControl shows
-  battery stats.
-  Evidence: Aya feature list; technastic.com battery guide; ADB dumpsys docs
-  Touches: `src-tauri/src/adb/device_info.rs` (new parsers for `dumpsys
-  battery`, `dumpsys diskstats`, `dumpsys thermalservice`),
-  `src/routes/Devices.tsx` (health cards), locale files
-  Acceptance: Devices detail panel shows battery health (cycle count, capacity,
-  temperature), storage breakdown by partition (system/data/cache with used/free),
-  and current thermal zone temperatures. Data refreshes on device selection.
+- [ ] P1 — IMP-69: Repair the `ui:smoke` desktop debloat flow
+  Why: `npm run ui:smoke` times out at the desktop debloat step, waiting for
+  "QA Debloat Pack - debloat complete" after clicking "Disable 3 packages"
+  (`scripts/check-rendered-routes.mjs:586`). Pre-existing at HEAD (predates the
+  v0.7.0 finalize), so the smoke gate is currently red. Devices/Apps/Wireless
+  flows render fine — the batch-action mock response or its result rendering is
+  the suspect.
+  Touches: `scripts/check-rendered-routes.mjs` (batch debloat mock + assertions),
+  possibly `src/routes/Debloat.tsx` result surface.
+  Acceptance: `npm run ui:smoke` passes end-to-end on Windows.
   Complexity: M
+
+### P2
 
 - [ ] P2 — R-081: Keyboard-to-touch mapping GUI for scrcpy
   Why: scrcpy's most-requested feature (issue #712, 55 comments). QtScrcpy's

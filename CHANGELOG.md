@@ -14,6 +14,15 @@ completion.
 Working batches live here. Sections collapse into a versioned release on
 each milestone tag.
 
+### Added
+
+- Device health dashboard: the Devices detail panel now surfaces battery
+  health (health status, charge cycle count, capacity in mAh, voltage,
+  technology), per-partition storage usage (system/vendor/data/cache with
+  used/free bars), and thermal-zone temperatures with throttling-status
+  badges. Backed by new `dumpsys battery`/`df -k`/`dumpsys thermalservice`
+  parsers in `device_info.rs` (R-079).
+
 ## [0.7.0] - 2026-07-18
 
 Design-system unification, locale expansion, and OEM pack coverage batch.

@@ -1060,6 +1060,26 @@ export type BatteryInfo = {
   level: number | null;
   status: string | null;
   temperature: number | null;
+  /**
+   * Battery health label decoded from the `health:` code (Good, Overheat, ...).
+   */
+  health: string | null;
+  /**
+   * Instantaneous voltage in millivolts.
+   */
+  voltage_mv: number | null;
+  /**
+   * Cell chemistry, e.g. `Li-ion`.
+   */
+  technology: string | null;
+  /**
+   * Charge cycle count (Android 14+ exposes this via `dumpsys battery`).
+   */
+  cycle_count: number | null;
+  /**
+   * Remaining charge in microampere-hours (`Charge counter:`).
+   */
+  charge_counter_uah: number | null;
 };
 export type BugreportCaptureResult = {
   report: HostArtifact;
@@ -1159,6 +1179,14 @@ export type DeviceInfo = {
   hardware_serial: string | null;
   battery: BatteryInfo | null;
   storage: StorageInfo | null;
+  /**
+   * R-079 health dashboard: per-partition breakdown (system/data/cache/...).
+   */
+  storage_partitions: StoragePartition[];
+  /**
+   * R-079 health dashboard: thermal-zone temperatures from the HAL.
+   */
+  thermal_zones: ThermalZone[];
   wifi_ip: string | null;
 };
 export type DeviceLifecycleEvent =
@@ -2074,6 +2102,15 @@ export type StorageInfo = {
   used_kb: number | null;
   available_kb: number | null;
 };
+export type StoragePartition = {
+  /**
+   * Mount point, e.g. `/data`, `/system`, `/cache`.
+   */
+  mount: string;
+  total_kb: number | null;
+  used_kb: number | null;
+  available_kb: number | null;
+};
 export type SuggestedInstallOverride =
   | "allow_downgrade"
   | "bypass_low_target_sdk_block";
@@ -2085,6 +2122,17 @@ export type SupportPreview = {
   failed_operation_count: number;
   crash_line_count: number;
   local_only: boolean;
+};
+export type ThermalZone = {
+  /**
+   * HAL zone name, e.g. `CPU`, `battery`, `skin`.
+   */
+  name: string;
+  temperature_c: number;
+  /**
+   * Throttling status label from `mStatus` (`None`, `Light`, `Severe`, ...).
+   */
+  status: string | null;
 };
 export type UserScope = "unspecified" | "owner" | "current" | "any";
 export type VideoCodec = "h264" | "h265" | "av1" | "vp8" | "vp9";
