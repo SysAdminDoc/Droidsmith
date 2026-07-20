@@ -4,7 +4,7 @@
 
 <h1 align="center">Droidsmith</h1>
 
-![Version](https://img.shields.io/badge/version-0.7.0-cyan)
+![Version](https://img.shields.io/badge/version-0.8.0-cyan)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Platforms](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-blue)
 

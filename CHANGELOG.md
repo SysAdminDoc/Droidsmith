@@ -14,6 +14,13 @@ completion.
 Working batches live here. Sections collapse into a versioned release on
 each milestone tag.
 
+## [0.8.0] - 2026-07-20
+
+Device health + tuning batch: a battery/storage/thermal dashboard, a new
+Tuning route for safe system-settings edits, curated debloat presets, an
+accessibility pass (forced-colors + ARIA grid), a repaired end-to-end
+`ui:smoke` gate, and the start of the Devices god-file split.
+
 ### Fixed
 
 - Repaired the `ui:smoke` desktop route flow, which had been red since before
