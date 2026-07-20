@@ -1897,6 +1897,129 @@ function BatchActionBar({
   );
 }
 
+// IMP-62: roving-tabindex navigation for the package data grid (W3C ARIA APG
+// grid pattern). Row 0 is the column-header row; body rows follow. Exactly one
+// cell is the tab stop at a time; arrow keys move it, Home/End jump within a
+// row (Ctrl to the grid corners), PageUp/Down move ten rows, and Enter/Space
+// hands focus to the first interactive control inside the focused cell (Escape
+// returns focus to the cell).
+const GRID_PAGE_STEP = 10;
+
+function useRovingGrid(rowCount: number, colCount: number) {
+  const gridRef = useRef<HTMLTableElement>(null);
+  const [active, setActive] = useState({ row: 0, col: 0 });
+
+  const focusCell = useCallback(
+    (row: number, col: number) => {
+      const r = Math.max(0, Math.min(rowCount - 1, row));
+      const c = Math.max(0, Math.min(colCount - 1, col));
+      setActive({ row: r, col: c });
+      gridRef.current
+        ?.querySelector<HTMLElement>(`[data-grid-cell="${r}-${c}"]`)
+        ?.focus();
+    },
+    [rowCount, colCount],
+  );
+
+  // A shrinking result set must not strand the tab stop on a removed row.
+  useEffect(() => {
+    setActive((current) => ({
+      row: Math.max(0, Math.min(current.row, rowCount - 1)),
+      col: Math.max(0, Math.min(current.col, colCount - 1)),
+    }));
+  }, [rowCount, colCount]);
+
+  const onKeyDown = useCallback(
+    (event: ReactKeyboardEvent) => {
+      const target = event.target as HTMLElement;
+      const onCell = target.hasAttribute?.("data-grid-cell");
+      const { row, col } = active;
+      switch (event.key) {
+        case "ArrowRight":
+          if (onCell) {
+            event.preventDefault();
+            focusCell(row, col + 1);
+          }
+          break;
+        case "ArrowLeft":
+          if (onCell) {
+            event.preventDefault();
+            focusCell(row, col - 1);
+          }
+          break;
+        case "ArrowDown":
+          if (onCell) {
+            event.preventDefault();
+            focusCell(row + 1, col);
+          }
+          break;
+        case "ArrowUp":
+          if (onCell) {
+            event.preventDefault();
+            focusCell(row - 1, col);
+          }
+          break;
+        case "Home":
+          if (onCell) {
+            event.preventDefault();
+            focusCell(event.ctrlKey ? 0 : row, 0);
+          }
+          break;
+        case "End":
+          if (onCell) {
+            event.preventDefault();
+            focusCell(event.ctrlKey ? rowCount - 1 : row, colCount - 1);
+          }
+          break;
+        case "PageDown":
+          if (onCell) {
+            event.preventDefault();
+            focusCell(row + GRID_PAGE_STEP, col);
+          }
+          break;
+        case "PageUp":
+          if (onCell) {
+            event.preventDefault();
+            focusCell(row - GRID_PAGE_STEP, col);
+          }
+          break;
+        case "Enter":
+        case " ":
+          if (onCell) {
+            const widget = target.querySelector<HTMLElement>(
+              "button, input, a[href], select, textarea",
+            );
+            if (widget) {
+              event.preventDefault();
+              widget.focus();
+            }
+          }
+          break;
+        case "Escape":
+          if (!onCell) {
+            target.closest<HTMLElement>("[data-grid-cell]")?.focus();
+          }
+          break;
+        default:
+          break;
+      }
+    },
+    [active, focusCell, rowCount, colCount],
+  );
+
+  const cellProps = useCallback(
+    (row: number, col: number) => ({
+      "data-grid-cell": `${row}-${col}`,
+      role: row === 0 ? ("columnheader" as const) : ("gridcell" as const),
+      tabIndex: active.row === row && active.col === col ? 0 : -1,
+      "aria-colindex": col + 1,
+    }),
+    [active],
+  );
+
+  return { gridRef, onKeyDown, cellProps };
+}
+
 function PackageTable({
   packages,
   metadata,
@@ -1930,6 +2053,11 @@ function PackageTable({
   const allVisibleSelected =
     packages.length > 0 &&
     packages.every((pkg) => selectedPackages.has(pkg.package));
+  const gridColumnCount = 5;
+  const { gridRef, onKeyDown, cellProps } = useRovingGrid(
+    packages.length + 1,
+    gridColumnCount,
+  );
 
   return (
     <Card className="overflow-hidden p-0">
@@ -1962,10 +2090,19 @@ function PackageTable({
         </EmptyState>
       ) : (
         <div className="overflow-x-auto">
-          <table className="min-w-full text-sm">
+          <table
+            ref={gridRef}
+            role="grid"
+            aria-label={t("apps.installedPackages")}
+            aria-rowcount={packages.length + 1}
+            aria-colcount={gridColumnCount}
+            aria-multiselectable="true"
+            onKeyDown={onKeyDown}
+            className="min-w-full text-sm"
+          >
             <thead className="bg-white/[0.04]">
-              <tr>
-                <TableHeaderCell>
+              <tr role="row" aria-rowindex={1}>
+                <TableHeaderCell {...cellProps(0, 0)}>
                   <input
                     type="checkbox"
                     checked={allVisibleSelected}
@@ -1975,19 +2112,30 @@ function PackageTable({
                     className="h-4 w-4 accent-circuit-400"
                   />
                 </TableHeaderCell>
-                <TableHeaderCell>{t("apps.package")}</TableHeaderCell>
-                <TableHeaderCell>{t("apps.type")}</TableHeaderCell>
-                <TableHeaderCell>{t("devices.state")}</TableHeaderCell>
-                <TableHeaderCell>{t("apps.actions")}</TableHeaderCell>
+                <TableHeaderCell {...cellProps(0, 1)}>
+                  {t("apps.package")}
+                </TableHeaderCell>
+                <TableHeaderCell {...cellProps(0, 2)}>
+                  {t("apps.type")}
+                </TableHeaderCell>
+                <TableHeaderCell {...cellProps(0, 3)}>
+                  {t("devices.state")}
+                </TableHeaderCell>
+                <TableHeaderCell {...cellProps(0, 4)}>
+                  {t("apps.actions")}
+                </TableHeaderCell>
               </tr>
             </thead>
             <tbody className="divide-y divide-white/10">
-              {packages.map((pkg) => (
+              {packages.map((pkg, rowIndex) => (
                 <tr
                   key={pkg.package}
+                  role="row"
+                  aria-rowindex={rowIndex + 2}
+                  aria-selected={selectedPackages.has(pkg.package)}
                   className="bg-anvil-950/20 transition hover:bg-white/[0.035]"
                 >
-                  <TableCell>
+                  <TableCell {...cellProps(rowIndex + 1, 0)}>
                     <input
                       type="checkbox"
                       checked={selectedPackages.has(pkg.package)}
@@ -1998,21 +2146,21 @@ function PackageTable({
                       className="h-4 w-4 accent-circuit-400"
                     />
                   </TableCell>
-                  <TableCell>
+                  <TableCell {...cellProps(rowIndex + 1, 1)}>
                     <PackageIdentity
                       pkg={pkg}
                       metadata={metadata[pkg.package]}
                       onRequest={onMetadataRequest}
                     />
                   </TableCell>
-                  <TableCell>
+                  <TableCell {...cellProps(rowIndex + 1, 2)}>
                     <Badge tone={pkg.system ? "warning" : "neutral"}>
                       {pkg.system
                         ? t("apps.filterSystem")
                         : t("apps.filterUser")}
                     </Badge>
                   </TableCell>
-                  <TableCell>
+                  <TableCell {...cellProps(rowIndex + 1, 3)}>
                     <Badge
                       tone={
                         pkg.retained
@@ -2033,7 +2181,7 @@ function PackageTable({
                             : t("apps.filterDisabled")}
                     </Badge>
                   </TableCell>
-                  <TableCell>
+                  <TableCell {...cellProps(rowIndex + 1, 4)}>
                     <div className="flex min-w-[10rem] flex-wrap gap-1.5">
                       {pkg.retained ? (
                         <Button

@@ -342,6 +342,45 @@ async function runDesktopFlow(browser) {
   await page.evaluate(() => window.__DROIDSMITH_MOCK_HOTPLUG__(true));
   await page.getByText("com.example.app").waitFor();
 
+  // IMP-62: the package table is an ARIA grid with roving-tabindex cell
+  // navigation. Drive it from the keyboard and assert the tab stop moves.
+  const packageGrid = page.getByRole("grid", { name: "Installed packages" });
+  await packageGrid.waitFor();
+  const activeCell = () =>
+    page.evaluate(
+      () => document.activeElement?.getAttribute("data-grid-cell") ?? null,
+    );
+  await page.evaluate(() =>
+    document.querySelector('[data-grid-cell="0-0"]')?.focus(),
+  );
+  await page.keyboard.press("ArrowDown");
+  if ((await activeCell()) !== "1-0") {
+    throw new Error(
+      `Grid ArrowDown should move the tab stop to cell 1-0, got ${await activeCell()}`,
+    );
+  }
+  await page.keyboard.press("ArrowRight");
+  if ((await activeCell()) !== "1-1") {
+    throw new Error(
+      `Grid ArrowRight should move the tab stop to cell 1-1, got ${await activeCell()}`,
+    );
+  }
+  await page.keyboard.press("End");
+  if ((await activeCell()) !== "1-4") {
+    throw new Error(
+      `Grid End should move the tab stop to the last cell 1-4, got ${await activeCell()}`,
+    );
+  }
+  await page.keyboard.press("Enter");
+  const enteredTag = await page.evaluate(
+    () => document.activeElement?.tagName ?? null,
+  );
+  if (enteredTag !== "BUTTON") {
+    throw new Error(
+      `Grid Enter should hand focus to the cell's control, got ${enteredTag}`,
+    );
+  }
+
   // Opt-in incremental install records and surfaces its mode.
   await page.getByRole("checkbox", { name: "Incremental" }).check();
   await page.getByRole("button", { name: "Install package" }).click();

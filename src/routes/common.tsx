@@ -411,18 +411,24 @@ export function TableHeaderCell({
   children,
   align = "left",
   className,
+  ...rest
 }: {
   children: ReactNode;
   align?: "left" | "right";
   className?: string;
-}) {
+} & Omit<ComponentPropsWithoutRef<"th">, "className" | "children">) {
   return (
     <th
       className={cn(
         "px-4 py-3 text-xs font-medium text-anvil-400",
         align === "right" ? "text-right" : "text-left",
+        // Grid-mode cells (role="columnheader") show a focus ring when they
+        // become the roving tab stop; native table headers are unaffected.
+        rest.role === "columnheader" &&
+          "focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-circuit-300",
         className,
       )}
+      {...rest}
     >
       {children}
     </th>
@@ -433,18 +439,22 @@ export function TableCell({
   children,
   align = "left",
   className,
+  ...rest
 }: {
   children: ReactNode;
   align?: "left" | "right";
   className?: string;
-}) {
+} & Omit<ComponentPropsWithoutRef<"td">, "className" | "children">) {
   return (
     <td
       className={cn(
         "px-4 py-4 align-middle text-anvil-200",
         align === "right" && "text-right",
+        rest.role === "gridcell" &&
+          "focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-circuit-300",
         className,
       )}
+      {...rest}
     >
       {children}
     </td>

@@ -36,6 +36,13 @@ each milestone tag.
   checkboxes/radios track the system `Highlight`, and progress fills stay
   legible. Native checkboxes/radios are also floored to a 20px box so the 24px
   target-spacing exception (2.5.8) is met alongside their label gap (IMP-61).
+- The Apps package table is now a W3C ARIA grid: `role="grid"` with
+  `aria-rowcount`/`aria-colcount`/`aria-multiselectable`, `role="row"` +
+  `aria-rowindex`/`aria-selected` rows, and `columnheader`/`gridcell` cells.
+  Roving-tabindex keyboard navigation moves a single tab stop with the arrow
+  keys, Home/End (Ctrl for grid corners), and PageUp/PageDown; Enter/Space hands
+  focus to the focused cell's control and Escape returns to the cell. Verified
+  end-to-end in `ui:smoke` (IMP-62).
 
 ### Added
 

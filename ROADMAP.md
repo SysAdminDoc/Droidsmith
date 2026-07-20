@@ -44,20 +44,6 @@ instead.
   preview of the ADB command. Changes are journaled and undoable.
   Complexity: M
 
-- [ ] P2 — IMP-62: ARIA grid pattern for package data table
-  Why: The Apps package table contains interactive elements (checkboxes, action
-  buttons) but uses basic `<table>` semantics. The W3C ARIA grid pattern
-  (role="grid" with arrow-key cell navigation) is the correct pattern for
-  tables with actionable cells, enabling keyboard-only users to navigate 500+
-  package rows efficiently.
-  Evidence: W3C ARIA APG grid pattern; WCAG 2.1.1 (keyboard); UAD-ng #605
-  Touches: `src/routes/Apps.tsx` (table refactor to grid role),
-  `src/routes/common.tsx` (TableHeaderCell/TableCell role attributes)
-  Acceptance: Arrow keys navigate between cells in the package table. Enter/Space
-  activates the focused cell's control. Page Up/Down scroll. `aria-rowcount` and
-  `aria-sort` are present. NVDA can read column headers and cell content.
-  Complexity: M
-
 - [ ] P2 — IMP-63: Curated debloat presets (Privacy Max, Battery Saver, etc.)
   Why: Users face decision fatigue choosing individual packages. UAD-ng #583
   requests a verified "Safe" list. Named presets like "Privacy Max" (remove all
