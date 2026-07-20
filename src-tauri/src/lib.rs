@@ -9,6 +9,7 @@ mod commands;
 pub mod contribution_schema;
 mod diagnostics;
 mod fs_util;
+mod gnirehtet;
 mod host_diagnostics;
 mod host_path;
 mod install;
@@ -34,13 +35,15 @@ use commands::{
     apply_action, apply_action_batch, apply_device_control, apply_remote_file_mutation,
     backup_package, cancel_operation, capture_bugreport, capture_layout, connect_wireless,
     explain_failure, export_package_apks, export_recovery_baseline, export_settings, extract_apk,
-    fastboot_getvar, get_device_info, get_package_metadata, get_settings_mirror_preset, heartbeat,
+    fastboot_getvar, get_device_info, get_package_metadata, get_settings_mirror_preset,
+    gnirehtet_session_status, heartbeat,
     initialize_settings, inspect_profile, inspect_recovery_baseline, install_apk, journal_list,
     journal_undo, journal_undo_batch, launch_scrcpy, list_devices, list_fastboot_devices,
     list_device_settings, list_logcat_queries, list_network_connections, list_packages, list_packs,
     list_permissions, list_processes, list_remote_files, list_running_services, list_users,
     list_wireless_services, locate_fastboot, put_device_setting,
-    locate_scrcpy, pair_wireless, plan_action, plan_action_batch, plan_pack,
+    locate_gnirehtet, locate_scrcpy, pair_wireless, plan_action, plan_action_batch, plan_pack,
+    start_gnirehtet, stop_gnirehtet,
     plan_remote_file_mutation, plan_shell_action, preflight_package_backup, preview_diagnostics,
     pull_file, push_file, recover_adb, reset_settings, reset_settings_mirror_preset,
     disconnect_device, grant_dropped_path, reveal_in_folder, run_host_doctor, save_diagnostics,
@@ -123,6 +126,10 @@ fn ipc_builder() -> tauri_specta::Builder<tauri::Wry> {
             launch_scrcpy,
             scrcpy_session_status,
             stop_scrcpy,
+            locate_gnirehtet,
+            start_gnirehtet,
+            gnirehtet_session_status,
+            stop_gnirehtet,
             install_apk,
             extract_apk,
             journal_list,

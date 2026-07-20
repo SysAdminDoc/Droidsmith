@@ -3459,6 +3459,68 @@ pub fn stop_scrcpy(session_id: u64) -> Result<crate::scrcpy::ScrcpySession, Comm
     })
 }
 
+/// Locate the gnirehtet binary on the system. Returns the path if found.
+#[tauri::command]
+#[specta::specta]
+pub fn locate_gnirehtet() -> Option<String> {
+    which::which("gnirehtet").ok().map(|p| p.display().to_string())
+}
+
+/// Start a gnirehtet reverse-tethering session for a device. Supervised like
+/// scrcpy: we spawn `gnirehtet run <serial>` and track it so the renderer can
+/// poll or stop the session. Stopping restores the device's default network.
+#[tauri::command]
+#[specta::specta]
+pub fn start_gnirehtet(
+    target: adb::DeviceTarget,
+) -> Result<crate::gnirehtet::GnirehtetSession, CommandError> {
+    validate_serial_arg(&target.serial)?;
+    let (transport, _) = privileged_transport(&target)?;
+    let duplicate_count = transport
+        .list_devices()?
+        .into_iter()
+        .filter(|device| device.serial == target.serial)
+        .count();
+    if duplicate_count != 1 {
+        return Err(CommandError {
+            code: "ambiguous_serial",
+            message: "gnirehtet cannot safely select a duplicate device serial".to_string(),
+        });
+    }
+    let gnirehtet_path = which::which("gnirehtet").map_err(|_| CommandError {
+        code: "gnirehtet_not_found",
+        message: "gnirehtet binary not found on PATH".to_string(),
+    })?;
+    crate::gnirehtet::start(&gnirehtet_path, target.serial, iso_now()).map_err(|message| {
+        CommandError {
+            code: "gnirehtet_spawn_failed",
+            message,
+        }
+    })
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn gnirehtet_session_status(
+    session_id: u64,
+) -> Result<crate::gnirehtet::GnirehtetSession, CommandError> {
+    crate::gnirehtet::status(session_id).map_err(|e| CommandError {
+        code: "gnirehtet_session_not_found",
+        message: e,
+    })
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn stop_gnirehtet(
+    session_id: u64,
+) -> Result<crate::gnirehtet::GnirehtetSession, CommandError> {
+    crate::gnirehtet::stop(session_id).map_err(|e| CommandError {
+        code: "gnirehtet_stop_failed",
+        message: e,
+    })
+}
+
 /// Install an APK or split-package archive on a device. Single APKs retain the
 /// direct `adb install -r` path; APKS/XAPK/APKM archives are committed through
 /// an atomic PackageInstaller session.

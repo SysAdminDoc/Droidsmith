@@ -64,6 +64,7 @@ import {
   type RemoteFileMutationPlan,
   type RemoteFileMutationRequest,
   type RemoteListing,
+  type GnirehtetSession,
   type SavedResult,
   type ScrcpyCapabilities as GeneratedScrcpyCapabilities,
   type ScrcpySession,
@@ -880,6 +881,30 @@ export async function callStopScrcpy(
   sessionId: number,
 ): Promise<ScrcpySession> {
   return commands.stopScrcpy(sessionId);
+}
+
+export type { GnirehtetSession };
+
+export async function callLocateGnirehtet(): Promise<string | null> {
+  return commands.locateGnirehtet();
+}
+
+export async function callStartGnirehtet(
+  target: DeviceTarget,
+): Promise<GnirehtetSession> {
+  return commands.startGnirehtet(target);
+}
+
+export async function callGnirehtetSessionStatus(
+  sessionId: number,
+): Promise<GnirehtetSession> {
+  return commands.gnirehtetSessionStatus(sessionId);
+}
+
+export async function callStopGnirehtet(
+  sessionId: number,
+): Promise<GnirehtetSession> {
+  return commands.stopGnirehtet(sessionId);
 }
 
 export async function callShellRun(

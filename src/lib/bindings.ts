@@ -696,6 +696,28 @@ export const commands = {
     return await TAURI_INVOKE("stop_scrcpy", { session_id: sessionId });
   },
   /**
+   * Locate the gnirehtet binary on the system. Returns the path if found.
+   */
+  async locateGnirehtet(): Promise<string | null> {
+    return await TAURI_INVOKE("locate_gnirehtet");
+  },
+  /**
+   * Start a gnirehtet reverse-tethering session for a device. Supervised like
+   * scrcpy: we spawn `gnirehtet run <serial>` and track it so the renderer can
+   * poll or stop the session. Stopping restores the device's default network.
+   */
+  async startGnirehtet(target: DeviceTarget): Promise<GnirehtetSession> {
+    return await TAURI_INVOKE("start_gnirehtet", { target });
+  },
+  async gnirehtetSessionStatus(sessionId: number): Promise<GnirehtetSession> {
+    return await TAURI_INVOKE("gnirehtet_session_status", {
+      session_id: sessionId,
+    });
+  },
+  async stopGnirehtet(sessionId: number): Promise<GnirehtetSession> {
+    return await TAURI_INVOKE("stop_gnirehtet", { session_id: sessionId });
+  },
+  /**
    * Install an APK or split-package archive on a device. Single APKs retain the
    * direct `adb install -r` path; APKS/XAPK/APKM archives are committed through
    * an atomic PackageInstaller session.
@@ -1336,6 +1358,26 @@ export type FastbootDevice = {
   parse_error?: string | null;
 };
 export type FindingSeverity = "info" | "warning" | "error";
+export type GnirehtetExitReason =
+  | "user_stopped"
+  | "device_disconnected"
+  | "relay_failed"
+  | "client_install_failed"
+  | "adb_failed"
+  | "signaled"
+  | "process_exited";
+export type GnirehtetSession = {
+  id: number;
+  serial: string;
+  pid: number;
+  args: string[];
+  started_at: string;
+  state: GnirehtetSessionState;
+  exit_code: number | null;
+  exit_reason: GnirehtetExitReason | null;
+  stderr_tail: string;
+};
+export type GnirehtetSessionState = "running" | "exited" | "stopped";
 export type HashedDeviceIdentity = {
   device_identity_sha256: string;
   build_identity_sha256: string | null;

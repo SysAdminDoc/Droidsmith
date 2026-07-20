@@ -457,6 +457,16 @@
       "nodeParseError": "Unparsed node",
       "clickable": "Clickable",
       "truncated": "Showing 500 of {{count}} nodes"
+    },
+    "tethering": {
+      "title": "Share Internet",
+      "body": "Share this PC's internet connection with the device over USB using gnirehtet reverse tethering.",
+      "active": "Active",
+      "start": "Share Internet",
+      "stop": "Stop Sharing",
+      "starting": "Starting…",
+      "stopped": "Internet sharing stopped.",
+      "failed": "Internet sharing failed: {{message}}"
     }
   },
   "wireless": {
@@ -1244,12 +1254,18 @@
     "privacy": "Privacy and side-effect contract",
     "officialGuidance": "Open official guidance",
     "findings": {
-      "adb_missing": { "title": "ADB was not found" },
+      "adb_missing": {
+        "title": "ADB was not found"
+      },
       "adb_unrunnable": {
         "title": "ADB was found but could not enumerate transports"
       },
-      "adb_version_unknown": { "title": "ADB version could not be verified" },
-      "adb_ready": { "title": "ADB executable is ready" },
+      "adb_version_unknown": {
+        "title": "ADB version could not be verified"
+      },
+      "adb_ready": {
+        "title": "ADB executable is ready"
+      },
       "platform_tools_blocked": {
         "title": "This Platform Tools release is known-bad"
       },
@@ -1259,12 +1275,18 @@
       "unauthorized": {
         "title": "Android is waiting for USB debugging authorization"
       },
-      "offline": { "title": "ADB transports are offline" },
-      "no_permissions": { "title": "Linux cannot open the Android USB device" },
+      "offline": {
+        "title": "ADB transports are offline"
+      },
+      "no_permissions": {
+        "title": "Linux cannot open the Android USB device"
+      },
       "usb_visible_adb_missing": {
         "title": "Android USB hardware is visible but absent from ADB"
       },
-      "no_usb_transport": { "title": "No Android USB transport was detected" },
+      "no_usb_transport": {
+        "title": "No Android USB transport was detected"
+      },
       "windows_driver_missing": {
         "title": "Windows has no recognized ADB interface"
       },

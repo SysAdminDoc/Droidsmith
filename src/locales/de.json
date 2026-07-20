@@ -457,6 +457,16 @@
       "nodeParseError": "Nicht geparster Knoten",
       "clickable": "Anklickbar",
       "truncated": "Zeige 500 von {{count}} Knoten"
+    },
+    "tethering": {
+      "title": "Internet freigeben",
+      "body": "Teile die Internetverbindung dieses PCs über USB mit dem Gerät per gnirehtet Reverse-Tethering.",
+      "active": "Aktiv",
+      "start": "Internet freigeben",
+      "stop": "Freigabe beenden",
+      "starting": "Wird gestartet…",
+      "stopped": "Internetfreigabe beendet.",
+      "failed": "Internetfreigabe fehlgeschlagen: {{message}}"
     }
   },
   "wireless": {

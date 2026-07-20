@@ -18,6 +18,7 @@ import {
 } from "../common";
 import { statusToneClass, type StatusMessage } from "./common";
 import { FileManager } from "./FileManager";
+import { InternetSharing } from "./InternetSharing";
 import { NetworkInspector } from "./NetworkInspector";
 import { LayoutInspector } from "./LayoutInspector";
 import { ProcessManager } from "./ProcessManager";
@@ -304,6 +305,7 @@ export function DeviceControls({ target }: { target: DeviceTarget }) {
           </Card>
         </div>
       </div>
+      <InternetSharing target={operationTarget} />
       <ProcessManager target={operationTarget} />
       <FileManager target={operationTarget} />
       <NetworkInspector target={operationTarget} />

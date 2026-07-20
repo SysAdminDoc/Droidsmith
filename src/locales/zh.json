@@ -457,6 +457,16 @@
       "nodeParseError": "未解析的节点",
       "clickable": "可点击",
       "truncated": "显示 {{count}} 个节点中的 500 个"
+    },
+    "tethering": {
+      "title": "共享网络",
+      "body": "通过 gnirehtet 反向网络共享，将此电脑的网络连接通过 USB 共享给设备。",
+      "active": "进行中",
+      "start": "共享网络",
+      "stop": "停止共享",
+      "starting": "正在启动…",
+      "stopped": "已停止网络共享。",
+      "failed": "网络共享失败：{{message}}"
     }
   },
   "wireless": {

@@ -735,7 +735,17 @@
     "unusableState": "Dispositivos no listos para administrar",
     "unusableStateBody": "Estos dispositivos están conectados pero no en un estado ADB administrable — por ejemplo fuera de línea, en modo bootloader/recuperación/sideload, o en un estado no reconocido. Reconecta el cable, desbloquea la pantalla o sal del modo especial, luego vuelve a escanear.",
     "waitingForAdb": "Esperando a ADB",
-    "wifiIp": "IP Wi-Fi"
+    "wifiIp": "IP Wi-Fi",
+    "tethering": {
+      "title": "Compartir Internet",
+      "body": "Comparte la conexión a Internet de este PC con el dispositivo por USB mediante el tethering inverso de gnirehtet.",
+      "active": "Activo",
+      "start": "Compartir Internet",
+      "stop": "Dejar de compartir",
+      "starting": "Iniciando…",
+      "stopped": "Se detuvo el uso compartido de Internet.",
+      "failed": "Error al compartir Internet: {{message}}"
+    }
   },
   "diagnostics": {
     "bundleSize": "Tamaño del paquete",
