@@ -171,4 +171,36 @@ mod tests {
         let status = terminate(&mut child).expect("terminate exited child");
         assert!(status.success());
     }
+
+    #[test]
+    fn kill_direct_reports_status_for_an_already_exited_child() {
+        let mut command = quick_command();
+        configure(&mut command);
+        let mut child = command.spawn().expect("spawn quick child");
+        // The direct-kill fallback (used when a group kill fails) must surface
+        // an already-exited child's real status instead of signalling a dead
+        // pid and returning an error.
+        sleep(Duration::from_millis(400));
+        let status = kill_direct_if_running(&mut child)
+            .expect("direct kill on exited child")
+            .expect("exited child yields a status");
+        assert!(status.success());
+    }
+
+    #[test]
+    fn kill_direct_signals_a_running_child_then_reaps() {
+        let mut command = long_running_command();
+        configure(&mut command);
+        let mut child = command.spawn().expect("spawn long-running child");
+        // A live child returns None (the kill signal was issued but the child
+        // is not yet reaped); the caller then reaps it via wait(). This is the
+        // fallback branch taken when the OS group kill did not succeed.
+        let started = Instant::now();
+        let outcome =
+            kill_direct_if_running(&mut child).expect("direct kill on running child");
+        assert!(outcome.is_none());
+        let status = child.wait().expect("reap direct-killed child");
+        assert!(!status.success());
+        assert!(started.elapsed() < Duration::from_secs(20));
+    }
 }

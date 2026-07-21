@@ -54,18 +54,6 @@ IDs continue from R-096 / IMP-73.
   serialize path.
   Complexity: M
 
-- [ ] P2 — IMP-74 — Unit tests for `process_tree.rs`
-  Why: The only security-relevant module with no `#[cfg(test)]`; a regression in
-  cross-platform child-containment/kill could let adb/fastboot/scrcpy children
-  outlive an operation.
-  Evidence: `src-tauri/src/process_tree.rs` (no test module; host_path/install/
-  scrcpy/gnirehtet all have one).
-  Touches: `src-tauri/src/process_tree.rs`.
-  Acceptance: `cargo test` covers the PID-hierarchy parse and the kill/containment
-  decision paths (including the empty/malformed-input branches) with no new
-  clippy warnings.
-  Complexity: S
-
 - [ ] P2 — R-099 — Dependency + security re-audit (release-policy exceptions expire 2026-10-15)
   Why: Scheduled re-audit is due; `time`, `reqwest`, `hyper`, `tokio` are in the
   tree transitively and advisories accrue over time.
