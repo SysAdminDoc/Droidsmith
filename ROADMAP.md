@@ -63,16 +63,6 @@ in Roadmap_Blocked.md, not here — see the Rejected Ideas table in RESEARCH.md.
   are covered; `npm test` green.
   Complexity: S
 
-- [ ] P3 — R-094 gnirehtet discovery hint when not on PATH
-  Why: `InternetSharing` returns `null` when gnirehtet is missing, so the feature
-  is silently invisible with no way to learn it exists.
-  Evidence: `src/routes/devices/InternetSharing.tsx:122` early-returns `null`.
-  Touches: `src/routes/devices/InternetSharing.tsx` (render a locate-failure hint
-  with install guidance, mirroring scrcpy/fastboot).
-  Acceptance: with gnirehtet absent, the panel shows an "install gnirehtet to
-  enable Share Internet" hint instead of nothing; smoke assertion.
-  Complexity: S
-
 - [ ] P3 — R-093 Host-doctor USB/mDNS backend troubleshooting toggles
   Why: platform-tools 37.0.1 changed USB/mDNS backends; device-detection issues
   now hinge on env toggles users can't discover.

@@ -755,6 +755,8 @@
     "waitingForAdb": "Esperando a ADB",
     "wifiIp": "IP Wi-Fi",
     "tethering": {
+      "notInstalled": "No instalado",
+      "notFoundBody": "Instala gnirehtet y añádelo al PATH para habilitar Compartir Internet: el tethering inverso enruta el dispositivo a través de la conexión de este equipo.",
       "title": "Compartir Internet",
       "body": "Comparte la conexión a Internet de este PC con el dispositivo por USB mediante el tethering inverso de gnirehtet.",
       "active": "Activo",

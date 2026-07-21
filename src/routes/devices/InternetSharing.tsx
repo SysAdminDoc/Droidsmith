@@ -118,8 +118,26 @@ export function InternetSharing({ target }: { target: DeviceTarget }) {
     }
   }, []);
 
-  // Only advertise the feature when the binary is actually installed.
-  if (located !== true) return null;
+  // Still probing PATH — render nothing to avoid a flash of the hint.
+  if (located === null) return null;
+
+  // Binary missing: surface a discovery hint so the feature is not silently
+  // invisible (mirrors how scrcpy/fastboot report a locate failure).
+  if (!located) {
+    return (
+      <Card className="p-5">
+        <div className="flex items-center gap-2">
+          <h3 className="text-sm font-semibold text-anvil-50">
+            {t("devices.tethering.title")}
+          </h3>
+          <Badge tone="neutral">{t("devices.tethering.notInstalled")}</Badge>
+        </div>
+        <p className="mt-2 text-xs text-anvil-400">
+          {t("devices.tethering.notFoundBody")}
+        </p>
+      </Card>
+    );
+  }
 
   const running = state.kind === "running";
   const busy = state.kind === "starting";

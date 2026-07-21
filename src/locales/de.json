@@ -473,6 +473,8 @@
       "truncated": "Zeige 500 von {{count}} Knoten"
     },
     "tethering": {
+      "notInstalled": "Nicht installiert",
+      "notFoundBody": "Installiere gnirehtet und füge es zum PATH hinzu, um „Internet teilen“ zu aktivieren – Reverse-Tethering leitet das Gerät über die Verbindung dieses Computers.",
       "title": "Internet freigeben",
       "body": "Teile die Internetverbindung dieses PCs über USB mit dem Gerät per gnirehtet Reverse-Tethering.",
       "active": "Aktiv",

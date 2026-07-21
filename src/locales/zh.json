@@ -473,6 +473,8 @@
       "truncated": "显示 {{count}} 个节点中的 500 个"
     },
     "tethering": {
+      "notInstalled": "未安装",
+      "notFoundBody": "安装 gnirehtet 并将其加入 PATH 以启用共享网络——反向网络共享会将设备通过此计算机的连接联网。",
       "title": "共享网络",
       "body": "通过 gnirehtet 反向网络共享，将此电脑的网络连接通过 USB 共享给设备。",
       "active": "进行中",

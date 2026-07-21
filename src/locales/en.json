@@ -473,6 +473,8 @@
       "truncated": "Showing 500 of {{count}} nodes"
     },
     "tethering": {
+      "notInstalled": "Not installed",
+      "notFoundBody": "Install gnirehtet and add it to your PATH to enable Share Internet — reverse-tethering routes the device through this computer's connection.",
       "title": "Share Internet",
       "body": "Share this PC's internet connection with the device over USB using gnirehtet reverse tethering.",
       "active": "Active",
