@@ -217,7 +217,7 @@ export default function LogcatRoute() {
     flushPartialLogcatLine(partialLineRef, setLines);
     setTailing(false);
     setReconnecting(false);
-    if (operationId) void cancelWithRegistrationRetry(operationId);
+    if (operationId) void callCancelOperation(operationId);
   }, []);
 
   useEffect(() => {
@@ -234,7 +234,7 @@ export default function LogcatRoute() {
       const operationId = operationRef.current;
       operationRef.current = null;
       generationRef.current += 1;
-      if (operationId) void cancelWithRegistrationRetry(operationId);
+      if (operationId) void callCancelOperation(operationId);
     };
   }, []);
 
@@ -1137,10 +1137,6 @@ function flushPartialLogcatLine(
 function appendBoundedLines(setLines: LineSetter, incoming: LogLine[]) {
   if (incoming.length === 0) return;
   setLines((previous) => [...previous, ...incoming].slice(-MAX_LOG_LINES));
-}
-
-async function cancelWithRegistrationRetry(operationId: string) {
-  await callCancelOperation(operationId);
 }
 
 function logLineColor(level: string): string {
