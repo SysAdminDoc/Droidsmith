@@ -14,6 +14,58 @@ completion.
 Working batches live here. Sections collapse into a versioned release on
 each milestone tag.
 
+## [0.9.1] - 2026-07-20
+
+Deep audit pass — correctness, security, UX, performance, and maintainability
+fixes across primary and secondary surfaces.
+
+### Security
+
+- The console shell gate classified commands by their head token only, but adb
+  joins argv and runs it through the device `sh -c`, so a read-only head
+  (`getprop`, `cat`, …) followed by a token carrying `; | & $ \` ( ) < >` — for
+  example the console splitting `getprop; pm uninstall x` on whitespace —
+  executed a hidden mutation while bypassing the reviewed/journaled executor.
+  `classify_shell` now treats any shell control metacharacter as non-read-only,
+  so `shell_run` rejects it and `plan_shell_action` routes it through review.
+
+### Fixed
+
+- Reverse-tethering (`Share Internet`) sessions were orphaned when the selected
+  device changed or the route unmounted — the toggle remounts per device, so a
+  running gnirehtet session lost its only control surface and a later remount
+  would spawn a duplicate that fails on the busy relay port. The session is now
+  stopped in the effect cleanup (and a "not tracked" stop of an already-reaped
+  session is ignored).
+- The permissions panel is not remounted when the inspected package changes, so
+  a slow list/set request for the previous package could overwrite the current
+  one; added a generation guard that drops stale resolutions.
+- The Tuning editor rendered raw developer tokens (`invalid`, `nan`, `0.5–2`) as
+  its inline validation message; these are now translated (all five locales).
+- The Profiles ordered-action list and dry-run diff showed the raw action enum
+  (`uninstall_for_user`) while the selector showed the translated label; both
+  now use the shared label, and the actionable "ready" diff rows use an active
+  tone instead of reading more muted than the "already matches" no-ops.
+- File-operation status ("complete") no longer lingers after browsing to a
+  different directory.
+
+### Performance
+
+- The installed-package table filtered and re-rendered every interactive row
+  (each mounting an IntersectionObserver) on every search keystroke — real jank
+  on devices with hundreds of packages. Filtering now uses a deferred search
+  value and memoized collections so the heavy render is lower-priority.
+
+### Refactored
+
+- Extracted the duplicated `CapturedTail` process-output capture/redaction
+  helper (≈90 lines) shared by the scrcpy and gnirehtet supervisors into a
+  single `captured_tail` module with its own tests.
+- Inlined the redundant Logcat `cancelWithRegistrationRetry` no-op wrapper (its
+  registration-retry now lives in `callCancelOperation`).
+- Normalized the Rust backend with rustfmt (accumulated drift across several
+  modules) so `cargo fmt --check` passes.
+
 ## [0.9.0] - 2026-07-20
 
 Reverse-tethering + maintainability batch: a gnirehtet "Share Internet" toggle,
