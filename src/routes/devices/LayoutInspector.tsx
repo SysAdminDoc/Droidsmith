@@ -183,6 +183,11 @@ export function LayoutInspector({ target }: { target: DeviceTarget }) {
           )}
         </div>
       )}
+      {nodes.length > 0 && filtered.length === 0 && !loading && (
+        <EmptyState title={t("devices.layout.noMatches")}>
+          <p>{t("devices.layout.noMatchesBody")}</p>
+        </EmptyState>
+      )}
     </Card>
   );
 }

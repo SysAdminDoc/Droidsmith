@@ -452,6 +452,8 @@
       "showingConnections": "Showing 100 of {{count}} connections"
     },
     "layout": {
+        "noMatches": "No matching nodes",
+        "noMatchesBody": "No captured nodes match the current filter. Clear or adjust the search.",
       "title": "Layout inspector",
       "body": "Capture the current on-screen UI hierarchy, read-only, with",
       "capture": "Capture hierarchy",

@@ -63,16 +63,6 @@ in Roadmap_Blocked.md, not here — see the Rejected Ideas table in RESEARCH.md.
   are covered; `npm test` green.
   Complexity: S
 
-- [ ] P3 — IMP-71 LayoutInspector filter-to-empty blank panel
-  Why: capturing nodes then filtering to zero matches renders a blank panel;
-  peer inspectors show a "no matching results" state.
-  Evidence: `LayoutInspector.tsx:136` (empty only when `nodes.length === 0`) and
-  `:141` (list only when `filtered.length > 0`) — no branch between.
-  Touches: `src/routes/devices/LayoutInspector.tsx`.
-  Acceptance: nodes present + zero filter matches shows a "no matching nodes"
-  EmptyState; covered by a smoke assertion.
-  Complexity: S
-
 - [ ] P3 — R-091 NetworkInspector export/copy
   Why: Logcat and LayoutInspector offer export; the socket table does not.
   Evidence: `src/routes/devices/NetworkInspector.tsx` has no export/copy action.

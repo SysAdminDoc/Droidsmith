@@ -89,6 +89,12 @@ async function runDesktopFlow(browser) {
   await page.getByRole("button", { name: "Capture hierarchy" }).click();
   await page.getByText("com.example.app:id/title").waitFor();
   await page.getByText("“Hello”").waitFor();
+  // IMP-71: filtering to zero matches shows an empty state, not a blank panel.
+  const layoutFilter = page.getByLabel("Filter layout nodes");
+  await layoutFilter.fill("zzz-no-such-node");
+  await page.getByText("No matching nodes", { exact: true }).waitFor();
+  await layoutFilter.fill("");
+  await page.getByText("com.example.app:id/title").waitFor();
   await page.getByRole("button", { name: "Export XML" }).click();
   await page.getByText(/Layout saved to .*layout-QA123\.xml/).waitFor();
 

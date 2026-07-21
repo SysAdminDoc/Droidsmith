@@ -452,6 +452,8 @@
       "showingConnections": "显示 {{count}} 个连接中的 100 个"
     },
     "layout": {
+        "noMatches": "没有匹配的节点",
+        "noMatchesBody": "没有捕获的节点与当前筛选匹配。请清除或调整搜索。",
       "title": "布局检查器",
       "body": "使用以下方式捕获当前屏幕的只读 UI 层级结构",
       "capture": "捕获层级结构",
