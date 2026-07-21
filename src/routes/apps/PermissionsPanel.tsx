@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import {
@@ -28,18 +28,25 @@ export function PermissionsPanel({
   const [loading, setLoading] = useState(true);
   const [toggling, setToggling] = useState<string | null>(null);
   const [permError, setPermError] = useState<string | null>(null);
+  // The panel is not remounted when the inspected package changes, so a slow
+  // list/set request for the previous package could resolve and overwrite the
+  // current one. Each load bumps the generation; stale resolutions are dropped.
+  const requestRef = useRef(0);
 
   const load = useCallback(async () => {
+    const generation = ++requestRef.current;
     setLoading(true);
     setPermError(null);
     try {
       const result = await callListPermissions(target, pkg);
+      if (requestRef.current !== generation) return;
       setPerms(result);
     } catch (e) {
+      if (requestRef.current !== generation) return;
       setPerms([]);
       setPermError(errorMessage(e));
     } finally {
-      setLoading(false);
+      if (requestRef.current === generation) setLoading(false);
     }
   }, [target, pkg]);
 
@@ -49,16 +56,19 @@ export function PermissionsPanel({
 
   const togglePerm = useCallback(
     async (permission: string, grant: boolean) => {
+      const generation = requestRef.current;
       setToggling(permission);
       setPermError(null);
       try {
         await callSetPermission(target, pkg, permission, grant, userId);
+        if (requestRef.current !== generation) return;
         setPerms((prev) =>
           prev.map((p) =>
             p.permission === permission ? { ...p, granted: grant } : p,
           ),
         );
       } catch (e) {
+        if (requestRef.current !== generation) return;
         // Many permissions (signature/system, or fixed by policy) can't be
         // changed via `pm grant`. Surface why instead of silently snapping
         // the toggle back, then reload to show the real state.
@@ -69,7 +79,7 @@ export function PermissionsPanel({
         );
         void load();
       } finally {
-        setToggling(null);
+        if (requestRef.current === generation) setToggling(null);
       }
     },
     [target, pkg, userId, load, t],

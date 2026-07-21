@@ -43,11 +43,20 @@ export function InternetSharing({ target }: { target: DeviceTarget }) {
     };
   }, []);
 
-  // A sharing session belongs to a specific device — reset tracking when the
-  // target changes so the UI doesn't show device A's session for device B.
+  // A sharing session belongs to a specific device and this toggle is its only
+  // control surface (gnirehtet is a headless background service, not a window).
+  // Reset the UI for the new target, and in the cleanup stop the supervised
+  // session when the target changes (device switch / reconnect) or the
+  // component unmounts (leaving the route) — otherwise it is orphaned as an
+  // uncontrollable process and a later remount would show "start" and spawn a
+  // duplicate that fails on the busy relay port.
   useEffect(() => {
     setState({ kind: "idle" });
-    sessionRef.current = null;
+    return () => {
+      const id = sessionRef.current;
+      sessionRef.current = null;
+      if (id !== null) void callStopGnirehtet(id);
+    };
   }, [target.serial, target.transport_id, target.connection_generation]);
 
   const runningSessionId = state.kind === "running" ? state.session.id : null;
