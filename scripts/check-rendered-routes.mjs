@@ -640,6 +640,12 @@ async function runDesktopFlow(browser) {
     fullPage: false,
   });
 
+  // IMP-68: the failed row can explain itself via the bundled quirk rules.
+  await page.getByRole("button", { name: "Why did this fail?" }).click();
+  await page
+    .getByText("Vendor blocks disabling this package", { exact: true })
+    .waitFor();
+
   await page.getByRole("button", { name: /Wireless/ }).click();
   await page.getByRole("heading", { name: "Wireless", exact: true }).waitFor();
   const wirelessConnectPanel = page
@@ -2388,6 +2394,22 @@ async function installTauriMock(
           });
           pending.resolve();
           return true;
+        }
+        if (cmd === "explain_failure") {
+          if (
+            (args.req?.raw_error ?? "").includes("OEM policy blocked") ||
+            (args.req?.package_id ?? "").includes("fail")
+          ) {
+            return {
+              id: "qa-oem-block",
+              title: "Vendor blocks disabling this package",
+              explanation:
+                "This OEM ROM prevents the shell user from disabling the package. Uninstall for the current user instead.",
+              matches: null,
+              mitigation: { kind: "try_alternative_action" },
+            };
+          }
+          return null;
         }
         if (cmd === "apply_action") {
           const request = args.plan.request;

@@ -18,6 +18,8 @@ import {
   type BugreportCaptureResult,
   type Device,
   type DeviceInfo,
+  type ExplainFailureRequest,
+  type Quirk,
   type DeviceSetting,
   type DeviceSettingChange,
   type DeviceLifecycleEvent,
@@ -576,6 +578,17 @@ export async function callGetDeviceInfo(
   target: DeviceTarget,
 ): Promise<DeviceInfo> {
   return commands.getDeviceInfo(target);
+}
+
+/**
+ * Match a failed operation against the bundled vendor-quirk rules. Returns the
+ * first applicable quirk (title + explanation + optional mitigation) or null
+ * when the raw error should stand on its own.
+ */
+export async function callExplainFailure(
+  req: ExplainFailureRequest,
+): Promise<Quirk | null> {
+  return commands.explainFailure(req);
 }
 
 export async function callListDeviceSettings(

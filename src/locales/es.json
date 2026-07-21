@@ -317,6 +317,11 @@
     "title": "Consola"
   },
   "debloat": {
+    "explainFailure": "¿Por qué falló esto?",
+    "explainLoading": "Comprobando peculiaridades del fabricante…",
+    "explainError": "No se pudo cargar la explicación de la peculiaridad.",
+    "explainNoMatch": "Ninguna peculiaridad conocida del fabricante coincide con este error.",
+    "explainMitigation": "Solución sugerida: {{kind}}",
     "advanced": "Avanzado",
     "afterState": "Después: {{state}}",
     "applyCount_few": "Aplicar {{count}} paquetes",

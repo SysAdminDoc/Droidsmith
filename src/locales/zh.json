@@ -757,6 +757,11 @@
     }
   },
   "debloat": {
+    "explainFailure": "为什么会失败？",
+    "explainLoading": "正在检查厂商特性…",
+    "explainError": "无法加载特性说明。",
+    "explainNoMatch": "没有已知的厂商特性与此错误匹配。",
+    "explainMitigation": "建议的解决方法：{{kind}}",
     "title": "精简",
     "description": "在应用之前审查厂商感知的清理方案。",
     "choosePack": "选择精简方案包",

@@ -16,6 +16,11 @@ each milestone tag.
 
 ### Added
 
+- **IMP-68 Vendor-quirk failure hints.** The previously orphaned
+  `explain_failure` IPC is now wired into the Debloat results: a failed row
+  offers a "Why did this fail?" action that matches the raw error and the
+  device's manufacturer/build fingerprint against the bundled quirk rules and
+  shows the explanation plus any suggested workaround.
 - **R-086 Wireless connection history + reconnect.** Successful wireless
   connects are now recorded (host:port, last-connected time, optional label) in
   the backend settings store, bounded to the 32 most recent and deduplicated by

@@ -757,6 +757,11 @@
     }
   },
   "debloat": {
+    "explainFailure": "Why did this fail?",
+    "explainLoading": "Checking vendor quirks…",
+    "explainError": "Could not load the quirk explanation.",
+    "explainNoMatch": "No known vendor quirk matches this error.",
+    "explainMitigation": "Suggested workaround: {{kind}}",
     "title": "Debloat",
     "description": "Review vendor-aware cleanup plans before applying them.",
     "choosePack": "Choose a debloat pack",

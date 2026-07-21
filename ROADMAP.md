@@ -51,19 +51,6 @@ in Roadmap_Blocked.md, not here — see the Rejected Ideas table in RESEARCH.md.
   (never silent). Unit test on the fingerprint-diff/drift logic + smoke flow.
   Complexity: L
 
-- [ ] P2 — IMP-68 Wire up or remove the orphaned `explain_failure` IPC
-  Why: the quirks failure-hint command is registered (`lib.rs:137`), defined
-  (`commands.rs:4515`), bound, and unit-tested, but has zero frontend callers —
-  built value that never reached the UI.
-  Evidence: `grep explain_failure src/` returns only generated bindings.
-  Touches: `src/lib/tauri.ts` (add wrapper), Apps/Debloat/Mirror failure
-  surfaces (show the quirk hint on operation failure), or delete the command +
-  registration if the quirks-hint direction is abandoned.
-  Acceptance: an operation failure with a matching bundled quirk shows the
-  explanation in the UI, exercised by a ui:smoke flow — or the command and its
-  registration/bindings are removed and tests updated.
-  Complexity: M
-
 - [ ] P2 — R-088 Expand the Mirror scrcpy flag surface
   Why: Droidsmith launches scrcpy but drives only ~12 flags; several
   commonly-wanted, already-stable options are unexposed.

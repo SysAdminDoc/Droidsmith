@@ -4,7 +4,9 @@ import { useTranslation } from "react-i18next";
 import {
   errorMessage,
   callApplyAction,
+  callExplainFailure,
   callExportRecoveryBaseline,
+  callGetDeviceInfo,
   callListPackages,
   callListPacks,
   callListUsers,
@@ -13,6 +15,7 @@ import {
   deviceTarget,
   inTauri,
   type AndroidUser,
+  type Quirk,
   type CompatibilityStatus,
   type JournalEntry,
   type Pack,
@@ -119,6 +122,10 @@ export default function DebloatRoute() {
     null,
   );
   const [users, setUsers] = useState<AndroidUser[]>([]);
+  const [deviceContext, setDeviceContext] = useState<{
+    manufacturer: string | null;
+    rom: string | null;
+  }>({ manufacturer: null, rom: null });
   const [usersReady, setUsersReady] = useState(false);
   const [userError, setUserError] = useState<string | null>(null);
   const [selectedUser, setSelectedUser] = useState<number>(0);
@@ -168,10 +175,24 @@ export default function DebloatRoute() {
       setUsers([]);
       setUsersReady(false);
       setUserError(null);
+      setDeviceContext({ manufacturer: null, rom: null });
       return;
     }
     setUsersReady(false);
     setUserError(null);
+    // Best-effort device context for quirk matching; a failure here must not
+    // block the debloat flow.
+    void (async () => {
+      try {
+        const info = await callGetDeviceInfo(deviceTarget(selectedDevice));
+        setDeviceContext({
+          manufacturer: info.manufacturer,
+          rom: info.build_fingerprint,
+        });
+      } catch {
+        setDeviceContext({ manufacturer: null, rom: null });
+      }
+    })();
     try {
       const found = await callListUsers(deviceTarget(selectedDevice));
       setUsers(found);
@@ -744,6 +765,7 @@ export default function DebloatRoute() {
             pack={wizard.pack}
             queue={wizard.queue}
             cancelled={wizard.cancelled}
+            deviceContext={deviceContext}
             onRetryFailed={() => void retryFailed()}
             onReset={() => setWizard({ step: "pick_pack" })}
           />
@@ -1447,16 +1469,20 @@ function QueueApplyProgress({
   );
 }
 
+type QuirkDeviceContext = { manufacturer: string | null; rom: string | null };
+
 function QueueApplyResult({
   pack,
   queue,
   cancelled,
+  deviceContext,
   onRetryFailed,
   onReset,
 }: {
   pack: Pack;
   queue: DebloatQueueRow[];
   cancelled: boolean;
+  deviceContext: QuirkDeviceContext;
   onRetryFailed: () => void;
   onReset: () => void;
 }) {
@@ -1508,13 +1534,19 @@ function QueueApplyResult({
         <h4 className="text-xs font-semibold text-anvil-200">
           {t("debloat.queueResults")}
         </h4>
-        <QueueRows rows={queue} />
+        <QueueRows rows={queue} deviceContext={deviceContext} />
       </Card>
     </>
   );
 }
 
-function QueueRows({ rows }: { rows: DebloatQueueRow[] }) {
+function QueueRows({
+  rows,
+  deviceContext,
+}: {
+  rows: DebloatQueueRow[];
+  deviceContext?: QuirkDeviceContext;
+}) {
   const { t } = useTranslation();
 
   return (
@@ -1539,6 +1571,13 @@ function QueueRows({ rows }: { rows: DebloatQueueRow[] }) {
                   <p className="mt-1 max-w-xl text-xs leading-5 text-red-200/80">
                     {row.error}
                   </p>
+                )}
+                {deviceContext && row.status === "failed" && row.error && (
+                  <QuirkHint
+                    packageId={row.entry.id}
+                    rawError={row.error}
+                    deviceContext={deviceContext}
+                  />
                 )}
               </TableCell>
               <TableCell>
@@ -1576,6 +1615,99 @@ function QueueRows({ rows }: { rows: DebloatQueueRow[] }) {
           ))}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+type QuirkHintState =
+  | { kind: "idle" }
+  | { kind: "loading" }
+  | { kind: "none" }
+  | { kind: "quirk"; quirk: Quirk }
+  | { kind: "error"; message: string };
+
+/**
+ * IMP-68: on a failed debloat row, offer to match the raw error against the
+ * bundled vendor-quirk rules and surface a human explanation + mitigation.
+ */
+function QuirkHint({
+  packageId,
+  rawError,
+  deviceContext,
+}: {
+  packageId: string;
+  rawError: string;
+  deviceContext: QuirkDeviceContext;
+}) {
+  const { t } = useTranslation();
+  const [state, setState] = useState<QuirkHintState>({ kind: "idle" });
+
+  const explain = useCallback(async () => {
+    setState({ kind: "loading" });
+    try {
+      const quirk = await callExplainFailure({
+        manufacturer: deviceContext.manufacturer,
+        rom: deviceContext.rom,
+        package_id: packageId,
+        raw_error: rawError,
+      });
+      setState(quirk ? { kind: "quirk", quirk } : { kind: "none" });
+    } catch (e) {
+      setState({ kind: "error", message: errorMessage(e) });
+    }
+  }, [deviceContext.manufacturer, deviceContext.rom, packageId, rawError]);
+
+  if (state.kind === "idle") {
+    return (
+      <button
+        type="button"
+        onClick={() => void explain()}
+        className="mt-1 text-xs font-medium text-circuit-200 underline underline-offset-2 hover:text-circuit-100"
+      >
+        {t("debloat.explainFailure")}
+      </button>
+    );
+  }
+
+  if (state.kind === "loading") {
+    return (
+      <p className="mt-1 text-xs text-anvil-400">
+        {t("debloat.explainLoading")}
+      </p>
+    );
+  }
+
+  if (state.kind === "error") {
+    return (
+      <p className="mt-1 text-xs text-red-200/80">
+        {t("debloat.explainError")}
+      </p>
+    );
+  }
+
+  if (state.kind === "none") {
+    return (
+      <p className="mt-1 text-xs text-anvil-400">
+        {t("debloat.explainNoMatch")}
+      </p>
+    );
+  }
+
+  return (
+    <div className="mt-2 max-w-xl rounded-md border border-circuit-300/25 bg-circuit-300/[0.06] p-3">
+      <h5 className="text-xs font-semibold text-circuit-100">
+        {state.quirk.title}
+      </h5>
+      <p className="mt-1 whitespace-pre-wrap text-xs leading-5 text-anvil-200">
+        {state.quirk.explanation}
+      </p>
+      {state.quirk.mitigation && (
+        <p className="mt-2 text-[11px] font-medium text-circuit-200">
+          {t("debloat.explainMitigation", {
+            kind: state.quirk.mitigation.kind.replace(/_/g, " "),
+          })}
+        </p>
+      )}
     </div>
   );
 }

@@ -757,6 +757,11 @@
     }
   },
   "debloat": {
+    "explainFailure": "Warum ist das fehlgeschlagen?",
+    "explainLoading": "Hersteller-Eigenheiten werden geprüft…",
+    "explainError": "Die Eigenheiten-Erklärung konnte nicht geladen werden.",
+    "explainNoMatch": "Keine bekannte Hersteller-Eigenheit passt zu diesem Fehler.",
+    "explainMitigation": "Empfohlene Umgehung: {{kind}}",
     "title": "Debloat",
     "description": "Herstellerbezogene Bereinigungspläne vor der Anwendung prüfen.",
     "choosePack": "Debloat-Paket wählen",
