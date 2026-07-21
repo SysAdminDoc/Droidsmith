@@ -1327,6 +1327,34 @@ pub async fn reset_settings_mirror_preset(
     .await
 }
 
+/// Record the selected device's current build fingerprint and report whether it
+/// differs from the last one Droidsmith saw for it (R-087). A changed
+/// fingerprint means the device was updated (OTA) since it was last used, so the
+/// renderer can prompt a debloat-drift review. Devices without a verified
+/// fingerprint are treated as unchanged.
+#[tauri::command]
+#[specta::specta]
+pub async fn observe_device_fingerprint(
+    app: tauri::AppHandle,
+    target: adb::DeviceTarget,
+) -> Result<settings::FingerprintObservation, CommandError> {
+    let Some(fingerprint) = target.build_fingerprint.clone() else {
+        return Ok(settings::FingerprintObservation {
+            changed: false,
+            previous: None,
+        });
+    };
+    let app_data_dir = settings_app_data_dir(&app)?;
+    spawn_blocking_operation(move || {
+        Ok(settings::record_device_fingerprint(
+            &app_data_dir,
+            &target.serial,
+            &fingerprint,
+        )?)
+    })
+    .await
+}
+
 /// Return the persisted wireless-endpoint history and the opt-in
 /// reconnect-on-launch flag so the renderer can offer one-click reconnect.
 #[tauri::command]

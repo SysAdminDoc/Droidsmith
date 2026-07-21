@@ -33,6 +33,8 @@ const LOGCAT_GLOBAL_KEY: &str = "global";
 const MAX_WIRELESS_HISTORY: usize = 32;
 const MAX_WIRELESS_HOST_BYTES: usize = 255;
 const MAX_WIRELESS_LABEL_BYTES: usize = 80;
+const MAX_DEVICE_FINGERPRINTS: usize = 128;
+const MAX_FINGERPRINT_BYTES: usize = 4_096;
 
 #[derive(specta::Type, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -209,6 +211,17 @@ pub struct WirelessHistorySnapshot {
     pub auto_reconnect: bool,
 }
 
+/// Result of observing a device's current build fingerprint against the last
+/// one Droidsmith recorded for it. `changed` is true only when a *different*
+/// fingerprint was previously stored — i.e. the device was updated (OTA) since
+/// it was last seen — so the renderer can prompt a debloat-drift review.
+#[derive(specta::Type, Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FingerprintObservation {
+    pub changed: bool,
+    pub previous: Option<String>,
+}
+
 #[derive(specta::Type, Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LogcatQueryLibrary {
@@ -270,6 +283,8 @@ struct SettingsDocument {
     wireless_history: Vec<WirelessEndpoint>,
     #[serde(default)]
     wireless_auto_reconnect: bool,
+    #[serde(default)]
+    device_fingerprints: BTreeMap<String, String>,
 }
 
 impl Default for SettingsDocument {
@@ -282,6 +297,7 @@ impl Default for SettingsDocument {
             logcat_queries: BTreeMap::new(),
             wireless_history: Vec::new(),
             wireless_auto_reconnect: false,
+            device_fingerprints: BTreeMap::new(),
         }
     }
 }
@@ -532,6 +548,51 @@ pub fn set_wireless_auto_reconnect(
     })
 }
 
+/// Record a device's current build fingerprint and report whether it differs
+/// from the previously stored one (i.e. the device was updated since last seen).
+pub fn record_device_fingerprint(
+    app_data_dir: &Path,
+    device_identity: &str,
+    fingerprint: &str,
+) -> Result<FingerprintObservation, SettingsError> {
+    let key = device_scope(device_identity)?;
+    let fingerprint = fingerprint.trim();
+    if fingerprint.is_empty()
+        || fingerprint.len() > MAX_FINGERPRINT_BYTES
+        || fingerprint.chars().any(char::is_control)
+    {
+        return Err(SettingsError::Invalid(
+            "device fingerprint is empty, oversized, or has control characters".to_string(),
+        ));
+    }
+    let fingerprint = fingerprint.to_string();
+    with_lock(move || {
+        initialize_locked(app_data_dir, &LegacySettingsImport::default())?;
+        let path = settings_path(app_data_dir);
+        let mut settings = read_valid_document(&path)?;
+        let previous = settings.device_fingerprints.get(&key).cloned();
+        let changed = previous
+            .as_deref()
+            .is_some_and(|stored| stored != fingerprint);
+        if previous.as_deref() != Some(fingerprint.as_str()) {
+            // Bound the map before inserting a genuinely new device key.
+            if !settings.device_fingerprints.contains_key(&key)
+                && settings.device_fingerprints.len() >= MAX_DEVICE_FINGERPRINTS
+            {
+                if let Some(oldest) = settings.device_fingerprints.keys().next().cloned() {
+                    settings.device_fingerprints.remove(&oldest);
+                }
+            }
+            settings
+                .device_fingerprints
+                .insert(key, fingerprint.clone());
+            validate_document(&settings)?;
+            write_document(&path, &settings)?;
+        }
+        Ok(FingerprintObservation { changed, previous })
+    })
+}
+
 fn wireless_snapshot(document: &SettingsDocument) -> WirelessHistorySnapshot {
     WirelessHistorySnapshot {
         endpoints: document.wireless_history.clone(),
@@ -747,6 +808,7 @@ fn import_legacy(
         logcat_queries: BTreeMap::new(),
         wireless_history: Vec::new(),
         wireless_auto_reconnect: false,
+        device_fingerprints: BTreeMap::new(),
     };
     write_document(&settings_path(app_data_dir), &settings)?;
     Ok(settings)
@@ -824,6 +886,26 @@ fn validate_document(settings: &SettingsDocument) -> Result<(), SettingsError> {
                     "wireless history label is oversized or has control characters".to_string(),
                 ));
             }
+        }
+    }
+    if settings.device_fingerprints.len() > MAX_DEVICE_FINGERPRINTS {
+        return Err(SettingsError::Invalid(
+            "too many device fingerprints".to_string(),
+        ));
+    }
+    for (scope, fingerprint) in &settings.device_fingerprints {
+        if scope.len() != 64 || !scope.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+            return Err(SettingsError::Invalid(
+                "device fingerprint scope is not a device hash".to_string(),
+            ));
+        }
+        if fingerprint.is_empty()
+            || fingerprint.len() > MAX_FINGERPRINT_BYTES
+            || fingerprint.chars().any(char::is_control)
+        {
+            return Err(SettingsError::Invalid(
+                "device fingerprint is empty, oversized, or has control characters".to_string(),
+            ));
         }
     }
     Ok(())
@@ -1398,6 +1480,40 @@ mod tests {
             .endpoints
             .iter()
             .all(|entry| entry.last_connected_ms > 8));
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn device_fingerprint_change_is_detected_across_reconnects() {
+        let dir = temp_dir("fingerprint");
+        initialize(&dir, LegacySettingsImport::default()).unwrap();
+
+        // First observation: no prior fingerprint, so nothing "changed".
+        let first = record_device_fingerprint(&dir, "SERIAL-9", "acme/pixel/1:13/A").unwrap();
+        assert!(!first.changed);
+        assert_eq!(first.previous, None);
+
+        // Same fingerprint again: still not a change.
+        let again = record_device_fingerprint(&dir, "SERIAL-9", "acme/pixel/1:13/A").unwrap();
+        assert!(!again.changed);
+        assert_eq!(again.previous.as_deref(), Some("acme/pixel/1:13/A"));
+
+        // A new fingerprint (OTA) is reported as changed with the prior value.
+        let updated = record_device_fingerprint(&dir, "SERIAL-9", "acme/pixel/2:14/B").unwrap();
+        assert!(updated.changed);
+        assert_eq!(updated.previous.as_deref(), Some("acme/pixel/1:13/A"));
+
+        // The raw serial is never stored in the clear.
+        let raw = fs::read_to_string(dir.join(SETTINGS_FILE)).unwrap();
+        assert!(!raw.contains("SERIAL-9"));
+
+        // A different device tracks independently.
+        let other = record_device_fingerprint(&dir, "SERIAL-2", "acme/pixel/2:14/B").unwrap();
+        assert!(!other.changed);
+        assert_eq!(other.previous, None);
+
+        // An empty fingerprint is rejected.
+        assert!(record_device_fingerprint(&dir, "SERIAL-9", "  ").is_err());
         fs::remove_dir_all(dir).unwrap();
     }
 

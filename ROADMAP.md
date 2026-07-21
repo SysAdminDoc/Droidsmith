@@ -36,21 +36,6 @@ in Roadmap_Blocked.md, not here — see the Rejected Ideas table in RESEARCH.md.
 
 ### P2
 
-- [ ] P2 — R-087 Post-OTA debloat-drift detection
-  Why: the one debloat gap no competitor (UAD-ng, Canta, ADB AppControl) solves —
-  packages silently reappear/re-enable after an OTA. Droidsmith already has
-  recovery baselines; it lacks change detection to prompt a re-check.
-  Evidence: UAD-ng FAQ/wiki (no auto re-apply); RESEARCH.md community signal #7.
-  Touches: `src-tauri/src/commands.rs` (capture `ro.build.fingerprint` /
-  `ro.build.version.incremental` into the recovery baseline), `src/routes/
-  apps/RecoveryBaselinePanel.tsx` + `src/routes/Debloat.tsx` (flag when the
-  current fingerprint differs from the baseline and offer a drift re-check).
-  Acceptance: a baseline stores the build fingerprint; on reconnect a changed
-  fingerprint surfaces a "device updated — review debloat drift" prompt that
-  runs the existing drift diff; re-apply stays behind explicit confirmation
-  (never silent). Unit test on the fingerprint-diff/drift logic + smoke flow.
-  Complexity: L
-
 ### P3
 
 - [ ] P3 — R-089 scrcpy v3–v4 capability surface + validation-heavy flags

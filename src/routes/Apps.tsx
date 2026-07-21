@@ -24,6 +24,7 @@ import {
   callJournalUndoBatch,
   callListPackagesWithCapability,
   callListUsers,
+  callObserveDeviceFingerprint,
   callPlanAction,
   callPlanActionBatch,
   callPreflightPackageBackup,
@@ -33,6 +34,7 @@ import {
   deviceTarget,
   newOperationId,
   type ActionKind,
+  type FingerprintObservation,
   type AndroidUser,
   type AppPackageMetadata,
   type BatchActionItemResult,
@@ -86,6 +88,17 @@ import {
   TransportTrustNotice,
 } from "./common";
 
+// Session caches for the R-087 OTA-drift notice. The promise cache guarantees a
+// single backend observation per device+fingerprint — surviving React
+// StrictMode remounts and Apps-route revisits (observe records the fingerprint,
+// so a second call would report no change) — and the dismissed set makes a
+// dismissal sticky for that device+fingerprint.
+const fingerprintObservations = new Map<
+  string,
+  Promise<FingerprintObservation>
+>();
+const dismissedFingerprintNotices = new Set<string>();
+
 export default function AppsRoute() {
   const { t } = useTranslation();
   const { devicesState, authorizedDevices } = useAuthorizedDevices();
@@ -120,6 +133,7 @@ export default function AppsRoute() {
   const [recoveryState, setRecoveryState] = useState<RecoveryState>({
     kind: "idle",
   });
+  const [otaNotice, setOtaNotice] = useState(false);
   const activeBackupRef = useRef<string | null>(null);
   const backupGenerationRef = useRef(0);
   const activeInstallRef = useRef<string | null>(null);
@@ -142,6 +156,54 @@ export default function AppsRoute() {
     setAccepted: setTransportOverrideAccepted,
     authorizedTarget,
   } = useTransportAuthorization(selectedTarget);
+
+  // R-087: when a device's build fingerprint has changed since Droidsmith last
+  // saw it (an OTA update), flag it so the user knows disabled/removed packages
+  // may have returned and can review their debloat recovery baseline.
+  const selectedFingerprint = selectedDevice?.build_fingerprint ?? null;
+  const currentFingerprintKeyRef = useRef<string | null>(null);
+  useEffect(() => {
+    const key = selectedTarget
+      ? `${selectedTarget.serial}:${selectedFingerprint ?? ""}`
+      : null;
+    currentFingerprintKeyRef.current = key;
+    if (!selectedTarget || !key || dismissedFingerprintNotices.has(key)) {
+      setOtaNotice(false);
+      return;
+    }
+    setOtaNotice(false);
+    // One shared observation per device+fingerprint for the whole session.
+    let pending = fingerprintObservations.get(key);
+    if (!pending) {
+      pending = callObserveDeviceFingerprint(selectedTarget);
+      fingerprintObservations.set(key, pending);
+    }
+    void pending
+      .then((observation) => {
+        // Ignore a result for a device the user has since switched away from,
+        // or one that was dismissed while the observation was in flight.
+        if (
+          observation.changed &&
+          currentFingerprintKeyRef.current === key &&
+          !dismissedFingerprintNotices.has(key)
+        ) {
+          setOtaNotice(true);
+        }
+      })
+      .catch(() => {
+        // A convenience signal; a failure must not disrupt the Apps route.
+      });
+    // Re-check only when the selected device or its fingerprint changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedDevice?.serial, selectedFingerprint]);
+
+  const dismissOtaNotice = useCallback(() => {
+    const key = currentFingerprintKeyRef.current;
+    if (key) {
+      dismissedFingerprintNotices.add(key);
+    }
+    setOtaNotice(false);
+  }, []);
 
   const loadUsers = useCallback(async () => {
     if (!selectedDevice) {
@@ -1114,6 +1176,20 @@ export default function AppsRoute() {
         {devicesState.kind === "ok" && authorizedDevices.length === 0 && (
           <StatePanel title={t("common.noAuthorized")} tone="warning">
             <p>{t("apps.noAuthorizedBody")}</p>
+          </StatePanel>
+        )}
+
+        {otaNotice && (
+          <StatePanel
+            title={t("apps.otaDriftTitle")}
+            tone="warning"
+            actions={
+              <Button type="button" size="sm" onClick={dismissOtaNotice}>
+                {t("common.dismiss")}
+              </Button>
+            }
+          >
+            <p>{t("apps.otaDriftBody")}</p>
           </StatePanel>
         )}
 

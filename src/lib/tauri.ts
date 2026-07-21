@@ -19,6 +19,7 @@ import {
   type Device,
   type DeviceInfo,
   type ExplainFailureRequest,
+  type FingerprintObservation,
   type Quirk,
   type DeviceSetting,
   type DeviceSettingChange,
@@ -578,6 +579,19 @@ export async function callGetDeviceInfo(
   target: DeviceTarget,
 ): Promise<DeviceInfo> {
   return commands.getDeviceInfo(target);
+}
+
+export type { FingerprintObservation };
+
+/**
+ * Record the device's current build fingerprint and report whether it changed
+ * since Droidsmith last saw it (i.e. an OTA update happened). Used to prompt a
+ * debloat-drift review (R-087).
+ */
+export async function callObserveDeviceFingerprint(
+  target: DeviceTarget,
+): Promise<FingerprintObservation> {
+  return commands.observeDeviceFingerprint(target);
 }
 
 /**

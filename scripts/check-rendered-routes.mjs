@@ -318,6 +318,15 @@ async function runDesktopFlow(browser) {
   await page.getByText("com.example.app").waitFor();
   await page.getByText("Example App", { exact: true }).waitFor();
   await page.getByText("com.android.settings").waitFor();
+  // R-087: an OTA fingerprint change surfaces a dismissible debloat-drift notice.
+  const otaNotice = page
+    .getByText("Device updated since last use", { exact: true })
+    .locator("../..");
+  await otaNotice.waitFor();
+  await otaNotice.getByRole("button", { name: "Dismiss" }).click();
+  await page
+    .getByText("Device updated since last use", { exact: true })
+    .waitFor({ state: "detached" });
   const exampleAppRow = page
     .getByRole("row")
     .filter({ hasText: "com.example.app" });
@@ -1260,6 +1269,7 @@ async function installTauriMock(
     const runtimeJournal = [];
     let installAttempts = 0;
     let scrcpyLaunches = 0;
+    let fingerprintObserved = false;
     let settingsLanguage = "en";
     const logcatQueries = { global: [] };
     let archiveApi = 35;
@@ -1798,6 +1808,15 @@ async function installTauriMock(
                   : `package archiving requires Android 15 (API 35); device reports API ${archiveApi}`,
             },
           };
+        }
+        if (cmd === "observe_device_fingerprint") {
+          // Model an OTA update once, then record it: the first observation
+          // reports changed, subsequent ones do not (matching the backend).
+          if (fingerprintObserved) {
+            return { changed: false, previous: "acme/qa/2:14/NEW" };
+          }
+          fingerprintObserved = true;
+          return { changed: true, previous: "acme/qa/1:13/OLD" };
         }
         if (cmd === "get_device_info") {
           return {

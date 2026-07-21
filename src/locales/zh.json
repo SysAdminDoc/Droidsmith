@@ -546,6 +546,8 @@
     "autoReconnectHint": "Droidsmith 启动时会尝试重新连接下面已保存的端点。"
   },
   "apps": {
+    "otaDriftTitle": "设备自上次使用后已更新",
+    "otaDriftBody": "此设备的系统版本已更改（OTA 更新）。你禁用或移除的软件包可能已恢复——导入你的精简恢复基线以查看并重新应用任何偏差。",
     "title": "应用",
     "description": "查找包、审查更改并管理应用。",
     "selectAllPackages": "全选包",

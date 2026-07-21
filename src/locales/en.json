@@ -546,6 +546,8 @@
     "autoReconnectHint": "When Droidsmith starts, it tries to reconnect the saved endpoints below."
   },
   "apps": {
+    "otaDriftTitle": "Device updated since last use",
+    "otaDriftBody": "This device's build changed (an OTA update). Packages you disabled or removed may have returned — import your debloat recovery baseline to review and re-apply any drift.",
     "title": "Apps",
     "description": "Find packages, review changes, and manage apps.",
     "selectAllPackages": "Select all packages",

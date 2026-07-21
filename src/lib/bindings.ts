@@ -271,6 +271,18 @@ export const commands = {
   ): Promise<WirelessHistorySnapshot> {
     return await TAURI_INVOKE("set_wireless_auto_reconnect", { enabled });
   },
+  /**
+   * Record the selected device's current build fingerprint and report whether it
+   * differs from the last one Droidsmith saw for it (R-087). A changed
+   * fingerprint means the device was updated (OTA) since it was last used, so the
+   * renderer can prompt a debloat-drift review. Devices without a verified
+   * fingerprint are treated as unchanged.
+   */
+  async observeDeviceFingerprint(
+    target: DeviceTarget,
+  ): Promise<FingerprintObservation> {
+    return await TAURI_INVOKE("observe_device_fingerprint", { target });
+  },
   async listPackages(
     target: DeviceTarget,
     filter: PackageFilter,
@@ -1382,6 +1394,16 @@ export type FastbootDevice = {
   parse_error?: string | null;
 };
 export type FindingSeverity = "info" | "warning" | "error";
+/**
+ * Result of observing a device's current build fingerprint against the last
+ * one Droidsmith recorded for it. `changed` is true only when a *different*
+ * fingerprint was previously stored — i.e. the device was updated (OTA) since
+ * it was last seen — so the renderer can prompt a debloat-drift review.
+ */
+export type FingerprintObservation = {
+  changed: boolean;
+  previous: string | null;
+};
 export type GnirehtetExitReason =
   | "user_stopped"
   | "device_disconnected"

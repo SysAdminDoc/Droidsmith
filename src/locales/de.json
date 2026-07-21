@@ -546,6 +546,8 @@
     "autoReconnectHint": "Beim Start von Droidsmith wird versucht, die unten gespeicherten Endpunkte erneut zu verbinden."
   },
   "apps": {
+    "otaDriftTitle": "Gerät seit der letzten Nutzung aktualisiert",
+    "otaDriftBody": "Der Build dieses Geräts hat sich geändert (ein OTA-Update). Von dir deaktivierte oder entfernte Pakete könnten zurückgekehrt sein – importiere deine Debloat-Wiederherstellungsbasis, um Abweichungen zu prüfen und erneut anzuwenden.",
     "title": "Apps",
     "description": "Pakete finden, Änderungen prüfen und Apps verwalten.",
     "selectAllPackages": "Alle Pakete auswählen",

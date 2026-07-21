@@ -16,6 +16,12 @@ each milestone tag.
 
 ### Added
 
+- **R-087 Post-OTA debloat-drift detection.** Droidsmith now records each
+  device's build fingerprint and, when it changes between sessions (an OTA
+  update), surfaces a dismissible notice on the Apps route prompting the user to
+  review their debloat recovery baseline — packages disabled/removed before the
+  update may have returned. New IPC `observe_device_fingerprint`; the existing
+  recovery-baseline review already renders the drift diff and confirmed re-apply.
 - **R-088 Expanded Mirror scrcpy flags.** Mirror now exposes `--max-fps`,
   `--fullscreen`, `--always-on-top`, and `--no-control` (view-only). The flags
   are selectable, persist in per-device mirror presets, and are asserted in the

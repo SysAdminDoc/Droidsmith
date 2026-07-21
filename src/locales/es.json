@@ -17,6 +17,8 @@
     "version": "Versión {{version}}"
   },
   "apps": {
+    "otaDriftTitle": "Dispositivo actualizado desde el último uso",
+    "otaDriftBody": "La compilación de este dispositivo cambió (una actualización OTA). Los paquetes que desactivaste o eliminaste pueden haber vuelto; importa tu línea base de recuperación de debloat para revisar y volver a aplicar cualquier cambio.",
     "actionCompleted": "Acción completada",
     "actionFailed": "La acción falló",
     "actionKind": {
