@@ -54,18 +54,6 @@ IDs continue from R-096 / IMP-73.
   serialize path.
   Complexity: M
 
-- [ ] P2 — R-099 — Dependency + security re-audit (release-policy exceptions expire 2026-10-15)
-  Why: Scheduled re-audit is due; `time`, `reqwest`, `hyper`, `tokio` are in the
-  tree transitively and advisories accrue over time.
-  Evidence: rustsec.org/advisories (RUSTSEC-2026-0009 `time` DoS); prior RESEARCH
-  noted the 2026-10-15 exception expiry; `rustls`/`webpki` are absent so
-  rustls-webpki advisories are N/A (verified against `src-tauri/Cargo.lock`).
-  Touches: `src-tauri/Cargo.lock`, `release-policy.json`, `deny.toml`.
-  Acceptance: `cargo audit` (and the repo's `security:audit:rust`) run clean or
-  with justified, dated exceptions; expiry dates refreshed; no advisory left
-  unreviewed.
-  Complexity: S
-
 ### P3
 
 - [ ] P3 — R-100 — scrcpy `--display-ime-policy` and `--no-vd-destroy-content` flags

@@ -14,6 +14,14 @@ completion.
 Working batches live here. Sections collapse into a versioned release on
 each milestone tag.
 
+### Security
+
+- **R-099 — Dependency re-audit.** Re-ran `cargo audit --deny warnings` clean
+  over 527 crates; every ignored advisory remains an unfixable transitive
+  (Tauri GTK3 / unic / build-time macro), and none affects a direct dependency
+  (RUSTSEC-2026-0009 `time` does not apply to the pinned version). Refreshed the
+  `release-policy.json` exception review window to 2027-01-15.
+
 ### Added
 
 - **R-097 — Offline APK Analyzer.** A new sidebar route statically inspects a

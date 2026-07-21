@@ -4,8 +4,8 @@
     {
       "kind": "rust_advisories",
       "owner": "Droidsmith maintainers",
-      "rationale": "Unfixable transitive Tauri Linux GTK3/webview dependencies and compile-time macro dependencies; none are direct Droidsmith dependencies. Specta's paste dependency is pinned to preserve the Rust 1.81 floor while the maintained next line requires edition 2024. Re-audit against active Tauri and Specta releases before expiry.",
-      "expiresOn": "2026-10-15",
+      "rationale": "Unfixable transitive Tauri Linux GTK3/webview dependencies and compile-time macro dependencies; none are direct Droidsmith dependencies. Specta's paste dependency is pinned to preserve the Rust 1.81 floor while the maintained next line requires edition 2024. Re-audit against active Tauri and Specta releases before expiry. Last re-audited 2026-07-21: cargo audit --deny warnings clean over 527 crates; every ignored advisory remains an unfixable transitive (GTK3/unic/build-time macro), and no advisory affects a direct dependency (time RUSTSEC-2026-0009 does not apply to the pinned version).",
+      "expiresOn": "2027-01-15",
       "subjects": [
         "RUSTSEC-2024-0370",
         "RUSTSEC-2024-0436",
@@ -30,8 +30,8 @@
     {
       "kind": "duplicate_crates",
       "owner": "Droidsmith maintainers",
-      "rationale": "Current cross-platform Tauri/plugin graph resolves these parallel major versions. Exact names and versions are frozen here so new duplication or version drift requires review.",
-      "expiresOn": "2026-10-15",
+      "rationale": "Current cross-platform Tauri/plugin graph resolves these parallel major versions. Exact names and versions are frozen here so new duplication or version drift requires review. Re-verified 2026-07-21: the frozen inventory still matches Cargo.lock.",
+      "expiresOn": "2027-01-15",
       "subjects": {
         "base64": ["0.21.7", "0.22.1"],
         "bitflags": ["1.3.2", "2.11.1"],
