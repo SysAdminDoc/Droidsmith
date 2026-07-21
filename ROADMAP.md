@@ -41,16 +41,3 @@ in Roadmap_Blocked.md, not here — see the Rejected Ideas table in RESEARCH.md.
   unit tests; display-only flags are suppressed in camera mode.
   Complexity: M
 
-- [ ] P3 — R-095 Import remote debloat pack by URL with SHA-256 pin
-  Why: static bundled YAML can't gain OEM/package coverage without an app
-  release; a generic pinned-URL import gives UAD-ng-style freshness without the
-  blocked R-036 redistribution dependency.
-  Evidence: UAD-ng ships a remote-updatable community list; Droidsmith packs are
-  static (`packs/*.yaml`).
-  Touches: `src-tauri/src/packs/` (fetch + SHA-256 verify + schema-validate a
-  remote pack), `src/routes/Debloat.tsx` (add-remote-pack UX).
-  Acceptance: a user can add a pack from a URL that is SHA-256-pinned and
-  schema-validated before use; malformed/unpinned sources are rejected; unit
-  test on verify + validate.
-  Complexity: M
-
