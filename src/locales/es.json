@@ -1398,6 +1398,14 @@
     "vpnHintStep1": "Pausa temporalmente la VPN o permite el tráfico de red local, luego reintenta.",
     "vpnHintStep2": "Confirma que el equipo y el dispositivo Android pueden comunicarse en la misma red Wi-Fi de confianza.",
     "vpnHintTitle": "Una VPN o túnel activo puede estar bloqueando la ruta al dispositivo",
-    "waitingForPlatformTools": "Esperando a que las herramientas de plataforma terminen."
+    "waitingForPlatformTools": "Esperando a que las herramientas de plataforma terminen.",
+    "historyTitle": "Historial de conexiones",
+    "historyBody": "Vuelve a conectar con un dispositivo que ya has emparejado.",
+    "historyEmpty": "Aún no hay conexiones guardadas. Conecta una vez y el punto de conexión aparecerá aquí para reconectar con un clic.",
+    "reconnect": "Reconectar",
+    "forget": "Olvidar",
+    "lastConnected": "Última conexión",
+    "autoReconnect": "Reconectar dispositivos conocidos al iniciar",
+    "autoReconnectHint": "Cuando Droidsmith se inicia, intenta reconectar los puntos de conexión guardados a continuación."
   }
 }

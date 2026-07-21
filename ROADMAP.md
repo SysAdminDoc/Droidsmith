@@ -34,22 +34,6 @@ verifiable in the current headless harness; device-verification-only ideas
 (multi-device broadcast, in-GUI touch mapping, auto-update hosting) are tracked
 in Roadmap_Blocked.md, not here — see the Rejected Ideas table in RESEARCH.md.
 
-### P1
-
-- [ ] P1 — R-086 Wireless connection history + one-click / auto reconnect
-  Why: reconnecting a wireless device after a reboot or IP change is the single
-  loudest recurring complaint across ADB desktop tooling; Droidsmith already
-  pairs but keeps no history and offers no re-attach.
-  Evidence: scrcpy #721, #4866, #3003, #4198, #5564 (IP churn); kil0bit-kb/scrcpy-gui ships it.
-  Touches: `src/routes/Wireless.tsx`, `src-tauri/src/settings.rs` (persist a
-  bounded `wireless_history` list of host:port + last-seen + optional label),
-  `src-tauri/src/commands.rs` (reconnect-by-endpoint command), optional
-  "reconnect known devices on launch" toggle.
-  Acceptance: previously paired endpoints persist across restarts, appear in a
-  history list with one-click reconnect, and an opt-in setting attempts
-  reconnect on app launch; covered by a settings round-trip test + ui:smoke flow.
-  Complexity: M
-
 ### P2
 
 - [ ] P2 — R-087 Post-OTA debloat-drift detection

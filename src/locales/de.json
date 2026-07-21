@@ -529,7 +529,15 @@
     "failureDiagnosticsPrivacy": "Dieser Bericht schließt Endpunkt, Adapternamen, Geräteseriennummer, Netzwerkadresse und VPN-Produktnamen aus.",
     "adbOutput": "ADB-Ausgabe",
     "commandCompleted": "Befehl abgeschlossen.",
-    "loadingServices": "Lade drahtlose Dienste"
+    "loadingServices": "Lade drahtlose Dienste",
+    "historyTitle": "Verbindungsverlauf",
+    "historyBody": "Mit einem bereits gekoppelten Gerät erneut verbinden.",
+    "historyEmpty": "Noch keine gespeicherten Verbindungen. Einmal verbinden, dann erscheint der Endpunkt hier zum erneuten Verbinden mit einem Klick.",
+    "reconnect": "Erneut verbinden",
+    "forget": "Entfernen",
+    "lastConnected": "Zuletzt verbunden",
+    "autoReconnect": "Bekannte Geräte beim Start erneut verbinden",
+    "autoReconnectHint": "Beim Start von Droidsmith wird versucht, die unten gespeicherten Endpunkte erneut zu verbinden."
   },
   "apps": {
     "title": "Apps",

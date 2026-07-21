@@ -675,6 +675,20 @@ async function runDesktopFlow(browser) {
     fullPage: false,
   });
 
+  // R-086: the connection-history panel surfaces a saved endpoint with a
+  // one-click reconnect and the opt-in reconnect-on-launch toggle.
+  await page.getByRole("heading", { name: "Connection history" }).waitFor();
+  await page.getByText("192.168.1.42:5555", { exact: true }).waitFor();
+  const wirelessAutoReconnect = page.getByRole("checkbox", {
+    name: "Reconnect known devices on launch",
+  });
+  await wirelessAutoReconnect.check();
+  await wirelessAutoReconnect.uncheck();
+  await page
+    .getByRole("row", { name: /192\.168\.1\.42:5555/ })
+    .getByRole("button", { name: "Reconnect" })
+    .waitFor();
+
   await page.getByRole("button", { name: /Mirror/ }).click();
   await page.getByRole("heading", { name: "Mirror", exact: true }).waitFor();
   await page.getByText("scrcpy 4.0", { exact: true }).waitFor();
@@ -1529,6 +1543,35 @@ async function installTauriMock(
               endpoint_kind: "local_name",
               adb_error_kind: "adb_exit",
             },
+          };
+        }
+        if (cmd === "list_wireless_history") {
+          return {
+            endpoints: [
+              {
+                host: "192.168.1.42",
+                port: 5555,
+                label: null,
+                lastConnectedMs: 1_752_000_000_000,
+              },
+            ],
+            autoReconnect: false,
+          };
+        }
+        if (cmd === "forget_wireless_endpoint") {
+          return { endpoints: [], autoReconnect: false };
+        }
+        if (cmd === "set_wireless_auto_reconnect") {
+          return {
+            endpoints: [
+              {
+                host: "192.168.1.42",
+                port: 5555,
+                label: null,
+                lastConnectedMs: 1_752_000_000_000,
+              },
+            ],
+            autoReconnect: Boolean(args.enabled),
           };
         }
         if (cmd === "watch_devices") {

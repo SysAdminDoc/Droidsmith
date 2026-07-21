@@ -247,6 +247,30 @@ export const commands = {
   ): Promise<WirelessCommandResult> {
     return await TAURI_INVOKE("connect_wireless", { request });
   },
+  /**
+   * Return the persisted wireless-endpoint history and the opt-in
+   * reconnect-on-launch flag so the renderer can offer one-click reconnect.
+   */
+  async listWirelessHistory(): Promise<WirelessHistorySnapshot> {
+    return await TAURI_INVOKE("list_wireless_history");
+  },
+  /**
+   * Remove one endpoint from the wireless history.
+   */
+  async forgetWirelessEndpoint(
+    host: string,
+    port: number,
+  ): Promise<WirelessHistorySnapshot> {
+    return await TAURI_INVOKE("forget_wireless_endpoint", { host, port });
+  },
+  /**
+   * Persist the opt-in "reconnect known wireless devices on launch" preference.
+   */
+  async setWirelessAutoReconnect(
+    enabled: boolean,
+  ): Promise<WirelessHistorySnapshot> {
+    return await TAURI_INVOKE("set_wireless_auto_reconnect", { enabled });
+  },
   async listPackages(
     target: DeviceTarget,
     filter: PackageFilter,
@@ -2280,6 +2304,17 @@ export type WirelessConnectRequest = {
    */
   legacy_tcp?: boolean;
 };
+/**
+ * A previously connected wireless ADB endpoint. Only the host/port (and an
+ * optional user label) are persisted so the renderer can offer one-click
+ * reconnect after a device reboots or its Wi-Fi IP churns.
+ */
+export type WirelessEndpoint = {
+  host: string;
+  port: number;
+  label?: string | null;
+  lastConnectedMs: number;
+};
 export type WirelessEndpointKind = "ip_address" | "local_name";
 export type WirelessFailureDiagnostics = {
   platform_tools_version: string | null;
@@ -2293,6 +2328,10 @@ export type WirelessFailureDiagnostics = {
 export type WirelessFailureHintCode =
   | "vpn_interference_likely"
   | "mdns_interference_likely";
+export type WirelessHistorySnapshot = {
+  endpoints: WirelessEndpoint[];
+  autoReconnect: boolean;
+};
 export type WirelessPairRequest = {
   host: string;
   port: number;

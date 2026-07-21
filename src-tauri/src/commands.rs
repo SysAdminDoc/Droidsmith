@@ -686,6 +686,7 @@ pub fn pair_wireless(
 #[tauri::command]
 #[specta::specta]
 pub fn connect_wireless(
+    app: tauri::AppHandle,
     request: adb::WirelessConnectRequest,
 ) -> Result<adb::WirelessCommandResult, adb::WirelessCommandError> {
     let resolution = adb::locate_adb();
@@ -697,7 +698,22 @@ pub fn connect_wireless(
         )
     })?;
     let transport = adb::ShellTransport::new(path);
-    adb::connect_wireless(&transport, &request, resolution.version)
+    let result = adb::connect_wireless(&transport, &request, resolution.version)?;
+    // Best-effort: record the endpoint so it appears in reconnect history. A
+    // settings write failure must never mask a successful connect.
+    if let Ok(app_data_dir) = settings_app_data_dir(&app) {
+        let now_ms = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|elapsed| elapsed.as_millis() as u64)
+            .unwrap_or(0);
+        let _ = settings::record_wireless_endpoint(
+            &app_data_dir,
+            &request.host,
+            request.port,
+            now_ms,
+        );
+    }
+    Ok(result)
 }
 
 #[tauri::command]
@@ -1311,6 +1327,50 @@ pub async fn reset_settings_mirror_preset(
             &app_data_dir,
             &device_identity,
         )?)
+    })
+    .await
+}
+
+/// Return the persisted wireless-endpoint history and the opt-in
+/// reconnect-on-launch flag so the renderer can offer one-click reconnect.
+#[tauri::command]
+#[specta::specta]
+pub async fn list_wireless_history(
+    app: tauri::AppHandle,
+) -> Result<settings::WirelessHistorySnapshot, CommandError> {
+    let app_data_dir = settings_app_data_dir(&app)?;
+    spawn_blocking_operation(move || Ok(settings::list_wireless_history(&app_data_dir)?)).await
+}
+
+/// Remove one endpoint from the wireless history.
+#[tauri::command]
+#[specta::specta]
+pub async fn forget_wireless_endpoint(
+    app: tauri::AppHandle,
+    host: String,
+    port: u16,
+) -> Result<settings::WirelessHistorySnapshot, CommandError> {
+    let app_data_dir = settings_app_data_dir(&app)?;
+    spawn_blocking_operation(move || {
+        Ok(settings::forget_wireless_endpoint(
+            &app_data_dir,
+            &host,
+            port,
+        )?)
+    })
+    .await
+}
+
+/// Persist the opt-in "reconnect known wireless devices on launch" preference.
+#[tauri::command]
+#[specta::specta]
+pub async fn set_wireless_auto_reconnect(
+    app: tauri::AppHandle,
+    enabled: bool,
+) -> Result<settings::WirelessHistorySnapshot, CommandError> {
+    let app_data_dir = settings_app_data_dir(&app)?;
+    spawn_blocking_operation(move || {
+        Ok(settings::set_wireless_auto_reconnect(&app_data_dir, enabled)?)
     })
     .await
 }

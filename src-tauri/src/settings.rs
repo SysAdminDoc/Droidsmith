@@ -30,6 +30,9 @@ const MAX_LOGCAT_NAME_BYTES: usize = 80;
 const MAX_LOGCAT_ID_BYTES: usize = 64;
 const MAX_LOGCAT_AGE_SECONDS: u32 = 30 * 24 * 60 * 60;
 const LOGCAT_GLOBAL_KEY: &str = "global";
+const MAX_WIRELESS_HISTORY: usize = 32;
+const MAX_WIRELESS_HOST_BYTES: usize = 255;
+const MAX_WIRELESS_LABEL_BYTES: usize = 80;
 
 #[derive(specta::Type, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -174,6 +177,26 @@ pub struct LogcatQuery {
     pub negate_process: bool,
 }
 
+/// A previously connected wireless ADB endpoint. Only the host/port (and an
+/// optional user label) are persisted so the renderer can offer one-click
+/// reconnect after a device reboots or its Wi-Fi IP churns.
+#[derive(specta::Type, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct WirelessEndpoint {
+    pub host: String,
+    pub port: u16,
+    #[serde(default)]
+    pub label: Option<String>,
+    pub last_connected_ms: u64,
+}
+
+#[derive(specta::Type, Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WirelessHistorySnapshot {
+    pub endpoints: Vec<WirelessEndpoint>,
+    pub auto_reconnect: bool,
+}
+
 #[derive(specta::Type, Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LogcatQueryLibrary {
@@ -231,6 +254,10 @@ struct SettingsDocument {
     mirror_presets: BTreeMap<String, MirrorPreset>,
     #[serde(default)]
     logcat_queries: BTreeMap<String, Vec<LogcatQuery>>,
+    #[serde(default)]
+    wireless_history: Vec<WirelessEndpoint>,
+    #[serde(default)]
+    wireless_auto_reconnect: bool,
 }
 
 impl Default for SettingsDocument {
@@ -241,6 +268,8 @@ impl Default for SettingsDocument {
             language: None,
             mirror_presets: BTreeMap::new(),
             logcat_queries: BTreeMap::new(),
+            wireless_history: Vec::new(),
+            wireless_auto_reconnect: false,
         }
     }
 }
@@ -410,6 +439,127 @@ pub fn save_logcat_queries(
         write_document(&path, &settings)?;
         Ok(logcat_library(&settings, device_key.as_deref()))
     })
+}
+
+pub fn list_wireless_history(
+    app_data_dir: &Path,
+) -> Result<WirelessHistorySnapshot, SettingsError> {
+    with_lock(|| {
+        initialize_locked(app_data_dir, &LegacySettingsImport::default())?;
+        let document = read_valid_document(&settings_path(app_data_dir))?;
+        Ok(wireless_snapshot(&document))
+    })
+}
+
+/// Record (or refresh) a successfully connected wireless endpoint. Re-recording
+/// an existing host:port preserves any user label and moves it to the front by
+/// updating its timestamp; the list is bounded to the most-recent entries.
+pub fn record_wireless_endpoint(
+    app_data_dir: &Path,
+    host: &str,
+    port: u16,
+    now_ms: u64,
+) -> Result<WirelessHistorySnapshot, SettingsError> {
+    let host = normalize_wireless_host(host)?;
+    with_lock(move || {
+        initialize_locked(app_data_dir, &LegacySettingsImport::default())?;
+        let path = settings_path(app_data_dir);
+        let mut settings = read_valid_document(&path)?;
+        let existing_label = settings
+            .wireless_history
+            .iter()
+            .find(|entry| wireless_matches(entry, &host, port))
+            .and_then(|entry| entry.label.clone());
+        settings
+            .wireless_history
+            .retain(|entry| !wireless_matches(entry, &host, port));
+        settings.wireless_history.push(WirelessEndpoint {
+            host,
+            port,
+            label: existing_label,
+            last_connected_ms: now_ms,
+        });
+        sort_and_bound_wireless(&mut settings.wireless_history);
+        validate_document(&settings)?;
+        write_document(&path, &settings)?;
+        Ok(wireless_snapshot(&settings))
+    })
+}
+
+pub fn forget_wireless_endpoint(
+    app_data_dir: &Path,
+    host: &str,
+    port: u16,
+) -> Result<WirelessHistorySnapshot, SettingsError> {
+    let host = normalize_wireless_host(host)?;
+    with_lock(move || {
+        initialize_locked(app_data_dir, &LegacySettingsImport::default())?;
+        let path = settings_path(app_data_dir);
+        let mut settings = read_valid_document(&path)?;
+        settings
+            .wireless_history
+            .retain(|entry| !wireless_matches(entry, &host, port));
+        validate_document(&settings)?;
+        write_document(&path, &settings)?;
+        Ok(wireless_snapshot(&settings))
+    })
+}
+
+pub fn set_wireless_auto_reconnect(
+    app_data_dir: &Path,
+    enabled: bool,
+) -> Result<WirelessHistorySnapshot, SettingsError> {
+    with_lock(move || {
+        initialize_locked(app_data_dir, &LegacySettingsImport::default())?;
+        let path = settings_path(app_data_dir);
+        let mut settings = read_valid_document(&path)?;
+        settings.wireless_auto_reconnect = enabled;
+        validate_document(&settings)?;
+        write_document(&path, &settings)?;
+        Ok(wireless_snapshot(&settings))
+    })
+}
+
+fn wireless_snapshot(document: &SettingsDocument) -> WirelessHistorySnapshot {
+    WirelessHistorySnapshot {
+        endpoints: document.wireless_history.clone(),
+        auto_reconnect: document.wireless_auto_reconnect,
+    }
+}
+
+fn wireless_matches(entry: &WirelessEndpoint, host: &str, port: u16) -> bool {
+    entry.port == port && entry.host.eq_ignore_ascii_case(host)
+}
+
+fn sort_and_bound_wireless(history: &mut Vec<WirelessEndpoint>) {
+    history.sort_by(|a, b| {
+        b.last_connected_ms
+            .cmp(&a.last_connected_ms)
+            .then_with(|| a.host.cmp(&b.host))
+            .then_with(|| a.port.cmp(&b.port))
+    });
+    history.truncate(MAX_WIRELESS_HISTORY);
+}
+
+fn normalize_wireless_host(host: &str) -> Result<String, SettingsError> {
+    let trimmed = host.trim();
+    if !valid_wireless_host(trimmed) {
+        return Err(SettingsError::Invalid(
+            "wireless host is empty, oversized, or malformed".to_string(),
+        ));
+    }
+    Ok(trimmed.to_string())
+}
+
+fn valid_wireless_host(host: &str) -> bool {
+    !host.is_empty()
+        && host.len() <= MAX_WIRELESS_HOST_BYTES
+        && !host
+            .chars()
+            .any(|character| character.is_whitespace() || character.is_control())
+        && !host.contains('/')
+        && !host.contains('\\')
+        && !host.contains("://")
 }
 
 fn logcat_library(document: &SettingsDocument, device_key: Option<&str>) -> LogcatQueryLibrary {
@@ -583,6 +733,8 @@ fn import_legacy(
         language,
         mirror_presets,
         logcat_queries: BTreeMap::new(),
+        wireless_history: Vec::new(),
+        wireless_auto_reconnect: false,
     };
     write_document(&settings_path(app_data_dir), &settings)?;
     Ok(settings)
@@ -636,6 +788,30 @@ fn validate_document(settings: &SettingsDocument) -> Result<(), SettingsError> {
         }
         for query in queries {
             validate_logcat_query(query)?;
+        }
+    }
+    if settings.wireless_history.len() > MAX_WIRELESS_HISTORY {
+        return Err(SettingsError::Invalid(
+            "too many wireless history entries".to_string(),
+        ));
+    }
+    for endpoint in &settings.wireless_history {
+        if !valid_wireless_host(&endpoint.host) {
+            return Err(SettingsError::Invalid(
+                "wireless history host is malformed".to_string(),
+            ));
+        }
+        if endpoint.port == 0 {
+            return Err(SettingsError::Invalid(
+                "wireless history port is out of range".to_string(),
+            ));
+        }
+        if let Some(label) = &endpoint.label {
+            if label.len() > MAX_WIRELESS_LABEL_BYTES || label.chars().any(char::is_control) {
+                return Err(SettingsError::Invalid(
+                    "wireless history label is oversized or has control characters".to_string(),
+                ));
+            }
         }
     }
     Ok(())
@@ -1148,6 +1324,58 @@ mod tests {
         assert!(validate_linear_regex("m", "[(]+").is_ok());
         assert!(validate_linear_regex("m", "[a-z()]+").is_ok());
         assert!(validate_linear_regex("m", "FATAL EXCEPTION|ANR in").is_ok());
+    }
+
+    #[test]
+    fn wireless_history_dedupes_orders_and_persists_auto_reconnect() {
+        let dir = temp_dir("wireless");
+        initialize(&dir, LegacySettingsImport::default()).unwrap();
+
+        record_wireless_endpoint(&dir, "192.168.1.10", 5555, 1_000).unwrap();
+        record_wireless_endpoint(&dir, "192.168.1.20", 5556, 2_000).unwrap();
+        // Re-recording the first endpoint (case-insensitive host) refreshes its
+        // timestamp and moves it to the front without creating a duplicate.
+        let snapshot = record_wireless_endpoint(&dir, "192.168.1.10", 5555, 3_000).unwrap();
+        assert_eq!(snapshot.endpoints.len(), 2);
+        assert_eq!(snapshot.endpoints[0].host, "192.168.1.10");
+        assert_eq!(snapshot.endpoints[0].last_connected_ms, 3_000);
+        assert!(!snapshot.auto_reconnect);
+
+        // The opt-in reconnect flag persists across a fresh load.
+        set_wireless_auto_reconnect(&dir, true).unwrap();
+        let reloaded = list_wireless_history(&dir).unwrap();
+        assert!(reloaded.auto_reconnect);
+        assert_eq!(reloaded.endpoints.len(), 2);
+
+        // Forgetting removes only the matching endpoint.
+        let after = forget_wireless_endpoint(&dir, "192.168.1.20", 5556).unwrap();
+        assert_eq!(after.endpoints.len(), 1);
+        assert_eq!(after.endpoints[0].host, "192.168.1.10");
+
+        // A malformed host is rejected rather than stored.
+        assert!(record_wireless_endpoint(&dir, "has space", 5555, 4_000).is_err());
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn wireless_history_is_bounded_to_the_most_recent_entries() {
+        let dir = temp_dir("wireless-bound");
+        initialize(&dir, LegacySettingsImport::default()).unwrap();
+        for index in 0..(MAX_WIRELESS_HISTORY as u64 + 8) {
+            record_wireless_endpoint(&dir, &format!("10.0.0.{index}"), 5555, index + 1).unwrap();
+        }
+        let snapshot = list_wireless_history(&dir).unwrap();
+        assert_eq!(snapshot.endpoints.len(), MAX_WIRELESS_HISTORY);
+        // The newest timestamp survives; the oldest is evicted.
+        assert_eq!(
+            snapshot.endpoints[0].last_connected_ms,
+            MAX_WIRELESS_HISTORY as u64 + 8
+        );
+        assert!(snapshot
+            .endpoints
+            .iter()
+            .all(|entry| entry.last_connected_ms > 8));
+        fs::remove_dir_all(dir).unwrap();
     }
 
     #[test]

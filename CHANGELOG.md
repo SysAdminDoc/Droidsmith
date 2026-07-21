@@ -14,6 +14,16 @@ completion.
 Working batches live here. Sections collapse into a versioned release on
 each milestone tag.
 
+### Added
+
+- **R-086 Wireless connection history + reconnect.** Successful wireless
+  connects are now recorded (host:port, last-connected time, optional label) in
+  the backend settings store, bounded to the 32 most recent and deduplicated by
+  endpoint. The Wireless route shows a history panel with one-click **Reconnect**
+  and **Forget**, plus an opt-in "reconnect known devices on launch" toggle that
+  attempts each saved endpoint once when the route first loads. New IPC:
+  `list_wireless_history`, `forget_wireless_endpoint`, `set_wireless_auto_reconnect`.
+
 ## [0.9.1] - 2026-07-20
 
 Deep audit pass — correctness, security, UX, performance, and maintainability

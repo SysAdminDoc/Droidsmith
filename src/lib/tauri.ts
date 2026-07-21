@@ -80,8 +80,10 @@ import {
   type WipeResult,
   type WirelessCommandResult,
   type WirelessConnectRequest,
+  type WirelessEndpoint,
   type WirelessFailureDiagnostics,
   type WirelessFailureHintCode,
+  type WirelessHistorySnapshot,
   type WirelessPairRequest,
 } from "./bindings";
 
@@ -473,6 +475,25 @@ export async function callConnectWireless(
   } catch (error) {
     throw normalizeWirelessFailure(error);
   }
+}
+
+export type { WirelessEndpoint, WirelessHistorySnapshot };
+
+export async function callListWirelessHistory(): Promise<WirelessHistorySnapshot> {
+  return commands.listWirelessHistory();
+}
+
+export async function callForgetWirelessEndpoint(
+  host: string,
+  port: number,
+): Promise<WirelessHistorySnapshot> {
+  return commands.forgetWirelessEndpoint(host, port);
+}
+
+export async function callSetWirelessAutoReconnect(
+  enabled: boolean,
+): Promise<WirelessHistorySnapshot> {
+  return commands.setWirelessAutoReconnect(enabled);
 }
 
 /**

@@ -529,7 +529,15 @@
     "failureDiagnosticsPrivacy": "This report excludes the endpoint, adapter name, device serial, network address, and VPN product name.",
     "adbOutput": "ADB output",
     "commandCompleted": "Command completed.",
-    "loadingServices": "Loading wireless services"
+    "loadingServices": "Loading wireless services",
+    "historyTitle": "Connection history",
+    "historyBody": "Reconnect to a device you have paired with before.",
+    "historyEmpty": "No saved connections yet. Connect once and the endpoint appears here for one-click reconnect.",
+    "reconnect": "Reconnect",
+    "forget": "Forget",
+    "lastConnected": "Last connected",
+    "autoReconnect": "Reconnect known devices on launch",
+    "autoReconnectHint": "When Droidsmith starts, it tries to reconnect the saved endpoints below."
   },
   "apps": {
     "title": "Apps",

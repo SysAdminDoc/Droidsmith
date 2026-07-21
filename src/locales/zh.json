@@ -529,7 +529,15 @@
     "failureDiagnosticsPrivacy": "此报告不包含端点、适配器名称、设备序列号、网络地址和 VPN 产品名称。",
     "adbOutput": "ADB 输出",
     "commandCompleted": "命令已完成。",
-    "loadingServices": "正在加载无线服务"
+    "loadingServices": "正在加载无线服务",
+    "historyTitle": "连接历史",
+    "historyBody": "重新连接到之前已配对的设备。",
+    "historyEmpty": "尚无已保存的连接。连接一次后，该端点将显示在此处，可一键重新连接。",
+    "reconnect": "重新连接",
+    "forget": "移除",
+    "lastConnected": "上次连接",
+    "autoReconnect": "启动时重新连接已知设备",
+    "autoReconnectHint": "Droidsmith 启动时会尝试重新连接下面已保存的端点。"
   },
   "apps": {
     "title": "应用",

@@ -1,17 +1,22 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import qrcode from "qrcode-generator";
 import { useTranslation } from "react-i18next";
 
 import {
   errorMessage,
   callConnectWireless,
+  callForgetWirelessEndpoint,
+  callListWirelessHistory,
   callListWirelessServices,
   callPairWireless,
+  callSetWirelessAutoReconnect,
   inTauri,
   type ListWirelessServicesResult,
   type WirelessAdbService,
   WirelessCommandFailure,
   type WirelessCommandResult,
+  type WirelessEndpoint,
+  type WirelessHistorySnapshot,
 } from "../lib/tauri";
 
 import {
@@ -46,6 +51,8 @@ export default function WirelessRoute() {
     kind: "loading",
   });
   const [actionState, setActionState] = useState<ActionState>({ kind: "idle" });
+  const [history, setHistory] = useState<WirelessHistorySnapshot | null>(null);
+  const autoReconnectDone = useRef(false);
   const [qrName, setQrName] = useState(() => `Droidsmith-${randomToken(5)}`);
   const [qrCode, setQrCode] = useState(() => randomPairingCode());
   const [manualHost, setManualHost] = useState("");
@@ -89,9 +96,57 @@ export default function WirelessRoute() {
     }
   }, []);
 
+  const loadHistory = useCallback(async () => {
+    if (!inTauri()) {
+      return;
+    }
+    try {
+      setHistory(await callListWirelessHistory());
+    } catch {
+      // History is a convenience surface; a load failure must not block pairing.
+    }
+  }, []);
+
+  const refreshAll = useCallback(async () => {
+    await loadServices();
+    await loadHistory();
+  }, [loadHistory, loadServices]);
+
   useEffect(() => {
     void loadServices();
   }, [loadServices]);
+
+  useEffect(() => {
+    void loadHistory();
+  }, [loadHistory]);
+
+  // Opt-in reconnect-on-launch: only the first loaded snapshot drives this, so
+  // toggling the preference later never re-triggers a reconnect sweep. When the
+  // persisted flag is set, attempt each saved endpoint once; failures are silent
+  // (the device may simply be offline).
+  useEffect(() => {
+    if (autoReconnectDone.current || history === null) {
+      return;
+    }
+    autoReconnectDone.current = true;
+    if (!history.autoReconnect || history.endpoints.length === 0) {
+      return;
+    }
+    void (async () => {
+      for (const endpoint of history.endpoints) {
+        try {
+          await callConnectWireless({
+            host: endpoint.host,
+            port: endpoint.port,
+            legacy_tcp: false,
+          });
+        } catch {
+          // Best-effort; skip endpoints that are no longer reachable.
+        }
+      }
+      await refreshAll();
+    })();
+  }, [history, refreshAll]);
 
   const pairManual = useCallback(async () => {
     await runWirelessAction(
@@ -103,9 +158,9 @@ export default function WirelessRoute() {
           port: Number(manualPort),
           pairing_code: manualCode.trim(),
         }),
-      loadServices,
+      refreshAll,
     );
-  }, [loadServices, manualCode, manualHost, manualPort, t]);
+  }, [manualCode, manualHost, manualPort, refreshAll, t]);
 
   const connectManual = useCallback(async () => {
     await runWirelessAction(
@@ -117,9 +172,44 @@ export default function WirelessRoute() {
           port: Number(connectPort),
           legacy_tcp: connectLegacyTcp,
         }),
-      loadServices,
+      refreshAll,
     );
-  }, [connectHost, connectLegacyTcp, connectPort, loadServices, t]);
+  }, [connectHost, connectLegacyTcp, connectPort, refreshAll, t]);
+
+  const reconnectEndpoint = useCallback(
+    async (endpoint: WirelessEndpoint) => {
+      await runWirelessAction(
+        setActionState,
+        t("wireless.connecting"),
+        () =>
+          callConnectWireless({
+            host: endpoint.host,
+            port: endpoint.port,
+            legacy_tcp: false,
+          }),
+        refreshAll,
+      );
+    },
+    [refreshAll, t],
+  );
+
+  const forgetEndpoint = useCallback(async (endpoint: WirelessEndpoint) => {
+    try {
+      setHistory(
+        await callForgetWirelessEndpoint(endpoint.host, endpoint.port),
+      );
+    } catch {
+      // Ignore; the row stays and the user can retry.
+    }
+  }, []);
+
+  const toggleAutoReconnect = useCallback(async (enabled: boolean) => {
+    try {
+      setHistory(await callSetWirelessAutoReconnect(enabled));
+    } catch {
+      // Ignore; the toggle reflects the last confirmed state.
+    }
+  }, []);
 
   const pairService = useCallback(
     async (service: WirelessAdbService) => {
@@ -132,10 +222,10 @@ export default function WirelessRoute() {
             port: service.port,
             pairing_code: qrCode,
           }),
-        loadServices,
+        refreshAll,
       );
     },
-    [loadServices, qrCode, t],
+    [qrCode, refreshAll, t],
   );
 
   const connectService = useCallback(
@@ -149,10 +239,10 @@ export default function WirelessRoute() {
             port: service.port,
             legacy_tcp: false,
           }),
-        loadServices,
+        refreshAll,
       );
     },
-    [loadServices, t],
+    [refreshAll, t],
   );
 
   const regenerateQr = useCallback(() => {
@@ -331,6 +421,18 @@ export default function WirelessRoute() {
         <ActionStatus state={actionState} />
       </section>
 
+      {history && (
+        <section className="mt-4 max-w-7xl">
+          <HistoryPanel
+            history={history}
+            busy={actionState.kind === "busy"}
+            onReconnect={(endpoint) => void reconnectEndpoint(endpoint)}
+            onForget={(endpoint) => void forgetEndpoint(endpoint)}
+            onToggleAuto={(enabled) => void toggleAutoReconnect(enabled)}
+          />
+        </section>
+      )}
+
       <section className="mt-4 max-w-7xl" aria-live="polite">
         <ServicesPanel
           state={servicesState}
@@ -403,6 +505,116 @@ function WirelessHeaderMeta({ state }: { state: ServicesState }) {
         {t("wireless.serviceCount", { count: state.value.services.length })}
       </Badge>
     </div>
+  );
+}
+
+function HistoryPanel({
+  history,
+  busy,
+  onReconnect,
+  onForget,
+  onToggleAuto,
+}: {
+  history: WirelessHistorySnapshot;
+  busy: boolean;
+  onReconnect: (endpoint: WirelessEndpoint) => void;
+  onForget: (endpoint: WirelessEndpoint) => void;
+  onToggleAuto: (enabled: boolean) => void;
+}) {
+  const { t } = useTranslation();
+
+  return (
+    <Card className="overflow-hidden p-0">
+      <div className="flex flex-col gap-3 border-b border-white/10 p-4 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h3 className="text-sm font-semibold text-anvil-50">
+            {t("wireless.historyTitle")}
+          </h3>
+          <p className="mt-1 text-xs text-anvil-400">
+            {t("wireless.historyBody")}
+          </p>
+        </div>
+        <label className="flex items-start gap-3 rounded-md border border-white/10 bg-white/[0.03] p-3 text-sm leading-5 text-anvil-200 sm:max-w-xs">
+          <input
+            type="checkbox"
+            className="mt-1 h-4 w-4 accent-circuit-300"
+            checked={history.autoReconnect}
+            onChange={(event) => onToggleAuto(event.currentTarget.checked)}
+          />
+          <span>
+            <span className="font-medium text-anvil-100">
+              {t("wireless.autoReconnect")}
+            </span>
+            <span className="mt-0.5 block text-xs text-anvil-400">
+              {t("wireless.autoReconnectHint")}
+            </span>
+          </span>
+        </label>
+      </div>
+      {history.endpoints.length === 0 ? (
+        <p className="p-4 text-sm text-anvil-400">
+          {t("wireless.historyEmpty")}
+        </p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-sm">
+            <thead className="bg-white/[0.04]">
+              <tr>
+                <TableHeaderCell>{t("wireless.endpoint")}</TableHeaderCell>
+                <TableHeaderCell>{t("wireless.lastConnected")}</TableHeaderCell>
+                <TableHeaderCell>{t("wireless.action")}</TableHeaderCell>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-white/10">
+              {history.endpoints.map((endpoint) => (
+                <tr
+                  key={`${endpoint.host}:${endpoint.port}`}
+                  className="bg-anvil-950/20 transition hover:bg-white/[0.035]"
+                >
+                  <TableCell>
+                    <code className="font-mono text-xs text-anvil-50">
+                      {endpoint.host}:{endpoint.port}
+                    </code>
+                    {endpoint.label && (
+                      <p className="mt-1 text-[11px] text-anvil-400">
+                        {endpoint.label}
+                      </p>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    <span className="text-xs text-anvil-300">
+                      {formatTimestamp(endpoint.lastConnectedMs)}
+                    </span>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="primary"
+                        disabled={busy}
+                        onClick={() => onReconnect(endpoint)}
+                      >
+                        {t("wireless.reconnect")}
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        disabled={busy}
+                        onClick={() => onForget(endpoint)}
+                      >
+                        {t("wireless.forget")}
+                      </Button>
+                    </div>
+                  </TableCell>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </Card>
   );
 }
 
@@ -771,6 +983,17 @@ function QrMetric({
       </dd>
     </div>
   );
+}
+
+function formatTimestamp(ms: number): string {
+  if (!Number.isFinite(ms) || ms <= 0) {
+    return "—";
+  }
+  try {
+    return new Date(ms).toLocaleString();
+  } catch {
+    return "—";
+  }
 }
 
 function serviceKindTone(
