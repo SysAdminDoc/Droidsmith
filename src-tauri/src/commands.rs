@@ -2323,7 +2323,31 @@ enum ShellClassification {
     Dangerous,
 }
 
+/// Characters that let the on-device shell chain a second command, substitute
+/// a subshell, or redirect output. `adb shell` joins argv with spaces and runs
+/// the result through the device's `sh -c`, so any of these inside *any* token
+/// (e.g. a `getprop; pm uninstall …` typed into the console and split on
+/// whitespace into `getprop;`) would execute a hidden mutation while the head
+/// token still looked read-only. Such argv can never be classified read-only.
+fn argv_has_shell_control_metacharacter(argv: &[String]) -> bool {
+    argv.iter().any(|token| {
+        token.chars().any(|character| {
+            matches!(
+                character,
+                ';' | '|' | '&' | '$' | '`' | '(' | ')' | '<' | '>'
+            )
+        })
+    })
+}
+
 fn classify_shell(argv: &[String]) -> ShellClassification {
+    // A token carrying a shell control metacharacter can smuggle a mutation past
+    // the head-token classifier, so refuse to treat it as anything but dangerous
+    // — that routes it through the reviewed/journaled executor (or is rejected
+    // outright by `shell_run`, which only runs read-only commands).
+    if argv_has_shell_control_metacharacter(argv) {
+        return ShellClassification::Dangerous;
+    }
     let head = argv.first().map(String::as_str).unwrap_or_default();
     let subcommand = argv.get(1).map(String::as_str).unwrap_or_default();
     match head {
@@ -4220,6 +4244,30 @@ mod tests {
         assert_eq!(
             classify_shell(&args(&["rm", "-rf", "/sdcard/data"])),
             ShellClassification::Dangerous
+        );
+        // A read-only head must not launder a chained/redirected mutation past
+        // the classifier: any shell control metacharacter forces Dangerous so
+        // shell_run rejects it and plan_shell_action routes it through review.
+        assert_eq!(
+            classify_shell(&args(&["getprop", "ro.build;", "pm", "uninstall", "com.x"])),
+            ShellClassification::Dangerous
+        );
+        assert_eq!(
+            classify_shell(&args(&["cat", "/proc/version", "&&", "reboot"])),
+            ShellClassification::Dangerous
+        );
+        assert_eq!(
+            classify_shell(&args(&["settings", "get", "secure", "$(reboot)"])),
+            ShellClassification::Dangerous
+        );
+        assert_eq!(
+            classify_shell(&args(&["getprop", ">", "/sdcard/x"])),
+            ShellClassification::Dangerous
+        );
+        // Plain read-only commands with dotted/underscored operands still pass.
+        assert_eq!(
+            classify_shell(&args(&["settings", "get", "global", "adb_enabled"])),
+            ShellClassification::ReadOnly
         );
     }
 
