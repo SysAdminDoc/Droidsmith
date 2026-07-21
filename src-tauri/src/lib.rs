@@ -2,6 +2,7 @@
 /// this crate as `droidsmith_lib`) can reach the transport and action
 /// types. The Tauri runtime still goes through `crate::adb`.
 pub mod adb;
+mod apk_analysis;
 mod apk_metadata;
 mod backup;
 mod bugreport;
@@ -33,25 +34,26 @@ mod support_bundle;
 pub mod time;
 
 use commands::{
-    apply_action, apply_action_batch, apply_device_control, apply_remote_file_mutation,
-    backup_package, cancel_operation, capture_bugreport, capture_layout, connect_wireless,
-    disconnect_device, explain_failure, export_package_apks, export_recovery_baseline,
-    export_settings, extract_apk, fastboot_getvar, find_gnirehtet_session,
-    forget_wireless_endpoint, get_device_info, get_package_metadata, get_settings_mirror_preset,
-    gnirehtet_session_status, grant_dropped_path, heartbeat, import_pack, initialize_settings,
-    inspect_profile, inspect_recovery_baseline, install_apk, journal_list, journal_undo,
-    journal_undo_batch, launch_scrcpy, list_device_settings, list_devices, list_fastboot_devices,
-    list_logcat_queries, list_network_connections, list_packages, list_packs, list_permissions,
-    list_processes, list_remote_files, list_running_services, list_users, list_wireless_history,
-    list_wireless_services, locate_fastboot, locate_gnirehtet, locate_scrcpy,
-    observe_device_fingerprint, pair_wireless, plan_action, plan_action_batch, plan_pack,
-    plan_remote_file_mutation, plan_shell_action, preflight_package_backup, preview_diagnostics,
-    pull_file, push_file, put_device_setting, recover_adb, remove_imported_pack, reset_settings,
-    reset_settings_mirror_preset, reveal_in_folder, run_host_doctor, save_diagnostics,
-    save_layout_export, save_logcat_export, save_logcat_queries, save_profile, scrcpy_capabilities,
-    scrcpy_session_status, select_host_path, set_permission, set_settings_language,
-    set_settings_mirror_preset, set_wireless_auto_reconnect, shell_run, start_gnirehtet,
-    stop_gnirehtet, stop_scrcpy, stream_logcat, take_screenshot, watch_devices, wipe_diagnostics,
+    analyze_apk, apply_action, apply_action_batch, apply_device_control,
+    apply_remote_file_mutation, backup_package, cancel_operation, capture_bugreport,
+    capture_layout, connect_wireless, disconnect_device, explain_failure, export_package_apks,
+    export_recovery_baseline, export_settings, extract_apk, fastboot_getvar,
+    find_gnirehtet_session, forget_wireless_endpoint, get_device_info, get_package_metadata,
+    get_settings_mirror_preset, gnirehtet_session_status, grant_dropped_path, heartbeat,
+    import_pack, initialize_settings, inspect_profile, inspect_recovery_baseline, install_apk,
+    journal_list, journal_undo, journal_undo_batch, launch_scrcpy, list_device_settings,
+    list_devices, list_fastboot_devices, list_logcat_queries, list_network_connections,
+    list_packages, list_packs, list_permissions, list_processes, list_remote_files,
+    list_running_services, list_users, list_wireless_history, list_wireless_services,
+    locate_fastboot, locate_gnirehtet, locate_scrcpy, observe_device_fingerprint, pair_wireless,
+    plan_action, plan_action_batch, plan_pack, plan_remote_file_mutation, plan_shell_action,
+    preflight_package_backup, preview_diagnostics, pull_file, push_file, put_device_setting,
+    recover_adb, remove_imported_pack, reset_settings, reset_settings_mirror_preset,
+    reveal_in_folder, run_host_doctor, save_diagnostics, save_layout_export, save_logcat_export,
+    save_logcat_queries, save_profile, scrcpy_capabilities, scrcpy_session_status,
+    select_host_path, set_permission, set_settings_language, set_settings_mirror_preset,
+    set_wireless_auto_reconnect, shell_run, start_gnirehtet, stop_gnirehtet, stop_scrcpy,
+    stream_logcat, take_screenshot, watch_devices, wipe_diagnostics,
 };
 
 fn ipc_builder() -> tauri_specta::Builder<tauri::Wry> {
@@ -99,6 +101,7 @@ fn ipc_builder() -> tauri_specta::Builder<tauri::Wry> {
             list_packs,
             import_pack,
             remove_imported_pack,
+            analyze_apk,
             plan_pack,
             plan_action,
             plan_action_batch,

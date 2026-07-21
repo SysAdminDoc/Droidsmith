@@ -31,6 +31,7 @@ import {
   type Heartbeat,
   type HostArtifact,
   type HostDoctorReport,
+  type ApkAnalysis,
   type HostPathGrant,
   type HostPathPurpose,
   type ImportedPack,
@@ -1103,4 +1104,8 @@ export async function callImportPack(
 
 export async function callRemoveImportedPack(packId: string): Promise<boolean> {
   return commands.removeImportedPack(packId);
+}
+
+export async function callAnalyzeApk(pathGrant: string): Promise<ApkAnalysis> {
+  return rendererRecord(await commands.analyzeApk(pathGrant));
 }

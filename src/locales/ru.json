@@ -143,7 +143,8 @@
     "console": "Консоль",
     "logcat": "Logcat",
     "fastboot": "Fastboot",
-    "tuning": "Настройка"
+    "tuning": "Настройка",
+    "apkAnalyzer": "Анализатор APK"
   },
   "tuning": {
     "title": "Настройка",
@@ -1476,5 +1477,42 @@
     "packageCount_other": "{{count}} пакетов",
     "totalCount": "{{count}} всего",
     "unknown": "Неизвестно"
+  },
+  "apk": {
+    "title": "Анализатор APK",
+    "description": "Офлайн-проверка локального APK — манифест, разрешения, DEX, подпись и размер. Устройство не требуется.",
+    "choose": "Выбрать APK",
+    "analyzing": "Анализ…",
+    "emptyTitle": "APK ещё не проанализирован",
+    "emptyBody": "Выберите локальный файл .apk или .apks, чтобы изучить манифест, компоненты, DEX, схему подписи и крупнейшие записи — полностью офлайн.",
+    "failed": "Ошибка анализа",
+    "multidex": "Multidex / 64K+",
+    "unsigned": "Подпись не обнаружена",
+    "signed": "Подписано ({{schemes}})",
+    "versionName": "Имя версии",
+    "versionCode": "Код версии",
+    "minSdk": "Мин. SDK",
+    "targetSdk": "Целевой SDK",
+    "compileSdk": "SDK компиляции",
+    "entries": "Записи ZIP",
+    "components": "Компоненты",
+    "activities": "Активности",
+    "services": "Сервисы",
+    "receivers": "Приёмники",
+    "providers": "Провайдеры",
+    "dex": "DEX",
+    "dexFiles": "Файлы DEX",
+    "classes": "Классы",
+    "methodRefs": "Ссылки на методы",
+    "permissions_one": "{{count}} разрешение",
+    "permissions_few": "{{count}} разрешения",
+    "permissions_many": "{{count}} разрешений",
+    "permissions_other": "{{count}} разрешения",
+    "noPermissions": "Разрешения не запрашиваются.",
+    "largestEntries": "Крупнейшие записи",
+    "entryName": "Запись",
+    "entryUncompressed": "Без сжатия",
+    "entryCompressed": "Сжато",
+    "unknownValue": "—"
   }
 }

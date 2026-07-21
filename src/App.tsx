@@ -18,6 +18,7 @@ import DevicesRoute from "./routes/Devices";
 import WirelessRoute from "./routes/Wireless";
 import AppsRoute from "./routes/Apps";
 import DebloatRoute from "./routes/Debloat";
+import ApkAnalyzerRoute from "./routes/ApkAnalyzer";
 import ProfilesRoute from "./routes/Profiles";
 import ConsoleRoute from "./routes/Console";
 import LogcatRoute from "./routes/Logcat";
@@ -38,6 +39,7 @@ export type NavItem = {
     | "console"
     | "logcat"
     | "fastboot"
+    | "apk-analyzer"
     | "tuning";
   labelKey: string;
   milestone: string;
@@ -117,6 +119,13 @@ export const NAV_ITEMS: ReadonlyArray<NavItem> = [
     milestone: "R-082",
     descriptionKey: "tuning.description",
     render: () => <DeviceSettingsRoute />,
+  },
+  {
+    id: "apk-analyzer",
+    labelKey: "nav.apkAnalyzer",
+    milestone: "R-097",
+    descriptionKey: "apk.description",
+    render: () => <ApkAnalyzerRoute />,
   },
 ] as const;
 

@@ -14,6 +14,19 @@ completion.
 Working batches live here. Sections collapse into a versioned release on
 each milestone tag.
 
+### Added
+
+- **R-097 — Offline APK Analyzer.** A new sidebar route statically inspects a
+  local `.apk`/`.apks` chosen through the audited host-path grant — no device
+  required. Reports package id, version code/name, min/target/compile SDK,
+  requested permissions, activity/service/receiver/provider counts, DEX file /
+  defined-class / method-reference totals with a multidex (64K) flag, the
+  detected signing scheme (v1 JAR + v2/v3/v3.1 from the APK Signing Block), the
+  file SHA-256, and the largest ZIP entries. New backend module
+  `apk_analysis.rs` (reusing the AXML/resource-table parser from
+  `apk_metadata.rs`), `analyze_apk` IPC command, and `apk_analyze_open`
+  host-path purpose.
+
 ## [0.9.4] - 2026-07-21
 
 Local debloat-pack import — the network-free half of R-095.

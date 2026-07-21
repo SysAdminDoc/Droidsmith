@@ -369,6 +369,14 @@ export const commands = {
   async removeImportedPack(packId: string): Promise<boolean> {
     return await TAURI_INVOKE("remove_imported_pack", { packId });
   },
+  /**
+   * Statically analyze a local APK file the user selects through a one-shot
+   * native read grant (R-097). Fully offline and device-free: parses the binary
+   * manifest, DEX headers, signing artifacts, and a per-entry size breakdown.
+   */
+  async analyzeApk(pathGrant: string): Promise<ApkAnalysis> {
+    return await TAURI_INVOKE("analyze_apk", { path_grant: pathGrant });
+  },
   async planPack(request: PlanPackRequest): Promise<PlannedPack> {
     return await TAURI_INVOKE("plan_pack", { request });
   },
@@ -1052,6 +1060,34 @@ export type AndroidUser = {
    */
   current: boolean;
 };
+export type ApkAnalysis = {
+  file_name: string;
+  file_size: number;
+  sha256: string;
+  package: string | null;
+  version_code: number | null;
+  version_name: string | null;
+  min_sdk: number | null;
+  target_sdk: number | null;
+  compile_sdk: number | null;
+  permissions: string[];
+  components: ComponentCounts;
+  dex: DexSummary;
+  signing: SigningInfo;
+  /**
+   * Total number of ZIP entries in the archive.
+   */
+  total_entries: number;
+  /**
+   * The largest entries by uncompressed size (bounded).
+   */
+  largest_entries: ApkEntrySize[];
+};
+export type ApkEntrySize = {
+  name: string;
+  compressed: number;
+  uncompressed: number;
+};
 export type AppPackage = {
   /**
    * Application package id, e.g. `com.android.chrome`.
@@ -1225,6 +1261,12 @@ export type CompatibilityCheck = {
   actual: string | null;
 };
 export type CompatibilityStatus = "compatible" | "unknown" | "mismatch";
+export type ComponentCounts = {
+  activities: number;
+  services: number;
+  receivers: number;
+  providers: number;
+};
 export type ConfirmationSource =
   | "unspecified"
   | "internal"
@@ -1403,6 +1445,25 @@ export type DeviceTransportKind =
   | "tls_wifi"
   | "legacy_tcp"
   | "unknown_tcp";
+export type DexSummary = {
+  /**
+   * Number of `classes*.dex` files (more than one means multidex).
+   */
+  files: number;
+  /**
+   * Sum of `class_defs_size` across all DEX files.
+   */
+  defined_classes: number;
+  /**
+   * Sum of `method_ids_size` (method references) across all DEX files.
+   */
+  method_refs: number;
+  /**
+   * True when the app is multidex or its total method refs exceed the
+   * single-DEX 65,536 reference ceiling.
+   */
+  exceeds_64k: boolean;
+};
 export type DisconnectResult = {
   serial: string;
   disconnected: boolean;
@@ -1553,7 +1614,8 @@ export type HostPathPurpose =
   | "install_open"
   | "recovery_baseline_open"
   | "profile_open"
-  | "pack_import_open";
+  | "pack_import_open"
+  | "apk_analyze_open";
 /**
  * Metadata returned after a debloat pack is imported from a local file.
  */
@@ -2358,6 +2420,24 @@ export type ShellActionPlan = {
   mutating: boolean;
   dangerous: boolean;
   plan: PlannedAction | null;
+};
+export type SigningInfo = {
+  /**
+   * v1 JAR signing: a `META-INF/*.RSA|.DSA|.EC` block is present.
+   */
+  v1: boolean;
+  /**
+   * v2 APK Signature Scheme (ID 0x7109871a in the APK Signing Block).
+   */
+  v2: boolean;
+  /**
+   * v3 APK Signature Scheme (ID 0xf05368c0).
+   */
+  v3: boolean;
+  /**
+   * v3.1 APK Signature Scheme (ID 0x1b93ad61).
+   */
+  v31: boolean;
 };
 export type StorageInfo = {
   total_kb: number | null;

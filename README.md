@@ -31,7 +31,10 @@ USB/TLS/legacy/unknown transports with fail-closed unsafe-TCP acknowledgement,
 read-only host connection diagnostics for ADB/tool/USB/driver/udev state,
 portable pre-change recovery baselines with read-only OTA drift review,
 GUI-authored schema-v2 action profiles with read-only live import diffs,
-native-selected scrcpy recording destinations, and fastboot inspection. A
+native-selected scrcpy recording destinations, fastboot inspection, and an
+offline APK Analyzer that statically inspects a local `.apk`/`.apks`
+(manifest, permissions, DEX/multidex, signing scheme, size breakdown) with no
+device attached. A
 local-only Diagnostics center previews and saves redacted support
 bundles with tool/OS/ADB health, failed-operation records, and crash excerpts;
 it never uploads data and can wipe disposable local diagnostic history. For

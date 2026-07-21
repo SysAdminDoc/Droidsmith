@@ -329,12 +329,12 @@ enum ResourceValue {
 }
 
 #[derive(Debug, Default)]
-struct ResourceTable {
+pub(crate) struct ResourceTable {
     values: HashMap<u32, ResourceValue>,
 }
 
 impl ResourceTable {
-    fn resolve(&self, id: u32) -> Option<String> {
+    pub(crate) fn resolve(&self, id: u32) -> Option<String> {
         self.resolve_inner(id, 0)
     }
 
@@ -594,7 +594,7 @@ fn parse_start_element(
     Ok(())
 }
 
-fn parse_resource_table(data: &[u8]) -> Result<ResourceTable, String> {
+pub(crate) fn parse_resource_table(data: &[u8]) -> Result<ResourceTable, String> {
     if data.len() < 12 || le_u16(data, 0)? != RES_TABLE_TYPE {
         return Err("resources table header missing".into());
     }
@@ -696,7 +696,7 @@ fn parse_type_chunk(
     Ok(())
 }
 
-fn parse_string_pool(data: &[u8], start: usize) -> Result<Vec<String>, String> {
+pub(crate) fn parse_string_pool(data: &[u8], start: usize) -> Result<Vec<String>, String> {
     if le_u16(data, start)? != RES_STRING_POOL_TYPE {
         return Err("string pool header missing".into());
     }
@@ -773,14 +773,14 @@ fn read_utf16_len(data: &[u8], position: usize) -> Result<(usize, usize), String
     }
 }
 
-fn le_u16(data: &[u8], position: usize) -> Result<u16, String> {
+pub(crate) fn le_u16(data: &[u8], position: usize) -> Result<u16, String> {
     let bytes = data
         .get(position..position.saturating_add(2))
         .ok_or_else(|| "u16 read is out of range".to_string())?;
     Ok(u16::from_le_bytes([bytes[0], bytes[1]]))
 }
 
-fn le_u32(data: &[u8], position: usize) -> Result<u32, String> {
+pub(crate) fn le_u32(data: &[u8], position: usize) -> Result<u32, String> {
     let bytes = data
         .get(position..position.saturating_add(4))
         .ok_or_else(|| "u32 read is out of range".to_string())?;

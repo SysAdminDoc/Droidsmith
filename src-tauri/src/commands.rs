@@ -4093,6 +4093,22 @@ pub fn remove_imported_pack(
     }
 }
 
+/// Statically analyze a local APK file the user selects through a one-shot
+/// native read grant (R-097). Fully offline and device-free: parses the binary
+/// manifest, DEX headers, signing artifacts, and a per-entry size breakdown.
+#[tauri::command]
+#[specta::specta]
+pub fn analyze_apk(
+    grants: tauri::State<'_, PathGrantStore>,
+    path_grant: String,
+) -> Result<crate::apk_analysis::ApkAnalysis, CommandError> {
+    let path = grants.consume(&path_grant, HostPathPurpose::ApkAnalyzeOpen)?;
+    crate::apk_analysis::analyze(&path).map_err(|error| CommandError {
+        code: error.code(),
+        message: error.to_string(),
+    })
+}
+
 #[tauri::command]
 #[specta::specta]
 pub fn plan_pack(

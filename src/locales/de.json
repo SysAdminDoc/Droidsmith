@@ -143,7 +143,8 @@
     "console": "Konsole",
     "logcat": "Logcat",
     "fastboot": "Fastboot",
-    "tuning": "Feinabstimmung"
+    "tuning": "Feinabstimmung",
+    "apkAnalyzer": "APK-Analyse"
   },
   "tuning": {
     "title": "Feinabstimmung",
@@ -1476,5 +1477,42 @@
     "packageCount_other": "{{count}} Pakete",
     "totalCount": "{{count}} insgesamt",
     "unknown": "Unbekannt"
+  },
+  "apk": {
+    "title": "APK-Analyse",
+    "description": "Ein lokales APK offline prüfen — Manifest, Berechtigungen, DEX, Signierung und Größe. Kein Gerät nötig.",
+    "choose": "APK auswählen",
+    "analyzing": "Analysiere …",
+    "emptyTitle": "Noch kein APK analysiert",
+    "emptyBody": "Wählen Sie eine lokale .apk- oder .apks-Datei, um Manifest, Komponenten, DEX, Signaturschema und die größten Einträge zu prüfen — vollständig offline.",
+    "failed": "Analyse fehlgeschlagen",
+    "multidex": "Multidex / 64K+",
+    "unsigned": "Keine Signatur erkannt",
+    "signed": "Signiert ({{schemes}})",
+    "versionName": "Versionsname",
+    "versionCode": "Versionscode",
+    "minSdk": "Min-SDK",
+    "targetSdk": "Ziel-SDK",
+    "compileSdk": "Compile-SDK",
+    "entries": "ZIP-Einträge",
+    "components": "Komponenten",
+    "activities": "Activities",
+    "services": "Services",
+    "receivers": "Receiver",
+    "providers": "Provider",
+    "dex": "DEX",
+    "dexFiles": "DEX-Dateien",
+    "classes": "Definierte Klassen",
+    "methodRefs": "Methodenrefs",
+    "permissions_one": "{{count}} Berechtigung",
+    "permissions_few": "{{count}} Berechtigungen",
+    "permissions_many": "{{count}} Berechtigungen",
+    "permissions_other": "{{count}} Berechtigungen",
+    "noPermissions": "Keine Berechtigungen angefordert.",
+    "largestEntries": "Größte Einträge",
+    "entryName": "Eintrag",
+    "entryUncompressed": "Unkomprimiert",
+    "entryCompressed": "Komprimiert",
+    "unknownValue": "—"
   }
 }

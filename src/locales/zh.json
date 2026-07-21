@@ -143,7 +143,8 @@
     "console": "控制台",
     "logcat": "Logcat",
     "fastboot": "Fastboot",
-    "tuning": "调优"
+    "tuning": "调优",
+    "apkAnalyzer": "APK 分析器"
   },
   "tuning": {
     "title": "调优",
@@ -1476,5 +1477,42 @@
     "packageCount_other": "{{count}} 个包",
     "totalCount": "共 {{count}} 个",
     "unknown": "未知"
+  },
+  "apk": {
+    "title": "APK 分析器",
+    "description": "离线检查本地 APK——清单、权限、DEX、签名和大小。无需设备。",
+    "choose": "选择 APK",
+    "analyzing": "正在分析……",
+    "emptyTitle": "尚未分析任何 APK",
+    "emptyBody": "选择本地 .apk 或 .apks 文件，离线查看其清单、组件、DEX、签名方案和最大条目。",
+    "failed": "分析失败",
+    "multidex": "多 DEX / 64K+",
+    "unsigned": "未检测到签名",
+    "signed": "已签名（{{schemes}}）",
+    "versionName": "版本名称",
+    "versionCode": "版本号",
+    "minSdk": "最低 SDK",
+    "targetSdk": "目标 SDK",
+    "compileSdk": "编译 SDK",
+    "entries": "ZIP 条目",
+    "components": "组件",
+    "activities": "Activity",
+    "services": "Service",
+    "receivers": "Receiver",
+    "providers": "Provider",
+    "dex": "DEX",
+    "dexFiles": "DEX 文件",
+    "classes": "已定义类",
+    "methodRefs": "方法引用",
+    "permissions_one": "{{count}} 项权限",
+    "permissions_few": "{{count}} 项权限",
+    "permissions_many": "{{count}} 项权限",
+    "permissions_other": "{{count}} 项权限",
+    "noPermissions": "未请求任何权限。",
+    "largestEntries": "最大条目",
+    "entryName": "条目",
+    "entryUncompressed": "未压缩",
+    "entryCompressed": "已压缩",
+    "unknownValue": "—"
   }
 }

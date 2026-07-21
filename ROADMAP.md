@@ -35,25 +35,6 @@ import) has all shipped through v0.9.4. These are the verified next-tier gaps;
 device-only and already-shipped ideas are in the RESEARCH.md Rejected table.
 IDs continue from R-096 / IMP-73.
 
-### P1
-
-- [ ] P1 — R-097 — Offline APK Analyzer panel
-  Why: No OSS competitor (Escrcpy/QtScrcpy/Aya/UAD-ng) offers static APK
-  analysis; it is 100% offline and fully headless-verifiable — a clean
-  differentiator that turns Droidsmith into an inspection workstation.
-  Evidence: developer.android.com/tools/apkanalyzer; existing
-  `src-tauri/src/apk_metadata.rs` (~30 KB) already parses APK metadata during
-  install but is not surfaced as an inspector.
-  Touches: `src-tauri/src/apk_metadata.rs`, new `analyze_apk` command in
-  `commands.rs` (reuse `select_host_path` grant, `HostPathPurpose` read variant),
-  new `src/routes/ApkAnalyzer.tsx`, `NAV_ITEMS` in `src/App.tsx`, bindings,
-  locales (5), `scripts/check-rendered-routes.mjs` mock.
-  Acceptance: selecting a local .apk/.apks shows package id, versionCode/Name,
-  min/target SDK, requested permissions, component + dex class/method counts with
-  a 64K-multidex flag, per-entry size breakdown, and detected signing scheme —
-  no device attached; a unit/smoke test parses a fixture APK.
-  Complexity: L
-
 ### P2
 
 - [ ] P2 — R-098 — Export current device debloat state as a shareable pack/selection

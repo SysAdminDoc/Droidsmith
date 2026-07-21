@@ -670,6 +670,24 @@ async function runDesktopFlow(browser) {
     .getByText("Vendor blocks disabling this package", { exact: true })
     .waitFor();
 
+  // R-097: the offline APK analyzer renders a manifest/dex/signing report.
+  await page.getByRole("button", { name: /APK Analyzer/ }).click();
+  await page
+    .getByRole("heading", { name: "APK Analyzer", exact: true })
+    .waitFor();
+  await page.getByRole("button", { name: "Choose an APK" }).click();
+  await page.getByText("com.example.qa", { exact: true }).waitFor();
+  await page.getByText("Multidex / 64K+", { exact: true }).waitFor();
+  await page.getByText("Signed (v2, v3)", { exact: true }).waitFor();
+  await page
+    .getByText("android.permission.POST_NOTIFICATIONS", { exact: true })
+    .waitFor();
+  await assertNoHorizontalOverflow(page, "desktop APK Analyzer report");
+  await page.screenshot({
+    path: path.join(screenshotDir, "desktop-apk-analyzer.png"),
+    fullPage: false,
+  });
+
   await page.getByRole("button", { name: /Wireless/ }).click();
   await page.getByRole("heading", { name: "Wireless", exact: true }).waitFor();
   const wirelessConnectPanel = page
@@ -1491,6 +1509,10 @@ async function installTauriMock(
             settings_export: {
               id: "123e4567-e89b-42d3-a456-42661417400e",
               local_path: "C:/Users/QA/Desktop/droidsmith-settings-all.json",
+            },
+            apk_analyze_open: {
+              id: "123e4567-e89b-42d3-a456-42661417400f",
+              local_path: "C:/Users/QA/Downloads/sample.apk",
             },
           };
           const selection = selections[args.purpose];
@@ -2605,6 +2627,50 @@ async function installTauriMock(
         }
         if (cmd === "remove_imported_pack") {
           return true;
+        }
+        if (cmd === "analyze_apk") {
+          return {
+            file_name: "sample.apk",
+            file_size: 4_215_872,
+            sha256:
+              "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+            package: "com.example.qa",
+            version_code: 4207,
+            version_name: "4.2.0",
+            min_sdk: 24,
+            target_sdk: 34,
+            compile_sdk: 34,
+            permissions: [
+              "android.permission.INTERNET",
+              "android.permission.POST_NOTIFICATIONS",
+            ],
+            components: {
+              activities: 12,
+              services: 3,
+              receivers: 5,
+              providers: 2,
+            },
+            dex: {
+              files: 2,
+              defined_classes: 8123,
+              method_refs: 71204,
+              exceeds_64k: true,
+            },
+            signing: { v1: false, v2: true, v3: true, v31: false },
+            total_entries: 512,
+            largest_entries: [
+              {
+                name: "classes.dex",
+                compressed: 1_800_000,
+                uncompressed: 5_400_000,
+              },
+              {
+                name: "resources.arsc",
+                compressed: 900_000,
+                uncompressed: 1_200_000,
+              },
+            ],
+          };
         }
         if (cmd === "plan_pack") {
           const selected = args.request.selected;

@@ -143,7 +143,8 @@
     "console": "Console",
     "logcat": "Logcat",
     "fastboot": "Fastboot",
-    "tuning": "Tuning"
+    "tuning": "Tuning",
+    "apkAnalyzer": "APK Analyzer"
   },
   "tuning": {
     "title": "Tuning",
@@ -1476,5 +1477,42 @@
     "packageCount_other": "{{count}} packages",
     "totalCount": "{{count}} total",
     "unknown": "Unknown"
+  },
+  "apk": {
+    "title": "APK Analyzer",
+    "description": "Inspect a local APK offline — manifest, permissions, DEX, signing, and size. No device required.",
+    "choose": "Choose an APK",
+    "analyzing": "Analyzing…",
+    "emptyTitle": "No APK analyzed yet",
+    "emptyBody": "Pick a local .apk or .apks file to inspect its manifest, components, DEX, signing scheme, and largest entries — entirely offline.",
+    "failed": "Analysis failed",
+    "multidex": "Multidex / 64K+",
+    "unsigned": "No signature detected",
+    "signed": "Signed ({{schemes}})",
+    "versionName": "Version name",
+    "versionCode": "Version code",
+    "minSdk": "Min SDK",
+    "targetSdk": "Target SDK",
+    "compileSdk": "Compile SDK",
+    "entries": "ZIP entries",
+    "components": "Components",
+    "activities": "Activities",
+    "services": "Services",
+    "receivers": "Receivers",
+    "providers": "Providers",
+    "dex": "DEX",
+    "dexFiles": "DEX files",
+    "classes": "Defined classes",
+    "methodRefs": "Method refs",
+    "permissions_one": "{{count}} permission",
+    "permissions_few": "{{count}} permissions",
+    "permissions_many": "{{count}} permissions",
+    "permissions_other": "{{count}} permissions",
+    "noPermissions": "No permissions requested.",
+    "largestEntries": "Largest entries",
+    "entryName": "Entry",
+    "entryUncompressed": "Uncompressed",
+    "entryCompressed": "Compressed",
+    "unknownValue": "—"
   }
 }

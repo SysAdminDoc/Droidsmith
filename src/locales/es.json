@@ -1150,7 +1150,8 @@
     "mirror": "Espejo",
     "profiles": "Perfiles",
     "tuning": "Ajuste",
-    "wireless": "Inalámbrico"
+    "wireless": "Inalámbrico",
+    "apkAnalyzer": "Analizador de APK"
   },
   "tuning": {
     "title": "Ajuste",
@@ -1476,5 +1477,42 @@
     "lastConnected": "Última conexión",
     "autoReconnect": "Reconectar dispositivos conocidos al iniciar",
     "autoReconnectHint": "Cuando Droidsmith se inicia, intenta reconectar los puntos de conexión guardados a continuación."
+  },
+  "apk": {
+    "title": "Analizador de APK",
+    "description": "Inspecciona un APK local sin conexión — manifiesto, permisos, DEX, firma y tamaño. No requiere dispositivo.",
+    "choose": "Elegir un APK",
+    "analyzing": "Analizando…",
+    "emptyTitle": "Aún no se ha analizado ningún APK",
+    "emptyBody": "Elige un archivo .apk o .apks local para inspeccionar su manifiesto, componentes, DEX, esquema de firma y entradas más grandes — totalmente sin conexión.",
+    "failed": "Error de análisis",
+    "multidex": "Multidex / 64K+",
+    "unsigned": "No se detectó firma",
+    "signed": "Firmado ({{schemes}})",
+    "versionName": "Nombre de versión",
+    "versionCode": "Código de versión",
+    "minSdk": "SDK mínimo",
+    "targetSdk": "SDK objetivo",
+    "compileSdk": "SDK de compilación",
+    "entries": "Entradas ZIP",
+    "components": "Componentes",
+    "activities": "Actividades",
+    "services": "Servicios",
+    "receivers": "Receptores",
+    "providers": "Proveedores",
+    "dex": "DEX",
+    "dexFiles": "Archivos DEX",
+    "classes": "Clases definidas",
+    "methodRefs": "Refs de métodos",
+    "permissions_one": "{{count}} permiso",
+    "permissions_few": "{{count}} permisos",
+    "permissions_many": "{{count}} permisos",
+    "permissions_other": "{{count}} permisos",
+    "noPermissions": "No se solicitan permisos.",
+    "largestEntries": "Entradas más grandes",
+    "entryName": "Entrada",
+    "entryUncompressed": "Sin comprimir",
+    "entryCompressed": "Comprimido",
+    "unknownValue": "—"
   }
 }
