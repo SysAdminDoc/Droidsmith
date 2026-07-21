@@ -26,19 +26,19 @@ in Roadmap_Blocked.md, not here — see the Rejected Ideas table in RESEARCH.md.
 
 ### P3
 
-- [ ] P3 — R-089 scrcpy version-gated capability surface (virtual display, camera)
-  Why: net-new scrcpy capabilities that require version probing. The
-  validation-heavy flags (crop/orientation/screen-off-timeout/audio-codec) and
-  the window/control toggles already shipped (R-088/R-089); VP8/VP9 fallback is
-  covered by the existing codec selector gated on `available_video_codecs`.
-  Evidence: scrcpy v3.0 `--new-display=<res>/<dpi>`, v3.2 audio-source
-  expansion (`--audio-source=mic-*`), v4.0 camera torch/zoom.
-  Touches: `src-tauri/src/scrcpy.rs` (probe a `supports_new_display` /
-  `supports_camera` capability from the version + `--help`, build the args),
-  `src/routes/Mirror.tsx` + `src/routes/mirrorPresets.ts` (virtual-display size/
-  dpi inputs, camera mirroring, audio-source picker), hidden on older scrcpy.
-  Acceptance: capabilities gate on detected scrcpy version; args asserted in
-  unit tests; unsupported controls hidden on older scrcpy.
+- [ ] P3 — R-089 scrcpy camera mirroring (video-source=camera)
+  Why: the remaining net-new scrcpy capability. Virtual display
+  (`--new-display`), the audio-source picker, VP8/VP9 fallback, and the
+  validation-heavy/window flags already shipped; camera mirroring is a
+  video-source *mode* change and warrants its own focused pass.
+  Evidence: scrcpy v3.0 `--video-source=camera` with `--camera-facing`,
+  `--camera-size`, `--camera-id`; v4.0 `--camera-torch`/`--camera-zoom`.
+  Touches: `src-tauri/src/scrcpy.rs` (a `supports_camera` capability + camera
+  args, mutually exclusive with the display-only flags), `src/routes/Mirror.tsx`
+  + `src/routes/mirrorPresets.ts` (a display/camera source toggle + camera
+  facing/size controls), hidden on older scrcpy.
+  Acceptance: camera mode gates on detected scrcpy version; args asserted in
+  unit tests; display-only flags are suppressed in camera mode.
   Complexity: M
 
 - [ ] P3 — R-095 Import remote debloat pack by URL with SHA-256 pin

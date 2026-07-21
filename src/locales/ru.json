@@ -928,6 +928,15 @@
     }
   },
   "mirror": {
+    "audioSource": "Источник звука",
+    "audioSourceOutput": "Вывод устройства (по умолчанию)",
+    "audioSourceMic": "Микрофон",
+    "audioSourceMicUnprocessed": "Микрофон (без обработки)",
+    "audioSourceMicVoiceComm": "Микрофон (голосовая связь)",
+    "audioSourceMicVoiceRec": "Микрофон (распознавание речи)",
+    "audioSourceVoiceCall": "Голосовой вызов",
+    "audioSourcePlayback": "Захват воспроизведения",
+    "newDisplay": "Виртуальный дисплей (Ш×В/dpi)",
     "crop": "Обрезка (ш:в:x:y)",
     "screenOffTimeout": "Тайм-аут отключения экрана (с)",
     "screenOffTimeoutPlaceholder": "Выкл.",

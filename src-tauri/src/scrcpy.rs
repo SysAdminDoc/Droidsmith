@@ -46,6 +46,10 @@ pub struct LaunchScrcpyRequest {
     pub screen_off_timeout: Option<u32>,
     #[serde(default)]
     pub audio_codec: Option<String>,
+    #[serde(default)]
+    pub new_display: Option<String>,
+    #[serde(default)]
+    pub audio_source: Option<String>,
 }
 
 #[derive(specta::Type, Debug, Clone, Serialize, PartialEq, Eq)]
@@ -65,6 +69,11 @@ pub struct ScrcpyCapabilities {
     pub cache_hit: bool,
     pub supports_flex_display: bool,
     pub supports_keep_active: bool,
+    /// `--new-display` (virtual/secondary display) landed in scrcpy 3.0.
+    pub supports_new_display: bool,
+    /// The expanded `--audio-source=mic-*`/`voice-call`/`playback` set landed in
+    /// scrcpy 3.2. `output` and `mic` predate it.
+    pub supports_audio_source_expansion: bool,
 }
 
 #[derive(specta::Type, Debug, Clone, Serialize, PartialEq, Eq)]
@@ -226,6 +235,8 @@ pub fn capabilities(
     let version_at_least_4 = version_gte(&version, 4, 0);
     let value = ScrcpyCapabilities {
         path: scrcpy_path.display().to_string(),
+        supports_new_display: version_gte(&version, 3, 0),
+        supports_audio_source_expansion: version_gte(&version, 3, 2),
         version,
         available_video_codecs,
         video_encoders,
@@ -373,6 +384,55 @@ fn reap_locked(sessions: &mut HashMap<u64, ManagedScrcpySession>, keep: Option<u
 const VALID_DISPLAY_ORIENTATIONS: [&str; 8] = [
     "0", "90", "180", "270", "flip0", "flip90", "flip180", "flip270",
 ];
+
+/// scrcpy audio sources. `output` (the default) is never emitted; the rest are
+/// allowlisted so no argument metacharacters can slip through the transport.
+const AUDIO_SOURCES: [&str; 6] = [
+    "mic",
+    "mic-unprocessed",
+    "mic-voice-communication",
+    "mic-voice-recognition",
+    "voice-call",
+    "playback",
+];
+
+/// Audio sources that require scrcpy 3.2+ (`mic` predates it).
+const AUDIO_SOURCES_V3_2: [&str; 5] = [
+    "mic-unprocessed",
+    "mic-voice-communication",
+    "mic-voice-recognition",
+    "voice-call",
+    "playback",
+];
+
+/// scrcpy `--new-display` is `<width>x<height>`, `<width>x<height>/<dpi>`, or
+/// `/<dpi>` (all non-negative integers). Accept only digits, one `x`, and one
+/// optional `/` so no argument metacharacters reach the device transport.
+fn valid_new_display(value: &str) -> bool {
+    let (size, dpi) = match value.split_once('/') {
+        Some((size, dpi)) => (size, Some(dpi)),
+        None => (value, None),
+    };
+    // Size is either "<width>x<height>" or empty (only valid in the "/<dpi>" form).
+    let size_ok = if size.is_empty() {
+        dpi.is_some()
+    } else {
+        match size.split_once('x') {
+            Some((w, h)) => is_small_int(w) && is_small_int(h),
+            None => false,
+        }
+    };
+    // A dpi, when present, must be a small integer; its absence is fine.
+    let dpi_ok = match dpi {
+        Some(dpi) => is_small_int(dpi),
+        None => true,
+    };
+    size_ok && dpi_ok
+}
+
+fn is_small_int(value: &str) -> bool {
+    !value.is_empty() && value.len() <= 5 && value.bytes().all(|byte| byte.is_ascii_digit())
+}
 
 /// scrcpy `--crop` is `width:height:x:y` (all non-negative integers). Accept
 /// only digits and exactly three colons so no shell/argument metacharacters can
@@ -524,6 +584,38 @@ pub fn build_args(
             return Err(format!("unsupported scrcpy audio codec: {codec}"));
         }
         args.push(format!("--audio-codec={codec}"));
+    }
+    if let Some(source) = request
+        .audio_source
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty() && *value != "output")
+    {
+        if !AUDIO_SOURCES.contains(&source) {
+            return Err(format!("unsupported scrcpy audio source: {source}"));
+        }
+        if AUDIO_SOURCES_V3_2.contains(&source) && !capabilities.supports_audio_source_expansion {
+            return Err(format!(
+                "scrcpy audio source {source} requires scrcpy 3.2 or later"
+            ));
+        }
+        args.push(format!("--audio-source={source}"));
+    }
+    if let Some(new_display) = request
+        .new_display
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        if !capabilities.supports_new_display {
+            return Err("virtual display (--new-display) requires scrcpy 3.0 or later".to_string());
+        }
+        if !valid_new_display(new_display) {
+            return Err(format!(
+                "scrcpy new-display must be <width>x<height>, <width>x<height>/<dpi>, or /<dpi>: {new_display}"
+            ));
+        }
+        args.push(format!("--new-display={new_display}"));
     }
     if request.flex_display {
         if !version_gte(&capabilities.version, 4, 0) {
@@ -768,6 +860,8 @@ mod tests {
             display_orientation: None,
             screen_off_timeout: None,
             audio_codec: None,
+            new_display: None,
+            audio_source: None,
         }
     }
 
@@ -785,6 +879,8 @@ mod tests {
             cache_hit: false,
             supports_flex_display: true,
             supports_keep_active: true,
+            supports_new_display: true,
+            supports_audio_source_expansion: true,
         }
     }
 
@@ -944,6 +1040,69 @@ mod tests {
         assert!(build_args(&bad_codec, None, &capabilities())
             .unwrap_err()
             .contains("audio codec"));
+    }
+
+    #[test]
+    fn emits_new_display_and_audio_source_when_supported() {
+        let mut req = request();
+        req.new_display = Some("1920x1080/240".to_string());
+        req.audio_source = Some("mic-unprocessed".to_string());
+        let args = build_args(&req, None, &capabilities()).unwrap();
+        assert!(args.contains(&"--new-display=1920x1080/240".to_string()));
+        assert!(args.contains(&"--audio-source=mic-unprocessed".to_string()));
+
+        // The default "output" audio source is never emitted.
+        let mut default_source = request();
+        default_source.audio_source = Some("output".to_string());
+        let args = build_args(&default_source, None, &capabilities()).unwrap();
+        assert!(!args.iter().any(|arg| arg.starts_with("--audio-source")));
+    }
+
+    #[test]
+    fn accepts_new_display_size_and_dpi_forms() {
+        for value in ["1920x1080", "1920x1080/240", "/320"] {
+            let mut req = request();
+            req.new_display = Some(value.to_string());
+            assert!(
+                build_args(&req, None, &capabilities()).is_ok(),
+                "new-display {value} should be accepted"
+            );
+        }
+    }
+
+    #[test]
+    fn rejects_new_display_and_audio_source_when_unsupported_or_malformed() {
+        // Gated off on older scrcpy.
+        let mut old = capabilities();
+        old.supports_new_display = false;
+        old.supports_audio_source_expansion = false;
+        let mut req = request();
+        req.new_display = Some("1920x1080".to_string());
+        assert!(build_args(&req, None, &old)
+            .unwrap_err()
+            .contains("new-display"));
+
+        let mut expanded = request();
+        expanded.audio_source = Some("voice-call".to_string());
+        assert!(build_args(&expanded, None, &old)
+            .unwrap_err()
+            .contains("3.2"));
+
+        // Malformed / metacharacter-bearing values are rejected.
+        for bad in ["1920", "1920x", "1920x1080/", "1920x1080/$(x)", "/"] {
+            let mut req = request();
+            req.new_display = Some(bad.to_string());
+            assert!(
+                build_args(&req, None, &capabilities()).is_err(),
+                "new-display {bad} should be rejected"
+            );
+        }
+
+        let mut bad_source = request();
+        bad_source.audio_source = Some("speaker".to_string());
+        assert!(build_args(&bad_source, None, &capabilities())
+            .unwrap_err()
+            .contains("audio source"));
     }
 
     #[test]

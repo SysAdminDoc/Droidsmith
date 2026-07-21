@@ -1630,6 +1630,8 @@ export type LaunchScrcpyRequest = {
   display_orientation?: string | null;
   screen_off_timeout?: number | null;
   audio_codec?: string | null;
+  new_display?: string | null;
+  audio_source?: string | null;
 };
 /**
  * One node of a `uiautomator dump` UI hierarchy, flattened with its nesting
@@ -1743,6 +1745,8 @@ export type MirrorPreset = {
   displayOrientation?: string;
   screenOffTimeout?: string;
   audioCodec?: AudioCodec;
+  newDisplay?: string;
+  audioSource?: string;
 };
 export type Mitigation =
   /**
@@ -2207,6 +2211,15 @@ export type ScrcpyCapabilities = {
   cache_hit: boolean;
   supports_flex_display: boolean;
   supports_keep_active: boolean;
+  /**
+   * `--new-display` (virtual/secondary display) landed in scrcpy 3.0.
+   */
+  supports_new_display: boolean;
+  /**
+   * The expanded `--audio-source=mic-*`/`voice-call`/`playback` set landed in
+   * scrcpy 3.2. `output` and `mic` predate it.
+   */
+  supports_audio_source_expansion: boolean;
 };
 export type ScrcpyExitReason =
   | "user_stopped"

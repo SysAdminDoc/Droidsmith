@@ -95,6 +95,10 @@ pub struct MirrorPreset {
     pub screen_off_timeout: String,
     #[serde(default)]
     pub audio_codec: AudioCodec,
+    #[serde(default)]
+    pub new_display: String,
+    #[serde(default)]
+    pub audio_source: String,
 }
 
 #[derive(specta::Type, Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -131,6 +135,8 @@ impl Default for MirrorPreset {
             display_orientation: String::new(),
             screen_off_timeout: String::new(),
             audio_codec: AudioCodec::Default,
+            new_display: String::new(),
+            audio_source: "output".to_string(),
         }
     }
 }
@@ -1127,7 +1133,51 @@ fn validate_preset(preset: &MirrorPreset) -> Result<(), SettingsError> {
             "mirror displayOrientation is invalid".to_string(),
         ));
     }
+    if !preset.new_display.is_empty() && !valid_new_display_setting(&preset.new_display) {
+        return Err(SettingsError::Invalid(
+            "mirror newDisplay must be empty or <w>x<h>[/<dpi>] or /<dpi>".to_string(),
+        ));
+    }
+    if !matches!(
+        preset.audio_source.as_str(),
+        "output"
+            | "mic"
+            | "mic-unprocessed"
+            | "mic-voice-communication"
+            | "mic-voice-recognition"
+            | "voice-call"
+            | "playback"
+    ) {
+        return Err(SettingsError::Invalid(
+            "mirror audioSource is invalid".to_string(),
+        ));
+    }
     Ok(())
+}
+
+fn valid_new_display_setting(value: &str) -> bool {
+    let (size, dpi) = match value.split_once('/') {
+        Some((size, dpi)) => (size, Some(dpi)),
+        None => (value, None),
+    };
+    let small_int = |candidate: &str| {
+        !candidate.is_empty()
+            && candidate.len() <= 5
+            && candidate.bytes().all(|byte| byte.is_ascii_digit())
+    };
+    let size_ok = if size.is_empty() {
+        dpi.is_some()
+    } else {
+        match size.split_once('x') {
+            Some((w, h)) => small_int(w) && small_int(h),
+            None => false,
+        }
+    };
+    let dpi_ok = match dpi {
+        Some(dpi) => small_int(dpi),
+        None => true,
+    };
+    size_ok && dpi_ok
 }
 
 fn valid_crop_setting(value: &str) -> bool {
@@ -1165,6 +1215,8 @@ fn normalize_legacy_preset(value: LegacyMirrorPreset) -> MirrorPreset {
         display_orientation: defaults.display_orientation,
         screen_off_timeout: defaults.screen_off_timeout,
         audio_codec: defaults.audio_codec,
+        new_display: defaults.new_display,
+        audio_source: defaults.audio_source,
     }
 }
 

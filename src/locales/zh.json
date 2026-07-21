@@ -928,6 +928,15 @@
     }
   },
   "mirror": {
+    "audioSource": "音频源",
+    "audioSourceOutput": "设备输出（默认）",
+    "audioSourceMic": "麦克风",
+    "audioSourceMicUnprocessed": "麦克风（未处理）",
+    "audioSourceMicVoiceComm": "麦克风（语音通信）",
+    "audioSourceMicVoiceRec": "麦克风（语音识别）",
+    "audioSourceVoiceCall": "语音通话",
+    "audioSourcePlayback": "回放捕获",
+    "newDisplay": "虚拟显示 (宽x高/dpi)",
     "crop": "裁剪 (宽:高:x:y)",
     "screenOffTimeout": "熄屏超时 (秒)",
     "screenOffTimeoutPlaceholder": "关闭",

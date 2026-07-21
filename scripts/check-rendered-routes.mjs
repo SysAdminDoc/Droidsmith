@@ -731,6 +731,9 @@ async function runDesktopFlow(browser) {
   await page.getByLabel("Crop (w:h:x:y)").fill("1224:1440:0:0");
   await page.getByLabel("Display orientation").selectOption("90");
   await page.getByLabel("Audio codec").selectOption("opus");
+  // R-089: version-gated virtual display + audio-source picker.
+  await page.getByLabel("Audio source").selectOption("mic-unprocessed");
+  await page.getByLabel("Virtual display (WxH/dpi)").fill("1920x1080/240");
   await page.getByLabel("Video codec").selectOption("h265");
   await page.getByLabel("Video encoder").selectOption("c2.vendor.hevc.encoder");
   await page.getByRole("checkbox", { name: "Record session" }).check();
@@ -2653,6 +2656,10 @@ async function installTauriMock(
             ],
             probe_warning: null,
             cache_hit: false,
+            supports_flex_display: true,
+            supports_keep_active: true,
+            supports_new_display: true,
+            supports_audio_source_expansion: true,
           };
         }
         if (cmd === "launch_scrcpy") {

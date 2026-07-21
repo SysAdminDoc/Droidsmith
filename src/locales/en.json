@@ -928,6 +928,15 @@
     }
   },
   "mirror": {
+    "audioSource": "Audio source",
+    "audioSourceOutput": "Device output (default)",
+    "audioSourceMic": "Microphone",
+    "audioSourceMicUnprocessed": "Mic (unprocessed)",
+    "audioSourceMicVoiceComm": "Mic (voice comm)",
+    "audioSourceMicVoiceRec": "Mic (voice recognition)",
+    "audioSourceVoiceCall": "Voice call",
+    "audioSourcePlayback": "Playback capture",
+    "newDisplay": "Virtual display (WxH/dpi)",
     "crop": "Crop (w:h:x:y)",
     "screenOffTimeout": "Screen-off timeout (s)",
     "screenOffTimeoutPlaceholder": "Off",

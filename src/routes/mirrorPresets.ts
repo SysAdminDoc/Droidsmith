@@ -33,7 +33,18 @@ export type MirrorPreset = {
   displayOrientation: string;
   screenOffTimeout: string;
   audioCodec: AudioCodec;
+  newDisplay: string;
+  audioSource: string;
 };
+
+export type AudioSource =
+  | "output"
+  | "mic"
+  | "mic-unprocessed"
+  | "mic-voice-communication"
+  | "mic-voice-recognition"
+  | "voice-call"
+  | "playback";
 
 export const DEFAULT_MIRROR_PRESET: MirrorPreset = {
   maxSize: "1024",
@@ -56,6 +67,8 @@ export const DEFAULT_MIRROR_PRESET: MirrorPreset = {
   displayOrientation: "",
   screenOffTimeout: "",
   audioCodec: "default",
+  newDisplay: "",
+  audioSource: "output",
 };
 
 export const LEGACY_MIRROR_PRESET_PREFIX = "droidsmith.mirror.preset.";
@@ -141,7 +154,27 @@ export function normalizePreset(value: Partial<MirrorPreset>): MirrorPreset {
     audioCodec: isAudioCodec(value.audioCodec)
       ? value.audioCodec
       : DEFAULT_MIRROR_PRESET.audioCodec,
+    newDisplay:
+      typeof value.newDisplay === "string" &&
+      /^((\d{1,5}x\d{1,5})(\/\d{1,5})?|\/\d{1,5})?$/u.test(value.newDisplay)
+        ? value.newDisplay
+        : DEFAULT_MIRROR_PRESET.newDisplay,
+    audioSource: isAudioSource(value.audioSource)
+      ? value.audioSource
+      : DEFAULT_MIRROR_PRESET.audioSource,
   };
+}
+
+function isAudioSource(value: unknown): value is AudioSource {
+  return (
+    value === "output" ||
+    value === "mic" ||
+    value === "mic-unprocessed" ||
+    value === "mic-voice-communication" ||
+    value === "mic-voice-recognition" ||
+    value === "voice-call" ||
+    value === "playback"
+  );
 }
 
 function isAudioCodec(value: unknown): value is AudioCodec {

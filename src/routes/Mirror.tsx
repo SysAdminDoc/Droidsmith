@@ -318,6 +318,9 @@ export default function MirrorRoute() {
           screen_off_timeout: parsePositiveInt(preset.screenOffTimeout),
           audio_codec:
             preset.audioCodec === "default" ? null : preset.audioCodec,
+          new_display: preset.newDisplay.trim() || null,
+          audio_source:
+            preset.audioSource === "output" ? null : preset.audioSource,
         },
         recordingGrant?.id,
       );
@@ -664,6 +667,70 @@ export default function MirrorRoute() {
                       <option value="raw">{t("mirror.audioCodecRaw")}</option>
                     </FieldSelect>
                   </label>
+                  <label className="grid gap-1.5">
+                    <span className="text-xs font-medium text-anvil-400">
+                      {t("mirror.audioSource")}
+                    </span>
+                    <FieldSelect
+                      value={preset.audioSource}
+                      onChange={(event) =>
+                        setPreset((previous) => ({
+                          ...previous,
+                          audioSource: event.target.value,
+                        }))
+                      }
+                      disabled={preset.noAudio}
+                    >
+                      <option value="output">
+                        {t("mirror.audioSourceOutput")}
+                      </option>
+                      <option value="mic">{t("mirror.audioSourceMic")}</option>
+                      {capabilityState.kind === "ready" &&
+                        capabilityState.value
+                          .supports_audio_source_expansion && (
+                          <>
+                            <option value="mic-unprocessed">
+                              {t("mirror.audioSourceMicUnprocessed")}
+                            </option>
+                            <option value="mic-voice-communication">
+                              {t("mirror.audioSourceMicVoiceComm")}
+                            </option>
+                            <option value="mic-voice-recognition">
+                              {t("mirror.audioSourceMicVoiceRec")}
+                            </option>
+                            <option value="voice-call">
+                              {t("mirror.audioSourceVoiceCall")}
+                            </option>
+                            <option value="playback">
+                              {t("mirror.audioSourcePlayback")}
+                            </option>
+                          </>
+                        )}
+                    </FieldSelect>
+                  </label>
+                  {capabilityState.kind === "ready" &&
+                    capabilityState.value.supports_new_display && (
+                      <label className="grid gap-1.5">
+                        <span className="text-xs font-medium text-anvil-400">
+                          {t("mirror.newDisplay")}
+                        </span>
+                        <FieldInput
+                          type="text"
+                          value={preset.newDisplay}
+                          onChange={(e) =>
+                            setPreset((prev) => ({
+                              ...prev,
+                              newDisplay: e.target.value
+                                .replace(/[^\dx/]/g, "")
+                                .slice(0, 15),
+                            }))
+                          }
+                          placeholder="1920x1080/240"
+                          inputMode="text"
+                          className="font-mono"
+                        />
+                      </label>
+                    )}
                   <label className="grid gap-1.5">
                     <span className="text-xs font-medium text-anvil-400">
                       {t("mirror.videoCodec")}
