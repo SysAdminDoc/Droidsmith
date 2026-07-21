@@ -55,7 +55,9 @@ export function InternetSharing({ target }: { target: DeviceTarget }) {
     return () => {
       const id = sessionRef.current;
       sessionRef.current = null;
-      if (id !== null) void callStopGnirehtet(id);
+      // The session may already be gone (device disconnected and reaped by a
+      // status poll), in which case stop rejects with "not tracked" — swallow it.
+      if (id !== null) void callStopGnirehtet(id).catch(() => {});
     };
   }, [target.serial, target.transport_id, target.connection_generation]);
 
