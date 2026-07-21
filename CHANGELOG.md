@@ -14,6 +14,15 @@ completion.
 Working batches live here. Sections collapse into a versioned release on
 each milestone tag.
 
+### Changed
+
+- **Persist gnirehtet reverse-tethering across navigation.** The "Share Internet"
+  panel no longer stops the supervised session when the Devices route unmounts;
+  instead, on (re)mount it re-attaches to a session already running for the
+  device via the new `find_gnirehtet_session` IPC. Tethering now survives
+  navigating away (e.g. to install something over the shared connection) and is
+  only torn down when the user clicks Stop.
+
 ### Refactored
 
 - **IMP-72 Devices.tsx god-file split.** Extracted the inline device panels and

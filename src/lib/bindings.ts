@@ -745,6 +745,17 @@ export const commands = {
   async startGnirehtet(target: DeviceTarget): Promise<GnirehtetSession> {
     return await TAURI_INVOKE("start_gnirehtet", { target });
   },
+  /**
+   * Return the supervised gnirehtet session already running for this device, if
+   * any, so a renderer remount can re-attach to it instead of showing "start"
+   * and spawning a duplicate that would fail on the busy relay port. Persists
+   * reverse-tethering across navigation.
+   */
+  async findGnirehtetSession(
+    target: DeviceTarget,
+  ): Promise<GnirehtetSession | null> {
+    return await TAURI_INVOKE("find_gnirehtet_session", { target });
+  },
   async gnirehtetSessionStatus(sessionId: number): Promise<GnirehtetSession> {
     return await TAURI_INVOKE("gnirehtet_session_status", {
       session_id: sessionId,

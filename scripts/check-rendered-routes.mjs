@@ -98,6 +98,15 @@ async function runDesktopFlow(browser) {
   await page.getByRole("button", { name: "Export XML" }).click();
   await page.getByText(/Layout saved to .*layout-QA123\.xml/).waitFor();
 
+  // Persist gnirehtet across navigation: the Share Internet panel re-attaches to
+  // an already-running session on mount (shows Active + Stop, not Start).
+  const tetherPanel = page
+    .getByRole("heading", { name: "Share Internet", exact: true })
+    .locator("../../..");
+  await tetherPanel.getByText("Active", { exact: true }).waitFor();
+  await tetherPanel.getByRole("button", { name: "Stop Sharing" }).click();
+  await page.getByText("Internet sharing stopped.", { exact: true }).waitFor();
+
   await page.getByRole("button", { name: "About", exact: true }).click();
   await page.getByRole("button", { name: "Diagnostics", exact: true }).click();
   const diagnosticsDialog = page.getByRole("dialog", {
@@ -1280,6 +1289,7 @@ async function installTauriMock(
     let installAttempts = 0;
     let scrcpyLaunches = 0;
     let fingerprintObserved = false;
+    let gnirehtetStopped = false;
     let settingsLanguage = "en";
     const logcatQueries = { global: [] };
     let archiveApi = 35;
@@ -2580,6 +2590,50 @@ async function installTauriMock(
           };
         }
         if (cmd === "locate_scrcpy") return "C:/Tools/scrcpy.exe";
+        if (cmd === "locate_gnirehtet") return "C:/Tools/gnirehtet.exe";
+        if (cmd === "find_gnirehtet_session") {
+          // Model a session already running for this device so the panel
+          // re-attaches on mount (persist tethering across navigation).
+          if (gnirehtetStopped) return null;
+          return {
+            id: 501,
+            serial: args.target.serial,
+            pid: 6001,
+            args: ["run", args.target.serial],
+            started_at: "2026-07-21T09:00:00Z",
+            state: "running",
+            exit_code: null,
+            exit_reason: null,
+            stderr_tail: "",
+          };
+        }
+        if (cmd === "gnirehtet_session_status") {
+          return {
+            id: args.session_id,
+            serial: "R58N-QA",
+            pid: 6001,
+            args: ["run", "R58N-QA"],
+            started_at: "2026-07-21T09:00:00Z",
+            state: gnirehtetStopped ? "stopped" : "running",
+            exit_code: gnirehtetStopped ? 0 : null,
+            exit_reason: gnirehtetStopped ? "user_stopped" : null,
+            stderr_tail: "",
+          };
+        }
+        if (cmd === "stop_gnirehtet") {
+          gnirehtetStopped = true;
+          return {
+            id: args.session_id,
+            serial: "R58N-QA",
+            pid: 6001,
+            args: ["run", "R58N-QA"],
+            started_at: "2026-07-21T09:00:00Z",
+            state: "stopped",
+            exit_code: 0,
+            exit_reason: "user_stopped",
+            stderr_tail: "",
+          };
+        }
         if (cmd === "scrcpy_capabilities") {
           return {
             path: "C:/Tools/scrcpy.exe",

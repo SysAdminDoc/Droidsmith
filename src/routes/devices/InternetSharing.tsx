@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 
 import {
   errorMessage,
+  callFindGnirehtetSession,
   callGnirehtetSessionStatus,
   callLocateGnirehtet,
   callStartGnirehtet,
@@ -22,7 +23,10 @@ type SharingState =
 /** Gnirehtet reverse-tethering ("Share Internet") toggle for the selected
  *  device (R-084). Rendered only when the `gnirehtet` binary is on PATH; the
  *  session is supervised in `src-tauri/src/gnirehtet.rs` and mirrors the
- *  scrcpy start/poll/stop lifecycle. */
+ *  scrcpy start/poll/stop lifecycle. The supervised session persists across
+ *  navigation: on (re)mount the panel re-attaches to an already-running session
+ *  for the device instead of stopping it, so tethering survives leaving the
+ *  route (e.g. to install something that needs the shared connection). */
 export function InternetSharing({ target }: { target: DeviceTarget }) {
   const { t } = useTranslation();
   const [located, setLocated] = useState<boolean | null>(null);
@@ -45,20 +49,32 @@ export function InternetSharing({ target }: { target: DeviceTarget }) {
 
   // A sharing session belongs to a specific device and this toggle is its only
   // control surface (gnirehtet is a headless background service, not a window).
-  // Reset the UI for the new target, and in the cleanup stop the supervised
-  // session when the target changes (device switch / reconnect) or the
-  // component unmounts (leaving the route) — otherwise it is orphaned as an
-  // uncontrollable process and a later remount would show "start" and spawn a
-  // duplicate that fails on the busy relay port.
+  // On (re)mount and device change, re-attach to a session already running for
+  // this device rather than stopping it — so tethering persists across
+  // navigation. The supervisor reaps dead sessions, so a stale one resolves to
+  // null and shows "start". A running session is only torn down when the user
+  // explicitly clicks Stop (or the app exits).
   useEffect(() => {
+    let cancelled = false;
     setState({ kind: "idle" });
+    sessionRef.current = null;
+    void callFindGnirehtetSession(target)
+      .then((existing) => {
+        if (cancelled) return;
+        if (existing && existing.state === "running") {
+          sessionRef.current = existing.id;
+          setState({ kind: "running", session: existing });
+        }
+      })
+      .catch(() => {
+        // Lookup is best-effort; on failure the panel simply offers "start".
+      });
     return () => {
-      const id = sessionRef.current;
-      sessionRef.current = null;
-      // The session may already be gone (device disconnected and reaped by a
-      // status poll), in which case stop rejects with "not tracked" — swallow it.
-      if (id !== null) void callStopGnirehtet(id).catch(() => {});
+      cancelled = true;
     };
+    // Re-attach only when the device identity changes, not on every render
+    // (target is a fresh object each render).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [target.serial, target.transport_id, target.connection_generation]);
 
   const runningSessionId = state.kind === "running" ? state.session.id : null;

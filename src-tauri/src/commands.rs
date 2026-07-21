@@ -3610,6 +3610,22 @@ pub fn start_gnirehtet(
     })
 }
 
+/// Return the supervised gnirehtet session already running for this device, if
+/// any, so a renderer remount can re-attach to it instead of showing "start"
+/// and spawning a duplicate that would fail on the busy relay port. Persists
+/// reverse-tethering across navigation.
+#[tauri::command]
+#[specta::specta]
+pub fn find_gnirehtet_session(
+    target: adb::DeviceTarget,
+) -> Result<Option<crate::gnirehtet::GnirehtetSession>, CommandError> {
+    validate_serial_arg(&target.serial)?;
+    crate::gnirehtet::find_running_by_serial(&target.serial).map_err(|message| CommandError {
+        code: "gnirehtet_lookup_failed",
+        message,
+    })
+}
+
 #[tauri::command]
 #[specta::specta]
 pub fn gnirehtet_session_status(

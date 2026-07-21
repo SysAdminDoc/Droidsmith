@@ -123,6 +123,22 @@ pub fn start(
     Ok(session)
 }
 
+/// Return the supervised session currently running for `serial`, if any, so a
+/// renderer remount can re-attach instead of spawning a duplicate (persist
+/// tethering across navigation). Reaping first ensures only live sessions match.
+pub fn find_running_by_serial(serial: &str) -> Result<Option<GnirehtetSession>, String> {
+    let mut guard = sessions()
+        .lock()
+        .map_err(|_| "gnirehtet session supervisor lock poisoned".to_string())?;
+    reap_locked(&mut guard, None);
+    // After reap_locked(None), every retained session is Running.
+    let found = guard
+        .values()
+        .find(|managed| managed.session.serial == serial)
+        .map(|managed| managed.session.clone());
+    Ok(found)
+}
+
 pub fn status(session_id: u64) -> Result<GnirehtetSession, String> {
     let mut guard = sessions()
         .lock()

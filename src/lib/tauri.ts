@@ -943,6 +943,17 @@ export async function callStartGnirehtet(
   return commands.startGnirehtet(target);
 }
 
+/**
+ * Return the supervised gnirehtet session already running for this device, if
+ * any, so a remount can re-attach instead of spawning a duplicate (tethering
+ * persists across navigation).
+ */
+export async function callFindGnirehtetSession(
+  target: DeviceTarget,
+): Promise<GnirehtetSession | null> {
+  return commands.findGnirehtetSession(target);
+}
+
 export async function callGnirehtetSessionStatus(
   sessionId: number,
 ): Promise<GnirehtetSession> {
