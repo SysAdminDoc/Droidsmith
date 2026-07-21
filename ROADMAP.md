@@ -51,21 +51,6 @@ in Roadmap_Blocked.md, not here — see the Rejected Ideas table in RESEARCH.md.
   (never silent). Unit test on the fingerprint-diff/drift logic + smoke flow.
   Complexity: L
 
-- [ ] P2 — R-092 Low-target-SDK install option + Advanced-Protection detection
-  Why: on Android 14–16 old-targetSDK APK installs fail and Advanced Protection
-  disables debugging; both currently fail opaquely.
-  Evidence: platform-tools `adb install --bypass-low-target-sdk-block`
-  (A14 minSDK 23 / A15 24); Android 16 Advanced Protection behavior-changes.
-  Touches: `src/routes/apps/InstallPanels.tsx` + `src-tauri/src/install.rs`
-  (opt-in bypass flag), `src/routes/HostDoctor.tsx`/`DiagnosticsCenter.tsx`
-  (detect and explain "debugging blocked by Advanced Protection" and low-SDK
-  install failures).
-  Acceptance: an install checkbox passes `--bypass-low-target-sdk-block`; a
-  device under Advanced Protection or a low-SDK install failure produces a clear
-  explanatory diagnostic instead of a raw error. Unit test on the flag builder +
-  the failure-classification.
-  Complexity: M
-
 ### P3
 
 - [ ] P3 — R-089 scrcpy v3–v4 capability surface + validation-heavy flags
