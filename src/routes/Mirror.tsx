@@ -313,6 +313,11 @@ export default function MirrorRoute() {
           fullscreen: preset.fullscreen,
           always_on_top: preset.alwaysOnTop,
           no_control: preset.noControl,
+          crop: preset.crop.trim() || null,
+          display_orientation: preset.displayOrientation || null,
+          screen_off_timeout: parsePositiveInt(preset.screenOffTimeout),
+          audio_codec:
+            preset.audioCodec === "default" ? null : preset.audioCodec,
         },
         recordingGrant?.id,
       );
@@ -561,6 +566,103 @@ export default function MirrorRoute() {
                       inputMode="numeric"
                       className="font-mono"
                     />
+                  </label>
+                  <label className="grid gap-1.5">
+                    <span className="text-xs font-medium text-anvil-400">
+                      {t("mirror.crop")}
+                    </span>
+                    <FieldInput
+                      type="text"
+                      value={preset.crop}
+                      onChange={(e) =>
+                        setPreset((prev) => ({
+                          ...prev,
+                          crop: e.target.value
+                            .replace(/[^\d:]/g, "")
+                            .slice(0, 27),
+                        }))
+                      }
+                      placeholder="1224:1440:0:0"
+                      inputMode="numeric"
+                      className="font-mono"
+                    />
+                  </label>
+                  <label className="grid gap-1.5">
+                    <span className="text-xs font-medium text-anvil-400">
+                      {t("mirror.screenOffTimeout")}
+                    </span>
+                    <FieldInput
+                      type="text"
+                      value={preset.screenOffTimeout}
+                      onChange={(e) =>
+                        setPreset((prev) => ({
+                          ...prev,
+                          screenOffTimeout: e.target.value
+                            .replace(/\D/g, "")
+                            .slice(0, 6),
+                        }))
+                      }
+                      placeholder={t("mirror.screenOffTimeoutPlaceholder")}
+                      inputMode="numeric"
+                      className="font-mono"
+                    />
+                  </label>
+                  <label className="grid gap-1.5">
+                    <span className="text-xs font-medium text-anvil-400">
+                      {t("mirror.displayOrientation")}
+                    </span>
+                    <FieldSelect
+                      value={preset.displayOrientation}
+                      onChange={(event) =>
+                        setPreset((previous) => ({
+                          ...previous,
+                          displayOrientation: event.target
+                            .value as MirrorPreset["displayOrientation"],
+                        }))
+                      }
+                    >
+                      <option value="">{t("mirror.orientationDefault")}</option>
+                      <option value="0">0°</option>
+                      <option value="90">90°</option>
+                      <option value="180">180°</option>
+                      <option value="270">270°</option>
+                      <option value="flip0">
+                        {t("mirror.orientationFlip")} 0°
+                      </option>
+                      <option value="flip90">
+                        {t("mirror.orientationFlip")} 90°
+                      </option>
+                      <option value="flip180">
+                        {t("mirror.orientationFlip")} 180°
+                      </option>
+                      <option value="flip270">
+                        {t("mirror.orientationFlip")} 270°
+                      </option>
+                    </FieldSelect>
+                  </label>
+                  <label className="grid gap-1.5">
+                    <span className="text-xs font-medium text-anvil-400">
+                      {t("mirror.audioCodec")}
+                    </span>
+                    <FieldSelect
+                      value={preset.audioCodec}
+                      onChange={(event) =>
+                        setPreset((previous) => ({
+                          ...previous,
+                          audioCodec: event.target
+                            .value as MirrorPreset["audioCodec"],
+                        }))
+                      }
+                      disabled={preset.noAudio}
+                    >
+                      <option value="default">
+                        {t("mirror.audioCodecDefault")}
+                      </option>
+                      <option value="opus">Opus</option>
+                      <option value="aac">AAC</option>
+                      <option value="flac">FLAC</option>
+                      <option value="raw">{t("mirror.audioCodecRaw")}</option>
+                    </FieldSelect>
                   </label>
                   <label className="grid gap-1.5">
                     <span className="text-xs font-medium text-anvil-400">

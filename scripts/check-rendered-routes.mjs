@@ -718,6 +718,10 @@ async function runDesktopFlow(browser) {
     .getByRole("checkbox", { name: "View only (no control)" })
     .waitFor();
   await page.getByLabel("Max FPS").fill("60");
+  // R-089: validation-heavier flags are exposed and selectable.
+  await page.getByLabel("Crop (w:h:x:y)").fill("1224:1440:0:0");
+  await page.getByLabel("Display orientation").selectOption("90");
+  await page.getByLabel("Audio codec").selectOption("opus");
   await page.getByLabel("Video codec").selectOption("h265");
   await page.getByLabel("Video encoder").selectOption("c2.vendor.hevc.encoder");
   await page.getByRole("checkbox", { name: "Record session" }).check();

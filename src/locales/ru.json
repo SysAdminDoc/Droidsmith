@@ -928,6 +928,15 @@
     }
   },
   "mirror": {
+    "crop": "Обрезка (ш:в:x:y)",
+    "screenOffTimeout": "Тайм-аут отключения экрана (с)",
+    "screenOffTimeoutPlaceholder": "Выкл.",
+    "displayOrientation": "Ориентация экрана",
+    "orientationDefault": "По умолчанию",
+    "orientationFlip": "Отразить",
+    "audioCodec": "Аудиокодек",
+    "audioCodecDefault": "По умолчанию",
+    "audioCodecRaw": "Без сжатия",
     "fullscreen": "Полный экран",
     "alwaysOnTop": "Поверх всех окон",
     "noControl": "Только просмотр (без управления)",

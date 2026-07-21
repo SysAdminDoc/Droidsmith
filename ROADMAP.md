@@ -38,19 +38,19 @@ in Roadmap_Blocked.md, not here — see the Rejected Ideas table in RESEARCH.md.
 
 ### P3
 
-- [ ] P3 — R-089 scrcpy v3–v4 capability surface + validation-heavy flags
-  Why: net-new scrcpy capabilities plus the validation-heavier flags deferred
-  from R-088 (which shipped the stable toggles + `--max-fps`).
-  Evidence: scrcpy v3.0 `--new-display`, v3.2 audio-source expansion, v4.0 flex
-  display + camera torch/zoom, v4.1 VP8/VP9. Deferred from R-088: `--crop`,
-  `--display-orientation`, `--screen-off-timeout`, `--audio-codec`.
-  Touches: `src-tauri/src/scrcpy.rs` (capability probe + args + validation),
-  `src/routes/Mirror.tsx` + `src/routes/mirrorPresets.ts` (virtual-display,
-  camera, VP8/VP9 fallback, audio-source picker, crop/orientation/audio-codec
-  inputs), degrade gracefully on scrcpy <4.0.
-  Acceptance: capabilities gate on detected scrcpy version; crop/orientation/
-  timeout/audio-codec validated and persisted; args asserted in unit tests;
-  unsupported flags hidden on older scrcpy.
+- [ ] P3 — R-089 scrcpy version-gated capability surface (virtual display, camera)
+  Why: net-new scrcpy capabilities that require version probing. The
+  validation-heavy flags (crop/orientation/screen-off-timeout/audio-codec) and
+  the window/control toggles already shipped (R-088/R-089); VP8/VP9 fallback is
+  covered by the existing codec selector gated on `available_video_codecs`.
+  Evidence: scrcpy v3.0 `--new-display=<res>/<dpi>`, v3.2 audio-source
+  expansion (`--audio-source=mic-*`), v4.0 camera torch/zoom.
+  Touches: `src-tauri/src/scrcpy.rs` (probe a `supports_new_display` /
+  `supports_camera` capability from the version + `--help`, build the args),
+  `src/routes/Mirror.tsx` + `src/routes/mirrorPresets.ts` (virtual-display size/
+  dpi inputs, camera mirroring, audio-source picker), hidden on older scrcpy.
+  Acceptance: capabilities gate on detected scrcpy version; args asserted in
+  unit tests; unsupported controls hidden on older scrcpy.
   Complexity: M
 
 - [ ] P3 — R-095 Import remote debloat pack by URL with SHA-256 pin

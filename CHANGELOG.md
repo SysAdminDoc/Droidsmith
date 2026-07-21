@@ -27,12 +27,15 @@ each milestone tag.
   review their debloat recovery baseline — packages disabled/removed before the
   update may have returned. New IPC `observe_device_fingerprint`; the existing
   recovery-baseline review already renders the drift diff and confirmed re-apply.
-- **R-088 Expanded Mirror scrcpy flags.** Mirror now exposes `--max-fps`,
-  `--fullscreen`, `--always-on-top`, and `--no-control` (view-only). The flags
-  are selectable, persist in per-device mirror presets, and are asserted in the
-  scrcpy arg-construction unit tests. (The validation-heavier flags — `--crop`,
-  `--display-orientation`, `--screen-off-timeout`, `--audio-codec` — are tracked
-  under R-089 alongside the version-gated capability surface.)
+- **R-088 / R-089 Expanded Mirror scrcpy flags.** Mirror now exposes
+  `--max-fps`, `--fullscreen`, `--always-on-top`, `--no-control` (view-only)
+  (R-088), plus the validation-heavier `--crop`, `--display-orientation`,
+  `--screen-off-timeout`, and `--audio-codec` (R-089). All are selectable,
+  persist in per-device mirror presets, validated (crop/orientation/timeout/
+  codec reject malformed input, including shell metacharacters in crop), and
+  asserted in the scrcpy arg-construction unit tests. (The remaining
+  version-gated capability surface — virtual/new display, camera mirroring,
+  audio-source picker — stays under R-089.)
 - **R-090 ProcessManager force-stop.** Process rows that resolve to an app
   package now offer a confirmed **Force-stop** action (`am force-stop --user 0`)
   routed through the audited action planner/journal. Native binaries, kernel

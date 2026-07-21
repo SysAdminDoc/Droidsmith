@@ -928,6 +928,15 @@
     }
   },
   "mirror": {
+    "crop": "Crop (w:h:x:y)",
+    "screenOffTimeout": "Screen-off timeout (s)",
+    "screenOffTimeoutPlaceholder": "Off",
+    "displayOrientation": "Display orientation",
+    "orientationDefault": "Default",
+    "orientationFlip": "Flip",
+    "audioCodec": "Audio codec",
+    "audioCodecDefault": "Default",
+    "audioCodecRaw": "Raw",
     "fullscreen": "Fullscreen",
     "alwaysOnTop": "Always on top",
     "noControl": "View only (no control)",

@@ -38,6 +38,14 @@ pub struct LaunchScrcpyRequest {
     pub always_on_top: bool,
     #[serde(default)]
     pub no_control: bool,
+    #[serde(default)]
+    pub crop: Option<String>,
+    #[serde(default)]
+    pub display_orientation: Option<String>,
+    #[serde(default)]
+    pub screen_off_timeout: Option<u32>,
+    #[serde(default)]
+    pub audio_codec: Option<String>,
 }
 
 #[derive(specta::Type, Debug, Clone, Serialize, PartialEq, Eq)]
@@ -362,6 +370,21 @@ fn reap_locked(sessions: &mut HashMap<u64, ManagedScrcpySession>, keep: Option<u
     });
 }
 
+const VALID_DISPLAY_ORIENTATIONS: [&str; 8] = [
+    "0", "90", "180", "270", "flip0", "flip90", "flip180", "flip270",
+];
+
+/// scrcpy `--crop` is `width:height:x:y` (all non-negative integers). Accept
+/// only digits and exactly three colons so no shell/argument metacharacters can
+/// slip through the join into the device transport.
+fn valid_crop(value: &str) -> bool {
+    let parts: Vec<&str> = value.split(':').collect();
+    parts.len() == 4
+        && parts.iter().all(|part| {
+            !part.is_empty() && part.len() <= 6 && part.bytes().all(|b| b.is_ascii_digit())
+        })
+}
+
 pub fn build_args(
     request: &LaunchScrcpyRequest,
     record_path: Option<&Path>,
@@ -461,6 +484,46 @@ pub fn build_args(
     }
     if request.no_control {
         args.push("--no-control".to_string());
+    }
+    if let Some(crop) = request
+        .crop
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        if !valid_crop(crop) {
+            return Err(format!(
+                "scrcpy crop must be width:height:x:y (digits and colons): {crop}"
+            ));
+        }
+        args.push(format!("--crop={crop}"));
+    }
+    if let Some(orientation) = request
+        .display_orientation
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        if !VALID_DISPLAY_ORIENTATIONS.contains(&orientation) {
+            return Err(format!(
+                "unsupported scrcpy display orientation: {orientation}"
+            ));
+        }
+        args.push(format!("--display-orientation={orientation}"));
+    }
+    if let Some(timeout) = request.screen_off_timeout.filter(|value| *value > 0) {
+        args.push(format!("--screen-off-timeout={timeout}"));
+    }
+    if let Some(codec) = request
+        .audio_codec
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        if !matches!(codec, "opus" | "aac" | "flac" | "raw") {
+            return Err(format!("unsupported scrcpy audio codec: {codec}"));
+        }
+        args.push(format!("--audio-codec={codec}"));
     }
     if request.flex_display {
         if !version_gte(&capabilities.version, 4, 0) {
@@ -701,6 +764,10 @@ mod tests {
             fullscreen: false,
             always_on_top: false,
             no_control: false,
+            crop: None,
+            display_orientation: None,
+            screen_off_timeout: None,
+            audio_codec: None,
         }
     }
 
@@ -838,6 +905,45 @@ mod tests {
         assert!(!args.contains(&"--fullscreen".to_string()));
         assert!(!args.contains(&"--always-on-top".to_string()));
         assert!(!args.contains(&"--no-control".to_string()));
+    }
+
+    #[test]
+    fn emits_crop_orientation_timeout_and_audio_codec() {
+        let mut req = request();
+        req.crop = Some("1224:1440:0:0".to_string());
+        req.display_orientation = Some("90".to_string());
+        req.screen_off_timeout = Some(300);
+        req.audio_codec = Some("opus".to_string());
+        let args = build_args(&req, None, &capabilities()).unwrap();
+        assert!(args.contains(&"--crop=1224:1440:0:0".to_string()));
+        assert!(args.contains(&"--display-orientation=90".to_string()));
+        assert!(args.contains(&"--screen-off-timeout=300".to_string()));
+        assert!(args.contains(&"--audio-codec=opus".to_string()));
+    }
+
+    #[test]
+    fn rejects_malformed_crop_orientation_and_audio_codec() {
+        let mut bad_crop = request();
+        bad_crop.crop = Some("1224x1440".to_string());
+        assert!(build_args(&bad_crop, None, &capabilities())
+            .unwrap_err()
+            .contains("crop"));
+
+        let mut bad_crop_meta = request();
+        bad_crop_meta.crop = Some("1224:1440:0:$(rm)".to_string());
+        assert!(build_args(&bad_crop_meta, None, &capabilities()).is_err());
+
+        let mut bad_orientation = request();
+        bad_orientation.display_orientation = Some("45".to_string());
+        assert!(build_args(&bad_orientation, None, &capabilities())
+            .unwrap_err()
+            .contains("orientation"));
+
+        let mut bad_codec = request();
+        bad_codec.audio_codec = Some("mp3".to_string());
+        assert!(build_args(&bad_codec, None, &capabilities())
+            .unwrap_err()
+            .contains("audio codec"));
     }
 
     #[test]

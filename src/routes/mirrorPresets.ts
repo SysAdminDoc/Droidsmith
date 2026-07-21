@@ -1,5 +1,16 @@
 export type KeyboardMode = "default" | "sdk" | "uhid" | "aoa" | "disabled";
 export type VideoCodec = "h264" | "h265" | "av1" | "vp8" | "vp9";
+export type AudioCodec = "default" | "opus" | "aac" | "flac" | "raw";
+export type DisplayOrientation =
+  | ""
+  | "0"
+  | "90"
+  | "180"
+  | "270"
+  | "flip0"
+  | "flip90"
+  | "flip180"
+  | "flip270";
 
 export type MirrorPreset = {
   maxSize: string;
@@ -18,6 +29,10 @@ export type MirrorPreset = {
   fullscreen: boolean;
   alwaysOnTop: boolean;
   noControl: boolean;
+  crop: string;
+  displayOrientation: string;
+  screenOffTimeout: string;
+  audioCodec: AudioCodec;
 };
 
 export const DEFAULT_MIRROR_PRESET: MirrorPreset = {
@@ -37,6 +52,10 @@ export const DEFAULT_MIRROR_PRESET: MirrorPreset = {
   fullscreen: false,
   alwaysOnTop: false,
   noControl: false,
+  crop: "",
+  displayOrientation: "",
+  screenOffTimeout: "",
+  audioCodec: "default",
 };
 
 export const LEGACY_MIRROR_PRESET_PREFIX = "droidsmith.mirror.preset.";
@@ -106,7 +125,47 @@ export function normalizePreset(value: Partial<MirrorPreset>): MirrorPreset {
       typeof value.noControl === "boolean"
         ? value.noControl
         : DEFAULT_MIRROR_PRESET.noControl,
+    crop:
+      typeof value.crop === "string" &&
+      /^(\d{1,6}:\d{1,6}:\d{1,6}:\d{1,6})?$/u.test(value.crop)
+        ? value.crop
+        : DEFAULT_MIRROR_PRESET.crop,
+    displayOrientation: isDisplayOrientation(value.displayOrientation)
+      ? value.displayOrientation
+      : DEFAULT_MIRROR_PRESET.displayOrientation,
+    screenOffTimeout:
+      typeof value.screenOffTimeout === "string" &&
+      /^\d{0,6}$/u.test(value.screenOffTimeout)
+        ? value.screenOffTimeout
+        : DEFAULT_MIRROR_PRESET.screenOffTimeout,
+    audioCodec: isAudioCodec(value.audioCodec)
+      ? value.audioCodec
+      : DEFAULT_MIRROR_PRESET.audioCodec,
   };
+}
+
+function isAudioCodec(value: unknown): value is AudioCodec {
+  return (
+    value === "default" ||
+    value === "opus" ||
+    value === "aac" ||
+    value === "flac" ||
+    value === "raw"
+  );
+}
+
+function isDisplayOrientation(value: unknown): value is DisplayOrientation {
+  return (
+    value === "" ||
+    value === "0" ||
+    value === "90" ||
+    value === "180" ||
+    value === "270" ||
+    value === "flip0" ||
+    value === "flip90" ||
+    value === "flip180" ||
+    value === "flip270"
+  );
 }
 
 function isVideoCodec(value: unknown): value is VideoCodec {

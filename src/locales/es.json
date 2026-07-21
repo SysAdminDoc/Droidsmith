@@ -1002,6 +1002,15 @@
     "warning": "Advertencia"
   },
   "mirror": {
+    "crop": "Recortar (an:al:x:y)",
+    "screenOffTimeout": "Tiempo de apagado de pantalla (s)",
+    "screenOffTimeoutPlaceholder": "Desactivado",
+    "displayOrientation": "Orientación de pantalla",
+    "orientationDefault": "Predeterminado",
+    "orientationFlip": "Voltear",
+    "audioCodec": "Códec de audio",
+    "audioCodecDefault": "Predeterminado",
+    "audioCodecRaw": "Sin comprimir",
     "fullscreen": "Pantalla completa",
     "alwaysOnTop": "Siempre visible",
     "noControl": "Solo ver (sin control)",

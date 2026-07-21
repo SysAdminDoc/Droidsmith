@@ -928,6 +928,15 @@
     }
   },
   "mirror": {
+    "crop": "裁剪 (宽:高:x:y)",
+    "screenOffTimeout": "熄屏超时 (秒)",
+    "screenOffTimeoutPlaceholder": "关闭",
+    "displayOrientation": "显示方向",
+    "orientationDefault": "默认",
+    "orientationFlip": "翻转",
+    "audioCodec": "音频编解码器",
+    "audioCodecDefault": "默认",
+    "audioCodecRaw": "原始",
     "fullscreen": "全屏",
     "alwaysOnTop": "始终置顶",
     "noControl": "仅查看（无控制）",

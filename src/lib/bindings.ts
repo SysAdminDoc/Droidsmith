@@ -1085,6 +1085,7 @@ export type ApplyActionResult = {
    */
   stdout: string;
 };
+export type AudioCodec = "default" | "opus" | "aac" | "flac" | "raw";
 export type BackupCapability =
   | "apk_export"
   | "legacy_data_eligible"
@@ -1614,6 +1615,10 @@ export type LaunchScrcpyRequest = {
   fullscreen?: boolean;
   always_on_top?: boolean;
   no_control?: boolean;
+  crop?: string | null;
+  display_orientation?: string | null;
+  screen_off_timeout?: number | null;
+  audio_codec?: string | null;
 };
 /**
  * One node of a `uiautomator dump` UI hierarchy, flattened with its nesting
@@ -1723,6 +1728,10 @@ export type MirrorPreset = {
   fullscreen?: boolean;
   alwaysOnTop?: boolean;
   noControl?: boolean;
+  crop?: string;
+  displayOrientation?: string;
+  screenOffTimeout?: string;
+  audioCodec?: AudioCodec;
 };
 export type Mitigation =
   /**

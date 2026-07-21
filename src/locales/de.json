@@ -928,6 +928,15 @@
     }
   },
   "mirror": {
+    "crop": "Zuschneiden (b:h:x:y)",
+    "screenOffTimeout": "Bildschirm-aus-Timeout (s)",
+    "screenOffTimeoutPlaceholder": "Aus",
+    "displayOrientation": "Anzeigeausrichtung",
+    "orientationDefault": "Standard",
+    "orientationFlip": "Spiegeln",
+    "audioCodec": "Audio-Codec",
+    "audioCodecDefault": "Standard",
+    "audioCodecRaw": "Roh",
     "fullscreen": "Vollbild",
     "alwaysOnTop": "Immer im Vordergrund",
     "noControl": "Nur ansehen (keine Steuerung)",

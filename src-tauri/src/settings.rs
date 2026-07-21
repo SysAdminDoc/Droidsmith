@@ -87,6 +87,25 @@ pub struct MirrorPreset {
     pub always_on_top: bool,
     #[serde(default)]
     pub no_control: bool,
+    #[serde(default)]
+    pub crop: String,
+    #[serde(default)]
+    pub display_orientation: String,
+    #[serde(default)]
+    pub screen_off_timeout: String,
+    #[serde(default)]
+    pub audio_codec: AudioCodec,
+}
+
+#[derive(specta::Type, Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum AudioCodec {
+    #[default]
+    Default,
+    Opus,
+    Aac,
+    Flac,
+    Raw,
 }
 
 impl Default for MirrorPreset {
@@ -108,6 +127,10 @@ impl Default for MirrorPreset {
             fullscreen: false,
             always_on_top: false,
             no_control: false,
+            crop: String::new(),
+            display_orientation: String::new(),
+            screen_off_timeout: String::new(),
+            audio_codec: AudioCodec::Default,
         }
     }
 }
@@ -1082,7 +1105,37 @@ fn validate_preset(preset: &MirrorPreset) -> Result<(), SettingsError> {
             "mirror maxFps must be empty or 1 to 3 ASCII digits".to_string(),
         ));
     }
+    if !preset.screen_off_timeout.is_empty()
+        && !valid_numeric_setting(&preset.screen_off_timeout, 6)
+    {
+        return Err(SettingsError::Invalid(
+            "mirror screenOffTimeout must be empty or 1 to 6 ASCII digits".to_string(),
+        ));
+    }
+    if !preset.crop.is_empty() && !valid_crop_setting(&preset.crop) {
+        return Err(SettingsError::Invalid(
+            "mirror crop must be empty or width:height:x:y digits".to_string(),
+        ));
+    }
+    if !preset.display_orientation.is_empty()
+        && !matches!(
+            preset.display_orientation.as_str(),
+            "0" | "90" | "180" | "270" | "flip0" | "flip90" | "flip180" | "flip270"
+        )
+    {
+        return Err(SettingsError::Invalid(
+            "mirror displayOrientation is invalid".to_string(),
+        ));
+    }
     Ok(())
+}
+
+fn valid_crop_setting(value: &str) -> bool {
+    let parts: Vec<&str> = value.split(':').collect();
+    parts.len() == 4
+        && parts.iter().all(|part| {
+            !part.is_empty() && part.len() <= 6 && part.bytes().all(|byte| byte.is_ascii_digit())
+        })
 }
 
 fn valid_numeric_setting(value: &str, max_len: usize) -> bool {
@@ -1108,6 +1161,10 @@ fn normalize_legacy_preset(value: LegacyMirrorPreset) -> MirrorPreset {
         fullscreen: defaults.fullscreen,
         always_on_top: defaults.always_on_top,
         no_control: defaults.no_control,
+        crop: defaults.crop,
+        display_orientation: defaults.display_orientation,
+        screen_off_timeout: defaults.screen_off_timeout,
+        audio_codec: defaults.audio_codec,
     }
 }
 
