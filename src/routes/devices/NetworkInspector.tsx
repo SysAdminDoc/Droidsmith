@@ -17,6 +17,9 @@ export function NetworkInspector({ target }: { target: DeviceTarget }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [copyStatus, setCopyStatus] = useState<"idle" | "copied" | "failed">(
+    "idle",
+  );
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -41,6 +44,30 @@ export function NetworkInspector({ target }: { target: DeviceTarget }) {
       : true,
   );
 
+  const copyTable = useCallback(async () => {
+    const header = ["protocol", "state", "local", "remote", "process"].join(
+      "\t",
+    );
+    const body = filtered
+      .map((c) =>
+        [
+          c.protocol,
+          c.state,
+          c.local_addr,
+          c.remote_addr,
+          c.process ?? "",
+        ].join("\t"),
+      )
+      .join("\n");
+    try {
+      await navigator.clipboard.writeText(`${header}\n${body}\n`);
+      setCopyStatus("copied");
+    } catch {
+      setCopyStatus("failed");
+    }
+    window.setTimeout(() => setCopyStatus("idle"), 2000);
+  }, [filtered]);
+
   return (
     <Card className="overflow-hidden p-0">
       <div className="flex flex-col gap-3 border-b border-white/10 p-4 sm:flex-row sm:items-center sm:justify-between">
@@ -61,6 +88,21 @@ export function NetworkInspector({ target }: { target: DeviceTarget }) {
             aria-label={t("devices.controls.filterConnections")}
             className="h-8 w-40 px-2 font-mono text-xs"
           />
+          {connections.length > 0 && (
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              onClick={() => void copyTable()}
+              disabled={filtered.length === 0}
+            >
+              {copyStatus === "copied"
+                ? t("devices.controls.copied")
+                : copyStatus === "failed"
+                  ? t("devices.controls.copyFailed")
+                  : t("devices.controls.copyTable")}
+            </Button>
+          )}
           <Button
             type="button"
             size="sm"

@@ -494,6 +494,9 @@
     "buildFingerprint": "Huella de compilación",
     "connected": "Dispositivos conectados",
     "controls": {
+      "copyTable": "Copiar",
+      "copied": "Copiado",
+      "copyFailed": "Error al copiar",
       "colActions": "Acciones",
       "forceStop": "Forzar detención",
       "forceStopping": "Deteniendo…",
@@ -665,8 +668,8 @@
     "launchDesktopBodySuffix": "cuando quieras que Droidsmith se comunique con ADB.",
     "launchDesktopTitle": "Inicia el shell de escritorio para escanear hardware",
     "layout": {
-        "noMatches": "Sin nodos coincidentes",
-        "noMatchesBody": "Ningún nodo capturado coincide con el filtro actual. Borra o ajusta la búsqueda.",
+      "noMatches": "Sin nodos coincidentes",
+      "noMatchesBody": "Ningún nodo capturado coincide con el filtro actual. Borra o ajusta la búsqueda.",
       "body": "Captura la jerarquía de interfaz actual en pantalla, solo lectura, con",
       "capture": "Capturar jerarquía",
       "captureFailed": "No se pudo capturar la jerarquía de la interfaz: {{message}}",

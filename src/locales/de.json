@@ -342,6 +342,9 @@
       "confirmRecovery": "Bestätigen und ausführen"
     },
     "controls": {
+      "copyTable": "Kopieren",
+      "copied": "Kopiert",
+      "copyFailed": "Kopieren fehlgeschlagen",
       "colActions": "Aktionen",
       "forceStop": "Beenden erzwingen",
       "forceStopping": "Wird beendet…",
@@ -452,8 +455,8 @@
       "showingConnections": "Zeige 100 von {{count}} Verbindungen"
     },
     "layout": {
-        "noMatches": "Keine passenden Knoten",
-        "noMatchesBody": "Keine erfassten Knoten entsprechen dem aktuellen Filter. Lösche oder ändere die Suche.",
+      "noMatches": "Keine passenden Knoten",
+      "noMatchesBody": "Keine erfassten Knoten entsprechen dem aktuellen Filter. Lösche oder ändere die Suche.",
       "title": "Layout-Inspektor",
       "body": "Die aktuelle Bildschirm-UI-Hierarchie schreibgeschützt erfassen mit",
       "capture": "Hierarchie erfassen",

@@ -63,15 +63,6 @@ in Roadmap_Blocked.md, not here — see the Rejected Ideas table in RESEARCH.md.
   are covered; `npm test` green.
   Complexity: S
 
-- [ ] P3 — R-091 NetworkInspector export/copy
-  Why: Logcat and LayoutInspector offer export; the socket table does not.
-  Evidence: `src/routes/devices/NetworkInspector.tsx` has no export/copy action.
-  Touches: `src/routes/devices/NetworkInspector.tsx` (copy-to-clipboard /
-  save-as-text of the current socket rows).
-  Acceptance: the current (filtered) socket table can be copied or saved; smoke
-  assertion on the action.
-  Complexity: S
-
 - [ ] P3 — R-094 gnirehtet discovery hint when not on PATH
   Why: `InternetSharing` returns `null` when gnirehtet is missing, so the feature
   is silently invisible with no way to learn it exists.
