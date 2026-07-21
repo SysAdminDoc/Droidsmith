@@ -1125,7 +1125,10 @@
         "label": "Mantener activa al cargar",
         "help": "Mantén la pantalla encendida mientras el dispositivo se carga."
       }
-    }
+    },
+    "invalidChoice": "Valor no permitido",
+    "notANumber": "Introduce un número",
+    "outOfRange": "Introduce un valor entre {{min}} y {{max}}"
   },
   "onboarding": {
     "done": "Listo",

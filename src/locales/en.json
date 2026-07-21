@@ -187,7 +187,10 @@
         "label": "Stay awake while charging",
         "help": "Keep the screen on while the device is charging."
       }
-    }
+    },
+    "invalidChoice": "Not an allowed value",
+    "notANumber": "Enter a number",
+    "outOfRange": "Enter a value between {{min}} and {{max}}"
   },
   "devices": {
     "title": "Devices",

@@ -63,6 +63,22 @@ const PROFILE_ACTIONS: ReadonlyArray<{
   { value: "force_stop", labelKey: "profiles.actions.forceStop" },
 ];
 
+const PROFILE_ACTION_LABEL_KEYS: Partial<Record<ActionKind, string>> =
+  Object.fromEntries(
+    PROFILE_ACTIONS.map((action) => [action.value, action.labelKey]),
+  );
+
+/** Human-readable label for a profile action kind — the same translated label
+ *  the action selector shows, so the ordered list and dry-run diff don't fall
+ *  back to the raw `uninstall_for_user` enum token. */
+function actionKindLabel(
+  kind: ActionKind,
+  t: ReturnType<typeof useTranslation>["t"],
+): string {
+  const labelKey = PROFILE_ACTION_LABEL_KEYS[kind];
+  return labelKey ? t(labelKey) : kind;
+}
+
 type InventoryState =
   | { kind: "idle" }
   | { kind: "loading" }
@@ -734,7 +750,7 @@ function AuthorWorkspace(props: {
                     {index + 1}
                   </span>
                   <div className="min-w-0 flex-1">
-                    <Badge tone="info">{action.kind}</Badge>
+                    <Badge tone="info">{actionKindLabel(action.kind, t)}</Badge>
                     <code className="mt-2 block break-all font-mono text-xs text-anvil-100">
                       {action.package}
                     </code>
@@ -947,7 +963,9 @@ function ProfileDiff({
                       </code>
                     </TableCell>
                     <TableCell>
-                      <Badge tone="info">{row.action.kind}</Badge>
+                      <Badge tone="info">
+                        {actionKindLabel(row.action.kind, t)}
+                      </Badge>
                     </TableCell>
                     <TableCell>
                       <span className="whitespace-nowrap">
@@ -1099,8 +1117,11 @@ function fileSafeName(value: string): string {
 
 function previewTone(
   status: ProfilePreviewStatus,
-): "neutral" | "success" | "warning" {
+): "info" | "success" | "warning" {
   if (status === "already_matches") return "success";
   if (status === "missing") return "warning";
-  return "neutral";
+  // "ready" rows are the ones that will actually change on apply — give them an
+  // active tone so they read as more prominent than the green "already matches"
+  // no-ops, not the most muted row in the table.
+  return "info";
 }

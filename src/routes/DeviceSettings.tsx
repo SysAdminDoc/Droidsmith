@@ -329,7 +329,7 @@ function SettingCard({
     trimmed || "…"
   }`;
 
-  const validationError = validateDraft(control, trimmed);
+  const validationError = validateDraft(control, trimmed, t);
 
   return (
     <Card>
@@ -412,17 +412,18 @@ function SettingCard({
 function validateDraft(
   control: DeviceSetting["control"],
   value: string,
+  t: ReturnType<typeof useTranslation>["t"],
 ): string | null {
   if (value.length === 0) return null;
   if (control.kind === "choice") {
     return control.options.some((option) => option.value === value)
       ? null
-      : "invalid";
+      : t("tuning.invalidChoice");
   }
   const parsed = Number(value);
-  if (!Number.isFinite(parsed)) return "nan";
+  if (!Number.isFinite(parsed)) return t("tuning.notANumber");
   if (parsed < control.min || parsed > control.max) {
-    return `${control.min}–${control.max}`;
+    return t("tuning.outOfRange", { min: control.min, max: control.max });
   }
   return null;
 }

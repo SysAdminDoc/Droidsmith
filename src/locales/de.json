@@ -187,7 +187,10 @@
         "label": "Beim Laden aktiv bleiben",
         "help": "Bildschirm eingeschaltet lassen, während das Gerät lädt."
       }
-    }
+    },
+    "invalidChoice": "Kein zulässiger Wert",
+    "notANumber": "Zahl eingeben",
+    "outOfRange": "Wert zwischen {{min}} und {{max}} eingeben"
   },
   "devices": {
     "title": "Geräte",
