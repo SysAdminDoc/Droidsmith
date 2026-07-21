@@ -37,19 +37,6 @@ IDs continue from R-096 / IMP-73.
 
 ### P3
 
-- [ ] P3 — R-101 — Surface `adb server-status` mDNS state + negotiated USB link speed
-  Why: platform-tools 36.0.0+ `adb server-status` reports mDNS status and USB
-  SuperSpeed/SuperSpeed+ negotiated link speed — richer host-doctor/diagnostics
-  than "device connected", and useful for diagnosing flaky-USB reports.
-  Evidence: developer.android.com/tools/releases/platform-tools (v36.0.0
-  server-status, v37.0.1 mDNS backend change).
-  Touches: `src-tauri/src/host_diagnostics.rs` (parse `adb server-status`),
-  `src/routes/HostDoctor.tsx` / `DiagnosticsCenter.tsx`, bindings, locales.
-  Acceptance: host-doctor shows mDNS enabled/disabled and the negotiated USB
-  link speed when the installed adb supports `server-status`, with a graceful
-  fallback on older adb; parser covered by a Rust unit test over sample output.
-  Complexity: M
-
 - [ ] P3 — R-102 — Crash-artifact viewer (ANR / tombstone / dropbox)
   Why: No scrcpy front-end surfaces crash artifacts; complements the existing
   Diagnostics/bugreport flow with a read-only browsable list a developer expects.
