@@ -14,6 +14,15 @@ completion.
 Working batches live here. Sections collapse into a versioned release on
 each milestone tag.
 
+### Refactored
+
+- **IMP-72 Devices.tsx god-file split.** Extracted the inline device panels and
+  helpers from `Devices.tsx` (1,633 → 370 LOC) into focused `src/routes/devices/`
+  modules — `icons`, `DeviceHeaderActions`, `AdbHealthPanel`, `RecoveryDialog`,
+  `DeviceTable` (toolbar/table/skeleton/state helpers), `DeviceDetail`
+  (+ health cards), and `AuthorizePrompt` — matching the IMP-67 sub-panel split.
+  No behavior change (typecheck/lint/tests/ui:smoke green).
+
 ## [0.9.2] - 2026-07-20
 
 Roadmap drain: wireless reconnect history, post-OTA drift detection, quirk

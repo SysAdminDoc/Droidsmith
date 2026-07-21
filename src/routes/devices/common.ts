@@ -1,8 +1,30 @@
 // Shared local types for the Devices route and its extracted sub-panels
-// (IMP-67). Kept separate so the god-file split does not duplicate them.
+// (IMP-67, IMP-72). Kept separate so the god-file split does not duplicate them.
+
+import {
+  summarizeState,
+  type AdbRecoveryResult,
+  type DeviceInfo,
+  type DeviceTarget,
+  type SerializedDeviceState,
+} from "../../lib/tauri";
 
 export type StatusTone = "neutral" | "success" | "danger";
 export type StatusMessage = { text: string; tone: StatusTone } | null;
+
+/** Selected-device detail lifecycle (device info query). */
+export type DetailState =
+  | { kind: "idle" }
+  | { kind: "loading"; target: DeviceTarget }
+  | { kind: "ok"; info: DeviceInfo; target: DeviceTarget }
+  | { kind: "error"; target: DeviceTarget; message: string };
+
+/** ADB server recovery lifecycle for the recovery dialog. */
+export type RecoveryState =
+  | { kind: "idle" }
+  | { kind: "running"; status: string }
+  | { kind: "done"; result: AdbRecoveryResult }
+  | { kind: "error"; message: string };
 
 export function statusToneClass(tone: StatusTone): string {
   if (tone === "success") return "text-emerald-200";
@@ -14,6 +36,39 @@ export function formatKb(kb: number): string {
   if (kb >= 1048576) return `${(kb / 1048576).toFixed(1)} GB`;
   if (kb >= 1024) return `${(kb / 1024).toFixed(1)} MB`;
   return `${kb} KB`;
+}
+
+/** Title-cased device state label for the connected-device table. */
+export function formatStateLabel(state: SerializedDeviceState): string {
+  const label = summarizeState(state);
+  return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
+/** Badge tone for a device state (used by the connected-device table). */
+export function deviceStateTone(
+  state: SerializedDeviceState,
+): "neutral" | "info" | "success" | "warning" | "danger" {
+  if (typeof state !== "string") {
+    return "neutral";
+  }
+
+  if (state === "device") {
+    return "success";
+  }
+
+  if (state === "bootloader" || state === "recovery" || state === "sideload") {
+    return "info";
+  }
+
+  if (state === "unauthorized" || state === "offline") {
+    return "warning";
+  }
+
+  if (state === "no_permissions") {
+    return "danger";
+  }
+
+  return "neutral";
 }
 
 export function formatBytes(bytes: number | null, unknown: string): string {

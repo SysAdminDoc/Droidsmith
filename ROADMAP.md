@@ -66,13 +66,3 @@ in Roadmap_Blocked.md, not here — see the Rejected Ideas table in RESEARCH.md.
   test on verify + validate.
   Complexity: M
 
-- [ ] P3 — IMP-72 Extract Devices.tsx inline panels
-  Why: Devices.tsx (1,633 LOC) still hosts several independent panels inline,
-  unlike the completed IMP-67 device sub-panel split.
-  Evidence: `AdbHealthPanel` (545–676), `RecoveryDialog` (687–840), `DeviceTable`
-  (891–1023), `DeviceDetail` (1053–1221), `DeviceHealthCards` (1221–1346).
-  Touches: new files under `src/routes/devices/`, `src/routes/Devices.tsx`.
-  Acceptance: panels move to `src/routes/devices/` with no behavior change;
-  typecheck/lint/tests/ui:smoke green.
-  Complexity: M
-
