@@ -342,6 +342,12 @@
       "confirmRecovery": "Bestätigen und ausführen"
     },
     "controls": {
+      "colActions": "Aktionen",
+      "forceStop": "Beenden erzwingen",
+      "forceStopping": "Wird beendet…",
+      "forceStopFailed": "{{package}} konnte nicht zwangsweise beendet werden.",
+      "forceStopConfirmTitle": "App-Beenden erzwingen?",
+      "forceStopConfirmBody": "{{package}} zwangsweise beenden? Nicht gespeicherte Daten können verloren gehen; die App startet beim nächsten Öffnen neu.",
       "virtualRemote": "Virtuelle Fernbedienung",
       "lastKey": "Zuletzt: {{key}}",
       "keyFailed": "{{label}} fehlgeschlagen",

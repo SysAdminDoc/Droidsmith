@@ -64,18 +64,6 @@ in Roadmap_Blocked.md, not here — see the Rejected Ideas table in RESEARCH.md.
   control input.
   Complexity: M
 
-- [ ] P2 — R-090 ProcessManager force-stop action
-  Why: a panel named "Process Manager" is read-only; users expect to stop a
-  running app process. Escrcpy/AppControl-class tools offer it.
-  Evidence: `src/routes/devices/ProcessManager.tsx` has no kill/force-stop;
-  no `am force-stop` IPC exists in `commands.rs`.
-  Touches: `src-tauri/src/commands.rs` (a confirmed, journaled `force-stop <pkg>`
-  command via `am force-stop`), `src/routes/devices/ProcessManager.tsx` (row
-  action behind a confirm), fake-tool-contract coverage.
-  Acceptance: selecting a process offers force-stop behind an explicit confirm,
-  routes through the journal, and is covered by the fake-tool contract test.
-  Complexity: M
-
 - [ ] P2 — R-092 Low-target-SDK install option + Advanced-Protection detection
   Why: on Android 14–16 old-targetSDK APK installs fail and Advanced Protection
   disables debugging; both currently fail opaquely.

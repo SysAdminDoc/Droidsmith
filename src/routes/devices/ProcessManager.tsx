@@ -3,15 +3,18 @@ import { useTranslation } from "react-i18next";
 
 import {
   errorMessage,
+  callApplyAction,
   callListProcesses,
+  callPlanAction,
   type DeviceTarget,
   type ProcessInfo,
 } from "../../lib/tauri";
 import { Badge, Button, Card, EmptyState, FieldInput } from "../common";
-import { formatKb } from "./common";
+import { appProcessPackage, formatKb } from "./common";
 
 /** Read-only process list (`ps`) with search and RSS/name sort (IMP-67:
- *  extracted verbatim from the former Devices.tsx god-file). */
+ *  extracted verbatim from the former Devices.tsx god-file). R-090 adds a
+ *  confirmed force-stop on rows whose name resolves to an app package. */
 export function ProcessManager({ target }: { target: DeviceTarget }) {
   const { t } = useTranslation();
   const [processes, setProcesses] = useState<ProcessInfo[]>([]);
@@ -19,6 +22,9 @@ export function ProcessManager({ target }: { target: DeviceTarget }) {
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState<"rss" | "name">("rss");
+  const [confirmPackage, setConfirmPackage] = useState<string | null>(null);
+  const [stopping, setStopping] = useState<string | null>(null);
+  const [stopError, setStopError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -33,6 +39,31 @@ export function ProcessManager({ target }: { target: DeviceTarget }) {
       setLoading(false);
     }
   }, [target]);
+
+  const forceStop = useCallback(
+    async (pkg: string) => {
+      setConfirmPackage(null);
+      setStopping(pkg);
+      setStopError(null);
+      try {
+        const plan = await callPlanAction({
+          serial: target.serial,
+          target,
+          package: pkg,
+          kind: "force_stop",
+          user_id: 0,
+        });
+        await callApplyAction(plan);
+        await refresh();
+      } catch (e) {
+        setStopError(t("devices.controls.forceStopFailed", { package: pkg }));
+        void e;
+      } finally {
+        setStopping(null);
+      }
+    },
+    [refresh, t, target],
+  );
 
   const filtered = processes
     .filter((p) =>
@@ -80,6 +111,42 @@ export function ProcessManager({ target }: { target: DeviceTarget }) {
       {error && (
         <div className="border-b border-red-500/20 bg-red-500/10 px-4 py-3 text-xs text-red-200">
           {t("devices.controls.processReadFailed", { message: error })}
+        </div>
+      )}
+      {stopError && (
+        <div className="border-b border-red-500/20 bg-red-500/10 px-4 py-3 text-xs text-red-200">
+          {stopError}
+        </div>
+      )}
+      {confirmPackage && (
+        <div
+          role="alertdialog"
+          aria-label={t("devices.controls.forceStopConfirmTitle")}
+          className="flex flex-col gap-3 border-b border-amber-300/25 bg-amber-300/[0.06] px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+        >
+          <p className="text-xs text-anvil-100">
+            {t("devices.controls.forceStopConfirmBody", {
+              package: confirmPackage,
+            })}
+          </p>
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant="danger"
+              onClick={() => void forceStop(confirmPackage)}
+            >
+              {t("devices.controls.forceStop")}
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              onClick={() => setConfirmPackage(null)}
+            >
+              {t("common.cancel")}
+            </Button>
+          </div>
         </div>
       )}
       {processes.length === 0 && !loading && !error && (
@@ -131,6 +198,9 @@ export function ProcessManager({ target }: { target: DeviceTarget }) {
                     )}
                   </button>
                 </th>
+                <th className="px-3 py-2 text-end font-semibold text-anvil-400">
+                  {t("devices.controls.colActions")}
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-white/5">
@@ -152,6 +222,23 @@ export function ProcessManager({ target }: { target: DeviceTarget }) {
                       <Badge tone="warning" className="ms-2">
                         {t("devices.controls.parseIssue")}
                       </Badge>
+                    )}
+                  </td>
+                  <td className="px-3 py-1.5 text-end">
+                    {appProcessPackage(p.name) && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        disabled={stopping !== null}
+                        onClick={() =>
+                          setConfirmPackage(appProcessPackage(p.name))
+                        }
+                      >
+                        {stopping === appProcessPackage(p.name)
+                          ? t("devices.controls.forceStopping")
+                          : t("devices.controls.forceStop")}
+                      </Button>
                     )}
                   </td>
                 </tr>

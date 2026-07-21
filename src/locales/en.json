@@ -342,6 +342,12 @@
       "confirmRecovery": "Confirm and run"
     },
     "controls": {
+      "colActions": "Actions",
+      "forceStop": "Force-stop",
+      "forceStopping": "Stopping…",
+      "forceStopFailed": "Could not force-stop {{package}}.",
+      "forceStopConfirmTitle": "Force-stop app?",
+      "forceStopConfirmBody": "Force-stop {{package}}? Unsaved work in the app may be lost; it restarts on next launch.",
       "virtualRemote": "Virtual remote",
       "lastKey": "Last: {{key}}",
       "keyFailed": "{{label}} failed",

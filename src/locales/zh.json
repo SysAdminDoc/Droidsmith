@@ -342,6 +342,12 @@
       "confirmRecovery": "确认并运行"
     },
     "controls": {
+      "colActions": "操作",
+      "forceStop": "强制停止",
+      "forceStopping": "正在停止…",
+      "forceStopFailed": "无法强制停止 {{package}}。",
+      "forceStopConfirmTitle": "强制停止应用？",
+      "forceStopConfirmBody": "强制停止 {{package}}？未保存的内容可能会丢失；下次打开时将重新启动。",
       "virtualRemote": "虚拟遥控",
       "lastKey": "上次：{{key}}",
       "keyFailed": "{{label}} 失败",

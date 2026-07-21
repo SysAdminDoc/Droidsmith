@@ -16,6 +16,10 @@ each milestone tag.
 
 ### Added
 
+- **R-090 ProcessManager force-stop.** Process rows that resolve to an app
+  package now offer a confirmed **Force-stop** action (`am force-stop --user 0`)
+  routed through the audited action planner/journal. Native binaries, kernel
+  threads, and daemons are correctly excluded.
 - **IMP-68 Vendor-quirk failure hints.** The previously orphaned
   `explain_failure` IPC is now wired into the Debloat results: a failed row
   offers a "Why did this fail?" action that matches the raw error and the

@@ -342,6 +342,12 @@
       "confirmRecovery": "Подтвердить и запустить"
     },
     "controls": {
+      "colActions": "Действия",
+      "forceStop": "Остановить",
+      "forceStopping": "Остановка…",
+      "forceStopFailed": "Не удалось принудительно остановить {{package}}.",
+      "forceStopConfirmTitle": "Принудительно остановить приложение?",
+      "forceStopConfirmBody": "Принудительно остановить {{package}}? Несохранённые данные могут быть потеряны; приложение перезапустится при следующем открытии.",
       "virtualRemote": "Виртуальный пульт",
       "lastKey": "Последняя: {{key}}",
       "keyFailed": "{{label}} не удалась",

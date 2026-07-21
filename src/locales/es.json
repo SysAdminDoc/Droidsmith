@@ -492,6 +492,12 @@
     "buildFingerprint": "Huella de compilación",
     "connected": "Dispositivos conectados",
     "controls": {
+      "colActions": "Acciones",
+      "forceStop": "Forzar detención",
+      "forceStopping": "Deteniendo…",
+      "forceStopFailed": "No se pudo forzar la detención de {{package}}.",
+      "forceStopConfirmTitle": "¿Forzar la detención de la app?",
+      "forceStopConfirmBody": "¿Forzar la detención de {{package}}? Se puede perder el trabajo no guardado; se reiniciará al abrirla de nuevo.",
       "applyingFileOperation": "Aplicando cambio de archivo revisado…",
       "browse": "Explorar",
       "capture": "Capturar",
