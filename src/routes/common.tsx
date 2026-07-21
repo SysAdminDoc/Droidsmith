@@ -407,6 +407,25 @@ export function EmptyState({
   );
 }
 
+/**
+ * Data-table accessibility baseline (IMP-73).
+ *
+ * The intended pattern is a **native semantic `<table>`** built from
+ * `TableHeaderCell`/`TableCell`. Native table semantics give assistive tech
+ * correct row/column navigation for free, so they are the default for every
+ * fully-rendered data table (Network/Process inspectors, Debloat, Devices,
+ * Fastboot, Profiles, Wireless, Journal, RecoveryBaseline, …).
+ *
+ * The ARIA **grid** pattern (`role="grid"`/`row"`/`gridcell"` +
+ * `aria-rowcount`/`aria-rowindex`, plus `role="columnheader"` here) is used in
+ * exactly one place — the **virtualized** `apps/PackageTable` — because its
+ * lazy IntersectionObserver rendering keeps only visible rows in the DOM, so
+ * `aria-rowcount` is required to announce the true total. Do NOT add
+ * `role="grid"` to the plain tables: without a full keyboard grid-navigation
+ * implementation it degrades, rather than improves, their accessibility.
+ *
+ * Sortable headers must expose `aria-sort` (see `devices/ProcessManager`).
+ */
 export function TableHeaderCell({
   children,
   align = "left",

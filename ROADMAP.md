@@ -76,14 +76,3 @@ in Roadmap_Blocked.md, not here — see the Rejected Ideas table in RESEARCH.md.
   typecheck/lint/tests/ui:smoke green.
   Complexity: M
 
-- [ ] P3 — IMP-73 Standardize data-table ARIA semantics
-  Why: only `PackageTable.tsx` uses the ARIA grid pattern; 9 other tables use
-  plain HTML, an inconsistent a11y baseline.
-  Evidence: `PackageTable.tsx:230,259` (`role="row"`/`aria-rowindex`) vs plain
-  `<table>` in NetworkInspector/ProcessManager/Debloat/Devices/Fastboot/Profiles/
-  Wireless/JournalPanel/RecoveryBaselinePanel.
-  Touches: the listed table components (or a shared table primitive in
-  `src/routes/common.tsx`).
-  Acceptance: interactive/sortable tables share one documented pattern
-  (grid roles + `aria-sort` where sortable); no visual regressions.
-  Complexity: M
