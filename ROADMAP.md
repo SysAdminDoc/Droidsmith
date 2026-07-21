@@ -104,16 +104,6 @@ in Roadmap_Blocked.md, not here — see the Rejected Ideas table in RESEARCH.md.
   the failure-classification.
   Complexity: M
 
-- [ ] P2 — IMP-69 Add process_tree.rs unit tests
-  Why: the cross-platform child-containment/kill module is security-relevant
-  (prevents adb/fastboot/scrcpy children outliving an operation) and has no tests.
-  Evidence: `grep -c '#[test]' src-tauri/src/process_tree.rs` → 0.
-  Touches: `src-tauri/src/process_tree.rs` (`#[cfg(test)]` for group creation,
-  containment, and reap/kill paths using a short-lived child).
-  Acceptance: tests cover spawn-into-group, kill-group, and no-orphan on drop;
-  `cargo test` green on Windows + Unix cfg paths.
-  Complexity: S
-
 ### P3
 
 - [ ] P3 — R-089 scrcpy v3–v4 capability surface (new/flex display, camera, codecs)

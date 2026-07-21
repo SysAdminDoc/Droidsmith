@@ -89,3 +89,86 @@ fn kill_direct_if_running(child: &mut Child) -> io::Result<Option<ExitStatus>> {
         },
     }
 }
+
+#[cfg(all(test, any(windows, unix)))]
+mod tests {
+    use super::*;
+    use std::process::Stdio;
+    use std::thread::sleep;
+    use std::time::{Duration, Instant};
+
+    fn silent(mut command: Command) -> Command {
+        command
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null());
+        command
+    }
+
+    #[cfg(unix)]
+    fn long_running_command() -> Command {
+        let mut command = Command::new("sleep");
+        command.arg("30");
+        silent(command)
+    }
+
+    #[cfg(unix)]
+    fn quick_command() -> Command {
+        silent(Command::new("true"))
+    }
+
+    #[cfg(windows)]
+    fn long_running_command() -> Command {
+        let mut command = Command::new("cmd");
+        command.args(["/C", "ping", "-n", "30", "127.0.0.1"]);
+        silent(command)
+    }
+
+    #[cfg(windows)]
+    fn quick_command() -> Command {
+        let mut command = Command::new("cmd");
+        command.args(["/C", "exit", "0"]);
+        silent(command)
+    }
+
+    #[test]
+    fn configure_spawns_into_an_isolated_group_and_runs() {
+        // A configured command must still spawn and run normally; the isolation
+        // flags only affect signal/console behaviour, not execution.
+        let mut command = quick_command();
+        configure(&mut command);
+        let mut child = command.spawn().expect("spawn configured child");
+        let status = child.wait().expect("wait for quick child");
+        assert!(status.success());
+    }
+
+    #[test]
+    fn terminate_kills_a_running_child_and_reaps_it() {
+        let mut command = long_running_command();
+        configure(&mut command);
+        let mut child = command.spawn().expect("spawn long-running child");
+        // The child is still running before we terminate it.
+        assert!(child.try_wait().expect("try_wait").is_none());
+
+        let started = Instant::now();
+        let status = terminate(&mut child).expect("terminate running child");
+        // A force-killed helper never exits successfully, and the group kill
+        // must return promptly (it reaps via wait() internally).
+        assert!(!status.success());
+        assert!(started.elapsed() < Duration::from_secs(20));
+    }
+
+    #[test]
+    fn terminate_returns_the_status_of_an_already_exited_child() {
+        let mut command = quick_command();
+        configure(&mut command);
+        let mut child = command.spawn().expect("spawn quick child");
+
+        // Let the child exit on its own (a bare `true` / `cmd /C exit 0`
+        // finishes in milliseconds) without reaping it, so terminate takes its
+        // early try_wait() path and reports the real success status.
+        sleep(Duration::from_millis(400));
+        let status = terminate(&mut child).expect("terminate exited child");
+        assert!(status.success());
+    }
+}
