@@ -14,6 +14,12 @@ completion.
 Working batches live here. Sections collapse into a versioned release on
 each milestone tag.
 
+## [0.9.3] - 2026-07-21
+
+Roadmap drain to empty: the Devices.tsx god-file split, persistent gnirehtet
+reverse-tethering, and the version-gated scrcpy capability surface (virtual
+display, audio-source picker, camera mirroring).
+
 ### Added
 
 - **R-089 scrcpy capability surface (virtual display, camera, audio sources).**
