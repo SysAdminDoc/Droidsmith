@@ -919,6 +919,11 @@
     }
   },
   "mirror": {
+    "fullscreen": "Fullscreen",
+    "alwaysOnTop": "Always on top",
+    "noControl": "View only (no control)",
+    "maxFps": "Max FPS",
+    "maxFpsPlaceholder": "Unlimited",
     "title": "Mirror",
     "description": "Configure and launch supervised scrcpy sessions.",
     "options": "Mirror options",

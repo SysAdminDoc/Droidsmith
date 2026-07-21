@@ -77,6 +77,14 @@ pub struct MirrorPreset {
     pub flex_display: bool,
     #[serde(default)]
     pub keep_active: bool,
+    #[serde(default)]
+    pub max_fps: String,
+    #[serde(default)]
+    pub fullscreen: bool,
+    #[serde(default)]
+    pub always_on_top: bool,
+    #[serde(default)]
+    pub no_control: bool,
 }
 
 impl Default for MirrorPreset {
@@ -94,6 +102,10 @@ impl Default for MirrorPreset {
             show_touches: false,
             flex_display: false,
             keep_active: false,
+            max_fps: String::new(),
+            fullscreen: false,
+            always_on_top: false,
+            no_control: false,
         }
     }
 }
@@ -981,6 +993,13 @@ fn validate_preset(preset: &MirrorPreset) -> Result<(), SettingsError> {
             "mirror videoEncoder is invalid".to_string(),
         ));
     }
+    // An empty maxFps means "unset"; a set value is 1-3 ASCII digits (fps caps
+    // never exceed a few hundred).
+    if !preset.max_fps.is_empty() && !valid_numeric_setting(&preset.max_fps, 3) {
+        return Err(SettingsError::Invalid(
+            "mirror maxFps must be empty or 1 to 3 ASCII digits".to_string(),
+        ));
+    }
     Ok(())
 }
 
@@ -1003,6 +1022,10 @@ fn normalize_legacy_preset(value: LegacyMirrorPreset) -> MirrorPreset {
         show_touches: value.show_touches.unwrap_or(defaults.show_touches),
         flex_display: defaults.flex_display,
         keep_active: defaults.keep_active,
+        max_fps: defaults.max_fps,
+        fullscreen: defaults.fullscreen,
+        always_on_top: defaults.always_on_top,
+        no_control: defaults.no_control,
     }
 }
 

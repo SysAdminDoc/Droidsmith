@@ -698,6 +698,11 @@ async function runDesktopFlow(browser) {
   await page.getByRole("button", { name: /Mirror/ }).click();
   await page.getByRole("heading", { name: "Mirror", exact: true }).waitFor();
   await page.getByText("scrcpy 4.0", { exact: true }).waitFor();
+  // R-088: the expanded scrcpy flag surface is present.
+  await page
+    .getByRole("checkbox", { name: "View only (no control)" })
+    .waitFor();
+  await page.getByLabel("Max FPS").fill("60");
   await page.getByLabel("Video codec").selectOption("h265");
   await page.getByLabel("Video encoder").selectOption("c2.vendor.hevc.encoder");
   await page.getByRole("checkbox", { name: "Record session" }).check();

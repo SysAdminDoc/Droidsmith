@@ -30,6 +30,14 @@ pub struct LaunchScrcpyRequest {
     pub show_touches: bool,
     pub flex_display: bool,
     pub keep_active: bool,
+    #[serde(default)]
+    pub max_fps: Option<u32>,
+    #[serde(default)]
+    pub fullscreen: bool,
+    #[serde(default)]
+    pub always_on_top: bool,
+    #[serde(default)]
+    pub no_control: bool,
 }
 
 #[derive(specta::Type, Debug, Clone, Serialize, PartialEq, Eq)]
@@ -442,6 +450,18 @@ pub fn build_args(
     if request.show_touches {
         args.push("--show-touches".to_string());
     }
+    if let Some(max_fps) = request.max_fps.filter(|value| *value > 0) {
+        args.push(format!("--max-fps={max_fps}"));
+    }
+    if request.fullscreen {
+        args.push("--fullscreen".to_string());
+    }
+    if request.always_on_top {
+        args.push("--always-on-top".to_string());
+    }
+    if request.no_control {
+        args.push("--no-control".to_string());
+    }
     if request.flex_display {
         if !version_gte(&capabilities.version, 4, 0) {
             return Err("flex display requires scrcpy 4.0 or later".to_string());
@@ -677,6 +697,10 @@ mod tests {
             show_touches: true,
             flex_display: false,
             keep_active: false,
+            max_fps: None,
+            fullscreen: false,
+            always_on_top: false,
+            no_control: false,
         }
     }
 
@@ -788,6 +812,32 @@ mod tests {
         assert!(build_args(&request, None, &capabilities())
             .unwrap_err()
             .contains("unsupported scrcpy keyboard mode"));
+    }
+
+    #[test]
+    fn emits_window_and_control_flags() {
+        let mut req = request();
+        req.max_fps = Some(60);
+        req.fullscreen = true;
+        req.always_on_top = true;
+        req.no_control = true;
+        let args = build_args(&req, None, &capabilities()).unwrap();
+        assert!(args.contains(&"--max-fps=60".to_string()));
+        assert!(args.contains(&"--fullscreen".to_string()));
+        assert!(args.contains(&"--always-on-top".to_string()));
+        assert!(args.contains(&"--no-control".to_string()));
+    }
+
+    #[test]
+    fn omits_window_flags_when_unset() {
+        // A zero/absent max-fps and unset toggles must not emit any flag.
+        let mut req = request();
+        req.max_fps = Some(0);
+        let args = build_args(&req, None, &capabilities()).unwrap();
+        assert!(!args.iter().any(|arg| arg.starts_with("--max-fps")));
+        assert!(!args.contains(&"--fullscreen".to_string()));
+        assert!(!args.contains(&"--always-on-top".to_string()));
+        assert!(!args.contains(&"--no-control".to_string()));
     }
 
     #[test]

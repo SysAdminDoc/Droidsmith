@@ -16,6 +16,12 @@ each milestone tag.
 
 ### Added
 
+- **R-088 Expanded Mirror scrcpy flags.** Mirror now exposes `--max-fps`,
+  `--fullscreen`, `--always-on-top`, and `--no-control` (view-only). The flags
+  are selectable, persist in per-device mirror presets, and are asserted in the
+  scrcpy arg-construction unit tests. (The validation-heavier flags — `--crop`,
+  `--display-orientation`, `--screen-off-timeout`, `--audio-codec` — are tracked
+  under R-089 alongside the version-gated capability surface.)
 - **R-090 ProcessManager force-stop.** Process rows that resolve to an app
   package now offer a confirmed **Force-stop** action (`am force-stop --user 0`)
   routed through the audited action planner/journal. Native binaries, kernel

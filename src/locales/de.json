@@ -919,6 +919,11 @@
     }
   },
   "mirror": {
+    "fullscreen": "Vollbild",
+    "alwaysOnTop": "Immer im Vordergrund",
+    "noControl": "Nur ansehen (keine Steuerung)",
+    "maxFps": "Max. FPS",
+    "maxFpsPlaceholder": "Unbegrenzt",
     "title": "Spiegeln",
     "description": "Überwachte scrcpy-Sitzungen konfigurieren und starten.",
     "options": "Spiegelungsoptionen",

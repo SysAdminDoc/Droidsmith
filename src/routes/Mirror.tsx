@@ -309,6 +309,10 @@ export default function MirrorRoute() {
           show_touches: preset.showTouches,
           flex_display: preset.flexDisplay,
           keep_active: preset.keepActive,
+          max_fps: parsePositiveInt(preset.maxFps),
+          fullscreen: preset.fullscreen,
+          always_on_top: preset.alwaysOnTop,
+          no_control: preset.noControl,
         },
         recordingGrant?.id,
       );
@@ -542,6 +546,24 @@ export default function MirrorRoute() {
                   </label>
                   <label className="grid gap-1.5">
                     <span className="text-xs font-medium text-anvil-400">
+                      {t("mirror.maxFps")}
+                    </span>
+                    <FieldInput
+                      type="text"
+                      value={preset.maxFps}
+                      onChange={(e) =>
+                        setPreset((prev) => ({
+                          ...prev,
+                          maxFps: e.target.value.replace(/\D/g, "").slice(0, 3),
+                        }))
+                      }
+                      placeholder={t("mirror.maxFpsPlaceholder")}
+                      inputMode="numeric"
+                      className="font-mono"
+                    />
+                  </label>
+                  <label className="grid gap-1.5">
+                    <span className="text-xs font-medium text-anvil-400">
                       {t("mirror.videoCodec")}
                     </span>
                     <FieldSelect
@@ -674,6 +696,27 @@ export default function MirrorRoute() {
                       setPreset((prev) => ({ ...prev, showTouches: checked }))
                     }
                     label={t("mirror.showTouches")}
+                  />
+                  <Toggle
+                    checked={preset.fullscreen}
+                    onChange={(checked) =>
+                      setPreset((prev) => ({ ...prev, fullscreen: checked }))
+                    }
+                    label={t("mirror.fullscreen")}
+                  />
+                  <Toggle
+                    checked={preset.alwaysOnTop}
+                    onChange={(checked) =>
+                      setPreset((prev) => ({ ...prev, alwaysOnTop: checked }))
+                    }
+                    label={t("mirror.alwaysOnTop")}
+                  />
+                  <Toggle
+                    checked={preset.noControl}
+                    onChange={(checked) =>
+                      setPreset((prev) => ({ ...prev, noControl: checked }))
+                    }
+                    label={t("mirror.noControl")}
                   />
                   {capabilityState.kind === "ready" &&
                     capabilityState.value.supports_flex_display && (

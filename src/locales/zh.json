@@ -919,6 +919,11 @@
     }
   },
   "mirror": {
+    "fullscreen": "全屏",
+    "alwaysOnTop": "始终置顶",
+    "noControl": "仅查看（无控制）",
+    "maxFps": "最大帧率",
+    "maxFpsPlaceholder": "不限制",
     "title": "镜像",
     "description": "配置并启动受监控的 scrcpy 会话。",
     "options": "镜像选项",

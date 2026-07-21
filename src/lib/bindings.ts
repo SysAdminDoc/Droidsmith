@@ -1588,6 +1588,10 @@ export type LaunchScrcpyRequest = {
   show_touches: boolean;
   flex_display: boolean;
   keep_active: boolean;
+  max_fps?: number | null;
+  fullscreen?: boolean;
+  always_on_top?: boolean;
+  no_control?: boolean;
 };
 /**
  * One node of a `uiautomator dump` UI hierarchy, flattened with its nesting
@@ -1693,6 +1697,10 @@ export type MirrorPreset = {
   showTouches: boolean;
   flexDisplay?: boolean;
   keepActive?: boolean;
+  maxFps?: string;
+  fullscreen?: boolean;
+  alwaysOnTop?: boolean;
+  noControl?: boolean;
 };
 export type Mitigation =
   /**

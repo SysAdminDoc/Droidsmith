@@ -51,19 +51,6 @@ in Roadmap_Blocked.md, not here — see the Rejected Ideas table in RESEARCH.md.
   (never silent). Unit test on the fingerprint-diff/drift logic + smoke flow.
   Complexity: L
 
-- [ ] P2 — R-088 Expand the Mirror scrcpy flag surface
-  Why: Droidsmith launches scrcpy but drives only ~12 flags; several
-  commonly-wanted, already-stable options are unexposed.
-  Evidence: `src-tauri/src/scrcpy.rs` builds no `--max-fps`, `--crop`,
-  `--fullscreen`, `--always-on-top`, `--no-control` (view-only), `--display-
-  orientation`, `--screen-off-timeout`, `--audio-codec` (verified absent).
-  Touches: `src-tauri/src/scrcpy.rs` (launch request + arg builder + tests),
-  `src/routes/Mirror.tsx` + `src/routes/mirrorPresets.ts` (controls + persist).
-  Acceptance: the new flags are selectable, persist in mirror presets, and are
-  asserted in the scrcpy arg-construction unit tests; view-only mode omits
-  control input.
-  Complexity: M
-
 - [ ] P2 — R-092 Low-target-SDK install option + Advanced-Protection detection
   Why: on Android 14–16 old-targetSDK APK installs fail and Advanced Protection
   disables debugging; both currently fail opaquely.
@@ -81,15 +68,19 @@ in Roadmap_Blocked.md, not here — see the Rejected Ideas table in RESEARCH.md.
 
 ### P3
 
-- [ ] P3 — R-089 scrcpy v3–v4 capability surface (new/flex display, camera, codecs)
-  Why: net-new scrcpy capabilities Droidsmith can expose once R-088 lands.
+- [ ] P3 — R-089 scrcpy v3–v4 capability surface + validation-heavy flags
+  Why: net-new scrcpy capabilities plus the validation-heavier flags deferred
+  from R-088 (which shipped the stable toggles + `--max-fps`).
   Evidence: scrcpy v3.0 `--new-display`, v3.2 audio-source expansion, v4.0 flex
-  display + camera torch/zoom, v4.1 VP8/VP9.
-  Touches: `src-tauri/src/scrcpy.rs` (capability probe + args), `src/routes/
-  Mirror.tsx` (virtual-display, camera, VP8/VP9 fallback, audio-source picker),
-  degrade gracefully on scrcpy <4.0.
-  Acceptance: capabilities gate on detected scrcpy version; args asserted in
-  unit tests; unsupported flags hidden on older scrcpy.
+  display + camera torch/zoom, v4.1 VP8/VP9. Deferred from R-088: `--crop`,
+  `--display-orientation`, `--screen-off-timeout`, `--audio-codec`.
+  Touches: `src-tauri/src/scrcpy.rs` (capability probe + args + validation),
+  `src/routes/Mirror.tsx` + `src/routes/mirrorPresets.ts` (virtual-display,
+  camera, VP8/VP9 fallback, audio-source picker, crop/orientation/audio-codec
+  inputs), degrade gracefully on scrcpy <4.0.
+  Acceptance: capabilities gate on detected scrcpy version; crop/orientation/
+  timeout/audio-codec validated and persisted; args asserted in unit tests;
+  unsupported flags hidden on older scrcpy.
   Complexity: M
 
 - [ ] P3 — IMP-70 Tests for deviceStore.ts and lib/logcatQueries.ts

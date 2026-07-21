@@ -990,6 +990,11 @@
     "warning": "Advertencia"
   },
   "mirror": {
+    "fullscreen": "Pantalla completa",
+    "alwaysOnTop": "Siempre visible",
+    "noControl": "Solo ver (sin control)",
+    "maxFps": "FPS máx.",
+    "maxFpsPlaceholder": "Sin límite",
     "bitRate": "Tasa de bits de video",
     "capabilityProbeFailed": "La verificación de capacidades de scrcpy falló",
     "capabilityProbeLimited": "El descubrimiento de codificadores es limitado",
