@@ -1475,9 +1475,7 @@ pub struct DisconnectResult {
 /// but the user is advised that it is safe to unplug.
 #[tauri::command]
 #[specta::specta]
-pub fn disconnect_device(
-    target: adb::DeviceTarget,
-) -> Result<DisconnectResult, CommandError> {
+pub fn disconnect_device(target: adb::DeviceTarget) -> Result<DisconnectResult, CommandError> {
     let (transport, _) = privileged_transport(&target)?;
     if target.transport_kind == adb::DeviceTransportKind::Usb {
         return Ok(DisconnectResult {
@@ -3487,7 +3485,9 @@ pub fn stop_scrcpy(session_id: u64) -> Result<crate::scrcpy::ScrcpySession, Comm
 #[tauri::command]
 #[specta::specta]
 pub fn locate_gnirehtet() -> Option<String> {
-    which::which("gnirehtet").ok().map(|p| p.display().to_string())
+    which::which("gnirehtet")
+        .ok()
+        .map(|p| p.display().to_string())
 }
 
 /// Start a gnirehtet reverse-tethering session for a device. Supervised like
@@ -3536,9 +3536,7 @@ pub fn gnirehtet_session_status(
 
 #[tauri::command]
 #[specta::specta]
-pub fn stop_gnirehtet(
-    session_id: u64,
-) -> Result<crate::gnirehtet::GnirehtetSession, CommandError> {
+pub fn stop_gnirehtet(session_id: u64) -> Result<crate::gnirehtet::GnirehtetSession, CommandError> {
     crate::gnirehtet::stop(session_id).map_err(|e| CommandError {
         code: "gnirehtet_stop_failed",
         message: e,

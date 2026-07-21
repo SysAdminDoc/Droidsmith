@@ -87,8 +87,7 @@ impl CapturedTail {
                 match reader.read(&mut buffer) {
                     Ok(0) | Err(_) => break,
                     Ok(count) => {
-                        let mut captured =
-                            bytes.lock().unwrap_or_else(|error| error.into_inner());
+                        let mut captured = bytes.lock().unwrap_or_else(|error| error.into_inner());
                         append_tail(&mut captured, &buffer[..count], LOG_CAPTURE_BYTES);
                     }
                 }
@@ -247,7 +246,8 @@ fn reap_locked(sessions: &mut HashMap<u64, ManagedSession>, keep: Option<u64>) {
 
 fn classify_exit_reason(code: Option<i32>, stderr: &str) -> GnirehtetExitReason {
     let haystack = stderr.to_ascii_lowercase();
-    if haystack.contains("device") && (haystack.contains("not found") || haystack.contains("offline"))
+    if haystack.contains("device")
+        && (haystack.contains("not found") || haystack.contains("offline"))
     {
         return GnirehtetExitReason::DeviceDisconnected;
     }
@@ -263,7 +263,8 @@ fn classify_exit_reason(code: Option<i32>, stderr: &str) -> GnirehtetExitReason 
     {
         return GnirehtetExitReason::RelayFailed;
     }
-    if haystack.contains("adb") && (haystack.contains("no such file") || haystack.contains("failed"))
+    if haystack.contains("adb")
+        && (haystack.contains("no such file") || haystack.contains("failed"))
     {
         return GnirehtetExitReason::AdbFailed;
     }

@@ -56,10 +56,7 @@ fn no_args_exits_two() {
 #[test]
 fn migrate_v1_succeeds_with_fixture() {
     let input = fixtures().join("profiles").join("v1-valid.yaml");
-    let dir = std::env::temp_dir().join(format!(
-        "droidsmith-cli-smoke-{}",
-        std::process::id()
-    ));
+    let dir = std::env::temp_dir().join(format!("droidsmith-cli-smoke-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let output = dir.join("migrated.yaml");
     let (code, stdout, stderr) = run(&[
@@ -84,4 +81,3 @@ fn migrate_v1_rejects_missing_output() {
     assert_eq!(code, 2);
     assert!(stderr.contains("--output"));
 }
-

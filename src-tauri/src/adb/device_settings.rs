@@ -73,19 +73,28 @@ const CATALOG: &[SettingSpec] = &[
         id: "window_animation_scale",
         namespace: SettingNamespace::Global,
         key: "window_animation_scale",
-        control: ControlSpec::Float { min: 0.0, max: 10.0 },
+        control: ControlSpec::Float {
+            min: 0.0,
+            max: 10.0,
+        },
     },
     SettingSpec {
         id: "transition_animation_scale",
         namespace: SettingNamespace::Global,
         key: "transition_animation_scale",
-        control: ControlSpec::Float { min: 0.0, max: 10.0 },
+        control: ControlSpec::Float {
+            min: 0.0,
+            max: 10.0,
+        },
     },
     SettingSpec {
         id: "animator_duration_scale",
         namespace: SettingNamespace::Global,
         key: "animator_duration_scale",
-        control: ControlSpec::Float { min: 0.0, max: 10.0 },
+        control: ControlSpec::Float {
+            min: 0.0,
+            max: 10.0,
+        },
     },
     SettingSpec {
         id: "screen_off_timeout",
@@ -169,7 +178,10 @@ pub fn read_device_settings(
     let mut out = Vec::with_capacity(CATALOG.len());
     for spec in CATALOG {
         let raw = transport
-            .shell_target(target, &["settings", "get", spec.namespace.as_arg(), spec.key])
+            .shell_target(
+                target,
+                &["settings", "get", spec.namespace.as_arg(), spec.key],
+            )
             .unwrap_or_default();
         out.push(DeviceSetting {
             id: spec.id.to_string(),
