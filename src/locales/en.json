@@ -453,7 +453,8 @@
       "colRemote": "Remote",
       "colProcess": "Process",
       "notReported": "Not reported",
-      "showingConnections": "Showing 100 of {{count}} connections"
+      "showingConnections": "Showing 100 of {{count}} connections",
+      "colCpu": "CPU"
     },
     "layout": {
       "noMatches": "No matching nodes",

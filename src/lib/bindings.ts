@@ -2188,6 +2188,12 @@ export type ProcessInfo = {
   user: string;
   vsz_kb: number;
   rss_kb: number;
+  /**
+   * Cumulative CPU usage as reported by `ps -o %CPU`, when the column is
+   * present. A single-snapshot value (not a live rate) — `None` on OEM `ps`
+   * builds that omit the column.
+   */
+  cpu_percent: number | null;
   name: string;
   parse_error?: string | null;
 };

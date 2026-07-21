@@ -630,7 +630,8 @@
       "showingProcesses": "Mostrando 100 de {{count}} procesos",
       "source": "Origen",
       "target": "Destino",
-      "virtualRemote": "Control remoto virtual"
+      "virtualRemote": "Control remoto virtual",
+      "colCpu": "CPU"
     },
     "description": "Inspecciona, conecta y administra dispositivos Android.",
     "detailTitle": "Detalles del dispositivo",

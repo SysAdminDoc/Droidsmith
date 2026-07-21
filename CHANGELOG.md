@@ -24,6 +24,11 @@ each milestone tag.
 
 ### Added
 
+- **R-103 — Per-process CPU in Process Manager.** The process table now shows a
+  sortable `%CPU` column parsed from the existing `ps -o %CPU` snapshot
+  (`ProcessInfo.cpu_percent`), alongside the RSS memory column. OEM `ps` builds
+  that omit the column show `—` rather than a fabricated value. Live graphs
+  remain out of scope (they need a device-side sampler).
 - **R-100 — scrcpy virtual-display flags.** Mirror gains version-gated
   `--display-ime-policy` (soft-keyboard placement on a virtual display, scrcpy
   3.2+) and `--no-vd-destroy-content` (keep virtual-display apps alive after the

@@ -21,7 +21,7 @@ export function ProcessManager({ target }: { target: DeviceTarget }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
-  const [sortBy, setSortBy] = useState<"rss" | "name">("rss");
+  const [sortBy, setSortBy] = useState<"rss" | "cpu" | "name">("rss");
   const [confirmPackage, setConfirmPackage] = useState<string | null>(null);
   const [stopping, setStopping] = useState<string | null>(null);
   const [stopError, setStopError] = useState<string | null>(null);
@@ -69,9 +69,12 @@ export function ProcessManager({ target }: { target: DeviceTarget }) {
     .filter((p) =>
       search ? p.name.toLowerCase().includes(search.toLowerCase()) : true,
     )
-    .sort((a, b) =>
-      sortBy === "rss" ? b.rss_kb - a.rss_kb : a.name.localeCompare(b.name),
-    );
+    .sort((a, b) => {
+      if (sortBy === "rss") return b.rss_kb - a.rss_kb;
+      if (sortBy === "cpu")
+        return (b.cpu_percent ?? -1) - (a.cpu_percent ?? -1);
+      return a.name.localeCompare(b.name);
+    });
 
   return (
     <Card className="overflow-hidden p-0">
@@ -184,6 +187,19 @@ export function ProcessManager({ target }: { target: DeviceTarget }) {
                   </button>
                 </th>
                 <th
+                  className="px-3 py-2 text-end font-semibold text-anvil-400"
+                  aria-sort={sortBy === "cpu" ? "descending" : "none"}
+                >
+                  <button
+                    type="button"
+                    onClick={() => setSortBy("cpu")}
+                    className="ms-auto flex items-center gap-1 hover:text-anvil-200"
+                  >
+                    {t("devices.controls.colCpu")}
+                    {sortBy === "cpu" && <span aria-hidden="true">&darr;</span>}
+                  </button>
+                </th>
+                <th
                   className="px-3 py-2 text-start font-semibold text-anvil-400"
                   aria-sort={sortBy === "name" ? "ascending" : "none"}
                 >
@@ -215,6 +231,11 @@ export function ProcessManager({ target }: { target: DeviceTarget }) {
                   <td className="px-3 py-1.5 text-anvil-400">{p.user}</td>
                   <td className="px-3 py-1.5 text-end font-mono text-anvil-200">
                     {formatKb(p.rss_kb)}
+                  </td>
+                  <td className="px-3 py-1.5 text-end font-mono text-anvil-300 tabular-nums">
+                    {p.cpu_percent != null
+                      ? `${p.cpu_percent.toFixed(1)}%`
+                      : "—"}
                   </td>
                   <td className="px-3 py-1.5 font-mono text-anvil-100">
                     <span>{p.name}</span>

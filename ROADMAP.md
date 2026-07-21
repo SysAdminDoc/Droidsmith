@@ -52,19 +52,6 @@ IDs continue from R-096 / IMP-73.
   confirmation; the parse layer is headless-testable.
   Complexity: M
 
-- [ ] P3 — R-103 — Per-process memory/CPU snapshot in Process Manager
-  Why: Aya parity minus the device-side FPS hook; `dumpsys meminfo`/`gfxinfo`
-  give a headless-parseable per-process snapshot the existing process inspector
-  lacks (no memory/CPU columns today).
-  Evidence: aya.liriliri.io (perf monitor); `src/routes/devices/ProcessManager.tsx`
-  is a read-only process list with no resource columns.
-  Touches: `src-tauri/src/process_tree.rs` or a new `dumpsys` parser,
-  `src/routes/devices/ProcessManager.tsx`, bindings, locales.
-  Acceptance: Process Manager shows PSS/RSS (and, where available, CPU%) per
-  process from a `dumpsys meminfo`/`top -n 1` snapshot; parser unit-tested; live
-  graphs are explicitly out of scope (they need a device).
-  Complexity: M
-
 - [ ] P3 — IMP-75 — Extract `Debloat.tsx` into `src/routes/debloat/`
   Why: 1,928 LOC with ~10 inline sub-components; matches the completed IMP-67
   (Devices) / IMP-72 refactor pattern; improves maintainability and testability.

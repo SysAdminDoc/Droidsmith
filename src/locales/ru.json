@@ -453,7 +453,8 @@
       "colRemote": "Удалённый",
       "colProcess": "Процесс",
       "notReported": "Не сообщено",
-      "showingConnections": "Показаны 100 из {{count}} соединений"
+      "showingConnections": "Показаны 100 из {{count}} соединений",
+      "colCpu": "ЦП"
     },
     "layout": {
       "noMatches": "Нет совпадающих узлов",

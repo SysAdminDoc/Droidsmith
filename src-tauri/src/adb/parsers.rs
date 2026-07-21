@@ -30,12 +30,16 @@ pub struct NetworkConnection {
     pub parse_error: Option<String>,
 }
 
-#[derive(specta::Type, Debug, Clone, Serialize, PartialEq, Eq)]
+#[derive(specta::Type, Debug, Clone, Serialize, PartialEq)]
 pub struct ProcessInfo {
     pub pid: u32,
     pub user: String,
     pub vsz_kb: u64,
     pub rss_kb: u64,
+    /// Cumulative CPU usage as reported by `ps -o %CPU`, when the column is
+    /// present. A single-snapshot value (not a live rate) — `None` on OEM `ps`
+    /// builds that omit the column.
+    pub cpu_percent: Option<f32>,
     pub name: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub parse_error: Option<String>,
@@ -394,6 +398,10 @@ fn parse_process_with_header(columns: &[String], tokens: &[&str]) -> Option<Proc
             .and_then(|idx| tokens.get(idx))
             .and_then(|token| token.parse::<u64>().ok())
             .unwrap_or(0),
+        cpu_percent: column_index(columns, &["%CPU", "PCPU", "CPU"])
+            .and_then(|idx| tokens.get(idx))
+            .and_then(|token| token.parse::<f32>().ok())
+            .filter(|value| value.is_finite() && *value >= 0.0),
         name: if name_idx < tokens.len() {
             tokens[name_idx..].join(" ")
         } else {
@@ -419,6 +427,7 @@ fn parse_process_fallback(tokens: &[&str]) -> Option<ProcessInfo> {
         user: tokens[1].to_string(),
         vsz_kb: tokens[2].parse::<u64>().unwrap_or(0),
         rss_kb: tokens[3].parse::<u64>().unwrap_or(0),
+        cpu_percent: None,
         name: tokens[4..].join(" "),
         parse_error: None,
     })
@@ -430,6 +439,7 @@ fn degraded_process(line: &str) -> ProcessInfo {
         user: "?".to_string(),
         vsz_kb: 0,
         rss_kb: 0,
+        cpu_percent: None,
         name: line.to_string(),
         parse_error: Some("unrecognized process row".to_string()),
     }
@@ -792,6 +802,19 @@ u0_a55 789 1 51200 4096 0 0 S com.samsung.android.app
         assert_eq!(emulator[0].pid, 0);
         assert!(emulator[0].parse_error.is_some());
         assert!(parse_ps_output("").is_empty());
+    }
+
+    #[test]
+    fn parses_cpu_percent_column_when_present() {
+        let rows = parse_ps_output(
+            "PID USER VSZ RSS %CPU NAME\n123 u0_a1 204800 12345 7.5 com.pixel.app\n",
+        );
+        assert_eq!(rows[0].rss_kb, 12345);
+        assert_eq!(rows[0].cpu_percent, Some(7.5));
+
+        // OEM headers without a CPU column leave it None rather than misreading.
+        let no_cpu = parse_ps_output("PID USER VSZ RSS NAME\n5 root 10 20 init\n");
+        assert_eq!(no_cpu[0].cpu_percent, None);
     }
 
     #[test]
