@@ -1290,6 +1290,9 @@
     "privacy": "Datenschutz- und Nebenwirkungsvertrag",
     "officialGuidance": "Offizielle Anleitung öffnen",
     "findings": {
+      "usb_mdns_backend_toggles": {
+        "title": "USB- und mDNS-Backend-Fehlerbehebungsschalter"
+      },
       "adb_missing": {
         "title": "ADB wurde nicht gefunden"
       },

@@ -16,6 +16,11 @@ each milestone tag.
 
 ### Added
 
+- **R-093 USB/mDNS backend troubleshooting guidance.** When Host Doctor finds no
+  connected device, it now surfaces the platform-specific USB/mDNS backend
+  toggles introduced in platform-tools 37.0.1 (`ADB_USB_LEGACY` on Windows,
+  `ADB_LIBUSB` on macOS) and reports any already set, so the "device not
+  detected" fix is discoverable. Unit-tested.
 - **R-087 Post-OTA debloat-drift detection.** Droidsmith now records each
   device's build fingerprint and, when it changes between sessions (an OTA
   update), surfaces a dismissible notice on the Apps route prompting the user to

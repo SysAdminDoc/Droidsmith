@@ -1290,6 +1290,9 @@
     "privacy": "隐私和副作用约定",
     "officialGuidance": "打开官方指南",
     "findings": {
+      "usb_mdns_backend_toggles": {
+        "title": "USB 和 mDNS 后端排障开关"
+      },
       "adb_missing": {
         "title": "未找到 ADB"
       },

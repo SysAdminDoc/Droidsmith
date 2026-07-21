@@ -272,6 +272,33 @@ fn analyze(snapshot: DoctorSnapshot) -> HostDoctorReport {
         ));
     }
 
+    // When no device is present, surface the USB/mDNS backend toggles that
+    // changed in platform-tools 37.0.1 — a common cause of "device not detected"
+    // that users cannot otherwise discover.
+    if snapshot.device_state_counts.is_empty() {
+        let detected = detected_backend_toggles();
+        let mut evidence = vec![backend_toggle_platform_hint().to_string()];
+        if detected.is_empty() {
+            evidence.push("No USB/mDNS backend override is currently set.".to_string());
+        } else {
+            for name in &detected {
+                evidence.push(format!("{name} is set (value redacted)"));
+            }
+        }
+        findings.push(finding(
+            "usb_mdns_backend_toggles",
+            FindingSeverity::Info,
+            "USB and mDNS backend troubleshooting toggles",
+            "platform-tools 37.0.1 changed the default USB and mDNS backends. If a wired device is not detected or wireless discovery fails, switching backends via these environment variables can help.",
+            evidence,
+            vec![
+                "Set the platform toggle above, then run `adb kill-server` and restart Droidsmith so the new server picks it up.",
+                "The openscreen mDNS backend was removed in 37.0.1; ADB_MDNS_OPENSCREEN is now a no-op.",
+            ],
+            PLATFORM_TOOLS_URL,
+        ));
+    }
+
     HostDoctorReport {
         scanned_at: crate::time::iso_utc_now(),
         platform: snapshot.platform,
@@ -486,6 +513,34 @@ fn configured_adb_overrides() -> Vec<&'static str> {
     .into_iter()
     .filter(|name| std::env::var_os(name).is_some_and(|value| !value.is_empty()))
     .collect()
+}
+
+/// USB/mDNS backend troubleshooting toggles (platform-tools 37.0.1) that are
+/// currently set in Droidsmith's environment.
+fn detected_backend_toggles() -> Vec<&'static str> {
+    backend_toggle_names()
+        .into_iter()
+        .filter(|name| std::env::var_os(name).is_some_and(|value| !value.is_empty()))
+        .collect()
+}
+
+const fn backend_toggle_names() -> [&'static str; 4] {
+    [
+        "ADB_USB_LEGACY",
+        "ADB_LIBUSB",
+        "ADB_MDNS_OPENSCREEN",
+        "ADB_MDNS",
+    ]
+}
+
+const fn backend_toggle_platform_hint() -> &'static str {
+    if cfg!(windows) {
+        "On Windows, set ADB_USB_LEGACY=1 to fall back to the legacy USB backend if a device is not detected."
+    } else if cfg!(target_os = "macos") {
+        "On macOS, set ADB_LIBUSB=1 to re-enable the libusb backend if a device is not detected."
+    } else {
+        "On Linux, ADB_USB_LEGACY or ADB_LIBUSB switch the USB backend if a device is not detected."
+    }
 }
 
 fn platform_name() -> &'static str {
@@ -838,6 +893,22 @@ mod tests {
         assert!(serialized.contains("server_config_override"));
         assert!(serialized.contains("client_server_mismatch"));
         assert!(serialized.contains("value redacted"));
+    }
+
+    #[test]
+    fn backend_toggle_advice_appears_only_without_devices() {
+        // No device present: surface the USB/mDNS backend troubleshooting toggles.
+        let empty = serde_json::to_string(&analyze(snapshot("windows"))).unwrap();
+        assert!(empty.contains("usb_mdns_backend_toggles"));
+        assert!(empty.contains("ADB_USB_LEGACY"));
+
+        // A device is present: the guidance is omitted as unneeded.
+        let mut with_device = snapshot("windows");
+        with_device
+            .device_state_counts
+            .insert("device".to_string(), 1);
+        let json = serde_json::to_string(&analyze(with_device)).unwrap();
+        assert!(!json.contains("usb_mdns_backend_toggles"));
     }
 
     #[test]

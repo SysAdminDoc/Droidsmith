@@ -1290,6 +1290,9 @@
     "privacy": "Контракт приватности и отсутствия изменений",
     "officialGuidance": "Открыть официальную инструкцию",
     "findings": {
+      "usb_mdns_backend_toggles": {
+        "title": "Переключатели диагностики USB- и mDNS-бэкендов"
+      },
       "adb_missing": {
         "title": "ADB не найден"
       },

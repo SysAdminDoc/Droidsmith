@@ -833,6 +833,9 @@
     "description": "Verifica ADB, USB, controladores y requisitos previos del host sin cambiar nada.",
     "failed": "El doctor de conexión falló",
     "findings": {
+      "usb_mdns_backend_toggles": {
+        "title": "Conmutadores de resolución de problemas de backend USB y mDNS"
+      },
       "adb_missing": {
         "title": "ADB no fue encontrado"
       },

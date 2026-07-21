@@ -53,17 +53,6 @@ in Roadmap_Blocked.md, not here — see the Rejected Ideas table in RESEARCH.md.
   unsupported flags hidden on older scrcpy.
   Complexity: M
 
-- [ ] P3 — R-093 Host-doctor USB/mDNS backend troubleshooting toggles
-  Why: platform-tools 37.0.1 changed USB/mDNS backends; device-detection issues
-  now hinge on env toggles users can't discover.
-  Evidence: 37.0.1 removed `openscreen` mDNS backend; added `ADB_USB_LEGACY=1`
-  (Windows) and macOS `ADB_LIBUSB=1`.
-  Touches: `src/routes/HostDoctor.tsx`, `src-tauri/src/` adb-invocation env
-  handling (opt-in `ADB_USB_LEGACY` / mDNS backend note + relaunch adb server).
-  Acceptance: host-doctor surfaces a USB-backend toggle that sets the env for the
-  adb server and reports the active mDNS backend; unit test on env assembly.
-  Complexity: S
-
 - [ ] P3 — R-095 Import remote debloat pack by URL with SHA-256 pin
   Why: static bundled YAML can't gain OEM/package coverage without an app
   release; a generic pinned-URL import gives UAD-ng-style freshness without the

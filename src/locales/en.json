@@ -1290,6 +1290,9 @@
     "privacy": "Privacy and side-effect contract",
     "officialGuidance": "Open official guidance",
     "findings": {
+      "usb_mdns_backend_toggles": {
+        "title": "USB and mDNS backend troubleshooting toggles"
+      },
       "adb_missing": {
         "title": "ADB was not found"
       },
