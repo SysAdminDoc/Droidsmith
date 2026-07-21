@@ -14,6 +14,13 @@ completion.
 Working batches live here. Sections collapse into a versioned release on
 each milestone tag.
 
+## [0.9.2] - 2026-07-20
+
+Roadmap drain: wireless reconnect history, post-OTA drift detection, quirk
+failure hints, ProcessManager force-stop, an expanded Mirror scrcpy flag
+surface, Host Doctor backend guidance, inspector/UX fixes, and new test
+coverage.
+
 ### Added
 
 - **R-093 USB/mDNS backend troubleshooting guidance.** When Host Doctor finds no
