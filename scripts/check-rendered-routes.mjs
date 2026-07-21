@@ -2565,9 +2565,46 @@ async function installTauriMock(
                   provenance: { source: "ui-smoke", license: "MIT" },
                 },
                 assessment: qaPackAssessment,
+                imported: false,
+              },
+              {
+                pack: {
+                  id: "qa-imported",
+                  revision: 1,
+                  name: "QA Imported Pack",
+                  version: "1",
+                  description:
+                    "Synthetic locally-imported pack used by rendered route smoke tests.",
+                  targets: {
+                    manufacturer: ["Google"],
+                    rom: ["Pixel"],
+                    model: [],
+                    build_fingerprint: ["google/"],
+                    android_min: 13,
+                    android_max: null,
+                    user_scope: "owner",
+                  },
+                  packages: [
+                    {
+                      id: "com.example.imported",
+                      removal: "recommended",
+                      description: "Imported QA package.",
+                      depends_on: [],
+                      needed_by: [],
+                      labels: ["qa"],
+                    },
+                  ],
+                  attribution: null,
+                  provenance: { source: "ui-smoke", license: "MIT" },
+                },
+                assessment: qaPackAssessment,
+                imported: true,
               },
             ],
           };
+        }
+        if (cmd === "remove_imported_pack") {
+          return true;
         }
         if (cmd === "plan_pack") {
           const selected = args.request.selected;

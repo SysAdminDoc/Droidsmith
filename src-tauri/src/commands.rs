@@ -3853,6 +3853,53 @@ fn load_runtime_packs(
     Ok((packs, errors))
 }
 
+/// Absolute path of the app-data directory that holds user-imported packs.
+/// Imported pack files are named `<pack-id>.yaml` (the id is validated
+/// kebab-case, so the name can never traverse out of this directory).
+fn user_packs_dir(app: &tauri::AppHandle) -> Result<PathBuf, CommandError> {
+    Ok(settings_app_data_dir(app)?.join("packs"))
+}
+
+/// A merged pack set: each pack paired with an `imported` flag (`true` when it
+/// came from the user-imported app-data directory), plus per-file load errors.
+type MergedPacks = (Vec<(crate::packs::Pack, bool)>, Vec<PackLoadError>);
+
+/// Load bundled packs (from the resource directory) merged with any packs the
+/// user has imported into the app-data `packs/` directory. Bundled ids win: an
+/// imported pack whose id shadows a bundled one surfaces as a load error rather
+/// than silently overriding the shipped pack. The `bool` is `true` for
+/// imported packs.
+fn load_all_packs(
+    bundled_dir: &std::path::Path,
+    user_dir: &std::path::Path,
+) -> Result<MergedPacks, CommandError> {
+    let (bundled, mut errors) = load_runtime_packs(bundled_dir)?;
+    let (imported, imported_errors) = load_runtime_packs(user_dir)?;
+    errors.extend(imported_errors);
+
+    let bundled_ids: std::collections::HashSet<String> =
+        bundled.iter().map(|pack| pack.id.clone()).collect();
+    let mut packs: Vec<(crate::packs::Pack, bool)> =
+        bundled.into_iter().map(|pack| (pack, false)).collect();
+    for pack in imported {
+        if bundled_ids.contains(&pack.id) {
+            errors.push(PackLoadError {
+                file: format!("{}.yaml", pack.id),
+                code: "pack_duplicate_id",
+                message: format!(
+                    "imported pack id {:?} shadows a bundled pack; remove the import",
+                    pack.id
+                ),
+            });
+        } else {
+            packs.push((pack, true));
+        }
+    }
+    packs.sort_by(|a, b| a.0.id.cmp(&b.0.id));
+    errors.sort_by(|a, b| a.file.cmp(&b.file));
+    Ok((packs, errors))
+}
+
 fn pack_context(
     transport: &adb::ShellTransport,
     target: &adb::DeviceTarget,
@@ -3896,19 +3943,154 @@ pub fn list_packs(
         code: "no_resource_dir",
         message: e.to_string(),
     })?;
-    let packs_dir = resource_dir.join("packs");
+    let user_dir = user_packs_dir(&app)?;
 
-    let (packs, errors) = load_runtime_packs(&packs_dir)?;
+    let (packs, errors) = load_all_packs(&resource_dir.join("packs"), &user_dir)?;
     let transport = validated_transport(&target)?;
     let context = pack_context(&transport, &target, userId)?;
     let packs = packs
         .into_iter()
-        .map(|pack| crate::packs::PackCandidate {
+        .map(|(pack, imported)| crate::packs::PackCandidate {
             assessment: crate::packs::assess(&pack, &context),
             pack,
+            imported,
         })
         .collect();
     Ok(PackListing { packs, errors })
+}
+
+/// Metadata returned after a debloat pack is imported from a local file.
+#[derive(specta::Type, Debug, Clone, Serialize)]
+pub struct ImportedPack {
+    pub id: String,
+    pub name: String,
+    pub revision: u32,
+    /// SHA-256 of the imported file, computed at import time. Surfaced so the
+    /// user can record it and re-import the same bytes with a pin later.
+    pub sha256: String,
+    /// Number of package entries the pack offers to remove.
+    pub packages: usize,
+}
+
+/// Import a debloat pack from a user-selected local file through a one-shot
+/// native read grant. This is the network-free alternative to remote-pack
+/// fetching (R-095): it reuses the audited host-path grant model, optionally
+/// verifies a caller-supplied SHA-256 pin, schema-validates and lints the
+/// bytes, rejects ids that shadow a bundled pack, and persists the file to the
+/// app-data `packs/` directory so it appears in the picker on the next load.
+#[tauri::command]
+#[specta::specta]
+pub fn import_pack(
+    app: tauri::AppHandle,
+    grants: tauri::State<'_, PathGrantStore>,
+    path_grant: String,
+    #[allow(non_snake_case)] expectedSha256: Option<String>,
+) -> Result<ImportedPack, CommandError> {
+    let source = grants.consume(&path_grant, HostPathPurpose::PackImportOpen)?;
+
+    let actual_sha256 = crate::fs_util::sha256_file(&source).map_err(|error| CommandError {
+        code: "pack_read",
+        message: format!("could not read the selected pack file: {error}"),
+    })?;
+    if let Some(expected) = expectedSha256 {
+        let expected = expected.trim().to_ascii_lowercase();
+        if !expected.is_empty() {
+            if expected.len() != 64 || !expected.chars().all(|c| c.is_ascii_hexdigit()) {
+                return Err(CommandError {
+                    code: "pack_sha256_invalid",
+                    message: "expected SHA-256 must be 64 hexadecimal characters".to_string(),
+                });
+            }
+            if expected != actual_sha256 {
+                return Err(CommandError {
+                    code: "pack_sha256_mismatch",
+                    message: format!(
+                        "pack SHA-256 does not match: expected {expected}, got {actual_sha256}"
+                    ),
+                });
+            }
+        }
+    }
+
+    let pack = crate::packs::load(&source).map_err(|error| {
+        let load_error = pack_error_to_load_error(String::new(), &error);
+        CommandError {
+            code: load_error.code,
+            message: load_error.message,
+        }
+    })?;
+
+    // `packs::load` lints the id to lowercase kebab-case, so `<id>.yaml` is a
+    // safe filename; guard again for defense in depth before touching the FS.
+    if !crate::packs::valid_pack_id(&pack.id) {
+        return Err(CommandError {
+            code: "pack_validate",
+            message: format!("pack id {:?} is not a valid identifier", pack.id),
+        });
+    }
+
+    let resource_dir = app.path().resource_dir().map_err(|e| CommandError {
+        code: "no_resource_dir",
+        message: e.to_string(),
+    })?;
+    let (bundled, _) = load_runtime_packs(&resource_dir.join("packs"))?;
+    if bundled
+        .iter()
+        .any(|bundled_pack| bundled_pack.id == pack.id)
+    {
+        return Err(CommandError {
+            code: "pack_id_conflicts_bundled",
+            message: format!(
+                "a bundled pack already uses id {:?}; imported packs must have a unique id",
+                pack.id
+            ),
+        });
+    }
+
+    let user_dir = user_packs_dir(&app)?;
+    std::fs::create_dir_all(&user_dir).map_err(|error| CommandError {
+        code: "io_error",
+        message: format!("could not create the imported-packs directory: {error}"),
+    })?;
+    let destination = user_dir.join(format!("{}.yaml", pack.id));
+    std::fs::copy(&source, &destination).map_err(|error| CommandError {
+        code: "io_error",
+        message: format!("could not store the imported pack: {error}"),
+    })?;
+
+    Ok(ImportedPack {
+        id: pack.id.clone(),
+        name: pack.name.clone(),
+        revision: pack.revision,
+        sha256: actual_sha256,
+        packages: pack.packages.len(),
+    })
+}
+
+/// Remove a previously-imported debloat pack by its stable id. Bundled packs
+/// live in the read-only resource directory and are never touched. Returns
+/// `true` when a file was deleted, `false` when no import with that id existed.
+#[tauri::command]
+#[specta::specta]
+pub fn remove_imported_pack(
+    app: tauri::AppHandle,
+    #[allow(non_snake_case)] packId: String,
+) -> Result<bool, CommandError> {
+    if !crate::packs::valid_pack_id(&packId) {
+        return Err(CommandError {
+            code: "pack_id_invalid",
+            message: "invalid pack id".to_string(),
+        });
+    }
+    let destination = user_packs_dir(&app)?.join(format!("{packId}.yaml"));
+    match std::fs::remove_file(&destination) {
+        Ok(()) => Ok(true),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(false),
+        Err(error) => Err(CommandError {
+            code: "io_error",
+            message: format!("could not remove the imported pack: {error}"),
+        }),
+    }
 }
 
 #[tauri::command]
@@ -3927,13 +4109,14 @@ pub fn plan_pack(
         code: "no_resource_dir",
         message: e.to_string(),
     })?;
-    let (packs, _) = load_runtime_packs(&resource_dir.join("packs"))?;
+    let (packs, _) = load_all_packs(&resource_dir.join("packs"), &user_packs_dir(&app)?)?;
     let pack = packs
         .into_iter()
+        .map(|(pack, _)| pack)
         .find(|pack| pack.id == request.pack_id)
         .ok_or(CommandError {
             code: "pack_not_found",
-            message: format!("debloat pack {:?} is not bundled", request.pack_id),
+            message: format!("debloat pack {:?} is not available", request.pack_id),
         })?;
     if pack.revision != request.revision {
         return Err(CommandError {
@@ -4027,7 +4210,7 @@ fn iso_now() -> String {
 mod tests {
     use super::{
         accepted_transport_override, append_host_operation, classify_shell, diagnostic_text,
-        execute_batch_plans, is_allowed_device_control, load_runtime_packs,
+        execute_batch_plans, is_allowed_device_control, load_all_packs, load_runtime_packs,
         pack_error_to_load_error, parse_fastboot_getvar, plan_action_batch, profile_preview_rows,
         unique_screenshot_remote, validate_action_batch_plan, validate_backup_target,
         validate_remote_path, AdbRecoveryOutcome, AdbRecoveryRecord, ProcessOutput,
@@ -4485,6 +4668,100 @@ packages:
         assert!(packs.is_empty());
         assert_eq!(errors.len(), 2);
         assert!(errors.iter().all(|error| error.code == "pack_duplicate_id"));
+    }
+
+    fn pack_yaml(id: &str, package: &str) -> String {
+        format!(
+            r#"
+id: {id}
+revision: 1
+name: Pack {id}
+version: "1"
+description: Merge loader test pack.
+targets:
+  user_scope: any
+provenance:
+  source: https://example.invalid/test
+  license: MIT
+packages:
+  - id: {package}
+    removal: recommended
+    description: Merge test package.
+"#
+        )
+    }
+
+    fn merge_dirs(name: &str) -> (std::path::PathBuf, std::path::PathBuf) {
+        let base = std::env::temp_dir().join(format!("droidsmith-merge-pack-{name}"));
+        let _ = std::fs::remove_dir_all(&base);
+        let bundled = base.join("bundled");
+        let user = base.join("user");
+        std::fs::create_dir_all(&bundled).unwrap();
+        std::fs::create_dir_all(&user).unwrap();
+        (bundled, user)
+    }
+
+    #[test]
+    fn merged_loader_flags_bundled_and_imported_packs() {
+        let (bundled, user) = merge_dirs("merge");
+        std::fs::write(
+            bundled.join("shipped.yaml"),
+            pack_yaml("shipped-pack", "com.example.shipped"),
+        )
+        .unwrap();
+        std::fs::write(
+            user.join("imported.yaml"),
+            pack_yaml("imported-pack", "com.example.imported"),
+        )
+        .unwrap();
+
+        let (packs, errors) = load_all_packs(&bundled, &user).unwrap();
+        assert!(errors.is_empty());
+        assert_eq!(packs.len(), 2);
+        // Sorted by id: imported-pack < shipped-pack.
+        assert_eq!(packs[0].0.id, "imported-pack");
+        assert!(packs[0].1, "imported pack is flagged imported");
+        assert_eq!(packs[1].0.id, "shipped-pack");
+        assert!(!packs[1].1, "bundled pack is not flagged imported");
+    }
+
+    #[test]
+    fn merged_loader_rejects_imported_pack_shadowing_bundled_id() {
+        let (bundled, user) = merge_dirs("shadow");
+        std::fs::write(
+            bundled.join("shipped.yaml"),
+            pack_yaml("shared-id", "com.example.bundled"),
+        )
+        .unwrap();
+        std::fs::write(
+            user.join("shadow.yaml"),
+            pack_yaml("shared-id", "com.example.user"),
+        )
+        .unwrap();
+
+        let (packs, errors) = load_all_packs(&bundled, &user).unwrap();
+        // Only the bundled pack survives; the shadowing import is an error.
+        assert_eq!(packs.len(), 1);
+        assert_eq!(packs[0].0.id, "shared-id");
+        assert!(!packs[0].1);
+        assert_eq!(errors.len(), 1);
+        assert_eq!(errors[0].code, "pack_duplicate_id");
+    }
+
+    #[test]
+    fn merged_loader_tolerates_a_missing_user_directory() {
+        let (bundled, user) = merge_dirs("no-user");
+        std::fs::write(
+            bundled.join("shipped.yaml"),
+            pack_yaml("only-bundled", "com.example.only"),
+        )
+        .unwrap();
+        std::fs::remove_dir_all(&user).unwrap();
+
+        let (packs, errors) = load_all_packs(&bundled, &user).unwrap();
+        assert!(errors.is_empty());
+        assert_eq!(packs.len(), 1);
+        assert_eq!(packs[0].0.id, "only-bundled");
     }
 
     #[test]

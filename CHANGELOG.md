@@ -14,6 +14,26 @@ completion.
 Working batches live here. Sections collapse into a versioned release on
 each milestone tag.
 
+## [0.9.4] - 2026-07-21
+
+Local debloat-pack import — the network-free half of R-095.
+
+### Added
+
+- **Import debloat packs from a local YAML file.** The Debloat picker gains an
+  "Import a pack" control that opens a backend-owned native file dialog through
+  the audited one-shot host-path grant model, optionally verifies a
+  caller-supplied SHA-256 pin, schema-validates and lints the bytes with the
+  same loader as bundled packs, rejects ids that shadow a bundled pack, and
+  stores the file under the app-data `packs/` directory so it appears in the
+  picker on the next load. Imported packs carry an "Imported" badge and a
+  remove control. New IPC: `import_pack`, `remove_imported_pack`; new host-path
+  purpose `pack_import_open`; `PackCandidate` now reports an `imported` flag.
+  This ships the dependency-free alternative called out in R-095 with no
+  outbound network capability — remote-URL fetching stays in
+  [Roadmap_Blocked.md](Roadmap_Blocked.md) pending a maintainer network-posture
+  decision.
+
 ## [0.9.3] - 2026-07-21
 
 Roadmap drain to empty: the Devices.tsx god-file split, persistent gnirehtet

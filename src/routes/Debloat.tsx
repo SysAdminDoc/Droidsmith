@@ -7,10 +7,12 @@ import {
   callExplainFailure,
   callExportRecoveryBaseline,
   callGetDeviceInfo,
+  callImportPack,
   callListPackages,
   callListPacks,
   callListUsers,
   callPlanPack,
+  callRemoveImportedPack,
   callSelectHostPath,
   deviceTarget,
   inTauri,
@@ -680,6 +682,10 @@ export default function DebloatRoute() {
             state={packsState}
             onSelect={selectPack}
             onRefresh={() => void loadPacks()}
+            onRemove={async (packId) => {
+              await callRemoveImportedPack(packId);
+              await loadPacks();
+            }}
           />
         )}
 
@@ -925,14 +931,190 @@ function PackErrors({ errors }: { errors: PackLoadError[] }) {
   );
 }
 
+/// Import a debloat pack from a local YAML file through the audited host-path
+/// grant model. Network-free alternative to remote-pack fetching (R-095): the
+/// backend schema-validates the bytes, optionally checks a SHA-256 pin, and
+/// stores the pack under the app-data `packs/` directory.
+function PackImportControl({ onImported }: { onImported: () => void }) {
+  const { t } = useTranslation();
+  const [sha256, setSha256] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [status, setStatus] = useState<
+    | { kind: "success"; message: string; sha: string }
+    | { kind: "error"; message: string }
+    | null
+  >(null);
+
+  const runImport = useCallback(async () => {
+    if (busy) return;
+    setBusy(true);
+    setStatus(null);
+    try {
+      const grant = await callSelectHostPath("pack_import_open");
+      if (!grant) {
+        setBusy(false);
+        return;
+      }
+      const result = await callImportPack(grant.id, sha256);
+      setSha256("");
+      setStatus({
+        kind: "success",
+        message: t("debloat.import.success", { name: result.name }),
+        sha: result.sha256,
+      });
+      onImported();
+    } catch (e) {
+      setStatus({ kind: "error", message: errorMessage(e) });
+    } finally {
+      setBusy(false);
+    }
+  }, [busy, sha256, onImported, t]);
+
+  return (
+    <Card className="p-5">
+      <h3 className="text-sm font-semibold text-anvil-50">
+        {t("debloat.import.title")}
+      </h3>
+      <p className="mt-1 text-xs text-anvil-400">{t("debloat.import.body")}</p>
+      <div className="mt-3 flex flex-wrap items-end gap-3">
+        <label className="flex flex-col gap-1 text-xs text-anvil-300">
+          <span>{t("debloat.import.sha256Label")}</span>
+          <FieldInput
+            value={sha256}
+            onChange={(e) => setSha256(e.target.value)}
+            placeholder={t("debloat.import.sha256Placeholder")}
+            spellCheck={false}
+            autoComplete="off"
+            className="w-72 font-mono"
+            aria-label={t("debloat.import.sha256Label")}
+          />
+        </label>
+        <Button
+          type="button"
+          size="sm"
+          onClick={() => void runImport()}
+          disabled={busy}
+        >
+          {busy ? t("debloat.import.importing") : t("debloat.import.button")}
+        </Button>
+      </div>
+      {status?.kind === "success" && (
+        <div className="mt-3">
+          <StatePanel title={t("debloat.import.title")} tone="success">
+            <p>{status.message}</p>
+            <p className="mt-1 break-all font-mono text-xs text-anvil-300">
+              {t("debloat.import.shaLine", { sha: status.sha })}
+            </p>
+          </StatePanel>
+        </div>
+      )}
+      {status?.kind === "error" && (
+        <div className="mt-3">
+          <StatePanel title={t("debloat.import.failed")} tone="danger">
+            <p className="break-all">{status.message}</p>
+          </StatePanel>
+        </div>
+      )}
+    </Card>
+  );
+}
+
+/// A single selectable pack card. Imported packs carry a badge and a remove
+/// control; the remove button is a sibling of the selectable button so it is
+/// never nested inside another button.
+function PackCard({
+  candidate,
+  onSelect,
+  onRemove,
+}: {
+  candidate: PackCandidate;
+  onSelect: (candidate: PackCandidate) => void;
+  onRemove: (packId: string) => Promise<void>;
+}) {
+  const { t } = useTranslation();
+  const { pack, assessment, imported } = candidate;
+  const [removing, setRemoving] = useState(false);
+  const [removeError, setRemoveError] = useState<string | null>(null);
+
+  const remove = useCallback(async () => {
+    if (removing) return;
+    setRemoving(true);
+    setRemoveError(null);
+    try {
+      await onRemove(pack.id);
+    } catch (e) {
+      setRemoveError(errorMessage(e));
+      setRemoving(false);
+    }
+  }, [removing, onRemove, pack.id]);
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => onSelect(candidate)}
+        className="group h-full w-full rounded-lg border border-white/10 bg-white/[0.02] p-4 text-start transition hover:border-circuit-300/30 hover:bg-circuit-300/[0.04] focus:outline-none focus-visible:ring-2 focus-visible:ring-circuit-300"
+      >
+        <div className="flex items-start justify-between gap-3">
+          <h4 className="text-sm font-semibold text-anvil-50">{pack.name}</h4>
+          <Badge tone="neutral">
+            {t("debloat.packageShortCount", {
+              count: pack.packages.length,
+            })}
+          </Badge>
+          <Badge tone={compatibilityTone(assessment.status)}>
+            {t(`debloat.compatibility.${assessment.status}`)}
+          </Badge>
+        </div>
+        <p className="mt-2 line-clamp-3 text-xs leading-5 text-anvil-400">
+          {pack.description}
+        </p>
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          {imported && <Badge tone="info">{t("debloat.import.badge")}</Badge>}
+          {pack.targets.manufacturer.map((m) => (
+            <Badge key={m} tone="info">
+              {m}
+            </Badge>
+          ))}
+          {pack.targets.rom.map((r) => (
+            <Badge key={r} tone="neutral">
+              {r}
+            </Badge>
+          ))}
+        </div>
+      </button>
+      {imported && (
+        <Button
+          type="button"
+          size="sm"
+          variant="danger"
+          onClick={() => void remove()}
+          disabled={removing}
+          aria-label={t("debloat.import.remove")}
+          className="absolute end-2 top-2"
+        >
+          {removing ? t("debloat.import.importing") : "×"}
+        </Button>
+      )}
+      {removeError && (
+        <p className="mt-1 break-all text-xs text-red-300">
+          {t("debloat.import.removeFailed")}: {removeError}
+        </p>
+      )}
+    </div>
+  );
+}
+
 function PackPicker({
   state,
   onSelect,
   onRefresh,
+  onRemove,
 }: {
   state: PacksState;
   onSelect: (candidate: PackCandidate) => void;
   onRefresh: () => void;
+  onRemove: (packId: string) => Promise<void>;
 }) {
   const { t } = useTranslation();
 
@@ -970,7 +1152,7 @@ function PackPicker({
 
   if (state.packs.length === 0) {
     return (
-      <>
+      <div className="space-y-4">
         <PackErrors errors={state.errors} />
         <StatePanel title={t("debloat.noPacksTitle")} tone="info">
           <p>
@@ -979,62 +1161,34 @@ function PackPicker({
             {t("debloat.noPacksBodySuffix")} <code>packs/_example.yaml</code>.
           </p>
         </StatePanel>
-      </>
+        <PackImportControl onImported={onRefresh} />
+      </div>
     );
   }
 
   return (
-    <Card className="p-5">
-      <PackErrors errors={state.errors} />
-      <h3 className="text-sm font-semibold text-anvil-50">
-        {t("debloat.choosePack")}
-      </h3>
-      <p className="mt-1 text-xs text-anvil-400">
-        {t("debloat.choosePackBody")}
-      </p>
-      <div className="mt-4 grid gap-3 sm:grid-cols-2">
-        {state.packs.map((candidate) => {
-          const { pack, assessment } = candidate;
-          return (
-            <button
-              key={pack.id}
-              type="button"
-              onClick={() => onSelect(candidate)}
-              className="group rounded-lg border border-white/10 bg-white/[0.02] p-4 text-start transition hover:border-circuit-300/30 hover:bg-circuit-300/[0.04] focus:outline-none focus-visible:ring-2 focus-visible:ring-circuit-300"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <h4 className="text-sm font-semibold text-anvil-50">
-                  {pack.name}
-                </h4>
-                <Badge tone="neutral">
-                  {t("debloat.packageShortCount", {
-                    count: pack.packages.length,
-                  })}
-                </Badge>
-                <Badge tone={compatibilityTone(assessment.status)}>
-                  {t(`debloat.compatibility.${assessment.status}`)}
-                </Badge>
-              </div>
-              <p className="mt-2 line-clamp-3 text-xs leading-5 text-anvil-400">
-                {pack.description}
-              </p>
-              <div className="mt-3 flex flex-wrap gap-1.5">
-                {pack.targets.manufacturer.map((m) => (
-                  <Badge key={m} tone="info">
-                    {m}
-                  </Badge>
-                ))}
-                {pack.targets.rom.map((r) => (
-                  <Badge key={r} tone="neutral">
-                    {r}
-                  </Badge>
-                ))}
-              </div>
-            </button>
-          );
-        })}
-      </div>
-    </Card>
+    <div className="space-y-4">
+      <PackImportControl onImported={onRefresh} />
+      <Card className="p-5">
+        <PackErrors errors={state.errors} />
+        <h3 className="text-sm font-semibold text-anvil-50">
+          {t("debloat.choosePack")}
+        </h3>
+        <p className="mt-1 text-xs text-anvil-400">
+          {t("debloat.choosePackBody")}
+        </p>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          {state.packs.map((candidate) => (
+            <PackCard
+              key={candidate.pack.id}
+              candidate={candidate}
+              onSelect={onSelect}
+              onRemove={onRemove}
+            />
+          ))}
+        </div>
+      </Card>
+    </div>
   );
 }
 

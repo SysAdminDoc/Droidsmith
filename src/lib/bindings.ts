@@ -344,6 +344,31 @@ export const commands = {
   async listPacks(target: DeviceTarget, userId: number): Promise<PackListing> {
     return await TAURI_INVOKE("list_packs", { target, userId });
   },
+  /**
+   * Import a debloat pack from a user-selected local file through a one-shot
+   * native read grant. This is the network-free alternative to remote-pack
+   * fetching (R-095): it reuses the audited host-path grant model, optionally
+   * verifies a caller-supplied SHA-256 pin, schema-validates and lints the
+   * bytes, rejects ids that shadow a bundled pack, and persists the file to the
+   * app-data `packs/` directory so it appears in the picker on the next load.
+   */
+  async importPack(
+    pathGrant: string,
+    expectedSha256: string | null,
+  ): Promise<ImportedPack> {
+    return await TAURI_INVOKE("import_pack", {
+      path_grant: pathGrant,
+      expectedSha256,
+    });
+  },
+  /**
+   * Remove a previously-imported debloat pack by its stable id. Bundled packs
+   * live in the read-only resource directory and are never touched. Returns
+   * `true` when a file was deleted, `false` when no import with that id existed.
+   */
+  async removeImportedPack(packId: string): Promise<boolean> {
+    return await TAURI_INVOKE("remove_imported_pack", { packId });
+  },
   async planPack(request: PlanPackRequest): Promise<PlannedPack> {
     return await TAURI_INVOKE("plan_pack", { request });
   },
@@ -1527,7 +1552,25 @@ export type HostPathPurpose =
   | "push_open"
   | "install_open"
   | "recovery_baseline_open"
-  | "profile_open";
+  | "profile_open"
+  | "pack_import_open";
+/**
+ * Metadata returned after a debloat pack is imported from a local file.
+ */
+export type ImportedPack = {
+  id: string;
+  name: string;
+  revision: number;
+  /**
+   * SHA-256 of the imported file, computed at import time. Surfaced so the
+   * user can record it and re-import the same bytes with a pin later.
+   */
+  sha256: string;
+  /**
+   * Number of package entries the pack offers to remove.
+   */
+  packages: number;
+};
 export type InstallFailure = {
   code: string;
   cause: string;
@@ -1852,7 +1895,16 @@ export type PackAssessment = {
   checks: CompatibilityCheck[];
   entries: PackEntryAssessment[];
 };
-export type PackCandidate = { pack: Pack; assessment: PackAssessment };
+export type PackCandidate = {
+  pack: Pack;
+  assessment: PackAssessment;
+  /**
+   * True when the pack was imported from a user-supplied local file
+   * (stored under the app-data `packs/` directory) rather than bundled
+   * with the app. Imported packs can be removed from the picker.
+   */
+  imported: boolean;
+};
 export type PackEntry = {
   /**
    * Android package identifier.

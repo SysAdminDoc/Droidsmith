@@ -33,6 +33,7 @@ import {
   type HostDoctorReport,
   type HostPathGrant,
   type HostPathPurpose,
+  type ImportedPack,
   type InstallOptions,
   type InstallPackageResult,
   type JournalEntry as GeneratedJournalEntry,
@@ -1091,4 +1092,15 @@ export async function callPlanPack(
   request: PlanPackRequest,
 ): Promise<PlannedPack> {
   return rendererRecord(await commands.planPack(request));
+}
+
+export async function callImportPack(
+  pathGrant: string,
+  expectedSha256?: string,
+): Promise<ImportedPack> {
+  return commands.importPack(pathGrant, expectedSha256?.trim() || null);
+}
+
+export async function callRemoveImportedPack(packId: string): Promise<boolean> {
+  return commands.removeImportedPack(packId);
 }

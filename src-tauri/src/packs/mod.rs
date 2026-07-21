@@ -232,6 +232,10 @@ pub struct PackAssessment {
 pub struct PackCandidate {
     pub pack: Pack,
     pub assessment: PackAssessment,
+    /// True when the pack was imported from a user-supplied local file
+    /// (stored under the app-data `packs/` directory) rather than bundled
+    /// with the app. Imported packs can be removed from the picker.
+    pub imported: bool,
 }
 
 #[derive(Debug, thiserror::Error)]
