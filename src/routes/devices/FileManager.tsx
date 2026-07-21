@@ -101,6 +101,11 @@ export function FileManager({ target }: { target: DeviceTarget }) {
     async (path: string) => {
       setLoading(true);
       setPullMsg(null);
+      // Clear any prior file-operation status so a "complete" line does not
+      // linger after the user navigates to another directory. confirmReview
+      // sets its message after awaiting the refresh browse(), so the freshly
+      // completed operation still reports.
+      setOperationMessage(null);
       setError(null);
       try {
         const result = await callListRemoteFiles(target, path);
