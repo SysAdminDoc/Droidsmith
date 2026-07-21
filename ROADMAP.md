@@ -26,3 +26,204 @@ instead.
   `src-tauri/src/gnirehtet.rs` + `src-tauri/src/commands.rs` (add a
   list-sessions-by-serial command so a remount can re-attach to a running
   session instead of showing "start" and spawning a duplicate).
+
+## Research-Driven Additions
+
+Added 2026-07-20 from the RESEARCH.md pass (v0.9.1). Items are actionable and
+verifiable in the current headless harness; device-verification-only ideas
+(multi-device broadcast, in-GUI touch mapping, auto-update hosting) are tracked
+in Roadmap_Blocked.md, not here — see the Rejected Ideas table in RESEARCH.md.
+
+### P1
+
+- [ ] P1 — R-086 Wireless connection history + one-click / auto reconnect
+  Why: reconnecting a wireless device after a reboot or IP change is the single
+  loudest recurring complaint across ADB desktop tooling; Droidsmith already
+  pairs but keeps no history and offers no re-attach.
+  Evidence: scrcpy #721, #4866, #3003, #4198, #5564 (IP churn); kil0bit-kb/scrcpy-gui ships it.
+  Touches: `src/routes/Wireless.tsx`, `src-tauri/src/settings.rs` (persist a
+  bounded `wireless_history` list of host:port + last-seen + optional label),
+  `src-tauri/src/commands.rs` (reconnect-by-endpoint command), optional
+  "reconnect known devices on launch" toggle.
+  Acceptance: previously paired endpoints persist across restarts, appear in a
+  history list with one-click reconnect, and an opt-in setting attempts
+  reconnect on app launch; covered by a settings round-trip test + ui:smoke flow.
+  Complexity: M
+
+### P2
+
+- [ ] P2 — R-087 Post-OTA debloat-drift detection
+  Why: the one debloat gap no competitor (UAD-ng, Canta, ADB AppControl) solves —
+  packages silently reappear/re-enable after an OTA. Droidsmith already has
+  recovery baselines; it lacks change detection to prompt a re-check.
+  Evidence: UAD-ng FAQ/wiki (no auto re-apply); RESEARCH.md community signal #7.
+  Touches: `src-tauri/src/commands.rs` (capture `ro.build.fingerprint` /
+  `ro.build.version.incremental` into the recovery baseline), `src/routes/
+  apps/RecoveryBaselinePanel.tsx` + `src/routes/Debloat.tsx` (flag when the
+  current fingerprint differs from the baseline and offer a drift re-check).
+  Acceptance: a baseline stores the build fingerprint; on reconnect a changed
+  fingerprint surfaces a "device updated — review debloat drift" prompt that
+  runs the existing drift diff; re-apply stays behind explicit confirmation
+  (never silent). Unit test on the fingerprint-diff/drift logic + smoke flow.
+  Complexity: L
+
+- [ ] P2 — IMP-68 Wire up or remove the orphaned `explain_failure` IPC
+  Why: the quirks failure-hint command is registered (`lib.rs:137`), defined
+  (`commands.rs:4515`), bound, and unit-tested, but has zero frontend callers —
+  built value that never reached the UI.
+  Evidence: `grep explain_failure src/` returns only generated bindings.
+  Touches: `src/lib/tauri.ts` (add wrapper), Apps/Debloat/Mirror failure
+  surfaces (show the quirk hint on operation failure), or delete the command +
+  registration if the quirks-hint direction is abandoned.
+  Acceptance: an operation failure with a matching bundled quirk shows the
+  explanation in the UI, exercised by a ui:smoke flow — or the command and its
+  registration/bindings are removed and tests updated.
+  Complexity: M
+
+- [ ] P2 — R-088 Expand the Mirror scrcpy flag surface
+  Why: Droidsmith launches scrcpy but drives only ~12 flags; several
+  commonly-wanted, already-stable options are unexposed.
+  Evidence: `src-tauri/src/scrcpy.rs` builds no `--max-fps`, `--crop`,
+  `--fullscreen`, `--always-on-top`, `--no-control` (view-only), `--display-
+  orientation`, `--screen-off-timeout`, `--audio-codec` (verified absent).
+  Touches: `src-tauri/src/scrcpy.rs` (launch request + arg builder + tests),
+  `src/routes/Mirror.tsx` + `src/routes/mirrorPresets.ts` (controls + persist).
+  Acceptance: the new flags are selectable, persist in mirror presets, and are
+  asserted in the scrcpy arg-construction unit tests; view-only mode omits
+  control input.
+  Complexity: M
+
+- [ ] P2 — R-090 ProcessManager force-stop action
+  Why: a panel named "Process Manager" is read-only; users expect to stop a
+  running app process. Escrcpy/AppControl-class tools offer it.
+  Evidence: `src/routes/devices/ProcessManager.tsx` has no kill/force-stop;
+  no `am force-stop` IPC exists in `commands.rs`.
+  Touches: `src-tauri/src/commands.rs` (a confirmed, journaled `force-stop <pkg>`
+  command via `am force-stop`), `src/routes/devices/ProcessManager.tsx` (row
+  action behind a confirm), fake-tool-contract coverage.
+  Acceptance: selecting a process offers force-stop behind an explicit confirm,
+  routes through the journal, and is covered by the fake-tool contract test.
+  Complexity: M
+
+- [ ] P2 — R-092 Low-target-SDK install option + Advanced-Protection detection
+  Why: on Android 14–16 old-targetSDK APK installs fail and Advanced Protection
+  disables debugging; both currently fail opaquely.
+  Evidence: platform-tools `adb install --bypass-low-target-sdk-block`
+  (A14 minSDK 23 / A15 24); Android 16 Advanced Protection behavior-changes.
+  Touches: `src/routes/apps/InstallPanels.tsx` + `src-tauri/src/install.rs`
+  (opt-in bypass flag), `src/routes/HostDoctor.tsx`/`DiagnosticsCenter.tsx`
+  (detect and explain "debugging blocked by Advanced Protection" and low-SDK
+  install failures).
+  Acceptance: an install checkbox passes `--bypass-low-target-sdk-block`; a
+  device under Advanced Protection or a low-SDK install failure produces a clear
+  explanatory diagnostic instead of a raw error. Unit test on the flag builder +
+  the failure-classification.
+  Complexity: M
+
+- [ ] P2 — IMP-69 Add process_tree.rs unit tests
+  Why: the cross-platform child-containment/kill module is security-relevant
+  (prevents adb/fastboot/scrcpy children outliving an operation) and has no tests.
+  Evidence: `grep -c '#[test]' src-tauri/src/process_tree.rs` → 0.
+  Touches: `src-tauri/src/process_tree.rs` (`#[cfg(test)]` for group creation,
+  containment, and reap/kill paths using a short-lived child).
+  Acceptance: tests cover spawn-into-group, kill-group, and no-orphan on drop;
+  `cargo test` green on Windows + Unix cfg paths.
+  Complexity: S
+
+### P3
+
+- [ ] P3 — R-089 scrcpy v3–v4 capability surface (new/flex display, camera, codecs)
+  Why: net-new scrcpy capabilities Droidsmith can expose once R-088 lands.
+  Evidence: scrcpy v3.0 `--new-display`, v3.2 audio-source expansion, v4.0 flex
+  display + camera torch/zoom, v4.1 VP8/VP9.
+  Touches: `src-tauri/src/scrcpy.rs` (capability probe + args), `src/routes/
+  Mirror.tsx` (virtual-display, camera, VP8/VP9 fallback, audio-source picker),
+  degrade gracefully on scrcpy <4.0.
+  Acceptance: capabilities gate on detected scrcpy version; args asserted in
+  unit tests; unsupported flags hidden on older scrcpy.
+  Complexity: M
+
+- [ ] P3 — IMP-70 Tests for deviceStore.ts and lib/logcatQueries.ts
+  Why: the device-lifecycle `useSyncExternalStore` machine and the logcat
+  persistence layer (with storage fallback) are untested core logic.
+  Evidence: no `src/lib/deviceStore.test.ts`; `src/lib/logcatQueries.ts` untested
+  (the tested file is the sibling `src/routes/logcatQueries.ts`).
+  Touches: `src/lib/deviceStore.test.ts`, `src/lib/logcatQueries.test.ts` (new).
+  Acceptance: subscribe/notify/reconnect transitions and load/save-with-fallback
+  are covered; `npm test` green.
+  Complexity: S
+
+- [ ] P3 — IMP-71 LayoutInspector filter-to-empty blank panel
+  Why: capturing nodes then filtering to zero matches renders a blank panel;
+  peer inspectors show a "no matching results" state.
+  Evidence: `LayoutInspector.tsx:136` (empty only when `nodes.length === 0`) and
+  `:141` (list only when `filtered.length > 0`) — no branch between.
+  Touches: `src/routes/devices/LayoutInspector.tsx`.
+  Acceptance: nodes present + zero filter matches shows a "no matching nodes"
+  EmptyState; covered by a smoke assertion.
+  Complexity: S
+
+- [ ] P3 — R-091 NetworkInspector export/copy
+  Why: Logcat and LayoutInspector offer export; the socket table does not.
+  Evidence: `src/routes/devices/NetworkInspector.tsx` has no export/copy action.
+  Touches: `src/routes/devices/NetworkInspector.tsx` (copy-to-clipboard /
+  save-as-text of the current socket rows).
+  Acceptance: the current (filtered) socket table can be copied or saved; smoke
+  assertion on the action.
+  Complexity: S
+
+- [ ] P3 — R-094 gnirehtet discovery hint when not on PATH
+  Why: `InternetSharing` returns `null` when gnirehtet is missing, so the feature
+  is silently invisible with no way to learn it exists.
+  Evidence: `src/routes/devices/InternetSharing.tsx:122` early-returns `null`.
+  Touches: `src/routes/devices/InternetSharing.tsx` (render a locate-failure hint
+  with install guidance, mirroring scrcpy/fastboot).
+  Acceptance: with gnirehtet absent, the panel shows an "install gnirehtet to
+  enable Share Internet" hint instead of nothing; smoke assertion.
+  Complexity: S
+
+- [ ] P3 — R-093 Host-doctor USB/mDNS backend troubleshooting toggles
+  Why: platform-tools 37.0.1 changed USB/mDNS backends; device-detection issues
+  now hinge on env toggles users can't discover.
+  Evidence: 37.0.1 removed `openscreen` mDNS backend; added `ADB_USB_LEGACY=1`
+  (Windows) and macOS `ADB_LIBUSB=1`.
+  Touches: `src/routes/HostDoctor.tsx`, `src-tauri/src/` adb-invocation env
+  handling (opt-in `ADB_USB_LEGACY` / mDNS backend note + relaunch adb server).
+  Acceptance: host-doctor surfaces a USB-backend toggle that sets the env for the
+  adb server and reports the active mDNS backend; unit test on env assembly.
+  Complexity: S
+
+- [ ] P3 — R-095 Import remote debloat pack by URL with SHA-256 pin
+  Why: static bundled YAML can't gain OEM/package coverage without an app
+  release; a generic pinned-URL import gives UAD-ng-style freshness without the
+  blocked R-036 redistribution dependency.
+  Evidence: UAD-ng ships a remote-updatable community list; Droidsmith packs are
+  static (`packs/*.yaml`).
+  Touches: `src-tauri/src/packs/` (fetch + SHA-256 verify + schema-validate a
+  remote pack), `src/routes/Debloat.tsx` (add-remote-pack UX).
+  Acceptance: a user can add a pack from a URL that is SHA-256-pinned and
+  schema-validated before use; malformed/unpinned sources are rejected; unit
+  test on verify + validate.
+  Complexity: M
+
+- [ ] P3 — IMP-72 Extract Devices.tsx inline panels
+  Why: Devices.tsx (1,633 LOC) still hosts several independent panels inline,
+  unlike the completed IMP-67 device sub-panel split.
+  Evidence: `AdbHealthPanel` (545–676), `RecoveryDialog` (687–840), `DeviceTable`
+  (891–1023), `DeviceDetail` (1053–1221), `DeviceHealthCards` (1221–1346).
+  Touches: new files under `src/routes/devices/`, `src/routes/Devices.tsx`.
+  Acceptance: panels move to `src/routes/devices/` with no behavior change;
+  typecheck/lint/tests/ui:smoke green.
+  Complexity: M
+
+- [ ] P3 — IMP-73 Standardize data-table ARIA semantics
+  Why: only `PackageTable.tsx` uses the ARIA grid pattern; 9 other tables use
+  plain HTML, an inconsistent a11y baseline.
+  Evidence: `PackageTable.tsx:230,259` (`role="row"`/`aria-rowindex`) vs plain
+  `<table>` in NetworkInspector/ProcessManager/Debloat/Devices/Fastboot/Profiles/
+  Wireless/JournalPanel/RecoveryBaselinePanel.
+  Touches: the listed table components (or a shared table primitive in
+  `src/routes/common.tsx`).
+  Acceptance: interactive/sortable tables share one documented pattern
+  (grid roles + `aria-sort` where sortable); no visual regressions.
+  Complexity: M
