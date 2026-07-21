@@ -4093,6 +4093,92 @@ pub fn remove_imported_pack(
     }
 }
 
+/// Result of exporting a device's captured debloat state to a pack file.
+#[derive(specta::Type, Debug, Clone, Serialize)]
+pub struct ExportedDevicePack {
+    pub pack_id: String,
+    pub packages: usize,
+    pub artifact: crate::fs_util::HostArtifact,
+}
+
+/// Capture the selected device's currently disabled/archived/uninstalled
+/// packages and write them to a schema-valid debloat pack YAML through a
+/// one-shot native save grant (R-098). The result round-trips through
+/// `import_pack`, so "what I removed on this phone" can be re-applied to another
+/// device after an OTA or factory reset.
+#[tauri::command]
+#[specta::specta]
+pub fn export_device_pack(
+    grants: tauri::State<'_, PathGrantStore>,
+    target: adb::DeviceTarget,
+    #[allow(non_snake_case)] userId: u32,
+    path_grant: String,
+) -> Result<ExportedDevicePack, CommandError> {
+    let destination = grants.consume(&path_grant, HostPathPurpose::PackExportSave)?;
+    let transport = validated_transport(&target)?;
+    adb::validate_device_target(&transport, &target)?;
+    let info = adb::get_device_info(&transport, &target)?;
+    let packages = adb::list_packages(&transport, &target, adb::PackageFilter::All, userId)?;
+
+    let removed: Vec<crate::packs::RemovedPackage> = packages
+        .into_iter()
+        .filter_map(|package| {
+            let kind = if package.archived {
+                crate::packs::RemovedKind::Archived
+            } else if package.retained {
+                crate::packs::RemovedKind::Uninstalled
+            } else if !package.enabled {
+                crate::packs::RemovedKind::Disabled
+            } else {
+                return None;
+            };
+            Some(crate::packs::RemovedPackage {
+                id: package.package,
+                kind,
+            })
+        })
+        .collect();
+
+    let context = crate::packs::DeviceExportContext {
+        manufacturer: info.manufacturer,
+        model: info.model,
+        api_level: info.sdk_level.and_then(|value| value.parse().ok()),
+        user_id: userId,
+        date: crate::time::iso_utc_now().chars().take(10).collect(),
+    };
+    let pack =
+        crate::packs::from_device_state(&removed, &context).map_err(|message| CommandError {
+            code: "pack_export_empty",
+            message,
+        })?;
+    let yaml = crate::packs::to_yaml(&pack).map_err(|error| CommandError {
+        code: "pack_export_serialize",
+        message: error.to_string(),
+    })?;
+
+    let staged =
+        crate::fs_util::StagedArtifact::new(&destination).map_err(|error| CommandError {
+            code: "io_error",
+            message: error.to_string(),
+        })?;
+    std::fs::write(staged.path(), yaml).map_err(|error| CommandError {
+        code: "io_error",
+        message: format!("could not write the exported pack: {error}"),
+    })?;
+    let artifact = staged
+        .commit(crate::fs_util::ArtifactKind::AnyFile)
+        .map_err(|error| CommandError {
+            code: "io_error",
+            message: error.to_string(),
+        })?;
+
+    Ok(ExportedDevicePack {
+        pack_id: pack.id,
+        packages: pack.packages.len(),
+        artifact,
+    })
+}
+
 /// Statically analyze a local APK file the user selects through a one-shot
 /// native read grant (R-097). Fully offline and device-free: parses the binary
 /// manifest, DEX headers, signing artifacts, and a per-entry size breakdown.

@@ -941,6 +941,17 @@
       "missing": "应用后包消失了；预期其保持已安装且已禁用状态。",
       "still_enabled": "应用后包仍处于启用状态。",
       "unknown": "应用后无法验证包状态。"
+    },
+    "export": {
+      "title": "导出设备状态",
+      "body": "将此设备已禁用、已归档和已卸载的软件包保存为可共享的方案包，可在 OTA 后或在其他设备上重新导入。",
+      "button": "导出为方案包……",
+      "exporting": "正在导出……",
+      "failed": "导出失败",
+      "success_one": "已将 {{count}} 个软件包导出到“{{id}}”。",
+      "success_few": "已将 {{count}} 个软件包导出到“{{id}}”。",
+      "success_many": "已将 {{count}} 个软件包导出到“{{id}}”。",
+      "success_other": "已将 {{count}} 个软件包导出到“{{id}}”。"
     }
   },
   "mirror": {

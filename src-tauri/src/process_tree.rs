@@ -196,8 +196,7 @@ mod tests {
         // is not yet reaped); the caller then reaps it via wait(). This is the
         // fallback branch taken when the OS group kill did not succeed.
         let started = Instant::now();
-        let outcome =
-            kill_direct_if_running(&mut child).expect("direct kill on running child");
+        let outcome = kill_direct_if_running(&mut child).expect("direct kill on running child");
         assert!(outcome.is_none());
         let status = child.wait().expect("reap direct-killed child");
         assert!(!status.success());

@@ -941,6 +941,17 @@
       "missing": "Package disappeared after apply; expected it to remain installed and disabled.",
       "still_enabled": "Package is still enabled after apply.",
       "unknown": "Package state could not be verified after apply."
+    },
+    "export": {
+      "title": "Export device state",
+      "body": "Save this device's disabled, archived, and uninstalled packages as a shareable pack you can re-import after an OTA or on another device.",
+      "button": "Export to pack…",
+      "exporting": "Exporting…",
+      "failed": "Export failed",
+      "success_one": "Exported {{count}} package to “{{id}}”.",
+      "success_few": "Exported {{count}} packages to “{{id}}”.",
+      "success_many": "Exported {{count}} packages to “{{id}}”.",
+      "success_other": "Exported {{count}} packages to “{{id}}”."
     }
   },
   "mirror": {

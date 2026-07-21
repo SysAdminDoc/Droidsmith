@@ -24,6 +24,14 @@ each milestone tag.
 
 ### Added
 
+- **R-098 — Export device debloat state as a shareable pack.** A new "Export
+  device state" control in the Debloat picker captures the selected device's
+  currently disabled, archived, and uninstalled packages and writes them to a
+  schema-valid pack YAML through a native save grant. The exported file
+  round-trips through the v0.9.4 pack importer, so "what I removed on this
+  phone" can be re-applied to another device after an OTA or factory reset.
+  New `export_device_pack` IPC command, `pack_export_save` host-path purpose,
+  and `packs::from_device_state` serializer.
 - **R-097 — Offline APK Analyzer.** A new sidebar route statically inspects a
   local `.apk`/`.apks` chosen through the audited host-path grant — no device
   required. Reports package id, version code/name, min/target/compile SDK,

@@ -5,6 +5,7 @@ import {
   errorMessage,
   callApplyAction,
   callExplainFailure,
+  callExportDevicePack,
   callExportRecoveryBaseline,
   callGetDeviceInfo,
   callImportPack,
@@ -17,6 +18,7 @@ import {
   deviceTarget,
   inTauri,
   type AndroidUser,
+  type DeviceTarget,
   type Quirk,
   type CompatibilityStatus,
   type JournalEntry,
@@ -59,6 +61,7 @@ import {
   FieldInput,
   FieldSelect,
   PaneHeader,
+  RevealInFolderButton,
   SkeletonLine,
   StatePanel,
   TableCell,
@@ -680,6 +683,8 @@ export default function DebloatRoute() {
         {selectedSerial && usersReady && wizard.step === "pick_pack" && (
           <PackPicker
             state={packsState}
+            target={selectedDevice ? deviceTarget(selectedDevice) : null}
+            userId={selectedUser}
             onSelect={selectPack}
             onRefresh={() => void loadPacks()}
             onRemove={async (packId) => {
@@ -1019,6 +1024,91 @@ function PackImportControl({ onImported }: { onImported: () => void }) {
   );
 }
 
+/// Capture the current device's disabled/archived/uninstalled packages into a
+/// shareable debloat pack YAML (R-098), symmetric to the import control. The
+/// exported file round-trips through the importer.
+function PackExportControl({
+  target,
+  userId,
+}: {
+  target: DeviceTarget;
+  userId: number;
+}) {
+  const { t } = useTranslation();
+  const [busy, setBusy] = useState(false);
+  const [status, setStatus] = useState<
+    | { kind: "success"; message: string; path: string }
+    | { kind: "error"; message: string }
+    | null
+  >(null);
+
+  const runExport = useCallback(async () => {
+    if (busy) return;
+    setBusy(true);
+    setStatus(null);
+    try {
+      const grant = await callSelectHostPath(
+        "pack_export_save",
+        "device-debloat.yaml",
+      );
+      if (!grant) {
+        setBusy(false);
+        return;
+      }
+      const result = await callExportDevicePack(target, userId, grant.id);
+      setStatus({
+        kind: "success",
+        message: t("debloat.export.success", {
+          count: result.packages,
+          id: result.pack_id,
+        }),
+        path: result.artifact.local_path,
+      });
+    } catch (e) {
+      setStatus({ kind: "error", message: errorMessage(e) });
+    } finally {
+      setBusy(false);
+    }
+  }, [busy, target, userId, t]);
+
+  return (
+    <Card className="p-5">
+      <h3 className="text-sm font-semibold text-anvil-50">
+        {t("debloat.export.title")}
+      </h3>
+      <p className="mt-1 text-xs text-anvil-400">{t("debloat.export.body")}</p>
+      <div className="mt-3">
+        <Button
+          type="button"
+          size="sm"
+          onClick={() => void runExport()}
+          disabled={busy}
+        >
+          {busy ? t("debloat.export.exporting") : t("debloat.export.button")}
+        </Button>
+      </div>
+      {status?.kind === "success" && (
+        <div className="mt-3">
+          <StatePanel
+            title={t("debloat.export.title")}
+            tone="success"
+            actions={<RevealInFolderButton path={status.path} />}
+          >
+            <p>{status.message}</p>
+          </StatePanel>
+        </div>
+      )}
+      {status?.kind === "error" && (
+        <div className="mt-3">
+          <StatePanel title={t("debloat.export.failed")} tone="danger">
+            <p className="break-all">{status.message}</p>
+          </StatePanel>
+        </div>
+      )}
+    </Card>
+  );
+}
+
 /// A single selectable pack card. Imported packs carry a badge and a remove
 /// control; the remove button is a sibling of the selectable button so it is
 /// never nested inside another button.
@@ -1107,16 +1197,29 @@ function PackCard({
 
 function PackPicker({
   state,
+  target,
+  userId,
   onSelect,
   onRefresh,
   onRemove,
 }: {
   state: PacksState;
+  target: DeviceTarget | null;
+  userId: number;
   onSelect: (candidate: PackCandidate) => void;
   onRefresh: () => void;
   onRemove: (packId: string) => Promise<void>;
 }) {
   const { t } = useTranslation();
+  const tools =
+    target !== null ? (
+      <div className="grid gap-4 sm:grid-cols-2">
+        <PackImportControl onImported={onRefresh} />
+        <PackExportControl target={target} userId={userId} />
+      </div>
+    ) : (
+      <PackImportControl onImported={onRefresh} />
+    );
 
   if (state.kind === "loading") {
     return (
@@ -1161,14 +1264,14 @@ function PackPicker({
             {t("debloat.noPacksBodySuffix")} <code>packs/_example.yaml</code>.
           </p>
         </StatePanel>
-        <PackImportControl onImported={onRefresh} />
+        {tools}
       </div>
     );
   }
 
   return (
     <div className="space-y-4">
-      <PackImportControl onImported={onRefresh} />
+      {tools}
       <Card className="p-5">
         <PackErrors errors={state.errors} />
         <h3 className="text-sm font-semibold text-anvil-50">

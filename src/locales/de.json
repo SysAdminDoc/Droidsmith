@@ -941,6 +941,17 @@
       "missing": "Paket nach Anwendung verschwunden; erwartet wurde, dass es installiert und deaktiviert bleibt.",
       "still_enabled": "Paket ist nach Anwendung immer noch aktiviert.",
       "unknown": "Paketstatus konnte nach Anwendung nicht verifiziert werden."
+    },
+    "export": {
+      "title": "Gerätestatus exportieren",
+      "body": "Speichern Sie die deaktivierten, archivierten und deinstallierten Pakete dieses Geräts als teilbaren Pack, den Sie nach einem OTA oder auf einem anderen Gerät erneut importieren können.",
+      "button": "Als Pack exportieren …",
+      "exporting": "Exportiere …",
+      "failed": "Export fehlgeschlagen",
+      "success_one": "{{count}} Paket nach „{{id}}“ exportiert.",
+      "success_few": "{{count}} Pakete nach „{{id}}“ exportiert.",
+      "success_many": "{{count}} Pakete nach „{{id}}“ exportiert.",
+      "success_other": "{{count}} Pakete nach „{{id}}“ exportiert."
     }
   },
   "mirror": {

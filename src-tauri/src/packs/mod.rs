@@ -379,6 +379,165 @@ pub fn lint(p: &Pack) -> Vec<String> {
     issues
 }
 
+/// What the source device did to a package, used to tier an exported entry.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RemovedKind {
+    /// Installed but disabled (`pm disable`).
+    Disabled,
+    /// Archived (APK removed, user data kept — Android 15+).
+    Archived,
+    /// Uninstalled for the selected user (`pm uninstall --user`).
+    Uninstalled,
+}
+
+/// One package captured from a device's current debloat state.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RemovedPackage {
+    pub id: String,
+    pub kind: RemovedKind,
+}
+
+/// Device metadata retained on an exported pack so it round-trips through the
+/// importer and assesses correctly against the originating hardware.
+#[derive(Debug, Clone, Default)]
+pub struct DeviceExportContext {
+    pub manufacturer: Option<String>,
+    pub model: Option<String>,
+    pub api_level: Option<u32>,
+    pub user_id: u32,
+    /// Absolute capture date (`YYYY-MM-DD`); the caller stamps it.
+    pub date: String,
+}
+
+/// Serialize an exported pack to schema-v1 YAML. The result round-trips through
+/// [`load`] (parse + lint) — see the `exported_pack_round_trips` test.
+pub fn to_yaml(pack: &Pack) -> Result<String, serde_yaml_ng::Error> {
+    serde_yaml_ng::to_string(pack)
+}
+
+/// Build a schema-valid [`Pack`] capturing a device's currently disabled,
+/// archived, and uninstalled packages (R-098). Errors when there is nothing to
+/// export. The produced pack lints clean so it re-imports via `import_pack`.
+pub fn from_device_state(
+    removed: &[RemovedPackage],
+    context: &DeviceExportContext,
+) -> Result<Pack, String> {
+    let mut seen = HashSet::new();
+    let mut packages = Vec::new();
+    for entry in removed {
+        if !valid_package_name(&entry.id) || !seen.insert(entry.id.clone()) {
+            continue;
+        }
+        let (removal, description) = match entry.kind {
+            RemovedKind::Disabled => (
+                RemovalLevel::Recommended,
+                "Disabled on the source device.".to_string(),
+            ),
+            RemovedKind::Archived => (
+                RemovalLevel::Advanced,
+                "Archived on the source device (APK removed, user data kept).".to_string(),
+            ),
+            RemovedKind::Uninstalled => (
+                RemovalLevel::Recommended,
+                "Uninstalled for the selected user on the source device.".to_string(),
+            ),
+        };
+        packages.push(PackEntry {
+            id: entry.id.clone(),
+            removal,
+            description,
+            depends_on: Vec::new(),
+            needed_by: Vec::new(),
+            labels: vec!["device-export".to_string()],
+        });
+    }
+    if packages.is_empty() {
+        return Err(
+            "no disabled, archived, or uninstalled packages to export from this device".to_string(),
+        );
+    }
+
+    let device_label = [context.manufacturer.as_deref(), context.model.as_deref()]
+        .into_iter()
+        .flatten()
+        .collect::<Vec<_>>()
+        .join(" ");
+    let device_label = if device_label.trim().is_empty() {
+        "this device".to_string()
+    } else {
+        device_label
+    };
+    let user_scope = if context.user_id == 0 {
+        UserScope::Owner
+    } else {
+        UserScope::Current
+    };
+
+    let pack = Pack {
+        id: sanitize_pack_id(&context.manufacturer, &context.model),
+        revision: 1,
+        name: format!("{device_label} — captured debloat"),
+        version: PACK_SCHEMA_VERSION.to_string(),
+        description: format!(
+            "Captured from the current device state on {date}: {count} package(s) disabled, archived, or uninstalled. Review the removal tiers before applying to another device.",
+            date = context.date,
+            count = packages.len()
+        ),
+        targets: PackTargets {
+            manufacturer: context.manufacturer.clone().into_iter().collect(),
+            rom: Vec::new(),
+            model: context.model.clone().into_iter().collect(),
+            build_fingerprint: Vec::new(),
+            android_min: context.api_level,
+            android_max: None,
+            user_scope,
+        },
+        packages,
+        attribution: Some("Captured from device state by Droidsmith".to_string()),
+        provenance: PackProvenance {
+            source: "Droidsmith device export".to_string(),
+            license: "unspecified".to_string(),
+        },
+    };
+    debug_assert!(lint(&pack).is_empty(), "exported pack must lint clean");
+    Ok(pack)
+}
+
+/// Derive a valid kebab-case pack id from device metadata, always ending in
+/// `-export` and falling back to `device-export` when nothing usable remains.
+fn sanitize_pack_id(manufacturer: &Option<String>, model: &Option<String>) -> String {
+    let raw = [manufacturer.as_deref(), model.as_deref()]
+        .into_iter()
+        .flatten()
+        .collect::<Vec<_>>()
+        .join("-");
+    let mut slug = String::new();
+    let mut last_hyphen = true; // suppress a leading hyphen
+    for character in raw.chars() {
+        if character.is_ascii_alphanumeric() {
+            slug.push(character.to_ascii_lowercase());
+            last_hyphen = false;
+        } else if !last_hyphen {
+            slug.push('-');
+            last_hyphen = true;
+        }
+    }
+    let stem = slug.trim_matches('-');
+    // Reserve room for the `-export` suffix within the 64-char id ceiling.
+    let stem: String = stem.chars().take(48).collect();
+    let stem = stem.trim_matches('-');
+    let candidate = if stem.is_empty() {
+        "device-export".to_string()
+    } else {
+        format!("{stem}-export")
+    };
+    if valid_pack_id(&candidate) {
+        candidate
+    } else {
+        "device-export".to_string()
+    }
+}
+
 pub fn valid_pack_id(value: &str) -> bool {
     (3..=64).contains(&value.len())
         && !value.starts_with('-')
@@ -774,6 +933,85 @@ packages:
         assert!(lint(&pack)
             .iter()
             .any(|issue| issue.contains("dependency cycle")));
+    }
+
+    #[test]
+    fn exported_pack_round_trips_through_load() {
+        let removed = vec![
+            RemovedPackage {
+                id: "com.example.bloat".into(),
+                kind: RemovedKind::Disabled,
+            },
+            RemovedPackage {
+                id: "com.example.archived".into(),
+                kind: RemovedKind::Archived,
+            },
+            RemovedPackage {
+                id: "com.example.gone".into(),
+                kind: RemovedKind::Uninstalled,
+            },
+            // Duplicate and invalid ids are dropped, not surfaced as lint errors.
+            RemovedPackage {
+                id: "com.example.bloat".into(),
+                kind: RemovedKind::Disabled,
+            },
+            RemovedPackage {
+                id: ".invalid".into(),
+                kind: RemovedKind::Disabled,
+            },
+        ];
+        let context = DeviceExportContext {
+            manufacturer: Some("Google".into()),
+            model: Some("Pixel 8".into()),
+            api_level: Some(34),
+            user_id: 0,
+            date: "2026-07-21".into(),
+        };
+        let pack = from_device_state(&removed, &context).unwrap();
+        assert_eq!(pack.id, "google-pixel-8-export");
+        assert_eq!(pack.packages.len(), 3);
+        assert_eq!(pack.targets.user_scope, UserScope::Owner);
+        assert!(lint(&pack).is_empty(), "{:?}", lint(&pack));
+
+        // The serialized YAML must parse and lint cleanly via the import path.
+        let yaml = to_yaml(&pack).unwrap();
+        let dir = std::env::temp_dir().join(format!("droidsmith-export-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("export.yaml");
+        std::fs::write(&path, yaml).unwrap();
+        let loaded = load(&path).unwrap();
+        let _ = std::fs::remove_dir_all(&dir);
+        assert_eq!(loaded.id, pack.id);
+        assert_eq!(loaded.packages.len(), 3);
+        assert_eq!(loaded.packages[1].removal, RemovalLevel::Advanced);
+    }
+
+    #[test]
+    fn export_rejects_empty_and_sanitizes_missing_metadata() {
+        assert!(from_device_state(
+            &[],
+            &DeviceExportContext {
+                date: "2026-07-21".into(),
+                ..Default::default()
+            }
+        )
+        .is_err());
+
+        let pack = from_device_state(
+            &[RemovedPackage {
+                id: "com.x.y".into(),
+                kind: RemovedKind::Disabled,
+            }],
+            &DeviceExportContext {
+                user_id: 10,
+                date: "2026-07-21".into(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(pack.id, "device-export");
+        assert_eq!(pack.targets.user_scope, UserScope::Current);
+        assert!(lint(&pack).is_empty());
     }
 
     #[test]

@@ -370,6 +370,24 @@ export const commands = {
     return await TAURI_INVOKE("remove_imported_pack", { packId });
   },
   /**
+   * Capture the selected device's currently disabled/archived/uninstalled
+   * packages and write them to a schema-valid debloat pack YAML through a
+   * one-shot native save grant (R-098). The result round-trips through
+   * `import_pack`, so "what I removed on this phone" can be re-applied to another
+   * device after an OTA or factory reset.
+   */
+  async exportDevicePack(
+    target: DeviceTarget,
+    userId: number,
+    pathGrant: string,
+  ): Promise<ExportedDevicePack> {
+    return await TAURI_INVOKE("export_device_pack", {
+      target,
+      userId,
+      path_grant: pathGrant,
+    });
+  },
+  /**
    * Statically analyze a local APK file the user selects through a one-shot
    * native read grant (R-097). Fully offline and device-free: parses the binary
    * manifest, DEX headers, signing artifacts, and a per-entry size breakdown.
@@ -1485,6 +1503,14 @@ export type ExportedArtifact = {
   size_bytes: number;
   sha256: string;
 };
+/**
+ * Result of exporting a device's captured debloat state to a pack file.
+ */
+export type ExportedDevicePack = {
+  pack_id: string;
+  packages: number;
+  artifact: HostArtifact;
+};
 export type FastbootDevice = {
   serial: string;
   mode: string;
@@ -1615,6 +1641,7 @@ export type HostPathPurpose =
   | "recovery_baseline_open"
   | "profile_open"
   | "pack_import_open"
+  | "pack_export_save"
   | "apk_analyze_open";
 /**
  * Metadata returned after a debloat pack is imported from a local file.

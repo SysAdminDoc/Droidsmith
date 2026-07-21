@@ -36,8 +36,8 @@ pub mod time;
 use commands::{
     analyze_apk, apply_action, apply_action_batch, apply_device_control,
     apply_remote_file_mutation, backup_package, cancel_operation, capture_bugreport,
-    capture_layout, connect_wireless, disconnect_device, explain_failure, export_package_apks,
-    export_recovery_baseline, export_settings, extract_apk, fastboot_getvar,
+    capture_layout, connect_wireless, disconnect_device, explain_failure, export_device_pack,
+    export_package_apks, export_recovery_baseline, export_settings, extract_apk, fastboot_getvar,
     find_gnirehtet_session, forget_wireless_endpoint, get_device_info, get_package_metadata,
     get_settings_mirror_preset, gnirehtet_session_status, grant_dropped_path, heartbeat,
     import_pack, initialize_settings, inspect_profile, inspect_recovery_baseline, install_apk,
@@ -101,6 +101,7 @@ fn ipc_builder() -> tauri_specta::Builder<tauri::Wry> {
             list_packs,
             import_pack,
             remove_imported_pack,
+            export_device_pack,
             analyze_apk,
             plan_pack,
             plan_action,

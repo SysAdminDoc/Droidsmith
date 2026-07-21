@@ -35,25 +35,6 @@ import) has all shipped through v0.9.4. These are the verified next-tier gaps;
 device-only and already-shipped ideas are in the RESEARCH.md Rejected table.
 IDs continue from R-096 / IMP-73.
 
-### P2
-
-- [ ] P2 — R-098 — Export current device debloat state as a shareable pack/selection
-  Why: Symmetric to the v0.9.4 local pack import; UAD-ng `selection_export`
-  parity. `save_profile`/`profile.rs` only persist GUI-authored profiles — there
-  is no capture-from-device export, so users can't carry "what I did on this
-  phone" to a fresh device after OTA/factory reset.
-  Evidence: UAD-ng wiki/Usage (selection_export.txt); verified gap —
-  `commands.rs::save_profile` takes a renderer-authored `Profile`, no
-  `capture`/`from_device` in `src-tauri/src/profile.rs`.
-  Touches: `src-tauri/src/commands.rs` (new `export_device_pack` command),
-  `src-tauri/src/packs/mod.rs` (serialize a `Pack` from observed disabled/
-  uninstalled/archived state), `src/routes/Debloat.tsx`, bindings, locales.
-  Acceptance: on a selected device, one action writes a schema-valid pack YAML
-  (round-trips through the existing `import_pack`/`packs::load`) capturing the
-  current disabled/uninstalled/archived set; covered by a Rust unit test on the
-  serialize path.
-  Complexity: M
-
 ### P3
 
 - [ ] P3 — R-100 — scrcpy `--display-ime-policy` and `--no-vd-destroy-content` flags

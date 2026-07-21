@@ -487,6 +487,17 @@
       "missing": "El paquete desapareció después de aplicar; se esperaba que permaneciera instalado y deshabilitado.",
       "still_enabled": "El paquete sigue habilitado después de aplicar.",
       "unknown": "No se pudo verificar el estado del paquete después de aplicar."
+    },
+    "export": {
+      "title": "Exportar estado del dispositivo",
+      "body": "Guarda los paquetes deshabilitados, archivados y desinstalados de este dispositivo como un pack que puedes reimportar tras un OTA o en otro dispositivo.",
+      "button": "Exportar a pack…",
+      "exporting": "Exportando…",
+      "failed": "Error al exportar",
+      "success_one": "Se exportó {{count}} paquete a «{{id}}».",
+      "success_few": "Se exportaron {{count}} paquetes a «{{id}}».",
+      "success_many": "Se exportaron {{count}} paquetes a «{{id}}».",
+      "success_other": "Se exportaron {{count}} paquetes a «{{id}}»."
     }
   },
   "devices": {

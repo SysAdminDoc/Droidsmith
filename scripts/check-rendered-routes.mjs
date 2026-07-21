@@ -604,6 +604,10 @@ async function runDesktopFlow(browser) {
   await page.getByRole("heading", { name: "Debloat", exact: true }).waitFor();
   await assertMainFocused(page, "Debloat");
 
+  // R-098: export the current device's debloat state to a shareable pack.
+  await page.getByRole("button", { name: "Export to pack…" }).click();
+  await page.getByText(/Exported 2 packages to .qa-device-export./).waitFor();
+
   await page.getByRole("button", { name: /QA Debloat Pack/ }).click();
   await page.getByRole("heading", { name: "Compatibility checks" }).waitFor();
   await page.getByText(/Pack qa-debloat · revision 3 · MIT/).waitFor();
@@ -1513,6 +1517,10 @@ async function installTauriMock(
             apk_analyze_open: {
               id: "123e4567-e89b-42d3-a456-42661417400f",
               local_path: "C:/Users/QA/Downloads/sample.apk",
+            },
+            pack_export_save: {
+              id: "123e4567-e89b-42d3-a456-426614174010",
+              local_path: "C:/Users/QA/Desktop/device-debloat.yaml",
             },
           };
           const selection = selections[args.purpose];
@@ -2627,6 +2635,18 @@ async function installTauriMock(
         }
         if (cmd === "remove_imported_pack") {
           return true;
+        }
+        if (cmd === "export_device_pack") {
+          return {
+            pack_id: "qa-device-export",
+            packages: 2,
+            artifact: {
+              local_path: "C:/Users/QA/Desktop/device-debloat.yaml",
+              size_bytes: 512,
+              sha256:
+                "1111111111111111111111111111111111111111111111111111111111111111",
+            },
+          };
         }
         if (cmd === "analyze_apk") {
           return {

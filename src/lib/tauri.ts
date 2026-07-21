@@ -32,6 +32,7 @@ import {
   type HostArtifact,
   type HostDoctorReport,
   type ApkAnalysis,
+  type ExportedDevicePack,
   type HostPathGrant,
   type HostPathPurpose,
   type ImportedPack,
@@ -1108,4 +1109,14 @@ export async function callRemoveImportedPack(packId: string): Promise<boolean> {
 
 export async function callAnalyzeApk(pathGrant: string): Promise<ApkAnalysis> {
   return rendererRecord(await commands.analyzeApk(pathGrant));
+}
+
+export async function callExportDevicePack(
+  target: DeviceTarget,
+  userId: number,
+  pathGrant: string,
+): Promise<ExportedDevicePack> {
+  return rendererRecord(
+    await commands.exportDevicePack(target, userId, pathGrant),
+  );
 }
