@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useTranslation } from "react-i18next";
 
 import {
@@ -967,18 +974,30 @@ export default function AppsRoute() {
     ],
   );
 
-  const filteredPackages =
-    pkgState.kind === "ok"
-      ? pkgState.packages.filter((p) =>
-          search
-            ? [p.package, packageMetadata[p.package]?.label ?? ""]
-                .join(" ")
-                .toLowerCase()
-                .includes(search.toLowerCase())
-            : true,
-        )
-      : [];
-  const selectedPackageSet = new Set(selectedPackages);
+  // Filtering the (potentially several-hundred-entry) package list on every
+  // keystroke re-renders every interactive row, each of which mounts an
+  // IntersectionObserver. Deferring the search term keeps the input responsive
+  // and lets React render the heavy filtered table at a lower priority, and
+  // memoizing avoids recomputing the filter on unrelated re-renders.
+  const deferredSearch = useDeferredValue(search);
+  const filteredPackages = useMemo(
+    () =>
+      pkgState.kind === "ok"
+        ? pkgState.packages.filter((p) =>
+            deferredSearch
+              ? [p.package, packageMetadata[p.package]?.label ?? ""]
+                  .join(" ")
+                  .toLowerCase()
+                  .includes(deferredSearch.toLowerCase())
+              : true,
+          )
+        : [],
+    [pkgState, packageMetadata, deferredSearch],
+  );
+  const selectedPackageSet = useMemo(
+    () => new Set(selectedPackages),
+    [selectedPackages],
+  );
   const selectedRows =
     pkgState.kind === "ok"
       ? pkgState.packages.filter((pkg) => selectedPackageSet.has(pkg.package))
