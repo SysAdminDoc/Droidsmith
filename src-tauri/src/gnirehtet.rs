@@ -12,18 +12,14 @@
 //! session down cleanly.
 
 use std::collections::HashMap;
-use std::io::Read;
 use std::path::Path;
 use std::process::{Child, Command, Stdio};
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::{Arc, Mutex, OnceLock};
-use std::thread;
-use std::time::{Duration, Instant};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Mutex, OnceLock};
 
 use serde::Serialize;
 
-const LOG_CAPTURE_BYTES: usize = 64 * 1024;
-const EXPOSED_LOG_CHARS: usize = 16 * 1024;
+use crate::captured_tail::CapturedTail;
 
 #[derive(specta::Type, Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct GnirehtetSession {
@@ -62,52 +58,6 @@ struct ManagedSession {
     session: GnirehtetSession,
     child: Child,
     stderr: CapturedTail,
-}
-
-#[derive(Clone)]
-struct CapturedTail {
-    bytes: Arc<Mutex<Vec<u8>>>,
-    done: Arc<AtomicBool>,
-}
-
-impl CapturedTail {
-    fn spawn<R>(mut reader: R) -> Self
-    where
-        R: Read + Send + 'static,
-    {
-        let capture = Self {
-            bytes: Arc::new(Mutex::new(Vec::new())),
-            done: Arc::new(AtomicBool::new(false)),
-        };
-        let bytes = Arc::clone(&capture.bytes);
-        let done = Arc::clone(&capture.done);
-        thread::spawn(move || {
-            let mut buffer = [0_u8; 4096];
-            loop {
-                match reader.read(&mut buffer) {
-                    Ok(0) | Err(_) => break,
-                    Ok(count) => {
-                        let mut captured = bytes.lock().unwrap_or_else(|error| error.into_inner());
-                        append_tail(&mut captured, &buffer[..count], LOG_CAPTURE_BYTES);
-                    }
-                }
-            }
-            done.store(true, Ordering::Release);
-        });
-        capture
-    }
-
-    fn snapshot(&self) -> String {
-        let bytes = self.bytes.lock().unwrap_or_else(|error| error.into_inner());
-        sanitize_log(&String::from_utf8_lossy(&bytes))
-    }
-
-    fn wait_for_eof(&self) {
-        let started = Instant::now();
-        while !self.done.load(Ordering::Acquire) && started.elapsed() < Duration::from_millis(150) {
-            thread::sleep(Duration::from_millis(10));
-        }
-    }
 }
 
 fn sessions() -> &'static Mutex<HashMap<u64, ManagedSession>> {
@@ -272,33 +222,6 @@ fn classify_exit_reason(code: Option<i32>, stderr: &str) -> GnirehtetExitReason 
         None => GnirehtetExitReason::Signaled,
         Some(_) => GnirehtetExitReason::ProcessExited,
     }
-}
-
-fn append_tail(target: &mut Vec<u8>, bytes: &[u8], limit: usize) {
-    if bytes.len() >= limit {
-        target.clear();
-        target.extend_from_slice(&bytes[bytes.len() - limit..]);
-        return;
-    }
-    let overflow = target
-        .len()
-        .saturating_add(bytes.len())
-        .saturating_sub(limit);
-    if overflow > 0 {
-        target.drain(..overflow);
-    }
-    target.extend_from_slice(bytes);
-}
-
-fn sanitize_log(value: &str) -> String {
-    let mut chars: Vec<char> = value
-        .chars()
-        .filter(|character| !character.is_control() || matches!(character, '\n' | '\r' | '\t'))
-        .collect();
-    if chars.len() > EXPOSED_LOG_CHARS {
-        chars.drain(..chars.len() - EXPOSED_LOG_CHARS);
-    }
-    chars.into_iter().collect::<String>().trim().to_string()
 }
 
 #[cfg(test)]

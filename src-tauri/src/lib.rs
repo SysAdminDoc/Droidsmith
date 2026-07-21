@@ -5,6 +5,7 @@ pub mod adb;
 mod apk_metadata;
 mod backup;
 mod bugreport;
+mod captured_tail;
 mod commands;
 pub mod contribution_schema;
 mod diagnostics;
