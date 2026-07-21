@@ -43,14 +43,15 @@ use commands::{
     list_devices, list_fastboot_devices, list_logcat_queries, list_network_connections,
     list_packages, list_packs, list_permissions, list_processes, list_remote_files,
     list_running_services, list_users, list_wireless_history, list_wireless_services,
-    locate_fastboot, locate_gnirehtet, locate_scrcpy, pair_wireless, plan_action, plan_action_batch,
-    plan_pack, plan_remote_file_mutation, plan_shell_action, preflight_package_backup,
-    preview_diagnostics, pull_file, push_file, put_device_setting, recover_adb, reset_settings,
-    reset_settings_mirror_preset, reveal_in_folder, run_host_doctor, save_diagnostics,
-    save_layout_export, save_logcat_export, save_logcat_queries, save_profile, scrcpy_capabilities,
-    scrcpy_session_status, select_host_path, set_permission, set_settings_language,
-    set_settings_mirror_preset, set_wireless_auto_reconnect, shell_run, start_gnirehtet,
-    stop_gnirehtet, stop_scrcpy, stream_logcat, take_screenshot, watch_devices, wipe_diagnostics,
+    locate_fastboot, locate_gnirehtet, locate_scrcpy, pair_wireless, plan_action,
+    plan_action_batch, plan_pack, plan_remote_file_mutation, plan_shell_action,
+    preflight_package_backup, preview_diagnostics, pull_file, push_file, put_device_setting,
+    recover_adb, reset_settings, reset_settings_mirror_preset, reveal_in_folder, run_host_doctor,
+    save_diagnostics, save_layout_export, save_logcat_export, save_logcat_queries, save_profile,
+    scrcpy_capabilities, scrcpy_session_status, select_host_path, set_permission,
+    set_settings_language, set_settings_mirror_preset, set_wireless_auto_reconnect, shell_run,
+    start_gnirehtet, stop_gnirehtet, stop_scrcpy, stream_logcat, take_screenshot, watch_devices,
+    wipe_diagnostics,
 };
 
 fn ipc_builder() -> tauri_specta::Builder<tauri::Wry> {

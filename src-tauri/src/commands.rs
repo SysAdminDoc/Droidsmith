@@ -706,12 +706,8 @@ pub fn connect_wireless(
             .duration_since(std::time::UNIX_EPOCH)
             .map(|elapsed| elapsed.as_millis() as u64)
             .unwrap_or(0);
-        let _ = settings::record_wireless_endpoint(
-            &app_data_dir,
-            &request.host,
-            request.port,
-            now_ms,
-        );
+        let _ =
+            settings::record_wireless_endpoint(&app_data_dir, &request.host, request.port, now_ms);
     }
     Ok(result)
 }
@@ -1370,7 +1366,10 @@ pub async fn set_wireless_auto_reconnect(
 ) -> Result<settings::WirelessHistorySnapshot, CommandError> {
     let app_data_dir = settings_app_data_dir(&app)?;
     spawn_blocking_operation(move || {
-        Ok(settings::set_wireless_auto_reconnect(&app_data_dir, enabled)?)
+        Ok(settings::set_wireless_auto_reconnect(
+            &app_data_dir,
+            enabled,
+        )?)
     })
     .await
 }
