@@ -15,5 +15,14 @@ instead.
 
 ## Remaining
 
-_No actionable items. Blocked/deferred work lives in
-[Roadmap_Blocked.md](Roadmap_Blocked.md)._
+### P3
+
+- [ ] P3 — Persist gnirehtet reverse-tethering across navigation
+  Why: the "Share Internet" toggle now stops its supervised session when the
+  selected device changes or the Devices route unmounts, so tethering does not
+  survive navigating away (e.g. to install something that needs the shared
+  connection). Safe default, but persistence would be friendlier.
+  Where: `src/routes/devices/InternetSharing.tsx` (drop the cleanup stop),
+  `src-tauri/src/gnirehtet.rs` + `src-tauri/src/commands.rs` (add a
+  list-sessions-by-serial command so a remount can re-attach to a running
+  session instead of showing "start" and spawning a duplicate).
