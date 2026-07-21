@@ -1,184 +1,186 @@
 # Research — Droidsmith
 
-Date: 2026-07-20 — replaces all prior research (prior pass was 2026-07-18 / v0.5.3
-and is now largely shipped).
+Date: 2026-07-21 — replaces all prior research (previous pass was 2026-07-20 /
+v0.9.1; the bulk of its top-10 has since shipped through v0.9.4).
 
 ## Executive Summary
 
-Droidsmith v0.9.1 is a cross-platform, open-source Tauri 2 (Rust 2.11.2 core +
-React/TS) ADB workstation with a broad live surface: device discovery/authorize,
-wireless pairing, package management (install APK/APKS/XAPK/APKM, backup/export,
-disable/enable/archive/uninstall, permission audit, reversible journal), curated
-debloat (9 OEM packs), scrcpy launch/supervision/recording, gnirehtet reverse
-tethering, file manager, network/process/layout inspectors, logcat with saved
-queries, YAML automation profiles + headless CLI, read-only fastboot, a
-shell/console with a read-only safety gate, diagnostics/host-doctor, and 5
-locales (de/en/es/ru/zh). It remains the only OSS tool combining all of this in a
-~10 MB binary. Since the last research pass most of the old top-10 shipped
-(scrcpy exposure, gnirehtet, locales 2→5, packs 7→9, sub-panel extraction), so
-this pass focuses on the **next** frontier.
+Droidsmith v0.9.4 is a cross-platform, open-source Tauri 2 (Rust core +
+React/TS) ADB workstation: device discovery/authorize, wireless pairing with
+connection history + auto-reconnect, package install (APK/APKS/XAPK/APKM) with
+`--bypass-low-target-sdk-block` retry and reversible archive/unarchive, backup/
+export, permission audit, per-device journal undo, curated + **locally
+importable** YAML debloat packs (v0.9.4), scrcpy launch/supervision/recording
+with a broad 27-field flag surface (max-fps, crop, fullscreen, no-control,
+orientation, screen-off, audio codec/source, **virtual/flex display**,
+**keep-active**, camera mirroring, AV1/VP8/VP9), gnirehtet reverse tethering,
+file/network/process(force-stop)/layout inspectors, logcat with saved queries,
+YAML automation profiles + headless CLI, read-only fastboot, quirk-based
+failure hints, diagnostics/host-doctor, and 5 locales. Still the only OSS tool
+combining all of this in a ~10 MB binary.
 
-The codebase is exceptionally clean post-audit: zero TODO/FIXME markers, no
-stubs, 73 IPC commands all (bar one) wired to the UI. The remaining opportunities
-are (1) closing the loudest unmet ADB-desktop complaints (wireless
-reconnect, multi-device), (2) the one genuinely unsolved market gap (post-OTA
-debloat drift), (3) exposing the large scrcpy 3.0–4.1 flag surface Droidsmith
-launches but doesn't drive, and (4) tightening a handful of concrete internal
-gaps a prior audit left.
+The codebase is exceptionally mature: **zero TODO/FIXME markers, 88/88 IPC
+commands wired to the UI** (the previously-orphaned `explain_failure` is now
+called from Debloat.tsx:1802), tauri pinned to 2.11.2 (patches the
+Origin-Confusion advisory GHSA-7gmj-67g7-phm9, fixed ≥2.11.1). Because the
+prior pass's frontier largely shipped, the remaining opportunity has shifted
+from "catch up on scrcpy/ADB parity" to **"become the local-first Android
+inspection + lifecycle workstation"** — capabilities no scrcpy front-end offers
+and that are fully verifiable in the headless smoke harness.
 
 Top opportunities in priority order:
 
-1. **Wireless connection history + auto-reconnect on launch** — the single
-   loudest recurring complaint across ADB tooling (scrcpy #721/#4866/#3003).
-2. **Post-OTA debloat-drift detection** — build-fingerprint change → re-check the
-   recovery baseline. No competitor solves this; strongest differentiation lever.
-3. **Wire up (or remove) the orphaned `explain_failure` quirks-hint IPC** — built,
-   registered, tested, but never called from any UI surface.
-4. **Expand the Mirror scrcpy flag surface** — `--max-fps`, `--crop`,
-   `--fullscreen`, `--no-control` (view-only), `--display-orientation`,
-   `--screen-off-timeout`, `--audio-codec`, then new/flex virtual display,
-   camera mirroring, VP8/VP9, rich audio sources.
-5. **ProcessManager force-stop action** + inspector export (Network/Layout).
-6. **`--bypass-low-target-sdk-block` install option + Advanced-Protection
-   detection** — Android 14–16 will otherwise fail opaquely.
-7. **process_tree.rs + deviceStore.ts test coverage** — untested
-   security/lifecycle code.
-8. **LayoutInspector filter-to-empty blank panel** and the smaller state/a11y
-   fixes.
+1. **APK Analyzer panel** (offline, no device) — manifest / permissions / dex
+   counts / 64K-multidex / size breakdown / signing scheme. No OSS competitor
+   in the set has it; 100% offline; builds on existing `apk_metadata.rs`.
+2. **Export current device debloat state as a shareable pack/selection** —
+   symmetric to the v0.9.4 local import; UAD-ng `selection_export` parity;
+   headless.
+3. **`process_tree.rs` unit tests** — the one security-relevant module still
+   with no `#[cfg(test)]` (child-containment/kill).
+4. **Dependency/security re-audit** — release-policy exceptions expire
+   2026-10-15; `time` and transitive `reqwest`/`hyper` are in the tree.
+5. **scrcpy `--display-ime-policy` + `--no-vd-destroy-content`** — the two
+   remaining headless-testable flags that complete the virtual-display surface.
+6. **Diagnostics: `adb server-status` mDNS + negotiated USB link speed** —
+   richer host-doctor from platform-tools 36/37.
+7. **ANR/tombstone/crash-log viewer** and **per-process meminfo/gfxinfo
+   snapshot** — Studio-grade debugging no scrcpy front-end offers.
 
 ## Product Map
 
-### Core workflows
-- Discover → authorize → inspect/health-check → recover ADB devices (USB +
-  wireless pairing).
-- Package lifecycle: enumerate, install multi-format, backup/export, disable/
-  enable/archive/uninstall, permission audit, per-device journal undo.
-- Debloat via 4-tier YAML packs with dependency expansion, recovery baselines,
-  and verified batch apply.
-- Mirror/control via supervised scrcpy sessions (presets, recording, codecs).
-- Automate via declarative YAML profiles (GUI + `droidsmith-cli`).
-
-### User personas
-Privacy-conscious user (debloat/permissions); power user (shell, fastboot,
-tuning, multi-device); developer (logcat, layout inspector, processes,
-bugreport); IT/fleet (profiles, baselines, headless CLI).
-
-### Platforms and distribution
-Windows (MSI/NSIS), macOS (DMG), Linux (AppImage/deb/rpm — blocked on build
-host). ~10 MB Tauri binary, MIT, local-first, zero telemetry.
-
-### Key integrations
-ADB (typed Rust parsers over shell-out), scrcpy (PATH probe + session
-supervision), gnirehtet, platform-tools policy (SHA-256 pinning), i18next,
-tauri-specta generated bindings.
+- **Core workflows:** discover→authorize→inspect/health→recover (USB +
+  wireless); package lifecycle (enumerate, install multi-format, backup/export,
+  disable/enable/archive/unarchive/uninstall, permissions, journal undo);
+  debloat via 4-tier YAML packs (bundled + imported) with dependency expansion,
+  recovery baselines, verified batch apply; scrcpy mirror/control/record;
+  declarative YAML profiles (GUI + `droidsmith-cli`).
+- **Personas:** privacy-conscious user; power user (shell/fastboot/tuning);
+  developer (logcat/layout/process/bugreport); IT/fleet (profiles, baselines,
+  headless CLI).
+- **Platforms/distribution:** Windows (MSI/NSIS built locally, unsigned), macOS
+  (DMG), Linux (AppImage/deb/rpm — blocked on build host). ~10 MB, MIT,
+  local-first, zero telemetry.
+- **Integrations:** ADB (typed Rust parsers over shell-out), scrcpy (PATH probe
+  + supervised sessions), gnirehtet, platform-tools SHA-256 policy, i18next,
+  tauri-specta generated bindings.
 
 ## Competitive Landscape
 
-### Escrcpy — Apache-2.0, Electron/Vue
-Ships **keyboard-to-touch mapping**, **multi-device single-window control with
-input broadcast**, batch screenshot/APK install, reorderable control bar.
-Learn: the in-GUI input-mapping layer (synthetic touch injection — not a scrcpy
-flag) and multi-device broadcast UX. Avoid: Electron footprint, paid tier.
+### Escrcpy — Apache-2.0, Electron/Vue (v2.11.1, 2026-05, 10.5k★, very active)
+Ships input mapping, multi-device broadcast, batch screenshot/APK, draggable
+control sidebar, and **AutoGLM natural-language control** (issue #614 requests
+MCP). Learn: the batch/broadcast orchestration UX. Avoid: Electron footprint.
 
-### QtScrcpy — Apache-2.0, Qt/C++
-Ships **game keymap scripts** and **group control** (one input → many phones).
-Learn: keymap-profile model and group broadcast. Avoid: bundled scrcpy fork
-maintenance burden.
+### QtScrcpy — Apache-2.0, Qt/C++ (v3.3.3, 2025-11, 30.6k★)
+Game keymap scripts + **group control** (one input → all devices). Learn: the
+group-broadcast model. Avoid: bundled scrcpy-fork maintenance.
 
-### UAD-ng — GPL-3.0, Rust/iced (v1.2.0, 2026-01, healthy)
-**Remote-updatable community package list**, safety tiers
-(Recommended/Advanced/Expert/Unsafe), **snapshots applied to many devices**,
-`--user` multi-user targeting. Learn: remote list updates without an app
-release; snapshot→apply-to-many. Avoid: iced Wayland rendering issues;
-debloat-only scope. Note: **no post-OTA re-application** — an ecosystem-wide gap.
+### UAD-ng — GPL-3.0, Rust/iced (v1.2.0, 2026-01, 8.6k★)
+**Portable package-state snapshot/restore** and **`selection_export.txt`**
+(+ export uninstalled-with-descriptions), multi-user. Learn: the shareable
+selection export and snapshot→apply-to-many — Droidsmith just shipped *import*
+but not the symmetric *export*. Still has **no post-OTA re-application** (an
+ecosystem-wide gap Droidsmith's drift detection partially addresses).
 
-### Aya — AGPL-3.0, Electron
-**Live CPU/mem/FPS perf overlay** + layout inspector + process/shell/logcat.
-Learn: the perf overlay (Droidsmith already has the layout inspector). Avoid:
-Electron, AGPL.
+### Canta — Shizuku/on-device (v3.2.2, 2026-03)
+**Tracks previously-uninstalled apps across reinstalls** and flags OEM
+re-adds after OTA. Learn: the "these got resurrected by the last update"
+reconciliation view. Avoid: on-device/Shizuku model.
 
-### ADB AppControl — closed, Windows, .NET
-Paywalls a **tiered debloat wizard**, **cross-store app search deep-links**,
-**virtual hardware-button overlay**, status-bar icon hiding, ADB key protection.
-Paywalled features signal undervalued OSS targets. Avoid: Windows-only, closed,
-telemetry.
+### Aya — AGPL-3.0, Electron (v1.14.2, 2025-11, 5.3k★)
+Live CPU/mem/**FPS** perf monitor + multi-session terminal. Learn: `dumpsys
+gfxinfo/meminfo` polling for a per-process snapshot (Droidsmith has the process
+inspector but no memory/CPU columns). Avoid: Electron, AGPL, device-side FPS
+hook.
 
-### scrcpy — Apache-2.0, C/SDL3 (v4.1)
-Every new CLI option is a Droidsmith GUI feature: v3.0 `--new-display`,
-`--angle`, `--capture-orientation`, `--screen-off-timeout`; v3.2 audio-source
-expansion + `--display-ime-policy`; v3.1/3.3 gamepad + UHID-on-virtual-display;
-v4.0 flex display, `--keep-active`, camera torch/zoom; v4.1 VP8/VP9.
+### ADB AppControl — closed, Windows/.NET
+**Paywalls** a Debloat Wizard, richer Process Manager, dark theme, batch
+install. Paywalled = undervalued OSS target: Droidsmith already gives debloat +
+process force-stop + dark theme free; a guided debloat *wizard* is the delta.
+Avoid: Windows-only, closed, telemetry.
+
+### scrcpy — Apache-2.0, C/SDL (v4.0, 2026-05)
+Every new flag is a potential GUI toggle. Droidsmith already exposes flex
+display, keep-active, camera, AV1/VP8/VP9. Remaining unexposed: headless-safe
+`--display-ime-policy`, `--no-vd-destroy-content`; device-dependent
+`--camera-torch`/`--camera-zoom`, `--gamepad=uhid`, OTG control-only.
 
 ## Security, Privacy, and Reliability
 
-- **Tauri CVE-2026-42184 resolved**: Cargo.lock pins `tauri` 2.11.2 (fix ≥2.11.1).
-  `tauri-plugin-shell` and `tauri-plugin-updater` are **not** present (adb is
-  spawned via `std::process`, not plugin-shell), so CVE-2025-31477 is N/A.
-  Prior open-question #1 is closed.
-- **Advanced Protection Mode (Android 16)** blocks sideloading and is expected to
-  disable/restrict Developer Options (USB/wireless debugging). An ADB tool that
-  silently "sees no device" under AP mode will generate support noise — detect
-  and explain it (host-doctor/diagnostics).
-- **Low-target-SDK install block** (A14 min targetSDK 23, A15 → 24): old APKs
-  fail unless `adb install --bypass-low-target-sdk-block` is passed — surface as
-  an install checkbox.
-- **platform-tools 37.0.1 (Jul 2026)**: `openscreen` mDNS backend removed
-  (`ADB_MDNS_OPENSCREEN` is now a no-op); new `ADB_USB_LEGACY=1` Windows fallback
-  and macOS `ADB_LIBUSB=1` — surface as host-doctor troubleshooting toggles.
-- **Untested security-relevant code**: `src-tauri/src/process_tree.rs`
-  (cross-platform child-containment/kill) has no `#[cfg(test)]`; a regression
-  could let adb/fastboot/scrcpy children outlive an operation.
-- Core Rust deps (serde, zip, sha2, base64, uuid) carry zero RustSec advisories
-  as of 2026-07-20. Release-policy exceptions expire 2026-10-15 — schedule a
-  re-audit.
+- **Tauri Origin-Confusion (GHSA-7gmj-67g7-phm9, ≤2.11.0):** already mitigated —
+  Cargo.lock pins `tauri` 2.11.2. No action beyond keeping the pin ≥2.11.1.
+  (Verified: `src-tauri/Cargo.lock`.)
+- **Dependency re-audit due:** release-policy exceptions expire **2026-10-15**.
+  `time`, `reqwest`, `hyper`, `tokio` are present transitively; `rustls`/`webpki`
+  are **not** in the tree, so RUSTSEC rustls-webpki advisories are N/A, but
+  RUSTSEC-2026-0009 (`time` DoS) should be checked with `cargo audit`.
+- **`process_tree.rs`** (child-containment/kill, security-relevant) is the sole
+  module with **no `#[cfg(test)]`** — a regression could let adb/fastboot/scrcpy
+  children outlive an operation. (host_path/install/scrcpy/gnirehtet all have
+  test modules — a prior claim to the contrary was incorrect.)
+- **Advanced Protection Mode (Android 16/17):** Google is wiring APM to block
+  Developer Options and USB data signaling. Host-doctor should detect
+  "present-but-unauthorized/APM-locked" and explain it rather than showing a
+  generic auth error. (Needs live validation; no stable adb signal yet — stays
+  in Roadmap_Blocked as R-092 remainder.)
+- **platform-tools 37.0.1 (Jul 2026):** `openscreen` mDNS backend deleted
+  (`ADB_MDNS_OPENSCREEN` now a no-op); new `libadbusb`; the `ADB_USB_LEGACY`/
+  `ADB_LIBUSB` toggles Droidsmith already surfaces remain correct.
 
 ## Architecture Assessment
 
 ### Strengths
-Thin IPC glue over domain modules; JSON-Lines journals (HGFS-safe, diffable);
-schema versioning with migration paths; generated TS bindings; a 30+ flow smoke
-harness. No stubs; 72/73 commands wired.
+Thin IPC glue over domain modules; JSON-Lines journals (HGFS-safe); schema
+versioning with migration paths; generated TS bindings; 30+ flow smoke harness;
+zero stubs; 88/88 commands wired.
 
 ### Refactor candidates
-- `src/routes/Devices.tsx` (1,633 LOC) still hosts several inline panels
-  (`AdbHealthPanel` 545–676, `RecoveryDialog` 687–840, `DeviceTable` 891–1023,
-  `DeviceDetail` 1053–1221, `DeviceHealthCards` 1221–1346) — extract to
-  `src/routes/devices/` to match the completed IMP-67 split.
-- `Debloat.tsx` (1,642) and `Apps.tsx` (1,610) have self-contained extractable
-  panels (`DebloatApplyReview`, `PackPicker`, `PackPreview`, `ActionOverlay`).
-- **Orphaned IPC**: `explain_failure` (lib.rs:137, commands.rs:4515) is
-  registered, bound, and unit-tested but has **no frontend caller** — the quirks
-  failure-hint feature was never surfaced. Wire it into operation-failure UI or
-  remove it.
+- **`src/routes/Debloat.tsx`** is now 1,928 LOC with ~10 inline sub-components
+  (`DebloatApplyReview`, `PackErrors`, `PackImportControl`, `PackCard`,
+  `PackPicker`, `PackPreview`, `CompatibilityChecks`, `QueueApply*`, `QuirkHint`)
+  — extract to `src/routes/debloat/` to match the completed IMP-67/IMP-72 splits.
+- Secondary: `Apps.tsx` (1,686), `Logcat.tsx` (1,177), `Mirror.tsx` (1,158),
+  `Profiles.tsx` (1,127), `Wireless.tsx` (1,056) — lower urgency; each already
+  has self-contained panels.
 
 ### Test gaps
 - `src-tauri/src/process_tree.rs` — no tests (security-relevant).
-- `src/lib/deviceStore.ts` (device-lifecycle `useSyncExternalStore` machine) and
-  `src/lib/logcatQueries.ts` (persistence with storage fallback) — no test files.
+- Route-level React components (Apps/Debloat/Mirror/Logcat/etc.) have no
+  component tests, but their extracted logic modules (`debloatPack`,
+  `debloatQueue`, `mirrorPresets`, `appsJournal`, `logcatQueries`, `deviceStore`,
+  `settings`) are covered — the logic/UI split keeps this acceptable.
 
-### UI/UX gaps (verified by file:line)
-- `LayoutInspector.tsx` (136/141): filter-to-empty renders a blank panel — no
-  "no matching nodes" state (NetworkInspector/ProcessManager both have one).
-- `ProcessManager.tsx`: read-only — no force-stop/kill action a user expects.
-- `NetworkInspector.tsx`: no export/copy of the socket table (Logcat/Layout have
-  export).
-- `InternetSharing.tsx` (122): returns `null` when gnirehtet isn't on PATH — the
-  feature is silently invisible with no install hint (scrcpy/fastboot surface a
-  locate-failure message).
-- Table semantics split: only `PackageTable.tsx` uses the ARIA grid pattern; 9
-  other tables use plain HTML — standardize or document the baseline.
+### Data / feature gaps (verified)
+- **No capture-from-device path:** `save_profile` (commands.rs) and
+  `profile.rs` only persist GUI-authored profiles — there is no way to export
+  the current device's debloat/package state as a shareable pack or selection
+  (UAD-ng parity gap). Recovery baselines snapshot state for OTA drift review
+  but are not a portable, re-appliable debloat artifact.
+- **No APK static-analysis surface:** `apk_metadata.rs` exists (~30 KB) and is
+  used during install, but there is no offline APK Analyzer route
+  (manifest/permissions/dex/size).
+- **No crash-artifact viewer:** Diagnostics captures bugreports but does not
+  parse ANR/tombstone/`dumpsys dropbox` records into a browsable list.
 
 ## Rejected Ideas
 
 | Idea | Source | Rejection reason |
 |------|--------|-----------------|
-| Keyboard-to-touch mapping via a scrcpy flag | Escrcpy/QtScrcpy | Vanilla scrcpy has no mapping API; already parked as blocked R-081. The in-GUI synthetic-touch path needs a physical device to verify — keep in Roadmap_Blocked. |
-| Multi-device group/broadcast control (new) | scrcpy #4122/#400 | Overlaps blocked IMP-52 (multi-device workspaces); acceptance needs ≥2 physical devices. Track under IMP-52, don't duplicate. |
-| tauri-plugin-updater as "blocked on code signing" | R-075 | The Ed25519 updater key is NOT code signing (satisfies the no-signing rule); but the manifest still needs a real GitHub Release + endpoint. Stays blocked on release infra, not signing — see note in Roadmap_Blocked. |
-| Redistribute UAD-ng list directly | R-036 | Still needs upstream redistribution permission. A generic "import remote pack by URL + SHA pin" avoids the dependency and is actionable (see R-096). |
-| On-device companion / perf agent | Aya | Contradicts zero-install desktop philosophy; Aya's FPS overlay needs a device-side hook. |
-| Electron migration / WebUSB web build | Aya, ya-webadb | ~10 MB Tauri binary is a core differentiator; WebUSB is Chromium-only. |
-| Pure-Rust ADB (drop shell-out) | adb_client | Reference adb binary handles OEM quirks; re-evaluate at adb_client v4. |
+| App archive / unarchive | platform research | Already shipped — `ActionKind::Archive` + `RequestUnarchive` in `adb/actions.rs`. |
+| `--bypass-low-target-sdk-block` install retry | Android 15 research | Already shipped — `install.rs` + `Apps.tsx` override dialog. |
+| Tauri Origin-Confusion mitigation | GHSA-7gmj-67g7-phm9 | Already patched — Cargo.lock pins tauri 2.11.2 (≥2.11.1). |
+| ARIA `role="grid"` table conversion | internal a11y scan | Plain semantic `<table>` is the correct pattern for static tables; the baseline is deliberate and documented (IMP-73). Not a defect. |
+| Multi-device broadcast / group control | Escrcpy, QtScrcpy | Overlaps blocked IMP-52 (needs ≥2 physical devices to verify). Track there. |
+| Keyboard→touch / game keymap editor | Escrcpy #618, QtScrcpy | Vanilla scrcpy has no mapping API; parked as blocked R-081. Needs a device. |
+| Camera torch/zoom, `--gamepad=uhid`, OTG control-only, floating control sidebar | scrcpy v4.0, #4793 | Device-dependent to verify; keep as thin best-effort scrcpy passthroughs, not owned code Droidsmith must device-test each release. |
+| Remote ADB tunneling (`adb connect` from anywhere) | DeviceFarmer/STF | Contradicts local-first; widens the network/threat surface. |
+| Browser/WebSocket remote view (ws-scrcpy) | ws-scrcpy | Contradicts the ~10 MB local-first binary; heavy decoder stack. |
+| Live FPS/perf overlay needing a device-side hook | Aya | Contradicts zero-install; only the headless `dumpsys` snapshot half is filed (R-103). |
+| Physical-device locate (flash bright screen) | STF | No portable ADB primitive without a device-side app; gimmicky. |
+| Pure-Rust `adb_client` (drop shell-out) | droidtui | Reference `adb` binary handles OEM quirks; re-evaluate at `adb_client` maturity. |
+| MCP server over `droidsmith-cli` | Escrcpy #614 | Interesting leapfrog and fits the CLI/YAML strength, but speculative + L effort; left Under Consideration, not roadmapped this pass. |
+| SharedPreferences/SQLite inspector | Android Studio | Requires `run-as` (debuggable apps only) or root; device-dependent, narrow scope — Under Consideration. |
 
 ## Sources
 
@@ -187,42 +189,45 @@ harness. No stubs; 72/73 commands wired.
 - https://github.com/barry-ran/QtScrcpy
 - https://github.com/liriliri/aya
 - https://github.com/Universal-Debloater-Alliance/universal-android-debloater-next-generation
-- https://github.com/Universal-Debloater-Alliance/universal-android-debloater-next-generation/wiki/FAQ
+- https://github.com/Universal-Debloater-Alliance/universal-android-debloater-next-generation/wiki/Usage
 - https://github.com/samolego/Canta
-- https://www.adbappcontrol.com/en/
-- https://adbappcontrol.com/en/extended/
-- https://github.com/kil0bit-kb/scrcpy-gui
+- https://github.com/DeviceFarmer/stf
+- https://adbappcontrol.com/en/
+- https://vysor.org/vysor-pro/
+- https://developer.android.com/tools/apkanalyzer
 
-### scrcpy releases / community demand
-- https://github.com/Genymobile/scrcpy/releases/tag/v3.0
-- https://github.com/Genymobile/scrcpy/releases/tag/v3.2
+### scrcpy / platform-tools / Android
 - https://github.com/Genymobile/scrcpy/releases/tag/v4.0
-- https://github.com/Genymobile/scrcpy/releases/tag/v4.1
-- https://github.com/Genymobile/scrcpy/issues/721
-- https://github.com/Genymobile/scrcpy/issues/4866
-- https://github.com/Genymobile/scrcpy/issues/4122
-- https://github.com/Genymobile/scrcpy/issues/3137
-- https://github.com/Genymobile/scrcpy/issues/5564
-
-### Platform / standards
+- https://github.com/Genymobile/scrcpy/releases/tag/v3.3
+- https://github.com/Genymobile/scrcpy/releases/tag/v3.2
+- https://github.com/Genymobile/scrcpy/blob/master/doc/gamepad.md
+- https://github.com/Genymobile/scrcpy/blob/master/doc/audio.md
+- https://github.com/Genymobile/scrcpy/issues/6643
+- https://github.com/Genymobile/scrcpy/issues/4793
 - https://developer.android.com/tools/releases/platform-tools
-- https://developer.android.com/about/versions/16/behavior-changes-all
+- https://bayton.org/android/advisories/android-15-app-install/
+- https://www.esper.io/blog/android-dessert-bites-16-app-archiving-857169
+- https://support.google.com/android/answer/15341885
 - https://www.androidauthority.com/android-advanced-protection-mode-developer-options-3679725/
-- https://xdaforums.com/t/platform-tools-adb-install-bypass-low-target-sdk-block.4703676/
-- https://v2.tauri.app/plugin/updater/
+- https://developer.android.com/studio/inspect/database
+- https://developer.android.com/studio/inspect/task
 
 ### Security
-- https://github.com/tauri-apps/tauri/security/advisories
-- https://rustsec.org/
+- https://github.com/tauri-apps/tauri/security/advisories/GHSA-7gmj-67g7-phm9
+- https://rustsec.org/advisories/
+- https://blog.rust-lang.org/2026/03/21/cve-2026-33056
 
 ## Open Questions
 
-1. **Post-OTA re-apply reliability**: OTAs rewrite `/system` and can flip package
-   states unpredictably per OEM. Is drift *detection* (fingerprint diff + baseline
-   re-check) the safe scope, deferring *auto* re-apply behind explicit user
-   confirmation? (Recommend: detect + prompt, never silent re-apply.)
-2. **Auto-update hosting**: R-075 needs a real GitHub Release + a stable manifest
-   endpoint and an Ed25519 keypair (not a code-signing cert). Who owns key
-   storage/rotation and cuts the first tagged release?
-3. **SECURITY.md contact**: still `security@droidsmith.invalid` — needs a real
-   channel or GitHub private vulnerability reporting enabled before any release.
+1. **Export format for device→pack (R-098):** should the exported artifact be a
+   full debloat *pack* (id/targets/packages, importable via the v0.9.4
+   `import_pack`) or a lightweight *selection list* (package ids + action)? Pack
+   format re-uses existing validation and round-trips through import; recommend
+   pack, with an optional flat-list export for UAD-ng interop.
+2. **APK Analyzer dex depth (R-097):** full method/class enumeration needs a dex
+   parser (bytes → header counts is cheap; per-method requires more). Scope v1
+   to header-level counts + 64K check + manifest/permissions/size, defer
+   per-method trees unless a maintained pure-Rust dex crate is confirmed.
+3. **APM detection signal:** still no stable adb property to distinguish
+   "Advanced Protection disabled debugging" from an ordinary unauthorized
+   device — R-092 remainder stays blocked until one is confirmed on a device.
