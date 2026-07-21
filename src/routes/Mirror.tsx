@@ -328,6 +328,8 @@ export default function MirrorRoute() {
             preset.videoSource === "camera" && preset.cameraSize.trim()
               ? preset.cameraSize.trim()
               : null,
+          display_ime_policy: preset.displayImePolicy || null,
+          no_vd_destroy_content: preset.noVdDestroyContent,
         },
         recordingGrant?.id,
       );
@@ -994,7 +996,44 @@ export default function MirrorRoute() {
                         label={t("mirror.keepActive")}
                       />
                     )}
+                  {capabilityState.kind === "ready" &&
+                    capabilityState.value.supports_no_vd_destroy_content && (
+                      <Toggle
+                        checked={preset.noVdDestroyContent}
+                        onChange={(checked) =>
+                          setPreset((prev) => ({
+                            ...prev,
+                            noVdDestroyContent: checked,
+                          }))
+                        }
+                        label={t("mirror.noVdDestroyContent")}
+                      />
+                    )}
                 </div>
+
+                {capabilityState.kind === "ready" &&
+                  capabilityState.value.supports_display_ime_policy && (
+                    <label className="mt-4 flex flex-col gap-1 text-xs text-anvil-300">
+                      <span>{t("mirror.displayImePolicy")}</span>
+                      <FieldSelect
+                        value={preset.displayImePolicy}
+                        onChange={(e) =>
+                          setPreset((prev) => ({
+                            ...prev,
+                            displayImePolicy: e.target.value,
+                          }))
+                        }
+                        className="w-56"
+                      >
+                        <option value="">
+                          {t("mirror.displayImePolicyDefault")}
+                        </option>
+                        <option value="local">local</option>
+                        <option value="hide">hide</option>
+                        <option value="fallback">fallback</option>
+                      </FieldSelect>
+                    </label>
+                  )}
 
                 {preset.recording && (
                   <p className="mt-4 rounded-md border border-circuit-300/20 bg-circuit-300/10 p-3 text-xs leading-5 text-anvil-300">

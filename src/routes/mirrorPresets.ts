@@ -38,7 +38,11 @@ export type MirrorPreset = {
   videoSource: string;
   cameraFacing: string;
   cameraSize: string;
+  displayImePolicy: string;
+  noVdDestroyContent: boolean;
 };
+
+export type DisplayImePolicy = "" | "local" | "hide" | "fallback";
 
 export type AudioSource =
   | "output"
@@ -75,6 +79,8 @@ export const DEFAULT_MIRROR_PRESET: MirrorPreset = {
   videoSource: "display",
   cameraFacing: "back",
   cameraSize: "",
+  displayImePolicy: "",
+  noVdDestroyContent: false,
 };
 
 export const LEGACY_MIRROR_PRESET_PREFIX = "droidsmith.mirror.preset.";
@@ -183,7 +189,23 @@ export function normalizePreset(value: Partial<MirrorPreset>): MirrorPreset {
       /^(\d{1,5}x\d{1,5})?$/u.test(value.cameraSize)
         ? value.cameraSize
         : DEFAULT_MIRROR_PRESET.cameraSize,
+    displayImePolicy: isDisplayImePolicy(value.displayImePolicy)
+      ? value.displayImePolicy
+      : DEFAULT_MIRROR_PRESET.displayImePolicy,
+    noVdDestroyContent:
+      typeof value.noVdDestroyContent === "boolean"
+        ? value.noVdDestroyContent
+        : DEFAULT_MIRROR_PRESET.noVdDestroyContent,
   };
+}
+
+function isDisplayImePolicy(value: unknown): value is DisplayImePolicy {
+  return (
+    value === "" ||
+    value === "local" ||
+    value === "hide" ||
+    value === "fallback"
+  );
 }
 
 function isAudioSource(value: unknown): value is AudioSource {

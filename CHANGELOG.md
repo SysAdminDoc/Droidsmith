@@ -24,6 +24,11 @@ each milestone tag.
 
 ### Added
 
+- **R-100 — scrcpy virtual-display flags.** Mirror gains version-gated
+  `--display-ime-policy` (soft-keyboard placement on a virtual display, scrcpy
+  3.2+) and `--no-vd-destroy-content` (keep virtual-display apps alive after the
+  window closes, scrcpy 3.1+) controls, persisted in the per-device mirror
+  preset and shown only when the detected scrcpy build supports them.
 - **R-098 — Export device debloat state as a shareable pack.** A new "Export
   device state" control in the Debloat picker captures the selected device's
   currently disabled, archived, and uninstalled packages and writes them to a

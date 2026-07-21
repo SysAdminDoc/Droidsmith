@@ -1076,7 +1076,10 @@
         "title": "scrcpy exited with an error",
         "body": "Review the bounded diagnostics below for the exact host or device failure."
       }
-    }
+    },
+    "noVdDestroyContent": "Keep virtual display content",
+    "displayImePolicy": "Virtual display IME",
+    "displayImePolicyDefault": "Default"
   },
   "console": {
     "title": "Console",

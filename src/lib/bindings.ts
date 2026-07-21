@@ -1771,6 +1771,16 @@ export type LaunchScrcpyRequest = {
   video_source?: string | null;
   camera_facing?: string | null;
   camera_size?: string | null;
+  /**
+   * `--display-ime-policy=local|hide|fallback` — where the soft keyboard
+   * renders relative to a virtual display (scrcpy 3.2+).
+   */
+  display_ime_policy?: string | null;
+  /**
+   * `--no-vd-destroy-content` — keep apps on a virtual display alive after
+   * the scrcpy window closes (scrcpy 3.1+).
+   */
+  no_vd_destroy_content?: boolean;
 };
 /**
  * One node of a `uiautomator dump` UI hierarchy, flattened with its nesting
@@ -1889,6 +1899,8 @@ export type MirrorPreset = {
   videoSource?: string;
   cameraFacing?: string;
   cameraSize?: string;
+  displayImePolicy?: string;
+  noVdDestroyContent?: boolean;
 };
 export type Mitigation =
   /**
@@ -2375,6 +2387,16 @@ export type ScrcpyCapabilities = {
    * Camera mirroring (`--video-source=camera`) landed in scrcpy 2.7.
    */
   supports_camera: boolean;
+  /**
+   * `--display-ime-policy` (soft-keyboard placement on a virtual display)
+   * landed in scrcpy 3.2.
+   */
+  supports_display_ime_policy: boolean;
+  /**
+   * `--no-vd-destroy-content` (keep virtual-display apps alive on close)
+   * landed in scrcpy 3.1.
+   */
+  supports_no_vd_destroy_content: boolean;
 };
 export type ScrcpyExitReason =
   | "user_stopped"

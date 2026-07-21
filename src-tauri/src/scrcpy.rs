@@ -58,6 +58,14 @@ pub struct LaunchScrcpyRequest {
     pub camera_facing: Option<String>,
     #[serde(default)]
     pub camera_size: Option<String>,
+    /// `--display-ime-policy=local|hide|fallback` — where the soft keyboard
+    /// renders relative to a virtual display (scrcpy 3.2+).
+    #[serde(default)]
+    pub display_ime_policy: Option<String>,
+    /// `--no-vd-destroy-content` — keep apps on a virtual display alive after
+    /// the scrcpy window closes (scrcpy 3.1+).
+    #[serde(default)]
+    pub no_vd_destroy_content: bool,
 }
 
 #[derive(specta::Type, Debug, Clone, Serialize, PartialEq, Eq)]
@@ -84,6 +92,12 @@ pub struct ScrcpyCapabilities {
     pub supports_audio_source_expansion: bool,
     /// Camera mirroring (`--video-source=camera`) landed in scrcpy 2.7.
     pub supports_camera: bool,
+    /// `--display-ime-policy` (soft-keyboard placement on a virtual display)
+    /// landed in scrcpy 3.2.
+    pub supports_display_ime_policy: bool,
+    /// `--no-vd-destroy-content` (keep virtual-display apps alive on close)
+    /// landed in scrcpy 3.1.
+    pub supports_no_vd_destroy_content: bool,
 }
 
 #[derive(specta::Type, Debug, Clone, Serialize, PartialEq, Eq)]
@@ -248,6 +262,8 @@ pub fn capabilities(
         supports_new_display: version_gte(&version, 3, 0),
         supports_audio_source_expansion: version_gte(&version, 3, 2),
         supports_camera: version_gte(&version, 2, 7),
+        supports_display_ime_policy: version_gte(&version, 3, 2),
+        supports_no_vd_destroy_content: version_gte(&version, 3, 1),
         version,
         available_video_codecs,
         video_encoders,
@@ -680,6 +696,34 @@ pub fn build_args(
         }
         args.push("--keep-active".to_string());
     }
+    if let Some(policy) = request
+        .display_ime_policy
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        if !capabilities.supports_display_ime_policy {
+            return Err(
+                "display IME policy (--display-ime-policy) requires scrcpy 3.2 or later"
+                    .to_string(),
+            );
+        }
+        if !matches!(policy, "local" | "hide" | "fallback") {
+            return Err(format!(
+                "scrcpy display-ime-policy must be local, hide, or fallback: {policy}"
+            ));
+        }
+        args.push(format!("--display-ime-policy={policy}"));
+    }
+    if request.no_vd_destroy_content {
+        if !capabilities.supports_no_vd_destroy_content {
+            return Err(
+                "keeping virtual-display content (--no-vd-destroy-content) requires scrcpy 3.1 or later"
+                    .to_string(),
+            );
+        }
+        args.push("--no-vd-destroy-content".to_string());
+    }
     Ok(args)
 }
 
@@ -916,6 +960,8 @@ mod tests {
             video_source: None,
             camera_facing: None,
             camera_size: None,
+            display_ime_policy: None,
+            no_vd_destroy_content: false,
         }
     }
 
@@ -936,6 +982,8 @@ mod tests {
             supports_new_display: true,
             supports_audio_source_expansion: true,
             supports_camera: true,
+            supports_display_ime_policy: true,
+            supports_no_vd_destroy_content: true,
         }
     }
 
@@ -1056,6 +1104,35 @@ mod tests {
         assert!(!args.contains(&"--fullscreen".to_string()));
         assert!(!args.contains(&"--always-on-top".to_string()));
         assert!(!args.contains(&"--no-control".to_string()));
+    }
+
+    #[test]
+    fn emits_and_gates_display_ime_policy_and_vd_content() {
+        let mut req = request();
+        req.display_ime_policy = Some("local".to_string());
+        req.no_vd_destroy_content = true;
+        let args = build_args(&req, None, &capabilities()).unwrap();
+        assert!(args.contains(&"--display-ime-policy=local".to_string()));
+        assert!(args.contains(&"--no-vd-destroy-content".to_string()));
+
+        // An unknown IME policy is rejected.
+        let mut bad = request();
+        bad.display_ime_policy = Some("elsewhere".to_string());
+        assert!(build_args(&bad, None, &capabilities())
+            .unwrap_err()
+            .contains("display-ime-policy"));
+
+        // Both flags are gated on their introducing scrcpy version.
+        let mut old = capabilities();
+        old.version = "3.0".to_string();
+        old.supports_display_ime_policy = false;
+        old.supports_no_vd_destroy_content = false;
+        let mut ime = request();
+        ime.display_ime_policy = Some("hide".to_string());
+        assert!(build_args(&ime, None, &old).unwrap_err().contains("3.2"));
+        let mut vd = request();
+        vd.no_vd_destroy_content = true;
+        assert!(build_args(&vd, None, &old).unwrap_err().contains("3.1"));
     }
 
     #[test]

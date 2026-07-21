@@ -37,20 +37,6 @@ IDs continue from R-096 / IMP-73.
 
 ### P3
 
-- [ ] P3 — R-100 — scrcpy `--display-ime-policy` and `--no-vd-destroy-content` flags
-  Why: The two remaining headless-testable scrcpy flags that complete the
-  already-shipped virtual-display surface (IME placement on the virtual display;
-  preserve virtual-display content when the window closes).
-  Evidence: scrcpy v3.2 (`--display-ime-policy`) / v3.1 (`--no-vd-destroy-content`)
-  release notes; `src-tauri/src/scrcpy.rs` `LaunchScrcpyRequest` (27 fields) does
-  not include them.
-  Touches: `src-tauri/src/scrcpy.rs` (request fields + version-gated arg emission
-  + capability flags), `src/routes/Mirror.tsx`, bindings, locales.
-  Acceptance: version-gated arg emission unit-tested exactly like
-  `emits_new_display_and_audio_source_when_supported`; Mirror exposes the toggles
-  only when scrcpy supports them.
-  Complexity: S
-
 - [ ] P3 — R-101 — Surface `adb server-status` mDNS state + negotiated USB link speed
   Why: platform-tools 36.0.0+ `adb server-status` reports mDNS status and USB
   SuperSpeed/SuperSpeed+ negotiated link speed — richer host-doctor/diagnostics

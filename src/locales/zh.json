@@ -1076,7 +1076,10 @@
         "title": "scrcpy 以错误退出",
         "body": "查看下方的有限诊断以了解确切的主机或设备故障。"
       }
-    }
+    },
+    "noVdDestroyContent": "保留虚拟显示内容",
+    "displayImePolicy": "虚拟显示输入法",
+    "displayImePolicyDefault": "默认"
   },
   "console": {
     "title": "控制台",

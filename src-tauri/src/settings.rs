@@ -105,6 +105,10 @@ pub struct MirrorPreset {
     pub camera_facing: String,
     #[serde(default)]
     pub camera_size: String,
+    #[serde(default)]
+    pub display_ime_policy: String,
+    #[serde(default)]
+    pub no_vd_destroy_content: bool,
 }
 
 fn default_video_source() -> String {
@@ -154,6 +158,8 @@ impl Default for MirrorPreset {
             video_source: default_video_source(),
             camera_facing: default_camera_facing(),
             camera_size: String::new(),
+            display_ime_policy: String::new(),
+            no_vd_destroy_content: false,
         }
     }
 }
@@ -1189,6 +1195,14 @@ fn validate_preset(preset: &MirrorPreset) -> Result<(), SettingsError> {
             }
         }
     }
+    if !matches!(
+        preset.display_ime_policy.as_str(),
+        "" | "local" | "hide" | "fallback"
+    ) {
+        return Err(SettingsError::Invalid(
+            "mirror displayImePolicy must be empty, local, hide, or fallback".to_string(),
+        ));
+    }
     Ok(())
 }
 
@@ -1257,6 +1271,8 @@ fn normalize_legacy_preset(value: LegacyMirrorPreset) -> MirrorPreset {
         video_source: defaults.video_source,
         camera_facing: defaults.camera_facing,
         camera_size: defaults.camera_size,
+        display_ime_policy: defaults.display_ime_policy,
+        no_vd_destroy_content: defaults.no_vd_destroy_content,
     }
 }
 

@@ -1076,7 +1076,10 @@
         "title": "scrcpy wurde mit einem Fehler beendet",
         "body": "Überprüfen Sie die begrenzten Diagnosen unten für den genauen Host- oder Gerätefehler."
       }
-    }
+    },
+    "noVdDestroyContent": "Inhalt des virtuellen Displays behalten",
+    "displayImePolicy": "IME für virtuelles Display",
+    "displayImePolicyDefault": "Standard"
   },
   "console": {
     "title": "Konsole",

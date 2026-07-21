@@ -1149,7 +1149,10 @@
     "title": "Espejo",
     "turnScreenOff": "Apagar pantalla del dispositivo",
     "videoCodec": "Códec de video",
-    "videoEncoder": "Codificador de video"
+    "videoEncoder": "Codificador de video",
+    "noVdDestroyContent": "Conservar el contenido de la pantalla virtual",
+    "displayImePolicy": "IME de pantalla virtual",
+    "displayImePolicyDefault": "Predeterminado"
   },
   "nav": {
     "apps": "Aplicaciones",
