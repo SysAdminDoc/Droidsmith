@@ -163,3 +163,21 @@ export async function restartDeviceLifecycle() {
   await stopDeviceLifecycle();
   startDeviceLifecycle();
 }
+
+/** Test-only accessor for the module-level store singleton. */
+export function __getDeviceStoreForTests(): DeviceStore {
+  return store;
+}
+
+/** Test-only reset so each test starts from a clean lifecycle. */
+export function __resetDeviceStoreForTests() {
+  activeOperationId = null;
+  lifecycleGeneration += 1;
+  store = {
+    devicesState: { kind: "loading" },
+    health: null,
+    observedAt: null,
+    watching: false,
+  };
+  listeners.clear();
+}

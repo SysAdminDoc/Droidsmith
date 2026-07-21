@@ -53,16 +53,6 @@ in Roadmap_Blocked.md, not here — see the Rejected Ideas table in RESEARCH.md.
   unsupported flags hidden on older scrcpy.
   Complexity: M
 
-- [ ] P3 — IMP-70 Tests for deviceStore.ts and lib/logcatQueries.ts
-  Why: the device-lifecycle `useSyncExternalStore` machine and the logcat
-  persistence layer (with storage fallback) are untested core logic.
-  Evidence: no `src/lib/deviceStore.test.ts`; `src/lib/logcatQueries.ts` untested
-  (the tested file is the sibling `src/routes/logcatQueries.ts`).
-  Touches: `src/lib/deviceStore.test.ts`, `src/lib/logcatQueries.test.ts` (new).
-  Acceptance: subscribe/notify/reconnect transitions and load/save-with-fallback
-  are covered; `npm test` green.
-  Complexity: S
-
 - [ ] P3 — R-093 Host-doctor USB/mDNS backend troubleshooting toggles
   Why: platform-tools 37.0.1 changed USB/mDNS backends; device-detection issues
   now hinge on env toggles users can't discover.
