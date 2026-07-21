@@ -99,6 +99,20 @@ pub struct MirrorPreset {
     pub new_display: String,
     #[serde(default)]
     pub audio_source: String,
+    #[serde(default = "default_video_source")]
+    pub video_source: String,
+    #[serde(default = "default_camera_facing")]
+    pub camera_facing: String,
+    #[serde(default)]
+    pub camera_size: String,
+}
+
+fn default_video_source() -> String {
+    "display".to_string()
+}
+
+fn default_camera_facing() -> String {
+    "back".to_string()
 }
 
 #[derive(specta::Type, Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -137,6 +151,9 @@ impl Default for MirrorPreset {
             audio_codec: AudioCodec::Default,
             new_display: String::new(),
             audio_source: "output".to_string(),
+            video_source: default_video_source(),
+            camera_facing: default_camera_facing(),
+            camera_size: String::new(),
         }
     }
 }
@@ -1152,6 +1169,26 @@ fn validate_preset(preset: &MirrorPreset) -> Result<(), SettingsError> {
             "mirror audioSource is invalid".to_string(),
         ));
     }
+    if !matches!(preset.video_source.as_str(), "display" | "camera") {
+        return Err(SettingsError::Invalid(
+            "mirror videoSource is invalid".to_string(),
+        ));
+    }
+    if !matches!(preset.camera_facing.as_str(), "front" | "back" | "external") {
+        return Err(SettingsError::Invalid(
+            "mirror cameraFacing is invalid".to_string(),
+        ));
+    }
+    if !preset.camera_size.is_empty() {
+        match preset.camera_size.split_once('x') {
+            Some((w, h)) if valid_numeric_setting(w, 5) && valid_numeric_setting(h, 5) => {}
+            _ => {
+                return Err(SettingsError::Invalid(
+                    "mirror cameraSize must be empty or <width>x<height>".to_string(),
+                ))
+            }
+        }
+    }
     Ok(())
 }
 
@@ -1217,6 +1254,9 @@ fn normalize_legacy_preset(value: LegacyMirrorPreset) -> MirrorPreset {
         audio_codec: defaults.audio_codec,
         new_display: defaults.new_display,
         audio_source: defaults.audio_source,
+        video_source: defaults.video_source,
+        camera_facing: defaults.camera_facing,
+        camera_size: defaults.camera_size,
     }
 }
 

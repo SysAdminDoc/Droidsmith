@@ -928,6 +928,14 @@
     }
   },
   "mirror": {
+    "videoSource": "视频源",
+    "videoSourceDisplay": "屏幕（默认）",
+    "videoSourceCamera": "摄像头",
+    "cameraFacing": "摄像头朝向",
+    "cameraFacingBack": "后置",
+    "cameraFacingFront": "前置",
+    "cameraFacingExternal": "外接",
+    "cameraSize": "摄像头分辨率 (宽x高)",
     "audioSource": "音频源",
     "audioSourceOutput": "设备输出（默认）",
     "audioSourceMic": "麦克风",

@@ -35,6 +35,9 @@ export type MirrorPreset = {
   audioCodec: AudioCodec;
   newDisplay: string;
   audioSource: string;
+  videoSource: string;
+  cameraFacing: string;
+  cameraSize: string;
 };
 
 export type AudioSource =
@@ -69,6 +72,9 @@ export const DEFAULT_MIRROR_PRESET: MirrorPreset = {
   audioCodec: "default",
   newDisplay: "",
   audioSource: "output",
+  videoSource: "display",
+  cameraFacing: "back",
+  cameraSize: "",
 };
 
 export const LEGACY_MIRROR_PRESET_PREFIX = "droidsmith.mirror.preset.";
@@ -162,6 +168,21 @@ export function normalizePreset(value: Partial<MirrorPreset>): MirrorPreset {
     audioSource: isAudioSource(value.audioSource)
       ? value.audioSource
       : DEFAULT_MIRROR_PRESET.audioSource,
+    videoSource:
+      value.videoSource === "camera"
+        ? "camera"
+        : DEFAULT_MIRROR_PRESET.videoSource,
+    cameraFacing:
+      value.cameraFacing === "front" ||
+      value.cameraFacing === "back" ||
+      value.cameraFacing === "external"
+        ? value.cameraFacing
+        : DEFAULT_MIRROR_PRESET.cameraFacing,
+    cameraSize:
+      typeof value.cameraSize === "string" &&
+      /^(\d{1,5}x\d{1,5})?$/u.test(value.cameraSize)
+        ? value.cameraSize
+        : DEFAULT_MIRROR_PRESET.cameraSize,
   };
 }
 

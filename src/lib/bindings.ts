@@ -1632,6 +1632,13 @@ export type LaunchScrcpyRequest = {
   audio_codec?: string | null;
   new_display?: string | null;
   audio_source?: string | null;
+  /**
+   * `"camera"` selects camera mirroring; anything else (or unset) is the
+   * default display source.
+   */
+  video_source?: string | null;
+  camera_facing?: string | null;
+  camera_size?: string | null;
 };
 /**
  * One node of a `uiautomator dump` UI hierarchy, flattened with its nesting
@@ -1747,6 +1754,9 @@ export type MirrorPreset = {
   audioCodec?: AudioCodec;
   newDisplay?: string;
   audioSource?: string;
+  videoSource?: string;
+  cameraFacing?: string;
+  cameraSize?: string;
 };
 export type Mitigation =
   /**
@@ -2220,6 +2230,10 @@ export type ScrcpyCapabilities = {
    * scrcpy 3.2. `output` and `mic` predate it.
    */
   supports_audio_source_expansion: boolean;
+  /**
+   * Camera mirroring (`--video-source=camera`) landed in scrcpy 2.7.
+   */
+  supports_camera: boolean;
 };
 export type ScrcpyExitReason =
   | "user_stopped"

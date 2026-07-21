@@ -321,6 +321,13 @@ export default function MirrorRoute() {
           new_display: preset.newDisplay.trim() || null,
           audio_source:
             preset.audioSource === "output" ? null : preset.audioSource,
+          video_source: preset.videoSource === "camera" ? "camera" : null,
+          camera_facing:
+            preset.videoSource === "camera" ? preset.cameraFacing : null,
+          camera_size:
+            preset.videoSource === "camera" && preset.cameraSize.trim()
+              ? preset.cameraSize.trim()
+              : null,
         },
         recordingGrant?.id,
       );
@@ -730,6 +737,80 @@ export default function MirrorRoute() {
                           className="font-mono"
                         />
                       </label>
+                    )}
+                  {capabilityState.kind === "ready" &&
+                    capabilityState.value.supports_camera && (
+                      <label className="grid gap-1.5">
+                        <span className="text-xs font-medium text-anvil-400">
+                          {t("mirror.videoSource")}
+                        </span>
+                        <FieldSelect
+                          value={preset.videoSource}
+                          onChange={(event) =>
+                            setPreset((previous) => ({
+                              ...previous,
+                              videoSource: event.target.value,
+                            }))
+                          }
+                        >
+                          <option value="display">
+                            {t("mirror.videoSourceDisplay")}
+                          </option>
+                          <option value="camera">
+                            {t("mirror.videoSourceCamera")}
+                          </option>
+                        </FieldSelect>
+                      </label>
+                    )}
+                  {preset.videoSource === "camera" &&
+                    capabilityState.kind === "ready" &&
+                    capabilityState.value.supports_camera && (
+                      <>
+                        <label className="grid gap-1.5">
+                          <span className="text-xs font-medium text-anvil-400">
+                            {t("mirror.cameraFacing")}
+                          </span>
+                          <FieldSelect
+                            value={preset.cameraFacing}
+                            onChange={(event) =>
+                              setPreset((previous) => ({
+                                ...previous,
+                                cameraFacing: event.target.value,
+                              }))
+                            }
+                          >
+                            <option value="back">
+                              {t("mirror.cameraFacingBack")}
+                            </option>
+                            <option value="front">
+                              {t("mirror.cameraFacingFront")}
+                            </option>
+                            <option value="external">
+                              {t("mirror.cameraFacingExternal")}
+                            </option>
+                          </FieldSelect>
+                        </label>
+                        <label className="grid gap-1.5">
+                          <span className="text-xs font-medium text-anvil-400">
+                            {t("mirror.cameraSize")}
+                          </span>
+                          <FieldInput
+                            type="text"
+                            value={preset.cameraSize}
+                            onChange={(e) =>
+                              setPreset((prev) => ({
+                                ...prev,
+                                cameraSize: e.target.value
+                                  .replace(/[^\dx]/g, "")
+                                  .slice(0, 11),
+                              }))
+                            }
+                            placeholder="1920x1080"
+                            inputMode="text"
+                            className="font-mono"
+                          />
+                        </label>
+                      </>
                     )}
                   <label className="grid gap-1.5">
                     <span className="text-xs font-medium text-anvil-400">

@@ -1002,6 +1002,14 @@
     "warning": "Advertencia"
   },
   "mirror": {
+    "videoSource": "Fuente de vídeo",
+    "videoSourceDisplay": "Pantalla (predeterminado)",
+    "videoSourceCamera": "Cámara",
+    "cameraFacing": "Orientación de la cámara",
+    "cameraFacingBack": "Trasera",
+    "cameraFacingFront": "Frontal",
+    "cameraFacingExternal": "Externa",
+    "cameraSize": "Tamaño de cámara (An×Al)",
     "audioSource": "Fuente de audio",
     "audioSourceOutput": "Salida del dispositivo (predeterminado)",
     "audioSourceMic": "Micrófono",

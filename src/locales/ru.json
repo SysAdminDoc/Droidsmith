@@ -928,6 +928,14 @@
     }
   },
   "mirror": {
+    "videoSource": "Источник видео",
+    "videoSourceDisplay": "Экран (по умолчанию)",
+    "videoSourceCamera": "Камера",
+    "cameraFacing": "Направление камеры",
+    "cameraFacingBack": "Задняя",
+    "cameraFacingFront": "Передняя",
+    "cameraFacingExternal": "Внешняя",
+    "cameraSize": "Размер камеры (Ш×В)",
     "audioSource": "Источник звука",
     "audioSourceOutput": "Вывод устройства (по умолчанию)",
     "audioSourceMic": "Микрофон",

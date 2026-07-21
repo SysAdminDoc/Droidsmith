@@ -50,6 +50,14 @@ pub struct LaunchScrcpyRequest {
     pub new_display: Option<String>,
     #[serde(default)]
     pub audio_source: Option<String>,
+    /// `"camera"` selects camera mirroring; anything else (or unset) is the
+    /// default display source.
+    #[serde(default)]
+    pub video_source: Option<String>,
+    #[serde(default)]
+    pub camera_facing: Option<String>,
+    #[serde(default)]
+    pub camera_size: Option<String>,
 }
 
 #[derive(specta::Type, Debug, Clone, Serialize, PartialEq, Eq)]
@@ -74,6 +82,8 @@ pub struct ScrcpyCapabilities {
     /// The expanded `--audio-source=mic-*`/`voice-call`/`playback` set landed in
     /// scrcpy 3.2. `output` and `mic` predate it.
     pub supports_audio_source_expansion: bool,
+    /// Camera mirroring (`--video-source=camera`) landed in scrcpy 2.7.
+    pub supports_camera: bool,
 }
 
 #[derive(specta::Type, Debug, Clone, Serialize, PartialEq, Eq)]
@@ -237,6 +247,7 @@ pub fn capabilities(
         path: scrcpy_path.display().to_string(),
         supports_new_display: version_gte(&version, 3, 0),
         supports_audio_source_expansion: version_gte(&version, 3, 2),
+        supports_camera: version_gte(&version, 2, 7),
         version,
         available_video_codecs,
         video_encoders,
@@ -451,6 +462,46 @@ pub fn build_args(
     capabilities: &ScrcpyCapabilities,
 ) -> Result<Vec<String>, String> {
     let mut args = vec!["-s".to_string(), request.serial.clone()];
+
+    // Camera mirroring is a video-source *mode* change: the device screen is not
+    // captured, so display-geometry flags (crop, orientation, new/flex display,
+    // touch overlay, turn-screen-off) do not apply and are suppressed below.
+    let camera_mode = request.video_source.as_deref() == Some("camera");
+    if camera_mode {
+        if !capabilities.supports_camera {
+            return Err("camera mirroring requires scrcpy 2.7 or later".to_string());
+        }
+        args.push("--video-source=camera".to_string());
+        if let Some(facing) = request
+            .camera_facing
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+        {
+            if !matches!(facing, "front" | "back" | "external") {
+                return Err(format!("unsupported scrcpy camera facing: {facing}"));
+            }
+            args.push(format!("--camera-facing={facing}"));
+        }
+        if let Some(size) = request
+            .camera_size
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+        {
+            match size.split_once('x') {
+                Some((w, h)) if is_small_int(w) && is_small_int(h) => {
+                    args.push(format!("--camera-size={size}"));
+                }
+                _ => {
+                    return Err(format!(
+                        "scrcpy camera size must be <width>x<height>: {size}"
+                    ))
+                }
+            }
+        }
+    }
+
     if let Some(max_size) = request.max_size.filter(|value| *value > 0) {
         args.push("--max-size".to_string());
         args.push(max_size.to_string());
@@ -524,13 +575,13 @@ pub fn build_args(
             _ => return Err(format!("unsupported scrcpy keyboard mode: {mode}")),
         }
     }
-    if request.turn_screen_off {
+    if !camera_mode && request.turn_screen_off {
         args.push("--turn-screen-off".to_string());
     }
     if request.stay_awake {
         args.push("--stay-awake".to_string());
     }
-    if request.show_touches {
+    if !camera_mode && request.show_touches {
         args.push("--show-touches".to_string());
     }
     if let Some(max_fps) = request.max_fps.filter(|value| *value > 0) {
@@ -549,7 +600,7 @@ pub fn build_args(
         .crop
         .as_deref()
         .map(str::trim)
-        .filter(|value| !value.is_empty())
+        .filter(|value| !camera_mode && !value.is_empty())
     {
         if !valid_crop(crop) {
             return Err(format!(
@@ -562,7 +613,7 @@ pub fn build_args(
         .display_orientation
         .as_deref()
         .map(str::trim)
-        .filter(|value| !value.is_empty())
+        .filter(|value| !camera_mode && !value.is_empty())
     {
         if !VALID_DISPLAY_ORIENTATIONS.contains(&orientation) {
             return Err(format!(
@@ -605,7 +656,7 @@ pub fn build_args(
         .new_display
         .as_deref()
         .map(str::trim)
-        .filter(|value| !value.is_empty())
+        .filter(|value| !camera_mode && !value.is_empty())
     {
         if !capabilities.supports_new_display {
             return Err("virtual display (--new-display) requires scrcpy 3.0 or later".to_string());
@@ -617,7 +668,7 @@ pub fn build_args(
         }
         args.push(format!("--new-display={new_display}"));
     }
-    if request.flex_display {
+    if !camera_mode && request.flex_display {
         if !version_gte(&capabilities.version, 4, 0) {
             return Err("flex display requires scrcpy 4.0 or later".to_string());
         }
@@ -862,6 +913,9 @@ mod tests {
             audio_codec: None,
             new_display: None,
             audio_source: None,
+            video_source: None,
+            camera_facing: None,
+            camera_size: None,
         }
     }
 
@@ -881,6 +935,7 @@ mod tests {
             supports_keep_active: true,
             supports_new_display: true,
             supports_audio_source_expansion: true,
+            supports_camera: true,
         }
     }
 
@@ -1103,6 +1158,55 @@ mod tests {
         assert!(build_args(&bad_source, None, &capabilities())
             .unwrap_err()
             .contains("audio source"));
+    }
+
+    #[test]
+    fn camera_mode_emits_camera_args_and_suppresses_display_flags() {
+        let mut req = request();
+        req.video_source = Some("camera".to_string());
+        req.camera_facing = Some("front".to_string());
+        req.camera_size = Some("1920x1080".to_string());
+        // Display-only flags must be suppressed in camera mode.
+        req.crop = Some("1224:1440:0:0".to_string());
+        req.display_orientation = Some("90".to_string());
+        req.new_display = Some("1920x1080".to_string());
+        req.show_touches = true;
+        req.turn_screen_off = true;
+        req.flex_display = true;
+
+        let args = build_args(&req, None, &capabilities()).unwrap();
+        assert!(args.contains(&"--video-source=camera".to_string()));
+        assert!(args.contains(&"--camera-facing=front".to_string()));
+        assert!(args.contains(&"--camera-size=1920x1080".to_string()));
+        for suppressed in [
+            "--crop",
+            "--display-orientation",
+            "--new-display",
+            "--show-touches",
+            "--turn-screen-off",
+            "--flex-display",
+        ] {
+            assert!(
+                !args.iter().any(|arg| arg.starts_with(suppressed)),
+                "{suppressed} must be suppressed in camera mode"
+            );
+        }
+    }
+
+    #[test]
+    fn camera_mode_rejected_on_old_scrcpy_and_bad_facing() {
+        let mut old = capabilities();
+        old.supports_camera = false;
+        let mut req = request();
+        req.video_source = Some("camera".to_string());
+        assert!(build_args(&req, None, &old).unwrap_err().contains("2.7"));
+
+        let mut bad_facing = request();
+        bad_facing.video_source = Some("camera".to_string());
+        bad_facing.camera_facing = Some("sideways".to_string());
+        assert!(build_args(&bad_facing, None, &capabilities())
+            .unwrap_err()
+            .contains("camera facing"));
     }
 
     #[test]

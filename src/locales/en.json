@@ -928,6 +928,14 @@
     }
   },
   "mirror": {
+    "videoSource": "Video source",
+    "videoSourceDisplay": "Screen (default)",
+    "videoSourceCamera": "Camera",
+    "cameraFacing": "Camera facing",
+    "cameraFacingBack": "Back",
+    "cameraFacingFront": "Front",
+    "cameraFacingExternal": "External",
+    "cameraSize": "Camera size (WxH)",
     "audioSource": "Audio source",
     "audioSourceOutput": "Device output (default)",
     "audioSourceMic": "Microphone",

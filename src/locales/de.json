@@ -928,6 +928,14 @@
     }
   },
   "mirror": {
+    "videoSource": "Videoquelle",
+    "videoSourceDisplay": "Bildschirm (Standard)",
+    "videoSourceCamera": "Kamera",
+    "cameraFacing": "Kameraausrichtung",
+    "cameraFacingBack": "Rückseite",
+    "cameraFacingFront": "Vorderseite",
+    "cameraFacingExternal": "Extern",
+    "cameraSize": "Kameragröße (BxH)",
     "audioSource": "Audioquelle",
     "audioSourceOutput": "Geräteausgabe (Standard)",
     "audioSourceMic": "Mikrofon",

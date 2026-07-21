@@ -16,15 +16,17 @@ each milestone tag.
 
 ### Added
 
-- **R-089 Virtual display + audio-source picker (scrcpy).** Mirror now exposes a
-  version-gated virtual/secondary display (`--new-display=<w>x<h>[/<dpi>]`,
-  scrcpy 3.0+) and an audio-source picker (`--audio-source`), with the expanded
-  `mic-unprocessed`/`mic-voice-*`/`voice-call`/`playback` sources gated on scrcpy
-  3.2+. Both are validated (digits/`x`/`/` only, so no argument metacharacters
-  reach the device transport), persist in mirror presets, and are asserted in
-  the scrcpy arg-construction unit tests. Unsupported controls are hidden on
-  older scrcpy. (Camera mirroring — a video-source mode change — remains under
-  R-089.)
+- **R-089 scrcpy capability surface (virtual display, camera, audio sources).**
+  Mirror now exposes a version-gated virtual/secondary display
+  (`--new-display=<w>x<h>[/<dpi>]`, scrcpy 3.0+), an audio-source picker
+  (`--audio-source`; expanded `mic-*`/`voice-call`/`playback` gated on 3.2+), and
+  **camera mirroring** (`--video-source=camera` with `--camera-facing`/
+  `--camera-size`, gated on scrcpy 2.7+). Camera mode is a video-source change,
+  so display-only flags (crop, orientation, new/flex display, touch overlay,
+  turn-screen-off) are suppressed. All values are validated (digits/`x`/`/`
+  only, so no argument metacharacters reach the device transport), persist in
+  mirror presets, and are asserted in the scrcpy arg-construction unit tests;
+  unsupported controls are hidden on older scrcpy.
 
 ### Changed
 
