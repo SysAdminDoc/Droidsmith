@@ -37,21 +37,6 @@ IDs continue from R-096 / IMP-73.
 
 ### P3
 
-- [ ] P3 — R-102 — Crash-artifact viewer (ANR / tombstone / dropbox)
-  Why: No scrcpy front-end surfaces crash artifacts; complements the existing
-  Diagnostics/bugreport flow with a read-only browsable list a developer expects.
-  Evidence: developer.android.com/studio/inspect (App Inspection); gap — Droidsmith
-  captures bugreports but does not parse ANR/tombstone/`dumpsys dropbox` records.
-  Touches: new parser in `src-tauri/src/adb/parsers.rs` or a `crash_artifacts.rs`
-  module, a command in `commands.rs`, a route under `src/routes/devices/`,
-  bindings, locales.
-  Acceptance: lists dropbox crash/ANR entries (tag, timestamp, process) parsed
-  from `adb shell dumpsys dropbox --print`, with malformed rows shown as visible
-  `parse_error` entries (matching the existing parser convention); parser
-  unit-tested against sampled output. Live device needed only for end-to-end
-  confirmation; the parse layer is headless-testable.
-  Complexity: M
-
 - [ ] P3 — IMP-75 — Extract `Debloat.tsx` into `src/routes/debloat/`
   Why: 1,928 LOC with ~10 inline sub-components; matches the completed IMP-67
   (Devices) / IMP-72 refactor pattern; improves maintainability and testability.
