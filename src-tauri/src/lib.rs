@@ -21,6 +21,7 @@ pub mod operations;
 /// against this crate as `droidsmith_lib`) can reach the loader + lint
 /// types. Tauri-internal callers go through `crate::packs` as usual.
 pub mod packs;
+mod process_capture;
 mod process_tree;
 pub mod profile;
 /// Public for the read-only schema-lint binary; runtime callers still use the

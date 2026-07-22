@@ -53,7 +53,9 @@ pub use packages::{
     PackageFilter, PackageListing,
 };
 pub use resolver::{locate_adb, AdbResolution};
-pub use transport::{validate_device_target, AdbTransport, ShellTransport, TransportError};
+pub use transport::{
+    validate_device_target, AdbTransport, OutputStream, ShellTransport, TransportError,
+};
 pub use users::{list_users, AndroidUser};
 pub use wireless::{
     connect as connect_wireless, list_mdns_services, pair as pair_wireless, WirelessAdbService,

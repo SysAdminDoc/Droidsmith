@@ -39,7 +39,11 @@ impl CapturedTail {
                     Ok(0) | Err(_) => break,
                     Ok(count) => {
                         let mut captured = bytes.lock().unwrap_or_else(|error| error.into_inner());
-                        append_tail(&mut captured, &buffer[..count], LOG_CAPTURE_BYTES);
+                        crate::process_capture::append_tail(
+                            &mut captured,
+                            &buffer[..count],
+                            LOG_CAPTURE_BYTES,
+                        );
                     }
                 }
             }
@@ -61,22 +65,6 @@ impl CapturedTail {
     }
 }
 
-fn append_tail(target: &mut Vec<u8>, bytes: &[u8], limit: usize) {
-    if bytes.len() >= limit {
-        target.clear();
-        target.extend_from_slice(&bytes[bytes.len() - limit..]);
-        return;
-    }
-    let overflow = target
-        .len()
-        .saturating_add(bytes.len())
-        .saturating_sub(limit);
-    if overflow > 0 {
-        target.drain(..overflow);
-    }
-    target.extend_from_slice(bytes);
-}
-
 /// Strip control characters (keeping tab/newline/carriage-return) and bound the
 /// exposed length so captured process output is safe to surface in the UI.
 pub(crate) fn sanitize_log(value: &str) -> String {
@@ -92,7 +80,8 @@ pub(crate) fn sanitize_log(value: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{append_tail, sanitize_log, EXPOSED_LOG_CHARS, LOG_CAPTURE_BYTES};
+    use super::{sanitize_log, EXPOSED_LOG_CHARS, LOG_CAPTURE_BYTES};
+    use crate::process_capture::append_tail;
 
     #[test]
     fn append_tail_keeps_only_the_trailing_window() {

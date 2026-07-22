@@ -275,6 +275,7 @@ fn transport_error_kind(error: &TransportError) -> &'static str {
         TransportError::Exit { .. } => "adb_exit",
         TransportError::Signaled { .. } => "adb_signaled",
         TransportError::Timeout(_) => "adb_timeout",
+        TransportError::OutputLimit { .. } => "subprocess_output_limit",
         TransportError::Parse(_) => "parse_error",
     }
 }

@@ -12,7 +12,6 @@
 //! `AdbResolution` so we can stub it for tests without spawning real
 //! children.
 
-use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::OnceLock;
@@ -202,52 +201,22 @@ fn candidate_paths(env: &ResolverEnv) -> Vec<(PathBuf, ResolveSource)> {
 /// Run `<adb> version` with a 2s wall-clock timeout. Returns the first
 /// line of stdout trimmed, or `None` on any failure.
 ///
-/// **Concurrency model:** we read stdout on a worker thread while the main
-/// thread polls `try_wait`. Reading and waiting are not interleaved — so
-/// a verbose `adb version` cannot deadlock the child by filling the OS
-/// pipe buffer before we collect it.
+/// Output is drained concurrently under the shared subprocess byte budget.
 fn probe_version(path: &Path) -> Option<String> {
     let mut command = Command::new(path);
-    command
-        .arg("version")
-        .stdin(std::process::Stdio::null())
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::null());
-    crate::process_tree::configure(&mut command);
-    let mut child = command.spawn().ok()?;
-
-    let mut stdout = child.stdout.take()?;
-    let reader = std::thread::spawn(move || {
-        let mut buf = Vec::with_capacity(256);
-        let _ = stdout.read_to_end(&mut buf);
-        buf
-    });
-
-    let start = std::time::Instant::now();
+    command.arg("version");
     let timeout = Duration::from_secs(2);
-    let exit_status = loop {
-        match child.try_wait() {
-            Ok(Some(status)) => break Some(status),
-            Ok(None) => {
-                if start.elapsed() > timeout {
-                    let _ = crate::process_tree::terminate(&mut child);
-                    break None;
-                }
-                std::thread::sleep(Duration::from_millis(20));
-            }
-            Err(_) => {
-                let _ = crate::process_tree::terminate(&mut child);
-                break None;
-            }
-        }
-    };
-
-    let buf = reader.join().unwrap_or_default();
-    let status_ok = exit_status.map(|s| s.success()).unwrap_or(false);
-    if !status_ok {
-        return None;
+    let output = crate::process_capture::run(
+        &mut command,
+        timeout,
+        crate::process_capture::CaptureLimits::default(),
+    )
+    .ok()?;
+    match output.termination {
+        crate::process_capture::CaptureTermination::Exited(status) if status.success() => {}
+        _ => return None,
     }
-    let text = String::from_utf8_lossy(&buf);
+    let text = String::from_utf8_lossy(&output.stdout);
     // `adb version` starts with the stable protocol version (`1.0.41`) and
     // reports the actionable Platform Tools release on the following
     // `Version 37.0.0-...` line. Prefer that release for health guidance.

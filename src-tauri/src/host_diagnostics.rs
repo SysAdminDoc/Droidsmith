@@ -7,9 +7,8 @@
 //! identifiers.
 
 use std::collections::BTreeMap;
-use std::io::Read;
-use std::process::{Command, Stdio};
-use std::time::{Duration, Instant};
+use std::process::Command;
+use std::time::Duration;
 
 #[cfg(target_os = "linux")]
 use std::{fs, path::Path};
@@ -764,41 +763,19 @@ fn looks_like_vpn_interface(value: &str) -> bool {
 
 fn run_probe(program: &str, args: &[&str], timeout: Duration) -> Option<String> {
     let mut command = Command::new(program);
-    command
-        .args(args)
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null());
-    crate::process_tree::configure(&mut command);
-    let mut child = command.spawn().ok()?;
-    let mut stdout = child.stdout.take()?;
-    let reader = std::thread::spawn(move || {
-        let mut bytes = Vec::new();
-        let mut chunk = [0_u8; 64 * 1024];
-        while let Ok(read) = stdout.read(&mut chunk) {
-            if read == 0 {
-                break;
-            }
-            let available = (4 * 1024 * 1024_usize).saturating_sub(bytes.len());
-            bytes.extend_from_slice(&chunk[..read.min(available)]);
+    command.args(args);
+    let output = crate::process_capture::run(
+        &mut command,
+        timeout,
+        crate::process_capture::CaptureLimits::default(),
+    )
+    .ok()?;
+    match output.termination {
+        crate::process_capture::CaptureTermination::Exited(status) if status.success() => {
+            Some(String::from_utf8_lossy(&output.stdout).into_owned())
         }
-        bytes
-    });
-    let started = Instant::now();
-    let success = loop {
-        match child.try_wait() {
-            Ok(Some(status)) => break status.success(),
-            Ok(None) if started.elapsed() < timeout => {
-                std::thread::sleep(Duration::from_millis(25));
-            }
-            _ => {
-                let _ = crate::process_tree::terminate(&mut child);
-                break false;
-            }
-        }
-    };
-    let bytes = reader.join().ok()?;
-    success.then(|| String::from_utf8_lossy(&bytes).into_owned())
+        _ => None,
+    }
 }
 
 #[cfg(test)]

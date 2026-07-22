@@ -13,10 +13,9 @@
 //! `tauri::async_runtime::spawn_blocking`. We may revisit if we hit a
 //! call site that genuinely needs streaming output (logcat — R-051).
 
-use std::io::Read;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
-use std::time::{Duration, Instant};
+use std::process::Command;
+use std::time::Duration;
 
 use crate::adb::device::{
     attach_transport_provenance, looks_wireless, observe_connection_generations, valid_serial,
@@ -27,6 +26,23 @@ use crate::adb::device::{
 /// for `devices`, `shell`, and most metadata reads; longer-running flows
 /// (install, logcat, scrcpy) take per-call overrides.
 pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(10);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OutputStream {
+    Stdout,
+    Stderr,
+    Both,
+}
+
+impl std::fmt::Display for OutputStream {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(match self {
+            Self::Stdout => "stdout",
+            Self::Stderr => "stderr",
+            Self::Both => "stdout and stderr",
+        })
+    }
+}
 
 #[derive(Debug, thiserror::Error)]
 pub enum TransportError {
@@ -40,6 +56,11 @@ pub enum TransportError {
     Signaled { stderr: String },
     #[error("adb timed out after {0:?}")]
     Timeout(Duration),
+    #[error("adb {stream} exceeded the {limit_bytes}-byte capture limit")]
+    OutputLimit {
+        stream: OutputStream,
+        limit_bytes: usize,
+    },
     #[error("could not parse adb output: {0}")]
     Parse(String),
 }
@@ -340,67 +361,48 @@ pub fn parse_devices_long(stdout: &str) -> Result<Vec<Device>, TransportError> {
 /// buffer deadlock fixed in the audit pass.
 fn run_capture(program: &Path, args: &[&str], timeout: Duration) -> Result<String, TransportError> {
     let mut command = Command::new(program);
-    command
-        .args(args)
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
-    crate::process_tree::configure(&mut command);
-    let mut child = command.spawn().map_err(TransportError::Spawn)?;
-
-    let mut stdout_pipe = child
-        .stdout
-        .take()
-        .ok_or_else(|| TransportError::Parse("no stdout pipe".to_string()))?;
-    let mut stderr_pipe = child
-        .stderr
-        .take()
-        .ok_or_else(|| TransportError::Parse("no stderr pipe".to_string()))?;
-
-    let stdout_reader = std::thread::spawn(move || -> Vec<u8> {
-        let mut buf = Vec::with_capacity(4096);
-        let _ = stdout_pipe.read_to_end(&mut buf);
-        buf
-    });
-    let stderr_reader = std::thread::spawn(move || -> Vec<u8> {
-        let mut buf = Vec::with_capacity(1024);
-        let _ = stderr_pipe.read_to_end(&mut buf);
-        buf
-    });
-
-    let start = Instant::now();
-    let exit_status = loop {
-        match child.try_wait() {
-            Ok(Some(status)) => break Some(status),
-            Ok(None) => {
-                if start.elapsed() > timeout {
-                    let _ = crate::process_tree::terminate(&mut child);
-                    break None;
-                }
-                std::thread::sleep(Duration::from_millis(20));
-            }
-            Err(_) => {
-                let _ = crate::process_tree::terminate(&mut child);
-                break None;
-            }
+    command.args(args);
+    let output = crate::process_capture::run(
+        &mut command,
+        timeout,
+        crate::process_capture::CaptureLimits::default(),
+    )
+    .map_err(capture_error)?;
+    let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
+    let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
+    match output.termination {
+        crate::process_capture::CaptureTermination::TimedOut => {
+            Err(TransportError::Timeout(timeout))
         }
-    };
-
-    let stdout_bytes = stdout_reader.join().unwrap_or_default();
-    let stderr_bytes = stderr_reader.join().unwrap_or_default();
-    let stderr = String::from_utf8_lossy(&stderr_bytes).into_owned();
-
-    match exit_status {
-        None => Err(TransportError::Timeout(timeout)),
-        Some(status) => {
-            if status.success() {
-                Ok(String::from_utf8_lossy(&stdout_bytes).into_owned())
-            } else if let Some(code) = status.code() {
-                Err(TransportError::Exit { code, stderr })
-            } else {
-                Err(TransportError::Signaled { stderr })
-            }
+        crate::process_capture::CaptureTermination::OutputLimitExceeded {
+            stream,
+            limit_bytes,
+        } => Err(TransportError::OutputLimit {
+            stream: output_stream(stream),
+            limit_bytes,
+        }),
+        crate::process_capture::CaptureTermination::Exited(status) if status.success() => {
+            Ok(stdout)
         }
+        crate::process_capture::CaptureTermination::Exited(status) => match status.code() {
+            Some(code) => Err(TransportError::Exit { code, stderr }),
+            None => Err(TransportError::Signaled { stderr }),
+        },
+    }
+}
+
+pub(crate) fn capture_error(error: crate::process_capture::CaptureError) -> TransportError {
+    match error {
+        crate::process_capture::CaptureError::Spawn(error) => TransportError::Spawn(error),
+        error => TransportError::Parse(format!("subprocess capture failed: {error}")),
+    }
+}
+
+pub(crate) const fn output_stream(stream: crate::process_capture::CaptureStream) -> OutputStream {
+    match stream {
+        crate::process_capture::CaptureStream::Stdout => OutputStream::Stdout,
+        crate::process_capture::CaptureStream::Stderr => OutputStream::Stderr,
+        crate::process_capture::CaptureStream::Both => OutputStream::Both,
     }
 }
 
@@ -502,6 +504,13 @@ mod mock {
                 stderr: stderr.clone(),
             },
             TransportError::Timeout(d) => TransportError::Timeout(*d),
+            TransportError::OutputLimit {
+                stream,
+                limit_bytes,
+            } => TransportError::OutputLimit {
+                stream: *stream,
+                limit_bytes: *limit_bytes,
+            },
             TransportError::Parse(s) => TransportError::Parse(s.clone()),
         }
     }

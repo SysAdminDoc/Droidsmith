@@ -126,6 +126,41 @@ function validatePolicy() {
   validateVersionParity();
   validatePlatformToolsPolicy();
   validateLanguageContract();
+  validateSubprocessCaptureContract();
+}
+
+function validateSubprocessCaptureContract() {
+  const finiteCaptureFiles = [
+    "src-tauri/src/adb/actions.rs",
+    "src-tauri/src/adb/health.rs",
+    "src-tauri/src/adb/resolver.rs",
+    "src-tauri/src/adb/transport.rs",
+    "src-tauri/src/commands.rs",
+    "src-tauri/src/host_diagnostics.rs",
+    "src-tauri/src/scrcpy.rs",
+  ];
+  for (const relativePath of finiteCaptureFiles) {
+    const source = fs.readFileSync(path.join(repoRoot, relativePath), "utf8");
+    assert(
+      source.includes("process_capture::run"),
+      `${relativePath} must use the shared bounded subprocess capture`,
+    );
+    assert(
+      !source.includes("read_to_end"),
+      `${relativePath} must not collect subprocess pipes to EOF directly`,
+    );
+  }
+
+  for (const relativePath of [
+    "src-tauri/src/captured_tail.rs",
+    "src-tauri/src/operations.rs",
+  ]) {
+    const source = fs.readFileSync(path.join(repoRoot, relativePath), "utf8");
+    assert(
+      source.includes("process_capture::append_tail"),
+      `${relativePath} must use the shared bounded tail implementation`,
+    );
+  }
 }
 
 function validateLanguageContract() {

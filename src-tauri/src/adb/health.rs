@@ -1,9 +1,8 @@
 //! ADB server and wireless-discovery health probes.
 
-use std::io::Read;
 use std::path::Path;
-use std::process::{Command, Stdio};
-use std::time::{Duration, Instant};
+use std::process::Command;
+use std::time::Duration;
 
 use serde::Serialize;
 
@@ -142,28 +141,22 @@ fn version_at_least(version: &str, required_major: u32) -> bool {
 /// killed after 900 ms because `mdns track-services` is a live stream.
 fn probe_wifi_v2(adb_path: &Path) -> Option<Vec<String>> {
     let mut command = Command::new(adb_path);
-    command
-        .args(["mdns", "track-services", "--proto-text"])
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null());
-    crate::process_tree::configure(&mut command);
-    let mut child = command.spawn().ok()?;
-    let mut stdout = child.stdout.take()?;
-    let reader = std::thread::spawn(move || {
-        let mut bytes = Vec::new();
-        let _ = stdout.read_to_end(&mut bytes);
-        bytes
-    });
-    let started = Instant::now();
-    while started.elapsed() < Duration::from_millis(900) {
-        if child.try_wait().ok().flatten().is_some() {
-            break;
+    command.args(["mdns", "track-services", "--proto-text"]);
+    let output = crate::process_capture::run(
+        &mut command,
+        Duration::from_millis(900),
+        crate::process_capture::CaptureLimits::default(),
+    )
+    .ok()?;
+    match output.termination {
+        crate::process_capture::CaptureTermination::Exited(status) if !status.success() => {
+            return None;
         }
-        std::thread::sleep(Duration::from_millis(25));
+        crate::process_capture::CaptureTermination::OutputLimitExceeded { .. } => return None,
+        crate::process_capture::CaptureTermination::Exited(_)
+        | crate::process_capture::CaptureTermination::TimedOut => {}
     }
-    let _ = crate::process_tree::terminate(&mut child);
-    let output = String::from_utf8_lossy(&reader.join().unwrap_or_default()).into_owned();
+    let output = String::from_utf8_lossy(&output.stdout).into_owned();
     Some(parse_wifi_v2_services(&output))
 }
 

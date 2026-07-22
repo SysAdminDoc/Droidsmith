@@ -12,7 +12,9 @@
 //! lets the CLI (`droidsmith-cli`) do `--dry-run` by stopping after
 //! [`plan`].
 
+use std::process::{Command, ExitStatus};
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 
@@ -103,10 +105,6 @@ pub fn install_apk(
     target: &DeviceTarget,
     apk_path: &str,
 ) -> Result<String, TransportError> {
-    use std::io::Read as IoRead;
-    use std::process::{Command, Stdio};
-    use std::time::Instant;
-
     if !crate::adb::device::valid_serial(&target.serial) || target.connection_generation == 0 {
         return Err(TransportError::Parse(format!(
             "invalid device target for serial {:?}",
@@ -122,74 +120,49 @@ pub fn install_apk(
         apk_path.to_string(),
     ]);
     let mut command = Command::new(adb_path);
-    command
-        .args(&args)
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
-    crate::process_tree::configure(&mut command);
-    let mut child = command.spawn().map_err(TransportError::Spawn)?;
-
-    let mut stdout_pipe = child
-        .stdout
-        .take()
-        .ok_or_else(|| TransportError::Parse("no stdout pipe".to_string()))?;
-    let mut stderr_pipe = child
-        .stderr
-        .take()
-        .ok_or_else(|| TransportError::Parse("no stderr pipe".to_string()))?;
-
-    let stdout_reader = std::thread::spawn(move || -> Vec<u8> {
-        let mut buf = Vec::with_capacity(4096);
-        let _ = stdout_pipe.read_to_end(&mut buf);
-        buf
-    });
-    let stderr_reader = std::thread::spawn(move || -> Vec<u8> {
-        let mut buf = Vec::with_capacity(1024);
-        let _ = stderr_pipe.read_to_end(&mut buf);
-        buf
-    });
-
-    let start = Instant::now();
-    let exit_status = loop {
-        match child.try_wait() {
-            Ok(Some(status)) => break Some(status),
-            Ok(None) => {
-                if start.elapsed() > timeout {
-                    let _ = crate::process_tree::terminate(&mut child);
-                    break None;
-                }
-                std::thread::sleep(std::time::Duration::from_millis(100));
-            }
-            Err(_) => {
-                let _ = crate::process_tree::terminate(&mut child);
-                break None;
-            }
+    command.args(&args);
+    let (stdout, stderr, status) = capture_action_command(&mut command, timeout)?;
+    if status.success() {
+        if let Some(err) = pm_failure_marker(&stdout) {
+            return Err(TransportError::Exit {
+                code: 1,
+                stderr: err.to_string(),
+            });
         }
-    };
+        Ok(stdout)
+    } else if let Some(code) = status.code() {
+        Err(TransportError::Exit { code, stderr })
+    } else {
+        Err(TransportError::Signaled { stderr })
+    }
+}
 
-    let stdout_bytes = stdout_reader.join().unwrap_or_default();
-    let stderr_bytes = stderr_reader.join().unwrap_or_default();
-    let stderr = String::from_utf8_lossy(&stderr_bytes).into_owned();
-    let stdout = String::from_utf8_lossy(&stdout_bytes).into_owned();
-
-    match exit_status {
-        None => Err(TransportError::Timeout(timeout)),
-        Some(status) => {
-            if status.success() {
-                if let Some(err) = pm_failure_marker(&stdout) {
-                    return Err(TransportError::Exit {
-                        code: 1,
-                        stderr: err.to_string(),
-                    });
-                }
-                Ok(stdout)
-            } else if let Some(code) = status.code() {
-                Err(TransportError::Exit { code, stderr })
-            } else {
-                Err(TransportError::Signaled { stderr })
-            }
+fn capture_action_command(
+    command: &mut Command,
+    timeout: Duration,
+) -> Result<(String, String, ExitStatus), TransportError> {
+    let output = crate::process_capture::run(
+        command,
+        timeout,
+        crate::process_capture::CaptureLimits::default(),
+    )
+    .map_err(crate::adb::transport::capture_error)?;
+    match output.termination {
+        crate::process_capture::CaptureTermination::Exited(status) => Ok((
+            String::from_utf8_lossy(&output.stdout).into_owned(),
+            String::from_utf8_lossy(&output.stderr).into_owned(),
+            status,
+        )),
+        crate::process_capture::CaptureTermination::TimedOut => {
+            Err(TransportError::Timeout(timeout))
         }
+        crate::process_capture::CaptureTermination::OutputLimitExceeded {
+            stream,
+            limit_bytes,
+        } => Err(TransportError::OutputLimit {
+            stream: crate::adb::transport::output_stream(stream),
+            limit_bytes,
+        }),
     }
 }
 
@@ -200,10 +173,6 @@ pub fn extract_apk(
     remote_path: &str,
     local_path: &str,
 ) -> Result<String, TransportError> {
-    use std::io::Read as IoRead;
-    use std::process::{Command, Stdio};
-    use std::time::Instant;
-
     if !crate::adb::device::valid_serial(&target.serial) || target.connection_generation == 0 {
         return Err(TransportError::Parse(format!(
             "invalid device target for serial {:?}",
@@ -219,68 +188,14 @@ pub fn extract_apk(
         local_path.to_string(),
     ]);
     let mut command = Command::new(adb_path);
-    command
-        .args(&args)
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
-    crate::process_tree::configure(&mut command);
-    let mut child = command.spawn().map_err(TransportError::Spawn)?;
-
-    let mut stdout_pipe = child
-        .stdout
-        .take()
-        .ok_or_else(|| TransportError::Parse("no stdout pipe".to_string()))?;
-    let mut stderr_pipe = child
-        .stderr
-        .take()
-        .ok_or_else(|| TransportError::Parse("no stderr pipe".to_string()))?;
-
-    let stdout_reader = std::thread::spawn(move || -> Vec<u8> {
-        let mut buf = Vec::with_capacity(4096);
-        let _ = stdout_pipe.read_to_end(&mut buf);
-        buf
-    });
-    let stderr_reader = std::thread::spawn(move || -> Vec<u8> {
-        let mut buf = Vec::with_capacity(1024);
-        let _ = stderr_pipe.read_to_end(&mut buf);
-        buf
-    });
-
-    let start = Instant::now();
-    let exit_status = loop {
-        match child.try_wait() {
-            Ok(Some(status)) => break Some(status),
-            Ok(None) => {
-                if start.elapsed() > timeout {
-                    let _ = crate::process_tree::terminate(&mut child);
-                    break None;
-                }
-                std::thread::sleep(std::time::Duration::from_millis(100));
-            }
-            Err(_) => {
-                let _ = crate::process_tree::terminate(&mut child);
-                break None;
-            }
-        }
-    };
-
-    let stdout_bytes = stdout_reader.join().unwrap_or_default();
-    let stderr_bytes = stderr_reader.join().unwrap_or_default();
-    let stderr = String::from_utf8_lossy(&stderr_bytes).into_owned();
-    let stdout = String::from_utf8_lossy(&stdout_bytes).into_owned();
-
-    match exit_status {
-        None => Err(TransportError::Timeout(timeout)),
-        Some(status) => {
-            if status.success() {
-                Ok(stdout)
-            } else if let Some(code) = status.code() {
-                Err(TransportError::Exit { code, stderr })
-            } else {
-                Err(TransportError::Signaled { stderr })
-            }
-        }
+    command.args(&args);
+    let (stdout, stderr, status) = capture_action_command(&mut command, timeout)?;
+    if status.success() {
+        Ok(stdout)
+    } else if let Some(code) = status.code() {
+        Err(TransportError::Exit { code, stderr })
+    } else {
+        Err(TransportError::Signaled { stderr })
     }
 }
 

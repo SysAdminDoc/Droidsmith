@@ -1094,6 +1094,7 @@ impl From<adb::TransportError> for CommandError {
             adb::TransportError::Exit { .. } => "adb_exit",
             adb::TransportError::Signaled { .. } => "adb_signaled",
             adb::TransportError::Timeout(_) => "adb_timeout",
+            adb::TransportError::OutputLimit { .. } => "subprocess_output_limit",
             adb::TransportError::Parse(_) => "parse_error",
         };
         Self {
@@ -2828,62 +2829,42 @@ fn run_captured(
     args: &[&str],
     timeout: std::time::Duration,
 ) -> Result<ProcessOutput, CommandError> {
-    use std::io::Read as IoRead;
-    use std::process::{Command, Stdio};
-    use std::time::Instant;
+    use std::process::Command;
 
     let mut command = Command::new(program);
-    command
-        .args(args)
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
-    crate::process_tree::configure(&mut command);
-    let mut child = command.spawn().map_err(|e| CommandError {
-        code: "spawn_failed",
-        message: format!("failed to run {}: {e}", program.display()),
+    command.args(args);
+    let output = crate::process_capture::run(
+        &mut command,
+        timeout,
+        crate::process_capture::CaptureLimits::default(),
+    )
+    .map_err(|error| CommandError {
+        code: match error {
+            crate::process_capture::CaptureError::Spawn(_) => "spawn_failed",
+            _ => "subprocess_capture_failed",
+        },
+        message: format!("failed to run {}: {error}", program.display()),
     })?;
-
-    let mut stdout_pipe = child.stdout.take().unwrap();
-    let mut stderr_pipe = child.stderr.take().unwrap();
-
-    let stdout_reader = std::thread::spawn(move || {
-        let mut buf = Vec::with_capacity(4096);
-        let _ = stdout_pipe.read_to_end(&mut buf);
-        buf
-    });
-    let stderr_reader = std::thread::spawn(move || {
-        let mut buf = Vec::with_capacity(1024);
-        let _ = stderr_pipe.read_to_end(&mut buf);
-        buf
-    });
-
-    let start = Instant::now();
-    let mut timed_out = false;
-    let exit_status = loop {
-        match child.try_wait() {
-            Ok(Some(status)) => break Some(status),
-            Ok(None) => {
-                if start.elapsed() > timeout {
-                    let _ = crate::process_tree::terminate(&mut child);
-                    timed_out = true;
-                    break None;
-                }
-                std::thread::sleep(std::time::Duration::from_millis(50));
-            }
-            Err(_) => {
-                let _ = crate::process_tree::terminate(&mut child);
-                break None;
-            }
+    let (code, timed_out) = match output.termination {
+        crate::process_capture::CaptureTermination::Exited(status) => (status.code(), false),
+        crate::process_capture::CaptureTermination::TimedOut => (None, true),
+        crate::process_capture::CaptureTermination::OutputLimitExceeded {
+            stream,
+            limit_bytes,
+        } => {
+            return Err(CommandError {
+                code: "subprocess_output_limit",
+                message: format!(
+                    "{} {stream} exceeded the {limit_bytes}-byte capture limit",
+                    program.display()
+                ),
+            });
         }
     };
-
-    let stdout_bytes = stdout_reader.join().unwrap_or_default();
-    let stderr_bytes = stderr_reader.join().unwrap_or_default();
     Ok(ProcessOutput {
-        stdout: String::from_utf8_lossy(&stdout_bytes).into_owned(),
-        stderr: String::from_utf8_lossy(&stderr_bytes).into_owned(),
-        code: exit_status.and_then(|s| s.code()),
+        stdout: String::from_utf8_lossy(&output.stdout).into_owned(),
+        stderr: String::from_utf8_lossy(&output.stderr).into_owned(),
+        code,
         timed_out,
     })
 }

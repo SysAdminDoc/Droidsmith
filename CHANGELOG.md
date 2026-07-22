@@ -14,6 +14,13 @@ completion.
 Working batches live here. Sections collapse into a versioned release on
 each milestone tag.
 
+### Security
+
+- **IMP-77 — Bounded subprocess capture.** Consolidated short-lived ADB,
+  fastboot, host-diagnostic, and scrcpy probes behind a shared 4 MiB-per-stream
+  collector. Output overflow now terminates and reaps the complete child tree
+  with a typed error; streaming supervisors share the same bounded-tail logic.
+
 ### Fixed
 
 - **IMP-76 — Locale persistence contract.** Unified the renderer, Rust settings,

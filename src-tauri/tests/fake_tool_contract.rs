@@ -7,7 +7,9 @@ use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
 use droidsmith_lib::adb::device::{observe_connection_generations, Device, DeviceState};
-use droidsmith_lib::adb::{validate_device_target, AdbTransport, ShellTransport, TransportError};
+use droidsmith_lib::adb::{
+    validate_device_target, AdbTransport, OutputStream, ShellTransport, TransportError,
+};
 use droidsmith_lib::journal::with_journal;
 use droidsmith_lib::operations::{cancel, run_process, EventSink, OperationError};
 
@@ -20,7 +22,14 @@ fn main() {
     if args.first().is_some_and(|arg| {
         matches!(
             arg.as_str(),
-            "emit" | "fail" | "flood" | "tree" | "grandchild"
+            "emit"
+                | "fail"
+                | "flood"
+                | "capture-stdout"
+                | "capture-stderr"
+                | "capture-both"
+                | "tree"
+                | "grandchild"
         )
     }) {
         run_fake_tool(&args);
@@ -34,6 +43,10 @@ fn main() {
     run_contract(
         "streaming_capture_is_bounded_under_pipe_backpressure",
         streaming_capture_is_bounded_under_pipe_backpressure,
+    );
+    run_contract(
+        "short_lived_capture_limits_stdout_stderr_and_both",
+        short_lived_capture_limits_stdout_stderr_and_both,
     );
     run_contract(
         "cancellation_terminates_the_full_descendant_tree",
@@ -112,6 +125,29 @@ fn streaming_capture_is_bounded_under_pipe_backpressure() {
     assert_eq!(output.stderr.len(), 1024 * 1024);
     assert!(output.stdout.ends_with("STDOUT-END"));
     assert!(output.stderr.ends_with("STDERR-END"));
+}
+
+fn short_lived_capture_limits_stdout_stderr_and_both() {
+    let transport = ShellTransport::new(fake_tool()).with_timeout(Duration::from_secs(5));
+    for (command, expected_stream) in [
+        ("capture-stdout", OutputStream::Stdout),
+        ("capture-stderr", OutputStream::Stderr),
+        ("capture-both", OutputStream::Both),
+    ] {
+        let started = Instant::now();
+        let error = transport.adb(&[command]).unwrap_err();
+        assert!(started.elapsed() < Duration::from_secs(4));
+        match error {
+            TransportError::OutputLimit {
+                stream,
+                limit_bytes,
+            } => {
+                assert_eq!(stream, expected_stream);
+                assert!(limit_bytes > 0);
+            }
+            other => panic!("unexpected capture result for {command}: {other}"),
+        }
+    }
 }
 
 fn cancellation_terminates_the_full_descendant_tree() {
@@ -226,6 +262,9 @@ fn run_fake_tool(args: &[String]) {
             stderr.write_all(&vec![b'b'; 2 * 1024 * 1024]).unwrap();
             stderr.write_all(b"STDERR-END").unwrap();
         }
+        Some("capture-stdout") => write_flood(true, false),
+        Some("capture-stderr") => write_flood(false, true),
+        Some("capture-both") => write_flood(true, true),
         Some("tree") => spawn_descendant_and_wait(args),
         Some("grandchild") => {
             let pid_path = args.get(1).expect("grandchild pid path");
@@ -233,6 +272,33 @@ fn run_fake_tool(args: &[String]) {
             std::thread::sleep(Duration::from_secs(30));
         }
         _ => unreachable!("fake tool dispatch checks the command"),
+    }
+}
+
+fn write_flood(write_stdout: bool, write_stderr: bool) {
+    const FLOOD_BYTES: usize = 8 * 1024 * 1024;
+    let barrier = Arc::new(std::sync::Barrier::new(
+        usize::from(write_stdout) + usize::from(write_stderr),
+    ));
+    let mut writers = Vec::new();
+    if write_stdout {
+        let barrier = Arc::clone(&barrier);
+        writers.push(std::thread::spawn(move || {
+            let mut stdout = std::io::stdout().lock();
+            barrier.wait();
+            let _ = stdout.write_all(&vec![b'o'; FLOOD_BYTES]);
+        }));
+    }
+    if write_stderr {
+        let barrier = Arc::clone(&barrier);
+        writers.push(std::thread::spawn(move || {
+            let mut stderr = std::io::stderr().lock();
+            barrier.wait();
+            let _ = stderr.write_all(&vec![b'e'; FLOOD_BYTES]);
+        }));
+    }
+    for writer in writers {
+        let _ = writer.join();
     }
 }
 

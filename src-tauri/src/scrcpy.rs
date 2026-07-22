@@ -3,8 +3,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Mutex, OnceLock};
-use std::thread;
-use std::time::{Duration, Instant, SystemTime};
+use std::time::{Duration, SystemTime};
 
 use serde::{Deserialize, Serialize};
 
@@ -13,7 +12,6 @@ use crate::captured_tail::{sanitize_log, CapturedTail};
 
 const PROBE_TIMEOUT: Duration = Duration::from_secs(4);
 const ENCODER_PROBE_TIMEOUT: Duration = Duration::from_secs(15);
-const POLL_INTERVAL: Duration = Duration::from_millis(25);
 
 #[derive(specta::Type, Debug, Clone, Deserialize, PartialEq, Eq)]
 pub struct LaunchScrcpyRequest {
@@ -742,45 +740,30 @@ impl ProbeOutput {
 
 fn run_probe(program: &Path, args: &[&str], timeout: Duration) -> Result<ProbeOutput, String> {
     let mut command = Command::new(program);
-    command
-        .args(args)
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
-    crate::process_tree::configure(&mut command);
-    let mut child = command
-        .spawn()
-        .map_err(|error| format!("failed to run scrcpy probe: {error}"))?;
-    let stdout = child
-        .stdout
-        .take()
-        .ok_or_else(|| "failed to capture scrcpy probe stdout".to_string())?;
-    let stderr = child
-        .stderr
-        .take()
-        .ok_or_else(|| "failed to capture scrcpy probe stderr".to_string())?;
-    let stdout = CapturedTail::spawn(stdout);
-    let stderr = CapturedTail::spawn(stderr);
-    let started = Instant::now();
-    let status = loop {
-        match child.try_wait() {
-            Ok(Some(status)) => break status,
-            Ok(None) if started.elapsed() < timeout => thread::sleep(POLL_INTERVAL),
-            Ok(None) => {
-                let _ = crate::process_tree::terminate(&mut child);
-                return Err(format!("scrcpy probe timed out after {timeout:?}"));
-            }
-            Err(error) => {
-                let _ = crate::process_tree::terminate(&mut child);
-                return Err(format!("failed to poll scrcpy probe: {error}"));
-            }
+    command.args(args);
+    let output = crate::process_capture::run(
+        &mut command,
+        timeout,
+        crate::process_capture::CaptureLimits::default(),
+    )
+    .map_err(|error| format!("failed to run scrcpy probe: {error}"))?;
+    let status = match output.termination {
+        crate::process_capture::CaptureTermination::Exited(status) => status,
+        crate::process_capture::CaptureTermination::TimedOut => {
+            return Err(format!("scrcpy probe timed out after {timeout:?}"));
+        }
+        crate::process_capture::CaptureTermination::OutputLimitExceeded {
+            stream,
+            limit_bytes,
+        } => {
+            return Err(format!(
+                "scrcpy probe {stream} exceeded the {limit_bytes}-byte capture limit"
+            ));
         }
     };
-    stdout.wait_for_eof();
-    stderr.wait_for_eof();
     Ok(ProbeOutput {
-        stdout: stdout.snapshot(),
-        stderr: stderr.snapshot(),
+        stdout: sanitize_log(&String::from_utf8_lossy(&output.stdout)),
+        stderr: sanitize_log(&String::from_utf8_lossy(&output.stderr)),
         code: status.code(),
     })
 }

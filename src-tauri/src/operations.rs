@@ -657,7 +657,11 @@ fn read_stream<R: Read + Send + 'static>(
                 }
                 Ok(count) => {
                     if capture_output {
-                        append_bounded(&mut captured, &buffer[..count]);
+                        crate::process_capture::append_tail(
+                            &mut captured,
+                            &buffer[..count],
+                            CAPTURE_LIMIT_BYTES,
+                        );
                     }
                     let text = decode_utf8_incremental(&mut utf8_pending, &buffer[..count], false);
                     if !text.is_empty() {
@@ -715,22 +719,6 @@ fn decode_utf8_incremental(pending: &mut Vec<u8>, chunk: &[u8], eof: bool) -> St
     output
 }
 
-fn append_bounded(target: &mut Vec<u8>, chunk: &[u8]) {
-    if chunk.len() >= CAPTURE_LIMIT_BYTES {
-        target.clear();
-        target.extend_from_slice(&chunk[chunk.len() - CAPTURE_LIMIT_BYTES..]);
-        return;
-    }
-    let overflow = target
-        .len()
-        .saturating_add(chunk.len())
-        .saturating_sub(CAPTURE_LIMIT_BYTES);
-    if overflow > 0 {
-        target.drain(..overflow);
-    }
-    target.extend_from_slice(chunk);
-}
-
 fn saturating_millis(duration: Duration) -> u64 {
     u64::try_from(duration.as_millis()).unwrap_or(u64::MAX)
 }
@@ -754,7 +742,7 @@ mod tests {
     #[test]
     fn capture_retains_only_the_bounded_tail() {
         let mut captured = vec![b'a'; CAPTURE_LIMIT_BYTES - 2];
-        append_bounded(&mut captured, b"wxyz");
+        crate::process_capture::append_tail(&mut captured, b"wxyz", CAPTURE_LIMIT_BYTES);
         assert_eq!(captured.len(), CAPTURE_LIMIT_BYTES);
         assert_eq!(&captured[captured.len() - 4..], b"wxyz");
     }
