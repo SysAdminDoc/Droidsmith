@@ -14,6 +14,12 @@ completion.
 Working batches live here. Sections collapse into a versioned release on
 each milestone tag.
 
+## [0.9.5] - 2026-07-21
+
+Inspection + lifecycle expansion: offline APK Analyzer, device-state pack
+export, richer Mirror and Process Manager, a dependency re-audit, and the
+start of the Debloat.tsx split.
+
 ### Security
 
 - **R-099 — Dependency re-audit.** Re-ran `cargo audit --deny warnings` clean
