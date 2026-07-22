@@ -43,18 +43,25 @@ export default function DevicesRoute() {
   const [recovery, setRecovery] = useState<RecoveryState>({ kind: "idle" });
   const recoveryOperationRef = useRef<string | null>(null);
   const recoveryGenerationRef = useRef(0);
+  // Click device A then B: whichever callGetDeviceInfo resolves last must not
+  // win the detail panel; only the latest selection may write it.
+  const selectGenerationRef = useRef(0);
 
   const refresh = useCallback(async () => {
     await restartDeviceLifecycle();
   }, []);
 
   const selectDevice = useCallback(async (device: Device) => {
+    const generation = selectGenerationRef.current + 1;
+    selectGenerationRef.current = generation;
     const target = deviceTarget(device);
     setDetail({ kind: "loading", target });
     try {
       const info = await callGetDeviceInfo(target);
+      if (selectGenerationRef.current !== generation) return;
       setDetail({ kind: "ok", info, target });
     } catch (e) {
+      if (selectGenerationRef.current !== generation) return;
       setDetail({
         kind: "error",
         target,
@@ -277,12 +284,10 @@ export default function DevicesRoute() {
         {state.kind === "ok" && state.value.devices.length > 0 && (
           <DeviceTable
             devices={state.value.devices}
-            selectedSerial={
-              detail.kind === "ok"
-                ? detail.target.transport_id
-                : detail.kind === "loading"
-                  ? detail.target.transport_id
-                  : undefined
+            selectedDeviceKey={
+              detail.kind === "ok" || detail.kind === "loading"
+                ? String(detail.target.transport_id ?? detail.target.serial)
+                : null
             }
             onSelect={(device) => void selectDevice(device)}
           />

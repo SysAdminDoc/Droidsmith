@@ -32,7 +32,7 @@ export function DeviceToolbar({
   );
 
   return (
-    <div className="mt-4 flex flex-col gap-3 border-b border-white/[0.08] pb-4 sm:flex-row sm:items-center">
+    <div className="mt-4 flex flex-col gap-3 border-b border-white/10 pb-4 sm:flex-row sm:items-center">
       <FieldSelect
         aria-label={t("common.selectDevice")}
         value={selectedDeviceKey ?? ""}
@@ -70,17 +70,20 @@ export function DeviceToolbar({
 
 export function DeviceTable({
   devices,
-  selectedSerial,
+  selectedDeviceKey,
   onSelect,
 }: {
   devices: ListDevicesResult["devices"];
-  selectedSerial?: number | null;
+  // Composite key (`transport_id ?? serial`, like DeviceToolbar): comparing
+  // raw transport ids marked every null-transport device selected
+  // (null === null).
+  selectedDeviceKey?: string | null;
   onSelect: (device: Device) => void;
 }) {
   const { t } = useTranslation();
 
   return (
-    <section className="border-t border-white/[0.08] pt-5">
+    <section className="border-t border-white/10 pt-5">
       <div className="mb-3 flex items-center justify-between gap-3">
         <h3 className="text-sm font-semibold text-anvil-50">
           {t("devices.connected")}
@@ -89,7 +92,7 @@ export function DeviceTable({
           {t("common.deviceCount", { count: devices.length })}
         </span>
       </div>
-      <div className="overflow-x-auto rounded-md border border-white/[0.08]">
+      <div className="overflow-x-auto rounded-md border border-white/10">
         <table className="min-w-full text-sm">
           <thead className="bg-white/[0.025]">
             <tr>
@@ -109,7 +112,10 @@ export function DeviceTable({
             {devices.map((device) => {
               const isDevice =
                 typeof device.state === "string" && device.state === "device";
-              const isSelected = device.transport_id === selectedSerial;
+              const isSelected =
+                selectedDeviceKey != null &&
+                String(device.transport_id ?? device.serial) ===
+                  selectedDeviceKey;
               return (
                 <tr
                   key={`${device.transport_id ?? device.serial}:${device.connection_generation}`}

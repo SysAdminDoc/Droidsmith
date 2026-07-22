@@ -33,6 +33,12 @@ export function InternetSharing({ target }: { target: DeviceTarget }) {
   const [located, setLocated] = useState<boolean | null>(null);
   const [state, setState] = useState<SharingState>({ kind: "idle" });
   const sessionOperation = useTargetOperation(target);
+  // Start/stop get their own coordinator: the 2s status poll begins a lease
+  // per tick on `sessionOperation`, so a tick starting after stop began would
+  // invalidate stop's lease and a failed callStopGnirehtet could never commit
+  // its error (panel stuck on "running" with no feedback). Both coordinators
+  // are still invalidated by a device change through the target fingerprint.
+  const controlOperation = useTargetOperation(target, "control");
 
   useEffect(() => {
     let cancelled = false;
@@ -123,7 +129,10 @@ export function InternetSharing({ target }: { target: DeviceTarget }) {
   }, [runningSessionId, sessionOperation]);
 
   const start = useCallback(async () => {
-    const lease = sessionOperation.begin();
+    // Supersede any in-flight attach lookup so a late commit cannot stomp the
+    // explicit start flow (previously implicit via the shared coordinator).
+    sessionOperation.invalidate();
+    const lease = controlOperation.begin();
     setState({ kind: "starting" });
     try {
       const session = await callStartGnirehtet(target);
@@ -133,11 +142,11 @@ export function InternetSharing({ target }: { target: DeviceTarget }) {
     } finally {
       lease.finish();
     }
-  }, [sessionOperation, target]);
+  }, [controlOperation, sessionOperation, target]);
 
   const stop = useCallback(async () => {
     if (state.kind !== "running") return;
-    const lease = sessionOperation.begin();
+    const lease = controlOperation.begin();
     try {
       const session = await callStopGnirehtet(state.session.id);
       lease.commit(() => setState({ kind: "ended", session }));
@@ -146,7 +155,7 @@ export function InternetSharing({ target }: { target: DeviceTarget }) {
     } finally {
       lease.finish();
     }
-  }, [sessionOperation, state]);
+  }, [controlOperation, state]);
 
   // Still probing PATH — render nothing to avoid a flash of the hint.
   if (located === null) return null;

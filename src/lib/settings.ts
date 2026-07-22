@@ -51,7 +51,16 @@ let initialization: Promise<SettingsLoadResult> | null = null;
 export function initializeSettings(
   storage: LegacyStorage | null = getLegacyStorage(),
 ): Promise<SettingsLoadResult> {
-  initialization ??= initializeSettingsOnce(storage);
+  if (!initialization) {
+    const pending = initializeSettingsOnce(storage);
+    initialization = pending;
+    // Never cache a rejection: one transient startup failure must not poison
+    // every settings operation for the rest of the session. The next call
+    // retries initialization from scratch.
+    pending.catch(() => {
+      if (initialization === pending) initialization = null;
+    });
+  }
   return initialization;
 }
 

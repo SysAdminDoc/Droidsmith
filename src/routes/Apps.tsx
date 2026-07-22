@@ -49,6 +49,7 @@ import {
   useAuthorizedDevices,
   useTransportAuthorization,
 } from "../lib/useAuthorizedDevices";
+import { targetFingerprint } from "../lib/targetOperation";
 
 import {
   canRunLegacyExport,
@@ -140,9 +141,16 @@ export default function AppsRoute() {
   const installGenerationRef = useRef(0);
   const metadataGenerationRef = useRef(0);
   const metadataRequestedRef = useRef(new Set<string>());
+  const packagesRequestRef = useRef(0);
+  const journalRequestRef = useRef(0);
   // Tracks the live selection so an in-flight journal undo can detect a
   // mid-operation device switch before refreshing shared package/journal state.
   const selectedSerialRef = useRef<string | null>(null);
+  // Mirrors installState for the drag-drop listener, which is intentionally
+  // not re-subscribed on every state change (drops during the unlisten window
+  // would be lost).
+  const installStateRef = useRef(installState);
+  installStateRef.current = installState;
 
   const selectedDevice =
     authorizedDevices.find((device) =>
@@ -150,7 +158,19 @@ export default function AppsRoute() {
         ? device.transport_id === selectedTransportId
         : device.serial === selectedSerial,
     ) ?? null;
-  const selectedTarget = selectedDevice ? deviceTarget(selectedDevice) : null;
+  // The device store rebuilds device objects on every snapshot, so a fresh
+  // target per render would give useTransportAuthorization's memo a new
+  // authorizedTarget identity each render (re-subscribing the drag-drop
+  // listener and refiring PermissionsPanel loads on every keystroke). Memoize
+  // on the scalar target identity instead of object identity.
+  const selectedTargetIdentity = targetFingerprint(
+    selectedDevice ? deviceTarget(selectedDevice) : null,
+  );
+  const selectedTarget = useMemo(
+    () => (selectedDevice ? deviceTarget(selectedDevice) : null),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [selectedTargetIdentity],
+  );
   const {
     accepted: transportOverrideAccepted,
     setAccepted: setTransportOverrideAccepted,
@@ -205,8 +225,12 @@ export default function AppsRoute() {
     setOtaNotice(false);
   }, []);
 
+  // Keyed on the memoized scalar target identity (not device object identity):
+  // plugging or unplugging an unrelated device rebuilds every device object,
+  // and refiring user discovery here would reset pkgState and wipe the
+  // metadata cache for the still-selected device.
   const loadUsers = useCallback(async () => {
-    if (!selectedDevice) {
+    if (!selectedTarget) {
       setUsers([]);
       setUsersReady(false);
       setUserError(null);
@@ -215,7 +239,7 @@ export default function AppsRoute() {
     setUsersReady(false);
     setUserError(null);
     try {
-      const found = await callListUsers(deviceTarget(selectedDevice));
+      const found = await callListUsers(selectedTarget);
       setUsers(found);
       // Never silently keep a stale selection from device A. The backend
       // rejects empty or ambiguous discovery instead of fabricating user 0.
@@ -228,44 +252,46 @@ export default function AppsRoute() {
       setUsers([]);
       setUserError(errorMessage(e));
     }
-  }, [selectedDevice]);
+  }, [selectedTarget]);
 
   const loadPackages = useCallback(async () => {
-    if (!selectedDevice || !usersReady) return;
+    if (!selectedTarget || !usersReady) return;
+    // Rapid filter/user/device switches can interleave responses; only the
+    // most recent request may write pkgState.
+    const request = packagesRequestRef.current + 1;
+    packagesRequestRef.current = request;
     metadataGenerationRef.current += 1;
     metadataRequestedRef.current.clear();
     setPackageMetadata({});
     setPkgState({ kind: "loading" });
     try {
       const listing = await callListPackagesWithCapability(
-        deviceTarget(selectedDevice),
+        selectedTarget,
         filter,
         selectedUser,
       );
+      if (packagesRequestRef.current !== request) return;
       setPkgState({
         kind: "ok",
         packages: listing.packages,
         archive: listing.archive,
       });
     } catch (e) {
+      if (packagesRequestRef.current !== request) return;
       setPkgState({
         kind: "error",
         message: errorMessage(e),
       });
     }
-  }, [selectedDevice, filter, selectedUser, usersReady]);
+  }, [selectedTarget, filter, selectedUser, usersReady]);
 
   const requestPackageMetadata = useCallback(
     (packageName: string) => {
-      if (!selectedDevice || !usersReady) return;
+      if (!selectedTarget || !usersReady) return;
       if (metadataRequestedRef.current.has(packageName)) return;
       metadataRequestedRef.current.add(packageName);
       const generation = metadataGenerationRef.current;
-      void callGetPackageMetadata(
-        deviceTarget(selectedDevice),
-        packageName,
-        selectedUser,
-      )
+      void callGetPackageMetadata(selectedTarget, packageName, selectedUser)
         .then((metadata) => {
           if (metadataGenerationRef.current !== generation) return;
           setPackageMetadata((current) => ({
@@ -283,7 +309,7 @@ export default function AppsRoute() {
           }));
         });
     },
-    [selectedDevice, selectedUser, usersReady],
+    [selectedTarget, selectedUser, usersReady],
   );
 
   useEffect(() => {
@@ -295,11 +321,15 @@ export default function AppsRoute() {
       setJournalState({ kind: "idle" });
       return;
     }
+    const request = journalRequestRef.current + 1;
+    journalRequestRef.current = request;
     setJournalState({ kind: "loading" });
     try {
       const entries = await callJournalList(selectedSerial);
+      if (journalRequestRef.current !== request) return;
       setJournalState({ kind: "ok", entries });
     } catch (e) {
+      if (journalRequestRef.current !== request) return;
       setJournalState({
         kind: "error",
         message: errorMessage(e),
@@ -335,6 +365,10 @@ export default function AppsRoute() {
     setSelectedSerial(next?.serial ?? null);
     setSelectedTransportId(next?.transport_id ?? null);
     setActionState({ kind: "idle" });
+    // The manual picker path clears the selection too; keeping it here would
+    // carry the previous device's picks onto the auto-rebound device (the
+    // pruning effect keeps package names both devices share).
+    setSelectedPackages([]);
     setInspectedPkg(null);
     setBackupNotice(null);
     setInstallState({ kind: "idle" });
@@ -445,8 +479,15 @@ export default function AppsRoute() {
       inspected?: PackageBackupPreflight,
     ) => {
       if (!selectedDevice || !authorizedTarget || !usersReady) return;
+      // One export at a time: claiming a fresh generation while another export
+      // runs would silently orphan its completion/failure handling and make it
+      // uncancellable.
+      if (activeBackupRef.current) return;
+      // Claim the generation before the first await so a device switch during
+      // the preflight/save dialog invalidates this export before it starts.
+      const generation = backupGenerationRef.current + 1;
+      backupGenerationRef.current = generation;
       let startedOperationId: string | null = null;
-      let startedGeneration: number | null = null;
       try {
         const preflight =
           inspected ??
@@ -455,6 +496,7 @@ export default function AppsRoute() {
             pkg,
             selectedUser,
           ));
+        if (backupGenerationRef.current !== generation) return;
         if (mode === "legacy_data" && !canRunLegacyExport(preflight)) {
           setBackupNotice({
             title: t("apps.legacyBlockedTitle"),
@@ -470,6 +512,7 @@ export default function AppsRoute() {
           mode === "apk_export" ? "package_export_save" : "backup_save",
           packageExportDefaultFileName(pkg, mode),
         );
+        if (backupGenerationRef.current !== generation) return;
         if (!pathGrant) {
           setBackupNotice({
             title: t("apps.exportCancelledTitle"),
@@ -482,10 +525,7 @@ export default function AppsRoute() {
         const operationId = newOperationId(
           mode === "apk_export" ? "package-export" : "legacy-backup",
         );
-        const generation = backupGenerationRef.current + 1;
         startedOperationId = operationId;
-        startedGeneration = generation;
-        backupGenerationRef.current = generation;
         activeBackupRef.current = operationId;
         setBackupNotice({
           title:
@@ -588,10 +628,10 @@ export default function AppsRoute() {
           evidence: result.manifest.eligibility,
         });
       } catch (e) {
+        if (backupGenerationRef.current !== generation) return;
         if (
           startedOperationId &&
-          (backupGenerationRef.current !== startedGeneration ||
-            activeBackupRef.current !== startedOperationId)
+          activeBackupRef.current !== startedOperationId
         )
           return;
         activeBackupRef.current = null;
@@ -753,6 +793,15 @@ export default function AppsRoute() {
       void getCurrentWebview()
         .onDragDropEvent(async (event) => {
           if (event.payload.type !== "drop" || cancelled) return;
+          // The install button is disabled while an install runs; a drop must
+          // not start a second concurrent install that silently orphans the
+          // first (read via ref — the listener is not re-subscribed on state
+          // changes).
+          if (
+            installStateRef.current.kind === "running" ||
+            installStateRef.current.kind === "choosing"
+          )
+            return;
           const apkPaths = event.payload.paths.filter((p) => {
             const ext = p.split(".").pop()?.toLowerCase() ?? "";
             return ["apk", "apks", "xapk", "apkm"].includes(ext);
@@ -819,11 +868,16 @@ export default function AppsRoute() {
   }, [installState, runInstall, t]);
 
   const confirmAction = useCallback(async () => {
+    // Same mid-flight device-switch guard as the journal undo paths: a switch
+    // while the action applies must not re-set panels/selection for the old
+    // device or race the new device's package/journal loads.
+    const serial = selectedSerialRef.current;
     try {
       if (actionState.kind === "confirming_batch") {
         const plan = actionState.plan;
         setActionState({ kind: "applying_batch", plan });
         const result = await callApplyActionBatch(plan);
+        if (selectedSerialRef.current !== serial) return;
         const failures = batchFailures(result);
         setSelectedPackages(failures.map((item) => item.package));
         setActionState({
@@ -840,6 +894,7 @@ export default function AppsRoute() {
         const plan = actionState.plan;
         setActionState({ kind: "applying", plan });
         await callApplyAction(plan);
+        if (selectedSerialRef.current !== serial) return;
         setActionState({
           kind: "success",
           message: t("apps.planCompleted", { description: plan.description }),
@@ -850,6 +905,7 @@ export default function AppsRoute() {
       void loadPackages();
       void loadJournal();
     } catch (e) {
+      if (selectedSerialRef.current !== serial) return;
       setActionState({
         kind: "error",
         message: errorMessage(e),
@@ -941,6 +997,9 @@ export default function AppsRoute() {
   const applyRecoveryBaseline = useCallback(async () => {
     if (recoveryState.kind !== "review") return;
     const { diff } = recoveryState;
+    // Mirror undoJournalEntry: a device switch mid-apply must stop the loop
+    // and must not overwrite the new device's recovery/package/journal state.
+    const serial = selectedSerialRef.current;
     setRecoveryState({
       kind: "busy",
       message: t("apps.recoveryApplying", { count: diff.plans.length }),
@@ -948,6 +1007,7 @@ export default function AppsRoute() {
     let applied = 0;
     const failures: string[] = [];
     for (const plan of diff.plans) {
+      if (selectedSerialRef.current !== serial) return;
       try {
         await callApplyAction(plan);
         applied += 1;
@@ -955,6 +1015,7 @@ export default function AppsRoute() {
         failures.push(`${plan.request.package}: ${errorMessage(error)}`);
       }
     }
+    if (selectedSerialRef.current !== serial) return;
     setRecoveryState({ kind: "result", diff, applied, failures });
     await Promise.all([loadPackages(), loadJournal()]);
   }, [loadJournal, loadPackages, recoveryState, t]);

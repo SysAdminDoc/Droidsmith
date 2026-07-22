@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useRef, useState } from "react";
+﻿import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import {
@@ -25,6 +25,7 @@ import {
   useAuthorizedDevices,
   useTransportAuthorization,
 } from "../lib/useAuthorizedDevices";
+import { targetFingerprint } from "../lib/targetOperation";
 
 import {
   snapshotJournalPackageState,
@@ -113,7 +114,14 @@ export default function DebloatRoute() {
     null,
   );
   const [applyReviewOpen, setApplyReviewOpen] = useState(false);
+  const [retryError, setRetryError] = useState<string | null>(null);
   const cancelRequestedRef = useRef(false);
+  // Superseding generation for the sequential apply queue: bumped when the
+  // device/user-change effect resets the wizard so a still-running runQueue
+  // stops issuing actions and cannot stomp the reset wizard with a stale
+  // "done" screen (mirrors Apps' installGenerationRef).
+  const queueGenerationRef = useRef(0);
+  const packsRequestRef = useRef(0);
 
   const selectedDevice =
     authorizedDevices.find((device) =>
@@ -121,7 +129,17 @@ export default function DebloatRoute() {
         ? device.transport_id === selectedTransportId
         : device.serial === selectedSerial,
     ) ?? null;
-  const selectedTarget = selectedDevice ? deviceTarget(selectedDevice) : null;
+  // Memoized on the scalar target identity: the device store rebuilds device
+  // objects on every snapshot, and a fresh target identity per render would
+  // refire every effect keyed on it (and useTransportAuthorization's memo).
+  const selectedTargetIdentity = targetFingerprint(
+    selectedDevice ? deviceTarget(selectedDevice) : null,
+  );
+  const selectedTarget = useMemo(
+    () => (selectedDevice ? deviceTarget(selectedDevice) : null),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [selectedTargetIdentity],
+  );
   const {
     accepted: transportOverrideAccepted,
     setAccepted: setTransportOverrideAccepted,
@@ -129,28 +147,35 @@ export default function DebloatRoute() {
   } = useTransportAuthorization(selectedTarget);
 
   const loadPacks = useCallback(async () => {
-    if (!inTauri() || !selectedDevice || !usersReady) return;
+    if (!inTauri() || !selectedTarget || !usersReady) return;
+    // Rapid device/user switches can interleave responses; only the most
+    // recent request may write packsState.
+    const request = packsRequestRef.current + 1;
+    packsRequestRef.current = request;
     setPacksState({ kind: "loading" });
     try {
-      const listing = await callListPacks(
-        deviceTarget(selectedDevice),
-        selectedUser,
-      );
+      const listing = await callListPacks(selectedTarget, selectedUser);
+      if (packsRequestRef.current !== request) return;
       setPacksState({
         kind: "ok",
         packs: listing.packs,
         errors: listing.errors,
       });
     } catch (e) {
+      if (packsRequestRef.current !== request) return;
       setPacksState({
         kind: "error",
         message: errorMessage(e),
       });
     }
-  }, [selectedDevice, selectedUser, usersReady]);
+  }, [selectedTarget, selectedUser, usersReady]);
 
+  // Keyed on the memoized scalar target identity (not device object identity):
+  // plugging or unplugging an unrelated device rebuilds every device object,
+  // and refiring user discovery here would reset the wizard to pick_pack and
+  // destroy an in-progress selection.
   const loadUsers = useCallback(async () => {
-    if (!selectedDevice) {
+    if (!selectedTarget) {
       setUsers([]);
       setUsersReady(false);
       setUserError(null);
@@ -163,7 +188,7 @@ export default function DebloatRoute() {
     // block the debloat flow.
     void (async () => {
       try {
-        const info = await callGetDeviceInfo(deviceTarget(selectedDevice));
+        const info = await callGetDeviceInfo(selectedTarget);
         setDeviceContext({
           manufacturer: info.manufacturer,
           rom: info.build_fingerprint,
@@ -173,7 +198,7 @@ export default function DebloatRoute() {
       }
     })();
     try {
-      const found = await callListUsers(deviceTarget(selectedDevice));
+      const found = await callListUsers(selectedTarget);
       setUsers(found);
       const foreground = found.find((u) => u.current) ?? found[0];
       if (!foreground)
@@ -184,7 +209,7 @@ export default function DebloatRoute() {
       setUsers([]);
       setUserError(errorMessage(e));
     }
-  }, [selectedDevice]);
+  }, [selectedTarget]);
 
   useEffect(() => {
     const current = authorizedDevices.find((device) =>
@@ -212,15 +237,20 @@ export default function DebloatRoute() {
   }, [loadUsers]);
 
   useEffect(() => {
-    if (selectedDevice && usersReady) {
+    if (selectedTarget && usersReady) {
+      // Supersede any still-running apply queue before stomping the wizard;
+      // its device/user context is gone.
+      queueGenerationRef.current += 1;
       setBaselineNotice(null);
+      setRetryError(null);
       setWizard({ step: "pick_pack" });
       void loadPacks();
     }
-  }, [loadPacks, selectedDevice, usersReady]);
+  }, [loadPacks, selectedTarget, usersReady]);
 
   const selectPack = useCallback((candidate: PackCandidate) => {
     setBaselineNotice(null);
+    setRetryError(null);
     setApplyReviewOpen(false);
     const { pack, assessment } = candidate;
     const ready = new Set(
@@ -297,16 +327,22 @@ export default function DebloatRoute() {
       plans: PlannedAction[],
       overrideAccepted: boolean,
     ) => {
-      if (!selectedDevice || !authorizedTarget || !usersReady) return;
+      if (!selectedTarget || !authorizedTarget || !usersReady) return;
+      // Claim the queue generation: a device/user change resets the wizard and
+      // bumps the ref, after which this run must stop issuing actions and must
+      // not commit any further wizard state.
+      const generation = queueGenerationRef.current + 1;
+      queueGenerationRef.current = generation;
       cancelRequestedRef.current = false;
       // One baseline listing supplies presence and system metadata for the
       // whole batch. Successful mutations use the backend's targeted journal
       // probes below, avoiding two complete package listings per queue row.
       const initialPackages = await callListPackages(
-        deviceTarget(selectedDevice),
+        selectedTarget,
         "all",
         selectedUser,
       );
+      if (queueGenerationRef.current !== generation) return;
       let queue = rows;
       const plansByPackage = new Map(
         plans.map((plan) => [plan.request.package, plan]),
@@ -335,6 +371,7 @@ export default function DebloatRoute() {
 
       for (const row of queue.filter((item) => item.status === "pending")) {
         if (cancelRequestedRef.current) break;
+        if (queueGenerationRef.current !== generation) return;
 
         queue = patchQueueRow(queue, row.entry.id, (current) => ({
           ...current,
@@ -376,6 +413,10 @@ export default function DebloatRoute() {
           error = errorMessage(e);
         }
 
+        // Superseded mid-apply: the action itself stands (it is journaled),
+        // but the wizard now belongs to a different device/user context.
+        if (queueGenerationRef.current !== generation) return;
+
         queue = patchQueueRow(queue, row.entry.id, (current) => ({
           ...current,
           status: error ? "failed" : "verified",
@@ -394,10 +435,11 @@ export default function DebloatRoute() {
       if (queue.some((row) => row.status === "failed" && row.after === null)) {
         try {
           const recoveredPackages = await callListPackages(
-            deviceTarget(selectedDevice),
+            selectedTarget,
             "all",
             selectedUser,
           );
+          if (queueGenerationRef.current !== generation) return;
           queue = queue.map((row) => {
             if (row.status !== "failed" || row.after !== null) return row;
             const recovered = snapshotPackage(recoveredPackages, row.entry.id);
@@ -431,6 +473,10 @@ export default function DebloatRoute() {
         );
       }
 
+      // The final commit is not guarded by commitQueue's step check, so it
+      // must bail explicitly when superseded — otherwise it stomps the reset
+      // wizard with a done screen for the old pack/device.
+      if (queueGenerationRef.current !== generation) return;
       setWizard({
         step: "done",
         pack,
@@ -442,7 +488,7 @@ export default function DebloatRoute() {
     },
     [
       authorizedTarget,
-      selectedDevice,
+      selectedTarget,
       selectedUser,
       t,
       usersReady,
@@ -541,36 +587,43 @@ export default function DebloatRoute() {
 
   const retryFailed = useCallback(async () => {
     if (wizard.step !== "done" || !authorizedTarget || !usersReady) return;
-    const failedIds = wizard.queue
-      .filter((row) => row.status === "failed")
-      .map((row) => row.entry.id);
-    const planned = await callPlanPack({
-      target: authorizedTarget,
-      user_id: selectedUser,
-      pack_id: wizard.pack.id,
-      revision: wizard.pack.revision,
-      selected: failedIds,
-      override_compatibility: wizard.overrideAccepted,
-    });
-    const previousRows = new Map(
-      wizard.queue.map((row) => [row.entry.id, row]),
-    );
-    const queue = planned.selected_ids.map((id) => {
-      const previous = previousRows.get(id);
-      if (previous && previous.status !== "failed") return previous;
-      const entry = wizard.pack.packages.find((item) => item.id === id)!;
-      return {
-        ...makeQueueRows([entry])[0]!,
-        attempts: previous?.attempts ?? 0,
-      };
-    });
-    await runQueue(
-      wizard.pack,
-      planned.assessment,
-      queue,
-      planned.plans,
-      wizard.overrideAccepted,
-    );
+    setRetryError(null);
+    try {
+      const failedIds = wizard.queue
+        .filter((row) => row.status === "failed")
+        .map((row) => row.entry.id);
+      const planned = await callPlanPack({
+        target: authorizedTarget,
+        user_id: selectedUser,
+        pack_id: wizard.pack.id,
+        revision: wizard.pack.revision,
+        selected: failedIds,
+        override_compatibility: wizard.overrideAccepted,
+      });
+      const previousRows = new Map(
+        wizard.queue.map((row) => [row.entry.id, row]),
+      );
+      const queue = planned.selected_ids.map((id) => {
+        const previous = previousRows.get(id);
+        if (previous && previous.status !== "failed") return previous;
+        const entry = wizard.pack.packages.find((item) => item.id === id)!;
+        return {
+          ...makeQueueRows([entry])[0]!,
+          attempts: previous?.attempts ?? 0,
+        };
+      });
+      await runQueue(
+        wizard.pack,
+        planned.assessment,
+        queue,
+        planned.plans,
+        wizard.overrideAccepted,
+      );
+    } catch (error) {
+      // The exact retry scenario (device unplugged after a partial queue) must
+      // surface instead of freezing the wizard on a dropped rejection.
+      setRetryError(errorMessage(error));
+    }
   }, [authorizedTarget, runQueue, selectedUser, usersReady, wizard]);
 
   return (
@@ -657,7 +710,7 @@ export default function DebloatRoute() {
         {selectedSerial && usersReady && wizard.step === "pick_pack" && (
           <PackPicker
             state={packsState}
-            target={selectedDevice ? deviceTarget(selectedDevice) : null}
+            target={selectedTarget}
             userId={selectedUser}
             onSelect={selectPack}
             onRefresh={() => void loadPacks()}
@@ -746,14 +799,36 @@ export default function DebloatRoute() {
         )}
 
         {usersReady && wizard.step === "done" && (
-          <QueueApplyResult
-            pack={wizard.pack}
-            queue={wizard.queue}
-            cancelled={wizard.cancelled}
-            deviceContext={deviceContext}
-            onRetryFailed={() => void retryFailed()}
-            onReset={() => setWizard({ step: "pick_pack" })}
-          />
+          <>
+            {retryError && (
+              <StatePanel
+                title={t("debloat.planFailed")}
+                tone="danger"
+                actions={
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={() => setRetryError(null)}
+                  >
+                    {t("common.dismiss")}
+                  </Button>
+                }
+              >
+                <p className="break-all">{retryError}</p>
+              </StatePanel>
+            )}
+            <QueueApplyResult
+              pack={wizard.pack}
+              queue={wizard.queue}
+              cancelled={wizard.cancelled}
+              deviceContext={deviceContext}
+              onRetryFailed={() => void retryFailed()}
+              onReset={() => {
+                setRetryError(null);
+                setWizard({ step: "pick_pack" });
+              }}
+            />
+          </>
         )}
       </section>
     </>
