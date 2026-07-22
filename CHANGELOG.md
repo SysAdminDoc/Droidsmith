@@ -14,6 +14,30 @@ completion.
 Working batches live here. Sections collapse into a versioned release on
 each milestone tag.
 
+## [0.9.6] - 2026-07-21
+
+Roadmap drain: the Debloat workspace is now split into focused workflow panels
+with the route retained as the orchestration and composition root.
+
+### Security
+
+- **Isolation policy completion.** Added explicit fail-closed classifications
+  and payload validation for 19 registered commands covering APK analysis,
+  local pack import/export, dropped packages, wireless history, device settings,
+  gnirehtet control, and related read paths. Added regression coverage for the
+  new path-grant purposes and mutation boundaries.
+- Updated transitive `brace-expansion` lockfile entries to patched releases
+  (`1.1.16` / `5.0.7`) after the release gate detected the current denial-of-
+  service advisory; `npm audit --audit-level=moderate` is clean.
+
+### Refactored
+
+- **IMP-75 — Debloat workflow split.** Extracted apply review, pack preview,
+  compatibility checks, queue progress/results, queue rows, quirk guidance, and
+  queue helpers into focused `src/routes/debloat/` modules. The interaction and
+  safety behavior is unchanged, including unsafe-tier acknowledgement, recovery
+  baseline export, cancel-after-current, retry, and quirk explanation flows.
+
 ## [0.9.5] - 2026-07-21
 
 Inspection + lifecycle expansion: offline APK Analyzer, device-state pack

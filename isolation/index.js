@@ -14,6 +14,7 @@
     "list_devices",
     "preview_diagnostics",
     "list_wireless_services",
+    "list_wireless_history",
     "get_device_info",
     "list_packages",
     "preflight_package_backup",
@@ -30,6 +31,7 @@
     "list_remote_files",
     "plan_remote_file_mutation",
     "locate_scrcpy",
+    "locate_gnirehtet",
     "scrcpy_session_status",
     "locate_fastboot",
     "list_fastboot_devices",
@@ -55,6 +57,10 @@
     wipe_diagnostics: [["confirmed"], []],
     pair_wireless: [["request"], []],
     connect_wireless: [["request"], []],
+    disconnect_device: [["target"], []],
+    forget_wireless_endpoint: [["host", "port"], []],
+    set_wireless_auto_reconnect: [["enabled"], []],
+    observe_device_fingerprint: [["target"], []],
     apply_action: [["plan"], []],
     apply_action_batch: [["batch"], []],
     export_recovery_baseline: [
@@ -99,10 +105,17 @@
       [],
     ],
     get_package_metadata: [["target", "package", "userId"], []],
+    list_device_settings: [["target"], []],
+    put_device_setting: [["target", "settingId", "value"], []],
+    list_running_services: [["target", "package"], []],
     take_screenshot: [["target", "path_grant"], []],
     scrcpy_capabilities: [["target"], []],
     launch_scrcpy: [["request"], ["path_grant"]],
     stop_scrcpy: [["session_id"], []],
+    start_gnirehtet: [["target"], []],
+    find_gnirehtet_session: [["target"], []],
+    gnirehtet_session_status: [["session_id"], []],
+    stop_gnirehtet: [["session_id"], []],
     shell_run: [["target", "argv", "operation_id", "on_event"], []],
     stream_logcat: [["target", "operation_id", "on_event"], []],
     cancel_operation: [["operation_id"], []],
@@ -118,6 +131,11 @@
       ["target", "remote_path", "path_grant", "operation_id", "on_event"],
       [],
     ],
+    grant_dropped_path: [["path"], []],
+    import_pack: [["path_grant", "expectedSha256"], []],
+    remove_imported_pack: [["packId"], []],
+    export_device_pack: [["target", "userId", "path_grant"], []],
+    analyze_apk: [["path_grant"], []],
   });
 
   const TARGET_KEYS = new Set([
@@ -149,6 +167,18 @@
     "install_open",
     "recovery_baseline_open",
     "profile_open",
+    "pack_import_open",
+    "pack_export_save",
+    "apk_analyze_open",
+  ]);
+
+  const DEVICE_SETTING_IDS = new Set([
+    "window_animation_scale",
+    "transition_animation_scale",
+    "animator_duration_scale",
+    "screen_off_timeout",
+    "font_scale",
+    "stay_on_while_plugged_in",
   ]);
 
   function isRecord(value) {
@@ -650,6 +680,12 @@
     if (command === "reveal_in_folder") {
       validateLocalPath(payload.path);
     }
+    if (command === "grant_dropped_path") {
+      validateLocalPath(payload.path);
+      if (!/\.(?:apk|apks|xapk|apkm)$/iu.test(payload.path)) {
+        reject("dropped_path_extension");
+      }
+    }
     if (command === "select_host_path") {
       if (!PATH_PURPOSES.has(payload.purpose)) reject("path_purpose");
       if (payload.suggested_name !== null) {
@@ -711,6 +747,43 @@
     }
     if (command === "recover_adb" || command === "wipe_diagnostics") {
       if (typeof payload.confirmed !== "boolean") reject("confirmation");
+    }
+    if (command === "forget_wireless_endpoint") {
+      validateWirelessHost(payload.host, "wireless_history_host");
+      ensureInteger(payload.port, "wireless_history_port", 1);
+      if (payload.port > 65535) reject("wireless_history_port");
+    }
+    if (
+      command === "set_wireless_auto_reconnect" &&
+      typeof payload.enabled !== "boolean"
+    ) {
+      reject("wireless_auto_reconnect");
+    }
+    if (command === "import_pack" && payload.expectedSha256 !== null) {
+      if (
+        typeof payload.expectedSha256 !== "string" ||
+        !/^[0-9a-f]{64}$/iu.test(payload.expectedSha256)
+      ) {
+        reject("pack_sha256");
+      }
+    }
+    if (command === "remove_imported_pack") {
+      if (!/^[a-z0-9](?:[a-z0-9-]{1,62}[a-z0-9])$/u.test(payload.packId)) {
+        reject("pack_id");
+      }
+    }
+    if (command === "put_device_setting") {
+      if (!DEVICE_SETTING_IDS.has(payload.settingId))
+        reject("device_setting_id");
+      if (
+        typeof payload.value !== "string" ||
+        payload.value.length === 0 ||
+        payload.value.length > 32 ||
+        payload.value !== payload.value.trim() ||
+        !/^(?:\d+|\d*\.\d+)$/u.test(payload.value)
+      ) {
+        reject("device_setting_value");
+      }
     }
     if (command === "capture_bugreport" && payload.privacy_confirmed !== true) {
       reject("bugreport_privacy_confirmation");
@@ -808,6 +881,9 @@
       ensureInteger(payload.entry_id, "entry_id", 1);
     if (command === "stop_scrcpy")
       ensureInteger(payload.session_id, "session_id", 1);
+    if (["gnirehtet_session_status", "stop_gnirehtet"].includes(command)) {
+      ensureInteger(payload.session_id, "session_id", 1);
+    }
   }
 
   function validateCommand(message) {

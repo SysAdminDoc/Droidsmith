@@ -530,6 +530,94 @@ test("allows read-only layout capture and bounded hierarchy export", () => {
   assert.equal(badGrant.cmd, blockedCommand);
 });
 
+test("scopes pack import, pack export, and offline APK analysis", () => {
+  const analyze = message("analyze_apk", { path_grant: pathGrant });
+  const importPack = message("import_pack", {
+    path_grant: pathGrant,
+    expectedSha256: "a".repeat(64),
+  });
+  const removePack = message("remove_imported_pack", {
+    packId: "qa-debloat",
+  });
+  const exportPack = message("export_device_pack", {
+    target,
+    userId: 10,
+    path_grant: pathGrant,
+  });
+  for (const valid of [analyze, importPack, removePack, exportPack]) {
+    assert.equal(hook(valid), valid);
+  }
+
+  for (const invalid of [
+    message("import_pack", {
+      path_grant: pathGrant,
+      expectedSha256: "not-a-sha256",
+    }),
+    message("remove_imported_pack", { packId: "../escape" }),
+    message("export_device_pack", {
+      target,
+      userId: -1,
+      path_grant: pathGrant,
+    }),
+  ]) {
+    assert.equal(hook(invalid).cmd, blockedCommand);
+  }
+});
+
+test("validates device settings, wireless history, and gnirehtet controls", () => {
+  const validMessages = [
+    message("list_device_settings", { target }),
+    message("put_device_setting", {
+      target,
+      settingId: "window_animation_scale",
+      value: "0.5",
+    }),
+    message("list_running_services", {
+      target,
+      package: "com.example.app",
+    }),
+    message("disconnect_device", { target }),
+    message("observe_device_fingerprint", { target }),
+    message("forget_wireless_endpoint", { host: "pixel.local", port: 5555 }),
+    message("set_wireless_auto_reconnect", { enabled: true }),
+    message("start_gnirehtet", { target }),
+    message("find_gnirehtet_session", { target }),
+    message("gnirehtet_session_status", { session_id: 7 }),
+    message("stop_gnirehtet", { session_id: 7 }),
+  ];
+  for (const valid of validMessages) assert.equal(hook(valid), valid);
+
+  for (const invalid of [
+    message("put_device_setting", {
+      target,
+      settingId: "arbitrary_secure_key",
+      value: "1",
+    }),
+    message("forget_wireless_endpoint", { host: "-a", port: 5555 }),
+    message("set_wireless_auto_reconnect", { enabled: "yes" }),
+    message("stop_gnirehtet", { session_id: 0 }),
+  ]) {
+    assert.equal(hook(invalid).cmd, blockedCommand);
+  }
+});
+
+test("accepts only supported absolute OS-dropped Android packages", () => {
+  const valid = message("grant_dropped_path", {
+    path: "C:/Users/QA/Downloads/app.apks",
+  });
+  assert.equal(hook(valid), valid);
+  for (const path of [
+    "relative/app.apk",
+    "C:/Users/QA/../secret.apk",
+    "C:/Users/QA/Downloads/readme.txt",
+  ]) {
+    assert.equal(
+      hook(message("grant_dropped_path", { path })).cmd,
+      blockedCommand,
+    );
+  }
+});
+
 test("allows only bounded native dialog purposes and file names", () => {
   const valid = message("select_host_path", {
     purpose: "screenshot_save",
@@ -560,7 +648,21 @@ test("allows only bounded native dialog purposes and file names", () => {
     purpose: "profile_open",
     suggested_name: null,
   });
-  assert.equal(hook(profileOpen), profileOpen);
+  const packImport = message("select_host_path", {
+    purpose: "pack_import_open",
+    suggested_name: null,
+  });
+  const packExport = message("select_host_path", {
+    purpose: "pack_export_save",
+    suggested_name: "device-debloat.yaml",
+  });
+  const apkAnalyze = message("select_host_path", {
+    purpose: "apk_analyze_open",
+    suggested_name: null,
+  });
+  for (const valid of [profileOpen, packImport, packExport, apkAnalyze]) {
+    assert.equal(hook(valid), valid);
+  }
 
   for (const payload of [
     { purpose: "arbitrary_write", suggested_name: "capture.png" },
