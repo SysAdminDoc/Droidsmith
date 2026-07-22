@@ -1,15 +1,22 @@
 import {
+  callApplySettingsImport,
   callExportSettings,
   callGetSettingsMirrorPreset,
+  callHasSettingsImportBackup,
   callInitializeSettings,
+  callPreviewSettingsImport,
   callResetSettings,
   callResetSettingsMirrorPreset,
+  callRestoreSettingsImportBackup,
   callSelectHostPath,
   callSetSettingsLanguage,
   callSetSettingsMirrorPreset,
   inTauri,
   type LegacySettingsImport,
   type SettingsExportResult,
+  type SettingsImportMode,
+  type SettingsImportPreview,
+  type SettingsImportResult,
   type SettingsLanguage,
   type SettingsLoadResult,
   type SettingsMirrorPreset,
@@ -137,6 +144,43 @@ export async function exportStoredSettings(
   );
   if (!pathGrant) return null;
   return callExportSettings(scope, pathGrant.id);
+}
+
+export async function previewStoredSettingsImport(): Promise<SettingsImportPreview | null> {
+  if (!inTauri()) {
+    throw new Error("Settings import requires the Droidsmith desktop runtime.");
+  }
+  await initializeSettings();
+  const pathGrant = await callSelectHostPath("settings_import");
+  if (!pathGrant) return null;
+  return callPreviewSettingsImport(pathGrant.id);
+}
+
+export async function applyStoredSettingsImport(
+  importId: string,
+  mode: SettingsImportMode,
+): Promise<SettingsImportResult> {
+  if (!inTauri()) {
+    throw new Error("Settings import requires the Droidsmith desktop runtime.");
+  }
+  await initializeSettings();
+  return callApplySettingsImport(importId, mode);
+}
+
+export async function restoreStoredSettingsImportBackup(): Promise<SettingsSnapshot> {
+  if (!inTauri()) {
+    throw new Error(
+      "Settings restore requires the Droidsmith desktop runtime.",
+    );
+  }
+  await initializeSettings();
+  return callRestoreSettingsImportBackup();
+}
+
+export async function hasStoredSettingsImportBackup(): Promise<boolean> {
+  if (!inTauri()) return false;
+  await initializeSettings();
+  return callHasSettingsImportBackup();
 }
 
 export function collectLegacySettings(

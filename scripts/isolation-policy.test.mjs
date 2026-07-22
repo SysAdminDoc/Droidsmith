@@ -120,6 +120,38 @@ test("accepts exactly every shipped settings language", () => {
   }
 });
 
+test("validates portable settings import previews and apply modes", () => {
+  const preview = message("preview_settings_import", {
+    path_grant: pathGrant,
+  });
+  const merge = message("apply_settings_import", {
+    importId: pathGrant,
+    mode: "merge",
+  });
+  const replace = message("apply_settings_import", {
+    importId: pathGrant,
+    mode: "replace",
+  });
+  const restore = message("restore_settings_import_backup", {});
+  for (const valid of [preview, merge, replace, restore]) {
+    assert.equal(hook(valid), valid);
+  }
+
+  for (const invalid of [
+    message("preview_settings_import", { path_grant: "C:/settings.json" }),
+    message("apply_settings_import", {
+      importId: "not-a-preview-id",
+      mode: "merge",
+    }),
+    message("apply_settings_import", {
+      importId: pathGrant,
+      mode: "overwrite",
+    }),
+  ]) {
+    assert.equal(hook(invalid).cmd, blockedCommand);
+  }
+});
+
 test("permits only explicitly confirmed structured file mutations", () => {
   const valid = message("apply_remote_file_mutation", {
     target,
@@ -678,7 +710,17 @@ test("allows only bounded native dialog purposes and file names", () => {
     purpose: "apk_analyze_open",
     suggested_name: null,
   });
-  for (const valid of [profileOpen, packImport, packExport, apkAnalyze]) {
+  const settingsImport = message("select_host_path", {
+    purpose: "settings_import",
+    suggested_name: null,
+  });
+  for (const valid of [
+    profileOpen,
+    packImport,
+    packExport,
+    apkAnalyze,
+    settingsImport,
+  ]) {
     assert.equal(hook(valid), valid);
   }
 

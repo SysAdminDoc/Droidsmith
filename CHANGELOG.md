@@ -14,6 +14,14 @@ completion.
 Working batches live here. Sections collapse into a versioned release on
 each milestone tag.
 
+### Added
+
+- **R-104 — Portable settings round-trip.** Expanded versioned settings exports
+  to include language, mirror presets, Logcat query libraries, wireless history,
+  and auto-reconnect. Imports validate before mutation, show a redacted
+  merge/replace preview, write atomically, preserve machine-local device
+  fingerprints, and create a restorable pre-import backup.
+
 ### Security
 
 - **IMP-77 — Bounded subprocess capture.** Consolidated short-lived ADB,

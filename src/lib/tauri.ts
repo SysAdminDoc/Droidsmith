@@ -77,6 +77,9 @@ import {
   type ScrcpyVideoEncoder as GeneratedScrcpyVideoEncoder,
   type ShellActionPlan as GeneratedShellActionPlan,
   type SettingsExportResult,
+  type SettingsImportMode,
+  type SettingsImportPreview,
+  type SettingsImportResult,
   type SettingsLanguage,
   type SettingsLoadResult,
   type SettingsScope,
@@ -381,6 +384,27 @@ export async function callExportSettings(
   pathGrant: string,
 ): Promise<SettingsExportResult> {
   return commands.exportSettings(scope, pathGrant);
+}
+
+export async function callPreviewSettingsImport(
+  pathGrant: string,
+): Promise<SettingsImportPreview> {
+  return commands.previewSettingsImport(pathGrant);
+}
+
+export async function callApplySettingsImport(
+  importId: string,
+  mode: SettingsImportMode,
+): Promise<SettingsImportResult> {
+  return commands.applySettingsImport(importId, mode);
+}
+
+export async function callRestoreSettingsImportBackup(): Promise<SettingsSnapshot> {
+  return commands.restoreSettingsImportBackup();
+}
+
+export async function callHasSettingsImportBackup(): Promise<boolean> {
+  return commands.hasSettingsImportBackup();
 }
 
 export async function callListLogcatQueries(

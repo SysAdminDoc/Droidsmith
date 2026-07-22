@@ -58,6 +58,29 @@ export const commands = {
     });
   },
   /**
+   * Parse and validate a portable settings document, then return only a
+   * redacted change summary plus an opaque, short-lived import id.
+   */
+  async previewSettingsImport(
+    pathGrant: string,
+  ): Promise<SettingsImportPreview> {
+    return await TAURI_INVOKE("preview_settings_import", {
+      path_grant: pathGrant,
+    });
+  },
+  async applySettingsImport(
+    importId: string,
+    mode: SettingsImportMode,
+  ): Promise<SettingsImportResult> {
+    return await TAURI_INVOKE("apply_settings_import", { importId, mode });
+  },
+  async restoreSettingsImportBackup(): Promise<SettingsSnapshot> {
+    return await TAURI_INVOKE("restore_settings_import_backup");
+  },
+  async hasSettingsImportBackup(): Promise<boolean> {
+    return await TAURI_INVOKE("has_settings_import_backup");
+  },
+  /**
    * List the saved Logcat query presets for the global scope and, when a device
    * identity is supplied, that device's scope. Only query definitions are
    * stored; captured log lines never enter the settings document.
@@ -1635,6 +1658,7 @@ export type HostPathPurpose =
   | "recovery_baseline_save"
   | "profile_save"
   | "settings_export"
+  | "settings_import"
   | "layout_export_save"
   | "push_open"
   | "install_open"
@@ -2450,10 +2474,38 @@ export type SettingControl =
    */
   | { kind: "choice"; options: SettingChoice[] };
 export type SettingNamespace = "system" | "secure" | "global";
+export type SettingsChangeCounts = {
+  added: number;
+  updated: number;
+  removed: number;
+  unchanged: number;
+};
 export type SettingsExportResult = {
   path: string;
   byteSize: number;
   scope: SettingsScope;
+};
+export type SettingsImportDiff = {
+  languageChanged: boolean;
+  mirrorPresets: SettingsChangeCounts;
+  logcatQueries: SettingsChangeCounts;
+  wirelessEndpoints: SettingsChangeCounts;
+  autoReconnectChanged: boolean;
+};
+export type SettingsImportMode = "merge" | "replace";
+export type SettingsImportPreview = {
+  importId: string;
+  version: string;
+  scope: SettingsScope;
+  merge: SettingsImportDiff;
+  replace: SettingsImportDiff;
+  excludedMachineLocal: string[];
+  backupAvailable: boolean;
+};
+export type SettingsImportResult = {
+  settings: SettingsSnapshot;
+  mode: SettingsImportMode;
+  backupAvailable: boolean;
 };
 export type SettingsLanguage = "de" | "en" | "es" | "ru" | "zh";
 export type SettingsLoadResult = {

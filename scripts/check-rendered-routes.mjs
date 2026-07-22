@@ -814,6 +814,28 @@ async function runDesktopFlow(browser) {
   }
   await page.getByRole("button", { name: "Export scope" }).click();
   await page.getByText(/Settings exported to/).waitFor();
+
+  // R-104: preview a complete portable import without exposing values, choose
+  // replace semantics, apply it, and restore the automatic pre-import backup.
+  await page.getByRole("button", { name: "Import settings" }).click();
+  await page
+    .getByRole("heading", { name: "Review portable settings" })
+    .waitFor();
+  await page.getByLabel("Import behavior").selectOption("replace");
+  await page.getByText("Wireless endpoints").waitFor();
+  await page.getByText(/deviceFingerprints/).waitFor();
+  await page.getByRole("button", { name: "Apply import" }).click();
+  await page.getByText(/A pre-import backup is available/).waitFor();
+  await page.getByRole("button", { name: "Restore pre-import backup" }).click();
+  await page.getByText(/pre-import settings backup was restored/).waitFor();
+
+  // A malformed/unreadable source is reported without opening a preview or
+  // changing current settings.
+  await page.evaluate(() =>
+    window.__DROIDSMITH_MOCK_FAIL_NEXT__("preview_settings_import"),
+  );
+  await page.getByRole("button", { name: "Import settings" }).click();
+  await page.getByText(/preview_settings_import/).waitFor();
   await page.getByRole("button", { name: "Reset scope" }).click();
   await page.getByRole("button", { name: "Reset selected scope" }).click();
   await page.getByText(/reset to defaults/).waitFor();
@@ -1340,6 +1362,7 @@ async function installTauriMock(
     let fingerprintObserved = false;
     let gnirehtetStopped = false;
     let settingsLanguage = "en";
+    let settingsImportBackupAvailable = false;
     const logcatQueries = { global: [] };
     let archiveApi = 35;
     window.__DROIDSMITH_MOCK_ARCHIVE_API__ = (api) => {
@@ -1532,6 +1555,10 @@ async function installTauriMock(
             settings_export: {
               id: "123e4567-e89b-42d3-a456-42661417400e",
               local_path: "C:/Users/QA/Desktop/droidsmith-settings-all.json",
+            },
+            settings_import: {
+              id: "123e4567-e89b-42d3-a456-426614174011",
+              local_path: "C:/Users/QA/Desktop/imported-settings.json",
             },
             apk_analyze_open: {
               id: "123e4567-e89b-42d3-a456-42661417400f",
@@ -2928,6 +2955,57 @@ async function installTauriMock(
             path: "C:/Users/QA/Desktop/droidsmith-settings-all.json",
             byteSize: 128,
             scope: args.scope,
+          };
+        }
+        if (cmd === "has_settings_import_backup") {
+          return settingsImportBackupAvailable;
+        }
+        if (cmd === "preview_settings_import") {
+          const counts = {
+            added: 1,
+            updated: 0,
+            removed: 0,
+            unchanged: 0,
+          };
+          return {
+            importId: "123e4567-e89b-42d3-a456-426614174012",
+            version: "1",
+            scope: "all",
+            merge: {
+              languageChanged: false,
+              mirrorPresets: counts,
+              logcatQueries: counts,
+              wirelessEndpoints: counts,
+              autoReconnectChanged: true,
+            },
+            replace: {
+              languageChanged: false,
+              mirrorPresets: counts,
+              logcatQueries: counts,
+              wirelessEndpoints: counts,
+              autoReconnectChanged: true,
+            },
+            excludedMachineLocal: ["deviceFingerprints"],
+            backupAvailable: settingsImportBackupAvailable,
+          };
+        }
+        if (cmd === "apply_settings_import") {
+          settingsImportBackupAvailable = true;
+          return {
+            settings: {
+              version: "1",
+              language: settingsLanguage,
+              mirrorPresetCount: 1,
+            },
+            mode: args.mode,
+            backupAvailable: true,
+          };
+        }
+        if (cmd === "restore_settings_import_backup") {
+          return {
+            version: "1",
+            language: settingsLanguage,
+            mirrorPresetCount: 0,
           };
         }
         if (cmd === "capture_layout") {

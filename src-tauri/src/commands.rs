@@ -1472,6 +1472,48 @@ pub async fn export_settings(
         .await
 }
 
+/// Parse and validate a portable settings document, then return only a
+/// redacted change summary plus an opaque, short-lived import id.
+#[tauri::command]
+#[specta::specta]
+pub async fn preview_settings_import(
+    app: tauri::AppHandle,
+    grants: tauri::State<'_, PathGrantStore>,
+    path_grant: String,
+) -> Result<settings::SettingsImportPreview, CommandError> {
+    let source = grants.consume(&path_grant, HostPathPurpose::SettingsImport)?;
+    let app_data_dir = settings_app_data_dir(&app)?;
+    spawn_blocking_operation(move || Ok(settings::preview_import(&app_data_dir, &source)?)).await
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn apply_settings_import(
+    app: tauri::AppHandle,
+    import_id: String,
+    mode: settings::SettingsImportMode,
+) -> Result<settings::SettingsImportResult, CommandError> {
+    let app_data_dir = settings_app_data_dir(&app)?;
+    spawn_blocking_operation(move || Ok(settings::apply_import(&app_data_dir, &import_id, mode)?))
+        .await
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn restore_settings_import_backup(
+    app: tauri::AppHandle,
+) -> Result<settings::SettingsSnapshot, CommandError> {
+    let app_data_dir = settings_app_data_dir(&app)?;
+    spawn_blocking_operation(move || Ok(settings::restore_import_backup(&app_data_dir)?)).await
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn has_settings_import_backup(app: tauri::AppHandle) -> Result<bool, CommandError> {
+    let app_data_dir = settings_app_data_dir(&app)?;
+    Ok(settings::import_backup_available(&app_data_dir))
+}
+
 /// Open a backend-owned native file dialog and retain its result as a short-
 /// lived, purpose-scoped, one-shot grant. Privileged commands accept only the
 /// opaque grant id, never a renderer-authored host path.

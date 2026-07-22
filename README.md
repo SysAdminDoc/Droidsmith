@@ -42,6 +42,13 @@ deeper device failures, users can separately acknowledge a sensitive-data
 warning and capture an atomic Android bugreport ZIP plus a redacted hash
 sidecar; Droidsmith never scans, opens, attaches, or uploads the report.
 
+The Settings dialog can export and import a versioned portable JSON document
+covering language, mirror presets, Logcat query libraries, wireless history,
+and auto-reconnect. Imports show a value-free merge/replace summary before any
+write and create a restorable pre-import backup. Hashed device fingerprint
+observations remain machine-local and are explicitly excluded from portable
+files.
+
 The Devices file manager browses and pulls files and now also supports guarded
 push, folder creation, same-directory rename, and delete. Every mutation shows
 the exact native-selected source, device target, and argument boundaries before

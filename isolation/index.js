@@ -40,6 +40,7 @@
     "list_fastboot_devices",
     "fastboot_getvar",
     "explain_failure",
+    "has_settings_import_backup",
   ]);
 
   const SENSITIVE_COMMANDS = Object.freeze({
@@ -54,6 +55,9 @@
     reset_settings_mirror_preset: [["deviceIdentity"], []],
     reset_settings: [["scope"], []],
     export_settings: [["scope", "path_grant"], []],
+    preview_settings_import: [["path_grant"], []],
+    apply_settings_import: [["importId", "mode"], []],
+    restore_settings_import_backup: [[], []],
     list_logcat_queries: [["deviceIdentity"], []],
     save_logcat_queries: [["scope", "deviceIdentity", "queries"], []],
     save_diagnostics: [["path_grant"], []],
@@ -165,6 +169,7 @@
     "recovery_baseline_save",
     "profile_save",
     "settings_export",
+    "settings_import",
     "layout_export_save",
     "push_open",
     "install_open",
@@ -725,6 +730,18 @@
     if (["reset_settings", "export_settings"].includes(command)) {
       if (!["all", "language", "mirror_presets"].includes(payload.scope)) {
         reject("settings_scope");
+      }
+    }
+    if (command === "apply_settings_import") {
+      if (
+        !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u.test(
+          payload.importId,
+        )
+      ) {
+        reject("settings_import_id");
+      }
+      if (!["merge", "replace"].includes(payload.mode)) {
+        reject("settings_import_mode");
       }
     }
     if (command === "list_logcat_queries" && payload.deviceIdentity !== null) {

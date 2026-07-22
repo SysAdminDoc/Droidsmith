@@ -9,7 +9,7 @@ use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -19,7 +19,10 @@ use crate::fs_util::{ArtifactKind, StagedArtifact};
 pub const SETTINGS_VERSION: &str = "1";
 const SETTINGS_FILE: &str = "settings.json";
 const LEGACY_BACKUP_FILE: &str = "settings-v0-backup.json";
+const PRE_IMPORT_BACKUP_FILE: &str = "settings-pre-import-backup.json";
 const MAX_SETTINGS_BYTES: u64 = 1024 * 1024;
+const MAX_PENDING_IMPORTS: usize = 8;
+const IMPORT_PREVIEW_TTL: Duration = Duration::from_secs(5 * 60);
 const MAX_LEGACY_PRESETS: usize = 128;
 const MAX_LEGACY_VALUE_BYTES: usize = 64 * 1024;
 const MAX_DEVICE_IDENTITY_BYTES: usize = 512;
@@ -60,6 +63,13 @@ pub enum SettingsRecovery {
     Clean,
     LegacyImported,
     CorruptQuarantined,
+}
+
+#[derive(specta::Type, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SettingsImportMode {
+    Merge,
+    Replace,
 }
 
 #[derive(specta::Type, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -321,6 +331,45 @@ pub struct SettingsExportResult {
     pub scope: SettingsScope,
 }
 
+#[derive(specta::Type, Debug, Clone, Default, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SettingsChangeCounts {
+    pub added: u32,
+    pub updated: u32,
+    pub removed: u32,
+    pub unchanged: u32,
+}
+
+#[derive(specta::Type, Debug, Clone, Default, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SettingsImportDiff {
+    pub language_changed: bool,
+    pub mirror_presets: SettingsChangeCounts,
+    pub logcat_queries: SettingsChangeCounts,
+    pub wireless_endpoints: SettingsChangeCounts,
+    pub auto_reconnect_changed: bool,
+}
+
+#[derive(specta::Type, Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SettingsImportPreview {
+    pub import_id: String,
+    pub version: String,
+    pub scope: SettingsScope,
+    pub merge: SettingsImportDiff,
+    pub replace: SettingsImportDiff,
+    pub excluded_machine_local: Vec<String>,
+    pub backup_available: bool,
+}
+
+#[derive(specta::Type, Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SettingsImportResult {
+    pub settings: SettingsSnapshot,
+    pub mode: SettingsImportMode,
+    pub backup_available: bool,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct SettingsDocument {
@@ -363,15 +412,24 @@ struct LegacyBackup {
     corrupt_entry_count: u32,
 }
 
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct SettingsExportDocument<'a> {
-    version: &'a str,
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct PortableSettingsDocument {
+    version: String,
     scope: SettingsScope,
-    #[serde(skip_serializing_if = "Option::is_none")]
     language: Option<SettingsLanguage>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    mirror_presets: Option<&'a BTreeMap<String, MirrorPreset>>,
+    mirror_presets: Option<BTreeMap<String, MirrorPreset>>,
+    logcat_queries: Option<BTreeMap<String, Vec<LogcatQuery>>>,
+    wireless_history: Option<Vec<WirelessEndpoint>>,
+    wireless_auto_reconnect: Option<bool>,
+    excluded_machine_local: Vec<String>,
+}
+
+#[derive(Debug, Clone)]
+struct PendingSettingsImport {
+    created_at: Instant,
+    app_data_dir: PathBuf,
+    document: PortableSettingsDocument,
 }
 
 #[derive(Debug, Deserialize)]
@@ -704,7 +762,16 @@ fn logcat_library(document: &SettingsDocument, device_key: Option<&str>) -> Logc
 
 pub fn reset(app_data_dir: &Path, scope: SettingsScope) -> Result<SettingsSnapshot, SettingsError> {
     mutate(app_data_dir, move |settings| match scope {
-        SettingsScope::All => *settings = SettingsDocument::default(),
+        SettingsScope::All => {
+            // Fingerprints are machine-local compatibility observations rather
+            // than portable preferences. Keep them outside the reset/export
+            // lifecycle just as imports do.
+            let device_fingerprints = std::mem::take(&mut settings.device_fingerprints);
+            *settings = SettingsDocument {
+                device_fingerprints,
+                ..SettingsDocument::default()
+            };
+        }
         SettingsScope::Language => settings.language = None,
         SettingsScope::MirrorPresets => settings.mirror_presets.clear(),
     })
@@ -733,22 +800,375 @@ pub fn export(
                 "settings export target must not be a symbolic link".to_string(),
             ));
         }
-        let document = SettingsExportDocument {
-            version: SETTINGS_VERSION,
-            scope,
-            language: matches!(scope, SettingsScope::All | SettingsScope::Language)
-                .then_some(settings.language)
-                .flatten(),
-            mirror_presets: matches!(scope, SettingsScope::All | SettingsScope::MirrorPresets)
-                .then_some(&settings.mirror_presets),
-        };
-        let bytes = serialize_pretty(&document)?;
+        let mut document = serde_json::Map::new();
+        document.insert(
+            "version".to_string(),
+            serde_json::Value::String(SETTINGS_VERSION.to_string()),
+        );
+        document.insert(
+            "scope".to_string(),
+            serde_json::to_value(scope)
+                .map_err(|error| SettingsError::Invalid(error.to_string()))?,
+        );
+        document.insert(
+            "excludedMachineLocal".to_string(),
+            serde_json::json!(["deviceFingerprints"]),
+        );
+        if matches!(scope, SettingsScope::All | SettingsScope::Language) {
+            document.insert(
+                "language".to_string(),
+                serde_json::to_value(settings.language)
+                    .map_err(|error| SettingsError::Invalid(error.to_string()))?,
+            );
+        }
+        if matches!(scope, SettingsScope::All | SettingsScope::MirrorPresets) {
+            document.insert(
+                "mirrorPresets".to_string(),
+                serde_json::to_value(&settings.mirror_presets)
+                    .map_err(|error| SettingsError::Invalid(error.to_string()))?,
+            );
+        }
+        if scope == SettingsScope::All {
+            document.insert(
+                "logcatQueries".to_string(),
+                serde_json::to_value(&settings.logcat_queries)
+                    .map_err(|error| SettingsError::Invalid(error.to_string()))?,
+            );
+            document.insert(
+                "wirelessHistory".to_string(),
+                serde_json::to_value(&settings.wireless_history)
+                    .map_err(|error| SettingsError::Invalid(error.to_string()))?,
+            );
+            document.insert(
+                "wirelessAutoReconnect".to_string(),
+                serde_json::Value::Bool(settings.wireless_auto_reconnect),
+            );
+        }
+        let bytes = serialize_pretty(&serde_json::Value::Object(document))?;
         write_atomic(destination, &bytes)?;
         Ok(SettingsExportResult {
             path: crate::fs_util::display_path(destination),
             byte_size: bytes.len() as u64,
             scope,
         })
+    })
+}
+
+pub fn preview_import(
+    app_data_dir: &Path,
+    source: &Path,
+) -> Result<SettingsImportPreview, SettingsError> {
+    with_lock(|| {
+        initialize_locked(app_data_dir, &LegacySettingsImport::default())?;
+        let current = read_valid_document(&settings_path(app_data_dir))?;
+        let document = read_portable_document(source)?;
+        let merge_document = apply_portable(&current, &document, SettingsImportMode::Merge)?;
+        let replace_document = apply_portable(&current, &document, SettingsImportMode::Replace)?;
+        let import_id = uuid::Uuid::new_v4().to_string();
+        store_pending_import(
+            import_id.clone(),
+            PendingSettingsImport {
+                created_at: Instant::now(),
+                app_data_dir: app_data_dir.to_path_buf(),
+                document: document.clone(),
+            },
+        )?;
+        Ok(SettingsImportPreview {
+            import_id,
+            version: document.version,
+            scope: document.scope,
+            merge: settings_diff(&current, &merge_document),
+            replace: settings_diff(&current, &replace_document),
+            excluded_machine_local: document.excluded_machine_local,
+            backup_available: import_backup_available_locked(app_data_dir),
+        })
+    })
+}
+
+pub fn apply_import(
+    app_data_dir: &Path,
+    import_id: &str,
+    mode: SettingsImportMode,
+) -> Result<SettingsImportResult, SettingsError> {
+    let pending = take_pending_import(import_id)?;
+    if pending.app_data_dir != app_data_dir {
+        return Err(SettingsError::Invalid(
+            "settings import preview belongs to a different application store".to_string(),
+        ));
+    }
+    with_lock(|| {
+        initialize_locked(app_data_dir, &LegacySettingsImport::default())?;
+        let path = settings_path(app_data_dir);
+        let current = read_valid_document(&path)?;
+        let next = apply_portable(&current, &pending.document, mode)?;
+        write_atomic(
+            &app_data_dir.join(PRE_IMPORT_BACKUP_FILE),
+            &serialize_pretty(&current)?,
+        )?;
+        write_document(&path, &next)?;
+        Ok(SettingsImportResult {
+            settings: snapshot(&next),
+            mode,
+            backup_available: true,
+        })
+    })
+}
+
+pub fn restore_import_backup(app_data_dir: &Path) -> Result<SettingsSnapshot, SettingsError> {
+    with_lock(|| {
+        initialize_locked(app_data_dir, &LegacySettingsImport::default())?;
+        let backup_path = app_data_dir.join(PRE_IMPORT_BACKUP_FILE);
+        if !backup_path.is_file() {
+            return Err(SettingsError::Invalid(
+                "no pre-import settings backup is available".to_string(),
+            ));
+        }
+        let backup = read_valid_document(&backup_path)?;
+        write_document(&settings_path(app_data_dir), &backup)?;
+        Ok(snapshot(&backup))
+    })
+}
+
+pub fn import_backup_available(app_data_dir: &Path) -> bool {
+    with_lock(|| Ok(import_backup_available_locked(app_data_dir))).unwrap_or(false)
+}
+
+fn import_backup_available_locked(app_data_dir: &Path) -> bool {
+    let path = app_data_dir.join(PRE_IMPORT_BACKUP_FILE);
+    path.is_file() && read_valid_document(&path).is_ok()
+}
+
+fn read_portable_document(path: &Path) -> Result<PortableSettingsDocument, SettingsError> {
+    if path.extension().and_then(|value| value.to_str()) != Some("json") {
+        return Err(SettingsError::Invalid(
+            "settings imports must use a .json extension".to_string(),
+        ));
+    }
+    if fs::symlink_metadata(path).is_ok_and(|meta| meta.file_type().is_symlink()) {
+        return Err(SettingsError::Invalid(
+            "settings import source must not be a symbolic link".to_string(),
+        ));
+    }
+    let text = crate::fs_util::read_to_string_limited(path, MAX_SETTINGS_BYTES).map_err(storage)?;
+    let value: serde_json::Value = serde_json::from_str(&text)
+        .map_err(|error| SettingsError::Invalid(format!("malformed settings import: {error}")))?;
+    let object = value.as_object().ok_or_else(|| {
+        SettingsError::Invalid("settings import root must be an object".to_string())
+    })?;
+    let version = object
+        .get("version")
+        .and_then(serde_json::Value::as_str)
+        .ok_or_else(|| SettingsError::Invalid("settings import version is missing".to_string()))?;
+    if version != SETTINGS_VERSION {
+        return Err(SettingsError::Invalid(format!(
+            "unsupported settings import version {version:?}; expected {SETTINGS_VERSION:?}"
+        )));
+    }
+    let document: PortableSettingsDocument = serde_json::from_str(&text)
+        .map_err(|error| SettingsError::Invalid(format!("invalid settings import: {error}")))?;
+    validate_portable_fields(object, &document)?;
+    let validation_base = SettingsDocument::default();
+    apply_portable(&validation_base, &document, SettingsImportMode::Replace)?;
+    Ok(document)
+}
+
+fn validate_portable_fields(
+    object: &serde_json::Map<String, serde_json::Value>,
+    document: &PortableSettingsDocument,
+) -> Result<(), SettingsError> {
+    let expected_exclusions = ["deviceFingerprints".to_string()];
+    if document.excluded_machine_local != expected_exclusions {
+        return Err(SettingsError::Invalid(
+            "settings import must disclose deviceFingerprints as machine-local".to_string(),
+        ));
+    }
+    let require = |name: &str, required: bool| {
+        if object.contains_key(name) == required {
+            Ok(())
+        } else {
+            Err(SettingsError::Invalid(format!(
+                "settings import field {name:?} does not match scope {:?}",
+                document.scope
+            )))
+        }
+    };
+    require(
+        "language",
+        matches!(document.scope, SettingsScope::All | SettingsScope::Language),
+    )?;
+    require(
+        "mirrorPresets",
+        matches!(
+            document.scope,
+            SettingsScope::All | SettingsScope::MirrorPresets
+        ),
+    )?;
+    for field in ["logcatQueries", "wirelessHistory", "wirelessAutoReconnect"] {
+        require(field, document.scope == SettingsScope::All)?;
+    }
+    Ok(())
+}
+
+fn apply_portable(
+    current: &SettingsDocument,
+    portable: &PortableSettingsDocument,
+    mode: SettingsImportMode,
+) -> Result<SettingsDocument, SettingsError> {
+    let mut next = current.clone();
+    if matches!(portable.scope, SettingsScope::All | SettingsScope::Language) {
+        next.language = portable.language;
+    }
+    if matches!(
+        portable.scope,
+        SettingsScope::All | SettingsScope::MirrorPresets
+    ) {
+        let imported = portable.mirror_presets.clone().ok_or_else(|| {
+            SettingsError::Invalid("settings import mirrorPresets is missing".to_string())
+        })?;
+        match mode {
+            SettingsImportMode::Merge => next.mirror_presets.extend(imported),
+            SettingsImportMode::Replace => next.mirror_presets = imported,
+        }
+    }
+    if portable.scope == SettingsScope::All {
+        let logcat_queries = portable.logcat_queries.clone().ok_or_else(|| {
+            SettingsError::Invalid("settings import logcatQueries is missing".to_string())
+        })?;
+        let wireless_history = portable.wireless_history.clone().ok_or_else(|| {
+            SettingsError::Invalid("settings import wirelessHistory is missing".to_string())
+        })?;
+        let auto_reconnect = portable.wireless_auto_reconnect.ok_or_else(|| {
+            SettingsError::Invalid("settings import wirelessAutoReconnect is missing".to_string())
+        })?;
+        match mode {
+            SettingsImportMode::Merge => {
+                for (scope, imported_queries) in logcat_queries {
+                    let current_queries = next.logcat_queries.entry(scope).or_default();
+                    for imported in imported_queries {
+                        current_queries.retain(|current| current.id != imported.id);
+                        current_queries.push(imported);
+                    }
+                }
+                for endpoint in wireless_history {
+                    next.wireless_history.retain(|current| {
+                        !wireless_matches(current, &endpoint.host, endpoint.port)
+                    });
+                    next.wireless_history.push(endpoint);
+                }
+                sort_and_bound_wireless(&mut next.wireless_history);
+            }
+            SettingsImportMode::Replace => {
+                next.logcat_queries = logcat_queries;
+                next.wireless_history = wireless_history;
+            }
+        }
+        next.wireless_auto_reconnect = auto_reconnect;
+    }
+    validate_document(&next)?;
+    Ok(next)
+}
+
+fn settings_diff(current: &SettingsDocument, next: &SettingsDocument) -> SettingsImportDiff {
+    SettingsImportDiff {
+        language_changed: current.language != next.language,
+        mirror_presets: map_change_counts(&current.mirror_presets, &next.mirror_presets),
+        logcat_queries: map_change_counts(
+            &flatten_logcat_queries(&current.logcat_queries),
+            &flatten_logcat_queries(&next.logcat_queries),
+        ),
+        wireless_endpoints: map_change_counts(
+            &wireless_map(&current.wireless_history),
+            &wireless_map(&next.wireless_history),
+        ),
+        auto_reconnect_changed: current.wireless_auto_reconnect != next.wireless_auto_reconnect,
+    }
+}
+
+fn flatten_logcat_queries(
+    scopes: &BTreeMap<String, Vec<LogcatQuery>>,
+) -> BTreeMap<String, LogcatQuery> {
+    scopes
+        .iter()
+        .flat_map(|(scope, queries)| {
+            queries
+                .iter()
+                .map(move |query| (format!("{scope}\0{}", query.id), query.clone()))
+        })
+        .collect()
+}
+
+fn wireless_map(history: &[WirelessEndpoint]) -> BTreeMap<String, WirelessEndpoint> {
+    history
+        .iter()
+        .map(|endpoint| {
+            (
+                format!("{}:{}", endpoint.host.to_ascii_lowercase(), endpoint.port),
+                endpoint.clone(),
+            )
+        })
+        .collect()
+}
+
+fn map_change_counts<T: PartialEq>(
+    current: &BTreeMap<String, T>,
+    next: &BTreeMap<String, T>,
+) -> SettingsChangeCounts {
+    let mut counts = SettingsChangeCounts::default();
+    for (key, value) in next {
+        match current.get(key) {
+            None => counts.added = counts.added.saturating_add(1),
+            Some(current_value) if current_value == value => {
+                counts.unchanged = counts.unchanged.saturating_add(1);
+            }
+            Some(_) => counts.updated = counts.updated.saturating_add(1),
+        }
+    }
+    counts.removed = current
+        .keys()
+        .filter(|key| !next.contains_key(*key))
+        .count()
+        .try_into()
+        .unwrap_or(u32::MAX);
+    counts
+}
+
+fn pending_imports() -> &'static Mutex<BTreeMap<String, PendingSettingsImport>> {
+    static IMPORTS: OnceLock<Mutex<BTreeMap<String, PendingSettingsImport>>> = OnceLock::new();
+    IMPORTS.get_or_init(|| Mutex::new(BTreeMap::new()))
+}
+
+fn store_pending_import(id: String, pending: PendingSettingsImport) -> Result<(), SettingsError> {
+    let mut imports = pending_imports()
+        .lock()
+        .map_err(|_| SettingsError::Storage("settings import registry unavailable".to_string()))?;
+    let now = Instant::now();
+    imports.retain(|_, entry| now.duration_since(entry.created_at) < IMPORT_PREVIEW_TTL);
+    if imports.len() >= MAX_PENDING_IMPORTS {
+        let oldest = imports
+            .iter()
+            .min_by_key(|(_, entry)| entry.created_at)
+            .map(|(id, _)| id.clone());
+        if let Some(oldest) = oldest {
+            imports.remove(&oldest);
+        }
+    }
+    imports.insert(id, pending);
+    Ok(())
+}
+
+fn take_pending_import(id: &str) -> Result<PendingSettingsImport, SettingsError> {
+    if uuid::Uuid::parse_str(id).is_err() {
+        return Err(SettingsError::Invalid(
+            "settings import id is malformed".to_string(),
+        ));
+    }
+    let mut imports = pending_imports()
+        .lock()
+        .map_err(|_| SettingsError::Storage("settings import registry unavailable".to_string()))?;
+    let now = Instant::now();
+    imports.retain(|_, entry| now.duration_since(entry.created_at) < IMPORT_PREVIEW_TTL);
+    imports.remove(id).ok_or_else(|| {
+        SettingsError::Invalid("settings import preview is missing or expired".to_string())
     })
 }
 
@@ -1713,6 +2133,201 @@ mod tests {
         let content = fs::read_to_string(destination).unwrap();
         assert!(content.contains("\"language\": \"ru\""));
         assert!(!content.contains("mirrorPresets"));
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn reset_all_preserves_machine_local_fingerprints() {
+        let dir = temp_dir("reset-portable");
+        initialize(&dir, LegacySettingsImport::default()).unwrap();
+        set_language(&dir, SettingsLanguage::Ru).unwrap();
+        record_device_fingerprint(&dir, "SERIAL-LOCAL", "local/fingerprint").unwrap();
+
+        let reset = reset(&dir, SettingsScope::All).unwrap();
+        assert_eq!(reset.language, None);
+        let document = read_valid_document(&settings_path(&dir)).unwrap();
+        assert_eq!(document.device_fingerprints.len(), 1);
+        assert!(document
+            .device_fingerprints
+            .values()
+            .any(|fingerprint| fingerprint == "local/fingerprint"));
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn portable_settings_replace_round_trips_and_restores_machine_local_state() {
+        let source = temp_dir("portable-source");
+        initialize(&source, LegacySettingsImport::default()).unwrap();
+        set_language(&source, SettingsLanguage::Es).unwrap();
+        set_mirror_preset(
+            &source,
+            "SOURCE-DEVICE",
+            MirrorPreset {
+                bit_rate: "14M".to_string(),
+                ..MirrorPreset::default()
+            },
+        )
+        .unwrap();
+        save_logcat_queries(
+            &source,
+            LogcatQueryScope::Global,
+            None,
+            vec![sample_query("portable")],
+        )
+        .unwrap();
+        record_wireless_endpoint(&source, "192.168.50.8", 5555, 50).unwrap();
+        set_wireless_auto_reconnect(&source, true).unwrap();
+        record_device_fingerprint(&source, "SOURCE-DEVICE", "source/fingerprint").unwrap();
+        let portable_path = source.join("portable.json");
+        export(&source, SettingsScope::All, &portable_path).unwrap();
+
+        let portable: serde_json::Value =
+            serde_json::from_slice(&fs::read(&portable_path).unwrap()).unwrap();
+        assert_eq!(
+            portable["excludedMachineLocal"],
+            serde_json::json!(["deviceFingerprints"])
+        );
+        assert!(portable.get("deviceFingerprints").is_none());
+        assert!(!fs::read_to_string(&portable_path)
+            .unwrap()
+            .contains("source/fingerprint"));
+
+        let target = temp_dir("portable-target");
+        initialize(&target, LegacySettingsImport::default()).unwrap();
+        set_language(&target, SettingsLanguage::De).unwrap();
+        set_mirror_preset(&target, "TARGET-DEVICE", MirrorPreset::default()).unwrap();
+        record_device_fingerprint(&target, "TARGET-DEVICE", "target/fingerprint").unwrap();
+        let before = read_valid_document(&settings_path(&target)).unwrap();
+
+        let preview = preview_import(&target, &portable_path).unwrap();
+        assert_eq!(preview.scope, SettingsScope::All);
+        assert!(preview.replace.language_changed);
+        assert_eq!(preview.replace.mirror_presets.added, 1);
+        assert_eq!(preview.replace.mirror_presets.removed, 1);
+        assert_eq!(preview.excluded_machine_local, vec!["deviceFingerprints"]);
+        let applied =
+            apply_import(&target, &preview.import_id, SettingsImportMode::Replace).unwrap();
+        assert_eq!(applied.settings.language, Some(SettingsLanguage::Es));
+        assert!(applied.backup_available);
+
+        let imported = read_valid_document(&settings_path(&target)).unwrap();
+        let source_document = read_valid_document(&settings_path(&source)).unwrap();
+        assert_eq!(imported.language, source_document.language);
+        assert_eq!(imported.mirror_presets, source_document.mirror_presets);
+        assert_eq!(imported.logcat_queries, source_document.logcat_queries);
+        assert_eq!(imported.wireless_history, source_document.wireless_history);
+        assert_eq!(
+            imported.wireless_auto_reconnect,
+            source_document.wireless_auto_reconnect
+        );
+        assert_eq!(imported.device_fingerprints, before.device_fingerprints);
+
+        restore_import_backup(&target).unwrap();
+        assert_eq!(
+            read_valid_document(&settings_path(&target)).unwrap(),
+            before
+        );
+        fs::remove_dir_all(source).unwrap();
+        fs::remove_dir_all(target).unwrap();
+    }
+
+    #[test]
+    fn portable_settings_merge_preserves_unmentioned_entries() {
+        let source = temp_dir("portable-merge-source");
+        initialize(&source, LegacySettingsImport::default()).unwrap();
+        set_mirror_preset(&source, "SOURCE", MirrorPreset::default()).unwrap();
+        let portable_path = source.join("mirror.json");
+        export(&source, SettingsScope::MirrorPresets, &portable_path).unwrap();
+
+        let target = temp_dir("portable-merge-target");
+        initialize(&target, LegacySettingsImport::default()).unwrap();
+        set_mirror_preset(
+            &target,
+            "TARGET",
+            MirrorPreset {
+                bit_rate: "10M".to_string(),
+                ..MirrorPreset::default()
+            },
+        )
+        .unwrap();
+        save_logcat_queries(
+            &target,
+            LogcatQueryScope::Global,
+            None,
+            vec![sample_query("target-query")],
+        )
+        .unwrap();
+        let preview = preview_import(&target, &portable_path).unwrap();
+        assert_eq!(preview.merge.mirror_presets.added, 1);
+        assert_eq!(preview.merge.mirror_presets.removed, 0);
+        assert_eq!(preview.replace.mirror_presets.removed, 1);
+        apply_import(&target, &preview.import_id, SettingsImportMode::Merge).unwrap();
+        assert_eq!(
+            read_valid_document(&settings_path(&target))
+                .unwrap()
+                .mirror_presets
+                .len(),
+            2
+        );
+        assert_eq!(list_logcat_queries(&target, None).unwrap().global.len(), 1);
+        fs::remove_dir_all(source).unwrap();
+        fs::remove_dir_all(target).unwrap();
+    }
+
+    #[test]
+    fn portable_merge_unions_logcat_queries_within_the_same_scope() {
+        let source = temp_dir("portable-logcat-source");
+        initialize(&source, LegacySettingsImport::default()).unwrap();
+        save_logcat_queries(
+            &source,
+            LogcatQueryScope::Global,
+            None,
+            vec![sample_query("source-query")],
+        )
+        .unwrap();
+        let portable_path = source.join("all.json");
+        export(&source, SettingsScope::All, &portable_path).unwrap();
+
+        let target = temp_dir("portable-logcat-target");
+        initialize(&target, LegacySettingsImport::default()).unwrap();
+        save_logcat_queries(
+            &target,
+            LogcatQueryScope::Global,
+            None,
+            vec![sample_query("target-query")],
+        )
+        .unwrap();
+        let preview = preview_import(&target, &portable_path).unwrap();
+        assert_eq!(preview.merge.logcat_queries.added, 1);
+        assert_eq!(preview.merge.logcat_queries.removed, 0);
+        apply_import(&target, &preview.import_id, SettingsImportMode::Merge).unwrap();
+        assert_eq!(list_logcat_queries(&target, None).unwrap().global.len(), 2);
+
+        fs::remove_dir_all(source).unwrap();
+        fs::remove_dir_all(target).unwrap();
+    }
+
+    #[test]
+    fn invalid_or_future_imports_never_mutate_settings_or_create_backups() {
+        let dir = temp_dir("portable-invalid");
+        initialize(&dir, LegacySettingsImport::default()).unwrap();
+        set_language(&dir, SettingsLanguage::Zh).unwrap();
+        let before = fs::read(settings_path(&dir)).unwrap();
+
+        let malformed = dir.join("malformed.json");
+        fs::write(&malformed, b"{broken").unwrap();
+        assert!(preview_import(&dir, &malformed).is_err());
+
+        let future = dir.join("future.json");
+        fs::write(
+            &future,
+            br#"{"version":"99","scope":"all","excludedMachineLocal":["deviceFingerprints"]}"#,
+        )
+        .unwrap();
+        let error = preview_import(&dir, &future).unwrap_err().to_string();
+        assert!(error.contains("unsupported settings import version"));
+        assert_eq!(fs::read(settings_path(&dir)).unwrap(), before);
+        assert!(!dir.join(PRE_IMPORT_BACKUP_FILE).exists());
         fs::remove_dir_all(dir).unwrap();
     }
 }
