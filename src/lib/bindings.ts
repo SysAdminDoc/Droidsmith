@@ -116,8 +116,9 @@ export const commands = {
     return await TAURI_INVOKE("capture_layout", { target });
   },
   /**
-   * Persist a captured UI hierarchy XML through a one-shot path grant. The size
-   * bound keeps the IPC and host write bounded, mirroring the Logcat export.
+   * Persist a captured UI hierarchy or accessibility-audit report through a
+   * one-shot path grant. The size bound keeps the IPC and host write bounded,
+   * mirroring the Logcat export.
    */
   async saveLayoutExport(pathGrant: string, contents: string): Promise<string> {
     return await TAURI_INVOKE("save_layout_export", {
@@ -1825,6 +1826,22 @@ export type LaunchScrcpyRequest = {
    */
   no_vd_destroy_content?: boolean;
 };
+export type LayoutAuditFinding = {
+  id: string;
+  kind: LayoutAuditKind;
+  node_index: number;
+  related_node_indices: number[];
+  resource_id: string;
+  bounds: string;
+  width_px: number | null;
+  height_px: number | null;
+  width_dp_tenths: number | null;
+  height_dp_tenths: number | null;
+};
+export type LayoutAuditKind =
+  | "missing_accessible_label"
+  | "duplicate_resource_id"
+  | "small_click_target";
 /**
  * One node of a `uiautomator dump` UI hierarchy, flattened with its nesting
  * `depth` so the renderer can indent it. Malformed structure yields a node
@@ -1839,6 +1856,12 @@ export type LayoutNode = {
   content_desc: string;
   resource_id: string;
   bounds: string;
+  /**
+   * Exact attribute payload from the source `<node ...>` tag. Kept so an
+   * audit finding can expose inspectable evidence without reparsing XML in
+   * the renderer.
+   */
+  raw_attributes: string;
   clickable: boolean;
   enabled: boolean;
   parse_error?: string | null;
@@ -1850,6 +1873,8 @@ export type LayoutNode = {
 export type LayoutSnapshot = {
   nodes: LayoutNode[];
   node_count: number;
+  density_dpi: number | null;
+  audit_findings: LayoutAuditFinding[];
   raw_xml: string;
 };
 export type LegacyContent = "app_data_entries_detected" | "no_app_data_entries";

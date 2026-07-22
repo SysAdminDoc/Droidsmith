@@ -76,7 +76,7 @@ impl HostPathPurpose {
             Self::ProfileSave => "Export Droidsmith profile",
             Self::SettingsExport => "Export Droidsmith settings",
             Self::SettingsImport => "Import Droidsmith settings",
-            Self::LayoutExportSave => "Export UI layout hierarchy",
+            Self::LayoutExportSave => "Export UI layout or accessibility audit",
             Self::PushOpen => "Choose file to push",
             Self::InstallOpen => "Choose Android package",
             Self::RecoveryBaselineOpen => "Inspect recovery baseline",
@@ -103,7 +103,9 @@ impl HostPathPurpose {
             Self::ProfileSave | Self::ProfileOpen => Some(("Droidsmith profile", &["yaml", "yml"])),
             Self::SettingsExport => Some(("Droidsmith settings", &["json"])),
             Self::SettingsImport => Some(("Droidsmith settings", &["json"])),
-            Self::LayoutExportSave => Some(("UI layout hierarchy", &["xml"])),
+            Self::LayoutExportSave => {
+                Some(("UI layout or accessibility audit", &["xml", "json", "txt"]))
+            }
             Self::InstallOpen => Some(("Android package", &["apk", "apks", "xapk", "apkm"])),
             Self::PackImportOpen | Self::PackExportSave => {
                 Some(("Droidsmith debloat pack", &["yaml", "yml"]))
@@ -593,5 +595,16 @@ mod tests {
                 "path_grant_invalid_path"
             );
         }
+    }
+
+    #[test]
+    fn layout_export_dialog_accepts_hierarchy_and_audit_formats() {
+        assert_eq!(
+            HostPathPurpose::LayoutExportSave.filter(),
+            Some((
+                "UI layout or accessibility audit",
+                &["xml", "json", "txt"][..]
+            ))
+        );
     }
 }

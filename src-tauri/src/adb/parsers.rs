@@ -483,10 +483,157 @@ pub struct LayoutNode {
     pub content_desc: String,
     pub resource_id: String,
     pub bounds: String,
+    /// Exact attribute payload from the source `<node ...>` tag. Kept so an
+    /// audit finding can expose inspectable evidence without reparsing XML in
+    /// the renderer.
+    pub raw_attributes: String,
     pub clickable: bool,
     pub enabled: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub parse_error: Option<String>,
+}
+
+#[derive(specta::Type, Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum LayoutAuditKind {
+    MissingAccessibleLabel,
+    DuplicateResourceId,
+    SmallClickTarget,
+}
+
+#[derive(specta::Type, Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct LayoutAuditFinding {
+    pub id: String,
+    pub kind: LayoutAuditKind,
+    pub node_index: u32,
+    pub related_node_indices: Vec<u32>,
+    pub resource_id: String,
+    pub bounds: String,
+    pub width_px: Option<u32>,
+    pub height_px: Option<u32>,
+    pub width_dp_tenths: Option<u32>,
+    pub height_dp_tenths: Option<u32>,
+}
+
+/// Run deterministic checks that are supportable from a UIAutomator XML dump.
+/// Contrast and rendered pixels are intentionally outside this evidence model.
+pub fn audit_layout_nodes(
+    nodes: &[LayoutNode],
+    density_dpi: Option<u32>,
+) -> Vec<LayoutAuditFinding> {
+    let mut ids = std::collections::BTreeMap::<&str, Vec<u32>>::new();
+    for (index, node) in nodes.iter().enumerate() {
+        if node.parse_error.is_none() && !node.resource_id.is_empty() {
+            ids.entry(&node.resource_id).or_default().push(index as u32);
+        }
+    }
+
+    let mut findings = Vec::new();
+    for (index, node) in nodes.iter().enumerate() {
+        if node.parse_error.is_some() {
+            continue;
+        }
+        let node_index = index as u32;
+        let dimensions = parse_layout_bounds(&node.bounds);
+        let (width_px, height_px) = dimensions.unzip();
+        let width_dp_tenths = width_px
+            .zip(density_dpi)
+            .map(|(width, density)| px_to_dp_tenths(width, density));
+        let height_dp_tenths = height_px
+            .zip(density_dpi)
+            .map(|(height, density)| px_to_dp_tenths(height, density));
+        let finding = |kind: LayoutAuditKind, related_node_indices: Vec<u32>| {
+            let kind_id = match &kind {
+                LayoutAuditKind::MissingAccessibleLabel => "missing_accessible_label",
+                LayoutAuditKind::DuplicateResourceId => "duplicate_resource_id",
+                LayoutAuditKind::SmallClickTarget => "small_click_target",
+            };
+            LayoutAuditFinding {
+                id: format!("{kind_id}:{node_index}"),
+                kind,
+                node_index,
+                related_node_indices,
+                resource_id: node.resource_id.clone(),
+                bounds: node.bounds.clone(),
+                width_px,
+                height_px,
+                width_dp_tenths,
+                height_dp_tenths,
+            }
+        };
+
+        if node.clickable && node.text.trim().is_empty() && node.content_desc.trim().is_empty() {
+            findings.push(finding(
+                LayoutAuditKind::MissingAccessibleLabel,
+                vec![node_index],
+            ));
+        }
+        if let Some(duplicates) = ids
+            .get(node.resource_id.as_str())
+            .filter(|matches| matches.len() > 1)
+        {
+            findings.push(finding(
+                LayoutAuditKind::DuplicateResourceId,
+                duplicates.clone(),
+            ));
+        }
+        if node.clickable
+            && dimensions.is_some_and(|(width, height)| {
+                density_dpi.is_some_and(|density| {
+                    (width as u64) * 160 < 48 * (density as u64)
+                        || (height as u64) * 160 < 48 * (density as u64)
+                })
+            })
+        {
+            findings.push(finding(LayoutAuditKind::SmallClickTarget, vec![node_index]));
+        }
+    }
+    findings
+}
+
+pub fn parse_effective_density(output: &str) -> Option<u32> {
+    let mut physical = None;
+    let mut override_density = None;
+    for line in output.lines() {
+        let line = line.trim();
+        let parsed = line
+            .split_once(':')
+            .and_then(|(_, value)| value.trim().parse::<u32>().ok())
+            .filter(|value| (72..=1000).contains(value));
+        if line.starts_with("Override density:") {
+            override_density = parsed;
+        } else if line.starts_with("Physical density:") {
+            physical = parsed;
+        }
+    }
+    override_density.or(physical)
+}
+
+fn parse_layout_bounds(value: &str) -> Option<(u32, u32)> {
+    let coordinates = value
+        .split(['[', ']', ','])
+        .filter(|value| !value.trim().is_empty())
+        .map(|value| value.trim().parse::<i64>())
+        .collect::<Result<Vec<_>, _>>()
+        .ok()?;
+    let [left, top, right, bottom] = coordinates.as_slice() else {
+        return None;
+    };
+    if right <= left || bottom <= top {
+        return None;
+    }
+    Some((
+        u32::try_from(right - left).ok()?,
+        u32::try_from(bottom - top).ok()?,
+    ))
+}
+
+fn px_to_dp_tenths(px: u32, density_dpi: u32) -> u32 {
+    if density_dpi == 0 {
+        return 0;
+    }
+    (((px as u64) * 1600 + (density_dpi as u64 / 2)) / density_dpi as u64).min(u32::MAX as u64)
+        as u32
 }
 
 /// Parse a `uiautomator dump` XML document into a depth-flattened node list.
@@ -574,6 +721,7 @@ fn build_layout_node(attrs: &str, depth: u32) -> LayoutNode {
         content_desc: take("content-desc"),
         resource_id: take("resource-id"),
         bounds: take("bounds"),
+        raw_attributes: attrs.trim().to_string(),
         clickable: flag("clickable"),
         enabled: flag("enabled"),
         parse_error: None,
@@ -637,6 +785,7 @@ fn layout_parse_error(message: &str) -> LayoutNode {
         content_desc: String::new(),
         resource_id: String::new(),
         bounds: String::new(),
+        raw_attributes: String::new(),
         clickable: false,
         enabled: false,
         parse_error: Some(message.to_string()),
@@ -664,7 +813,55 @@ mod tests {
         assert_eq!(nodes[1].text, "Tom & Jerry <3");
         assert_eq!(nodes[1].content_desc, "Play");
         assert_eq!(nodes[1].resource_id, "com.example.app:id/title");
+        assert!(nodes[1].raw_attributes.contains("content-desc=\"Play\""));
         assert!(nodes[1].clickable);
+    }
+
+    #[test]
+    fn parses_effective_density_and_prefers_an_override() {
+        assert_eq!(
+            parse_effective_density("Physical density: 420\n"),
+            Some(420)
+        );
+        assert_eq!(
+            parse_effective_density("Physical density: 420\nOverride density: 320\n"),
+            Some(320)
+        );
+        assert_eq!(parse_effective_density("Physical density: unknown\n"), None);
+        assert_eq!(parse_effective_density("Physical density: 12\n"), None);
+    }
+
+    #[test]
+    fn audits_labels_duplicate_ids_and_density_aware_target_sizes() {
+        let xml = include_str!("../../fixtures/layout/accessibility-audit.xml");
+        let nodes = parse_uiautomator_dump(xml);
+        let findings = audit_layout_nodes(&nodes, Some(320));
+
+        assert_eq!(findings.len(), 4);
+        assert_eq!(
+            findings
+                .iter()
+                .filter(|finding| finding.kind == LayoutAuditKind::MissingAccessibleLabel)
+                .count(),
+            1
+        );
+        let duplicates = findings
+            .iter()
+            .filter(|finding| finding.kind == LayoutAuditKind::DuplicateResourceId)
+            .collect::<Vec<_>>();
+        assert_eq!(duplicates.len(), 2);
+        assert!(duplicates
+            .iter()
+            .all(|finding| finding.related_node_indices == vec![1, 2]));
+        let small = findings
+            .iter()
+            .find(|finding| finding.kind == LayoutAuditKind::SmallClickTarget)
+            .expect("small target finding");
+        assert_eq!((small.width_px, small.height_px), (Some(80), Some(60)));
+        assert_eq!(
+            (small.width_dp_tenths, small.height_dp_tenths),
+            (Some(400), Some(300))
+        );
     }
 
     #[test]

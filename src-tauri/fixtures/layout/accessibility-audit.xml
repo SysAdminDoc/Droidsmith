@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<hierarchy rotation="0">
+  <node index="0" class="android.widget.ImageButton" package="com.example.audit" text="" content-desc="" resource-id="com.example.audit:id/unlabeled" bounds="[0,0][96,96]" clickable="true" enabled="true" />
+  <node index="1" class="android.widget.TextView" package="com.example.audit" text="First" content-desc="" resource-id="com.example.audit:id/duplicate" bounds="[0,100][200,200]" clickable="false" enabled="true" />
+  <node index="2" class="android.widget.TextView" package="com.example.audit" text="Second" content-desc="" resource-id="com.example.audit:id/duplicate" bounds="[0,200][200,300]" clickable="false" enabled="true" />
+  <node index="3" class="android.widget.Button" package="com.example.audit" text="Tiny" content-desc="" resource-id="com.example.audit:id/tiny" bounds="[0,300][80,360]" clickable="true" enabled="true" />
+</hierarchy>

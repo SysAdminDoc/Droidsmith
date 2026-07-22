@@ -21,9 +21,10 @@ use tauri::Manager;
 use crate::adb::device::valid_serial;
 use crate::adb::packages::valid_package_name;
 use crate::adb::parsers::{
-    parse_fastboot_devices, parse_ls_output, parse_ps_output, parse_running_services,
-    parse_ss_output, parse_uiautomator_dump, FastbootDevice, LayoutNode, NetworkConnection,
-    ProcessInfo, RemoteFileEntry, RunningService,
+    audit_layout_nodes, parse_effective_density, parse_fastboot_devices, parse_ls_output,
+    parse_ps_output, parse_running_services, parse_ss_output, parse_uiautomator_dump,
+    FastbootDevice, LayoutAuditFinding, LayoutNode, NetworkConnection, ProcessInfo,
+    RemoteFileEntry, RunningService,
 };
 use crate::adb::transport::AdbTransport;
 use crate::adb::{self, actions};
@@ -3394,6 +3395,8 @@ pub fn list_running_services(
 pub struct LayoutSnapshot {
     pub nodes: Vec<LayoutNode>,
     pub node_count: u32,
+    pub density_dpi: Option<u32>,
+    pub audit_findings: Vec<LayoutAuditFinding>,
     pub raw_xml: String,
 }
 
@@ -3404,6 +3407,10 @@ pub struct LayoutSnapshot {
 #[specta::specta]
 pub fn capture_layout(target: adb::DeviceTarget) -> Result<LayoutSnapshot, CommandError> {
     let transport = validated_transport(&target)?;
+    let density_dpi = transport
+        .shell_target(&target, &["wm", "density"])
+        .ok()
+        .and_then(|output| parse_effective_density(&output));
     let stdout = transport.shell_target(&target, &["uiautomator", "dump", "/dev/tty"])?;
     let xml = extract_hierarchy(&stdout);
     let nodes = parse_uiautomator_dump(&xml);
@@ -3411,9 +3418,12 @@ pub fn capture_layout(target: adb::DeviceTarget) -> Result<LayoutSnapshot, Comma
         .iter()
         .filter(|node| node.parse_error.is_none())
         .count() as u32;
+    let audit_findings = audit_layout_nodes(&nodes, density_dpi);
     Ok(LayoutSnapshot {
         nodes,
         node_count,
+        density_dpi,
+        audit_findings,
         raw_xml: xml,
     })
 }
@@ -3429,8 +3439,9 @@ fn extract_hierarchy(stdout: &str) -> String {
     stdout.trim().to_string()
 }
 
-/// Persist a captured UI hierarchy XML through a one-shot path grant. The size
-/// bound keeps the IPC and host write bounded, mirroring the Logcat export.
+/// Persist a captured UI hierarchy or accessibility-audit report through a
+/// one-shot path grant. The size bound keeps the IPC and host write bounded,
+/// mirroring the Logcat export.
 #[tauri::command]
 #[specta::specta]
 pub async fn save_layout_export(

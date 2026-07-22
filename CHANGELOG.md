@@ -16,6 +16,11 @@ each milestone tag.
 
 ### Added
 
+- **R-105 — Deterministic Layout Inspector accessibility audit.** UIAutomator
+  captures now flag clickable nodes without labels, duplicate non-empty
+  resource IDs, and density-aware touch targets smaller than 48dp. Findings
+  link to exact tree nodes and raw attributes; local JSON/text exports carry a
+  privacy warning and explicitly exclude color-contrast evaluation.
 - **IMP-83 — Route-level renderer chunks.** All eleven workspaces now load as
   dynamic modules with localized loading and keyboard-recoverable failure
   states. Focus/hover and delayed adjacent-route preloads stay speculative, and

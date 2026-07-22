@@ -99,21 +99,45 @@ async function runDesktopFlow(browser) {
   });
   await page.getByRole("button", { name: "Close", exact: true }).click();
 
-  // Read-only layout inspector: select the device, capture the mocked UI
-  // hierarchy, confirm nodes render indented, and export the raw XML.
+  // Read-only layout inspector: capture the mocked UI hierarchy, verify its
+  // deterministic accessibility audit links to exact nodes, and exercise all
+  // privacy-scoped export formats.
   await page.getByRole("button", { name: "Select Pixel QA" }).click();
   await page.getByRole("heading", { name: "Layout inspector" }).waitFor();
   await page.getByRole("button", { name: "Capture hierarchy" }).click();
-  await page.getByText("com.example.app:id/title").waitFor();
-  await page.getByText("“Hello”").waitFor();
+  await page.getByRole("heading", { name: "Accessibility audit" }).waitFor();
+  await page.getByText("Findings: 4", { exact: true }).waitFor();
+  await page.getByText("Density: 320 dpi", { exact: true }).waitFor();
+  await page
+    .getByText("Captured UI data may be sensitive", { exact: true })
+    .waitFor();
+  await page.getByText(/Color contrast is not evaluated/).waitFor();
+  if (
+    (await page
+      .getByRole("heading", { name: "Resource ID is duplicated" })
+      .count()) !== 2
+  ) {
+    throw new Error("Layout audit did not report both duplicate-ID nodes");
+  }
+  await page.getByText("com.example.audit:id/duplicate").first().waitFor();
+  await page.screenshot({
+    path: path.join(screenshotDir, "desktop-layout-audit.png"),
+    fullPage: false,
+  });
+  await page.getByRole("button", { name: "Go to node 0" }).click();
+  await page.locator("#layout-node-0:focus").waitFor();
   // IMP-71: filtering to zero matches shows an empty state, not a blank panel.
   const layoutFilter = page.getByLabel("Filter layout nodes");
   await layoutFilter.fill("zzz-no-such-node");
   await page.getByText("No matching nodes", { exact: true }).waitFor();
   await layoutFilter.fill("");
-  await page.getByText("com.example.app:id/title").waitFor();
+  await page.getByText("com.example.audit:id/tiny").last().waitFor();
   await page.getByRole("button", { name: "Export XML" }).click();
-  await page.getByText(/Layout saved to .*layout-QA123\.xml/).waitFor();
+  await page.getByText(/Layout saved to .*\.xml/).waitFor();
+  await page.getByRole("button", { name: "Export audit JSON" }).click();
+  await page.getByText(/Layout saved to .*\.json/).waitFor();
+  await page.getByRole("button", { name: "Export audit text" }).click();
+  await page.getByText(/Layout saved to .*\.txt/).waitFor();
 
   // Persistent display controls capture their exact prior value, expose an
   // immediate Restore action, and route that inverse through the durable
@@ -1906,10 +1930,6 @@ async function installTauriMock(
               id: "123e4567-e89b-42d3-a456-42661417400c",
               local_path: "C:/Users/QA/Downloads/新しい report.txt",
             },
-            layout_export_save: {
-              id: "123e4567-e89b-42d3-a456-42661417400d",
-              local_path: "C:/Users/QA/Desktop/layout-QA123.xml",
-            },
             settings_export: {
               id: "123e4567-e89b-42d3-a456-42661417400e",
               local_path: "C:/Users/QA/Desktop/droidsmith-settings-all.json",
@@ -1927,6 +1947,13 @@ async function installTauriMock(
               local_path: "C:/Users/QA/Desktop/device-debloat.yaml",
             },
           };
+          if (args.purpose === "layout_export_save") {
+            return {
+              id: "123e4567-e89b-42d3-a456-42661417400d",
+              purpose: args.purpose,
+              local_path: `C:/Users/QA/Desktop/${args.suggested_name}`,
+            };
+          }
           const selection = selections[args.purpose];
           if (!selection) {
             throw new Error(
@@ -3537,31 +3564,103 @@ async function installTauriMock(
         }
         if (cmd === "capture_layout") {
           return {
-            node_count: 2,
+            node_count: 4,
+            density_dpi: 320,
             raw_xml:
-              '<hierarchy rotation="0"><node index="0" class="android.widget.FrameLayout" package="com.example.app" text="" content-desc="" resource-id="" bounds="[0,0][1080,2400]" clickable="false" enabled="true"><node index="1" class="android.widget.TextView" package="com.example.app" text="Hello" content-desc="Greeting" resource-id="com.example.app:id/title" bounds="[10,20][300,80]" clickable="true" enabled="true" /></node></hierarchy>',
+              '<hierarchy rotation="0"><node index="0" class="android.widget.ImageButton" package="com.example.audit" text="" content-desc="" resource-id="com.example.audit:id/unlabeled" bounds="[0,0][96,96]" clickable="true" enabled="true" /><node index="1" class="android.widget.TextView" package="com.example.audit" text="First" content-desc="" resource-id="com.example.audit:id/duplicate" bounds="[0,100][200,200]" clickable="false" enabled="true" /><node index="2" class="android.widget.TextView" package="com.example.audit" text="Second" content-desc="" resource-id="com.example.audit:id/duplicate" bounds="[0,200][200,300]" clickable="false" enabled="true" /><node index="3" class="android.widget.Button" package="com.example.audit" text="Tiny" content-desc="" resource-id="com.example.audit:id/tiny" bounds="[0,300][80,360]" clickable="true" enabled="true" /></hierarchy>',
+            audit_findings: [
+              {
+                id: "missing_accessible_label:0",
+                kind: "missing_accessible_label",
+                node_index: 0,
+                related_node_indices: [0],
+                resource_id: "com.example.audit:id/unlabeled",
+                bounds: "[0,0][96,96]",
+                width_px: 96,
+                height_px: 96,
+                width_dp_tenths: 480,
+                height_dp_tenths: 480,
+              },
+              ...[1, 2].map((node_index) => ({
+                id: `duplicate_resource_id:${node_index}`,
+                kind: "duplicate_resource_id",
+                node_index,
+                related_node_indices: [1, 2],
+                resource_id: "com.example.audit:id/duplicate",
+                bounds:
+                  node_index === 1 ? "[0,100][200,200]" : "[0,200][200,300]",
+                width_px: 200,
+                height_px: 100,
+                width_dp_tenths: 1000,
+                height_dp_tenths: 500,
+              })),
+              {
+                id: "small_click_target:3",
+                kind: "small_click_target",
+                node_index: 3,
+                related_node_indices: [3],
+                resource_id: "com.example.audit:id/tiny",
+                bounds: "[0,300][80,360]",
+                width_px: 80,
+                height_px: 60,
+                width_dp_tenths: 400,
+                height_dp_tenths: 300,
+              },
+            ],
             nodes: [
               {
                 depth: 0,
                 index: "0",
-                class: "android.widget.FrameLayout",
-                package: "com.example.app",
+                class: "android.widget.ImageButton",
+                package: "com.example.audit",
                 text: "",
                 content_desc: "",
-                resource_id: "",
-                bounds: "[0,0][1080,2400]",
+                resource_id: "com.example.audit:id/unlabeled",
+                bounds: "[0,0][96,96]",
+                raw_attributes:
+                  'index="0" class="android.widget.ImageButton" package="com.example.audit" text="" content-desc="" resource-id="com.example.audit:id/unlabeled" bounds="[0,0][96,96]" clickable="true" enabled="true"',
+                clickable: true,
+                enabled: true,
+              },
+              {
+                depth: 0,
+                index: "1",
+                class: "android.widget.TextView",
+                package: "com.example.audit",
+                text: "First",
+                content_desc: "",
+                resource_id: "com.example.audit:id/duplicate",
+                bounds: "[0,100][200,200]",
+                raw_attributes:
+                  'index="1" class="android.widget.TextView" package="com.example.audit" text="First" content-desc="" resource-id="com.example.audit:id/duplicate" bounds="[0,100][200,200]" clickable="false" enabled="true"',
                 clickable: false,
                 enabled: true,
               },
               {
-                depth: 1,
-                index: "1",
+                depth: 0,
+                index: "2",
                 class: "android.widget.TextView",
-                package: "com.example.app",
-                text: "Hello",
-                content_desc: "Greeting",
-                resource_id: "com.example.app:id/title",
-                bounds: "[10,20][300,80]",
+                package: "com.example.audit",
+                text: "Second",
+                content_desc: "",
+                resource_id: "com.example.audit:id/duplicate",
+                bounds: "[0,200][200,300]",
+                raw_attributes:
+                  'index="2" class="android.widget.TextView" package="com.example.audit" text="Second" content-desc="" resource-id="com.example.audit:id/duplicate" bounds="[0,200][200,300]" clickable="false" enabled="true"',
+                clickable: false,
+                enabled: true,
+              },
+              {
+                depth: 0,
+                index: "3",
+                class: "android.widget.Button",
+                package: "com.example.audit",
+                text: "Tiny",
+                content_desc: "",
+                resource_id: "com.example.audit:id/tiny",
+                bounds: "[0,300][80,360]",
+                raw_attributes:
+                  'index="3" class="android.widget.Button" package="com.example.audit" text="Tiny" content-desc="" resource-id="com.example.audit:id/tiny" bounds="[0,300][80,360]" clickable="true" enabled="true"',
                 clickable: true,
                 enabled: true,
               },
@@ -3569,6 +3668,30 @@ async function installTauriMock(
           };
         }
         if (cmd === "save_layout_export") {
+          const contents = args.contents;
+          if (contents.startsWith("{")) {
+            const report = JSON.parse(contents);
+            if (
+              report.contrast_evaluated !== false ||
+              report.findings.length !== 4 ||
+              !report.findings[0].node.raw_attributes.includes(
+                'content-desc=""',
+              )
+            ) {
+              throw new Error("Layout JSON audit omitted required evidence");
+            }
+            return "C:/Users/QA/Desktop/layout-audit-QA123.json";
+          }
+          if (contents.startsWith("Droidsmith Layout Accessibility Audit")) {
+            if (
+              !contents.includes("Contrast evaluated: no") ||
+              !contents.includes("Raw attributes:") ||
+              !contents.includes("Privacy:")
+            ) {
+              throw new Error("Layout text audit omitted required evidence");
+            }
+            return "C:/Users/QA/Desktop/layout-audit-QA123.txt";
+          }
           return "C:/Users/QA/Desktop/layout-QA123.xml";
         }
         if (cmd === "list_logcat_queries") {
