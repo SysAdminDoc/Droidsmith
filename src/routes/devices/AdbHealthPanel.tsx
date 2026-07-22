@@ -21,7 +21,7 @@ export function AdbHealthPanel({
   const { t, i18n } = useTranslation();
   return (
     <section
-      className="border-b border-white/[0.08] py-5"
+      className="border-b border-white/10 py-5"
       aria-labelledby="adb-health-title"
     >
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -142,7 +142,7 @@ export function AdbHealthPanel({
 
 function HealthMetric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="min-w-0 border-s border-white/[0.08] px-3 first:border-s-0 first:ps-0">
+    <div className="min-w-0 border-s border-white/10 px-3 first:border-s-0 first:ps-0">
       <dt className="text-[11px] leading-4 text-anvil-500">{label}</dt>
       <dd className="mt-1 break-words text-[13px] font-medium leading-5 text-anvil-100">
         {value}

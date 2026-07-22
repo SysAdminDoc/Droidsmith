@@ -55,7 +55,7 @@ export function DeviceHeaderActions({
         {open && (
           <div
             role="menu"
-            className="absolute end-0 z-20 mt-2 min-w-48 rounded-lg border border-white/[0.09] bg-[#181d24] p-1.5 shadow-2xl"
+            className="absolute end-0 z-20 mt-2 min-w-48 rounded-lg border border-white/10 bg-surface-dialog p-1.5 shadow-2xl"
           >
             <button
               type="button"

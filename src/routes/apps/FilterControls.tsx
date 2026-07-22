@@ -47,7 +47,7 @@ export function FilterChips({
 
   return (
     <div
-      className="flex flex-wrap gap-4 border-b border-white/[0.08]"
+      className="flex flex-wrap gap-4 border-b border-white/10"
       role="radiogroup"
       aria-label={t("apps.packageFilterLabel")}
     >

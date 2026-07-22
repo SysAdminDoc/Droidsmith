@@ -1,7 +1,6 @@
 import type { Config } from "tailwindcss";
 
 export default {
-  darkMode: "class",
   content: ["./index.html", "./src/**/*.{ts,tsx}"],
   theme: {
     extend: {
@@ -59,6 +58,12 @@ export default {
           green: "#7dd3a8",
           amber: "#f4c86a",
           red: "#f48a8a",
+        },
+        surface: {
+          // Elevated dialog/modal surface shared by every overlay card.
+          dialog: "#121820",
+          // Terminal/console scrollback background (Console, Logcat).
+          terminal: "#0a0e13",
         },
       },
       boxShadow: {

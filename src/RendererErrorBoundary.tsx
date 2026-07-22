@@ -111,7 +111,7 @@ function RendererRecoverySurface({
       <section
         role="alert"
         aria-labelledby="renderer-error-title"
-        className="w-full max-w-2xl rounded-xl border border-red-300/20 bg-[#151a21] p-6 shadow-2xl"
+        className="w-full max-w-2xl rounded-lg border border-red-300/20 bg-surface-dialog p-6 shadow-2xl"
       >
         <p className="text-xs font-semibold uppercase tracking-[0.16em] text-red-200">
           {t("rendererError.eyebrow")}

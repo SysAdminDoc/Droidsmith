@@ -272,7 +272,7 @@ export default function App() {
       <div className="relative flex min-h-full flex-col lg:h-full lg:flex-row">
         <aside
           ref={sidebarRef}
-          className="border-b border-white/[0.08] bg-[#0f141a] px-3 py-3 lg:sticky lg:top-0 lg:flex lg:h-screen lg:w-[13.5rem] lg:shrink-0 lg:flex-col lg:overflow-y-auto lg:border-b-0 lg:border-e lg:px-3 lg:py-4"
+          className="border-b border-white/10 bg-[#0f141a] px-3 py-3 lg:sticky lg:top-0 lg:flex lg:h-screen lg:w-[13.5rem] lg:shrink-0 lg:flex-col lg:overflow-y-auto lg:border-b-0 lg:border-e lg:px-3 lg:py-4"
           aria-label={t("app.sidebarLabel")}
         >
           <div className="flex items-start justify-between gap-4 lg:block">
@@ -296,7 +296,7 @@ export default function App() {
             ))}
           </nav>
 
-          <div className="mt-3 lg:mt-auto lg:border-t lg:border-white/[0.08] lg:pt-3">
+          <div className="mt-3 lg:mt-auto lg:border-t lg:border-white/10 lg:pt-3">
             <ShellActions
               onOpenSettings={() => setShowSettings(true)}
               onOpenGuide={() => setShowOnboarding(true)}
@@ -497,8 +497,8 @@ function SettingsModal({ onDismiss }: { onDismiss: () => void }) {
       tabIndex={-1}
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 outline-none backdrop-blur-sm"
     >
-      <div className="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-xl border border-white/[0.09] bg-[#151a21] p-5 shadow-2xl sm:p-6">
-        <div className="flex items-start justify-between gap-4 border-b border-white/[0.08] pb-4">
+      <div className="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-lg border border-white/10 bg-surface-dialog p-5 shadow-2xl sm:p-6">
+        <div className="flex items-start justify-between gap-4 border-b border-white/10 pb-4">
           <div>
             <h2
               id="settings-modal-title"
@@ -514,7 +514,7 @@ function SettingsModal({ onDismiss }: { onDismiss: () => void }) {
             {t("common.close")}
           </Button>
         </div>
-        <div className="border-b border-white/[0.08] py-5">
+        <div className="border-b border-white/10 py-5">
           <p className="text-xs font-medium text-anvil-300">
             {t("language.label")}
           </p>
@@ -559,7 +559,7 @@ function AboutModal({
       tabIndex={-1}
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 outline-none backdrop-blur-sm"
     >
-      <div className="w-full max-w-md rounded-xl border border-white/[0.09] bg-[#151a21] p-6 shadow-2xl">
+      <div className="w-full max-w-md rounded-lg border border-white/10 bg-surface-dialog p-6 shadow-2xl">
         <div className="flex items-start gap-4">
           <LogoMark />
           <div className="min-w-0">
@@ -576,7 +576,7 @@ function AboutModal({
           {t("app.aboutDescription")}
         </p>
         <AboutRuntime state={state} onRetry={onRetry} />
-        <div className="mt-6 flex flex-wrap justify-end gap-2 border-t border-white/[0.08] pt-4">
+        <div className="mt-6 flex flex-wrap justify-end gap-2 border-t border-white/10 pt-4">
           <Button type="button" variant="ghost" onClick={onDismiss}>
             {t("common.close")}
           </Button>

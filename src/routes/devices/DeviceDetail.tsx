@@ -50,7 +50,7 @@ export function DeviceDetail({
 
   if (state.kind === "loading") {
     return (
-      <section className="border-b border-white/[0.08] py-5">
+      <section className="border-b border-white/10 py-5">
         <h3 className="text-sm font-semibold text-anvil-50">
           {t("devices.loadingDeviceInfo")}
         </h3>
@@ -93,7 +93,7 @@ export function DeviceDetail({
   const info = state.info;
   return (
     <section
-      className="border-b border-white/[0.08] py-5"
+      className="border-b border-white/10 py-5"
       aria-labelledby="device-details-title"
     >
       <div className="flex items-center justify-between">

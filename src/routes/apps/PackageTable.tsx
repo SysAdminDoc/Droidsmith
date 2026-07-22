@@ -457,7 +457,7 @@ function PackageActionMenu({
       </summary>
       <div
         role="menu"
-        className="mt-1 min-w-40 rounded-[0.25rem] border border-white/[0.1] bg-[#121820] p-1.5 shadow-2xl"
+        className="mt-1 min-w-40 rounded-lg border border-white/10 bg-surface-dialog p-1.5 shadow-2xl"
       >
         <MenuAction
           onClick={(button) => {

@@ -166,7 +166,9 @@ export default function SettingsDataControls({
 
   return (
     <Card
-      className={embedded ? "border-0 bg-transparent p-0 shadow-none" : "mt-5"}
+      className={
+        embedded ? "border-0 bg-transparent p-0 shadow-none" : "mt-5 py-4"
+      }
     >
       <h3 className="text-base font-semibold text-anvil-50">
         {t("settings.title")}

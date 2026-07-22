@@ -26,7 +26,7 @@ export function PaneHeader({
   meta?: ReactNode;
 }) {
   return (
-    <header className="border-b border-white/[0.09] pb-3.5">
+    <header className="border-b border-white/10 pb-3.5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-3">
@@ -60,11 +60,11 @@ export function Card({
     <div
       className={cn(
         surface === "section" &&
-          "rounded-none border-0 border-t border-white/[0.085] bg-transparent shadow-none",
+          "rounded-none border-0 border-t border-white/10 bg-transparent shadow-none",
         surface === "panel" &&
           "rounded-sm border border-white/[0.085] bg-black/10 shadow-panel",
         surface === "dialog" &&
-          "rounded-lg border border-white/[0.1] bg-[#121820] shadow-2xl",
+          "rounded-lg border border-white/10 bg-surface-dialog shadow-2xl",
         className ?? "p-4",
       )}
       {...props}
@@ -165,7 +165,7 @@ export function DevicePicker({
   const { t } = useTranslation();
 
   return (
-    <section className="border-b border-white/[0.08] pb-4">
+    <section className="border-b border-white/10 pb-4">
       <h3 className="text-xs font-medium text-anvil-400">
         {t("common.selectDevice")}
       </h3>
