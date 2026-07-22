@@ -41,6 +41,10 @@ each milestone tag.
 
 ### Fixed
 
+- **IMP-81 — Public README contract.** Removed links to local-only documentation,
+  embedded the supported source-build and unsigned-distribution guidance, and
+  now distinguish the `0.9.6` source tree from the older published `v0.5.3`
+  artifacts.
 - **IMP-80 — Target-bound async lifecycle.** Centralized immutable device
   fingerprints, operation generations, stale-result guards, and cancellation
   registration in one renderer primitive. Apps permissions, File Manager,

@@ -77,12 +77,13 @@ validation. Detected data entries are not a promise of completeness or future
 restore compatibility; Droidsmith does not present `adb restore` as a reliable
 recovery path.
 
-Current blockers are tracked separately in [Roadmap_Blocked.md](Roadmap_Blocked.md):
-signed release pipeline, bundled platform-tools wiring, UAD-NG redistribution,
-crash-log upload infrastructure, and the future plugin API/marketplace.
-Remaining actionable work lives in [ROADMAP.md](ROADMAP.md); release notes live
-in [CHANGELOG.md](CHANGELOG.md); design rationale is summarized in
-[RESEARCH_REPORT.md](RESEARCH_REPORT.md).
+The source tree and manifests are version `0.9.6`. As checked on 2026-07-21,
+the newest downloadable GitHub artifact is the older
+[v0.5.3 release](https://github.com/SysAdminDoc/Droidsmith/releases/tag/v0.5.3),
+published on 2026-07-17; changes after that tag are available from source but
+are not yet published release artifacts. Remaining actionable work lives in
+[ROADMAP.md](ROADMAP.md), release notes live in [CHANGELOG.md](CHANGELOG.md),
+and current product/architecture findings live in [RESEARCH.md](RESEARCH.md).
 
 ## Screenshots
 
@@ -135,14 +136,12 @@ ADB front end, but it has hard limits that an open project can fix:
 - **i18next** — translations
 
 Bundled platform-tools and bundled scrcpy are not wired into the installer yet;
-that work is held with release signing in [Roadmap_Blocked.md](Roadmap_Blocked.md).
+install those tools on the host when their workflows are needed.
 The current extension surface is schema-only: this build accepts schema version
 `"1"` for packs and quirks and version `"2"` for profiles. Profile v1 has an
 explicit review-and-migrate path; future revisions are rejected with migration
-guidance. The plugin API and marketplace remain deferred in
-[Roadmap_Blocked.md](Roadmap_Blocked.md).
-See [RESEARCH_REPORT.md](RESEARCH_REPORT.md) for the rationale and the
-alternatives considered.
+guidance. The plugin API and marketplace remain deferred. See
+[RESEARCH.md](RESEARCH.md) for current rationale and alternatives considered.
 
 ## Profiles and headless automation
 
@@ -208,19 +207,45 @@ Droidsmith/
   packs/            Community debloat packs (YAML)
   quirks/           Vendor failure explanations and mitigations (YAML)
   scripts/          Local development, resource, and sidecar helpers
-  docs/             Development notes and screenshots
+  docs/             Committed product screenshots and mockups
+  README.md
   ROADMAP.md
-  Roadmap_Blocked.md
   CHANGELOG.md
-  RESEARCH_REPORT.md
+  RESEARCH.md
 ```
 
 ## Project planning
 
 - [ROADMAP.md](ROADMAP.md) - active and planned roadmap items.
-- [Roadmap_Blocked.md](Roadmap_Blocked.md) - work paused on external blockers.
 - [CHANGELOG.md](CHANGELOG.md) - shipped roadmap history and release notes.
-- [RESEARCH_REPORT.md](RESEARCH_REPORT.md) - research summary and archive index.
+- [RESEARCH.md](RESEARCH.md) - current evidence and architecture assessment.
+
+## Development setup
+
+Prerequisites are Rust stable 1.81 or newer, Node.js 20 or newer, and the
+Tauri 2 OS dependencies: WebView2 plus MSVC build tools on Windows, Xcode
+Command Line Tools on macOS, or WebKitGTK 4.1/GTK 3/AppIndicator/RSVG development
+packages on Linux. Install Android SDK Platform Tools separately and put `adb`
+on `PATH`, or set `ANDROID_HOME` / `ANDROID_SDK_ROOT`; the current bundles do
+not include it.
+
+```bash
+npm install
+npm run tauri:dev
+```
+
+For production artifacts:
+
+```bash
+npm run tauri:build
+```
+
+Tauri writes the platform bundle under `src-tauri/target/release/bundle/`.
+These local builds and the currently published downloads are unsigned; no
+code-signing or certificate step is part of this project. The operating system
+may therefore show an unverified-publisher warning. The application is also
+single-instance, so close an installed copy before launching a development
+build.
 
 ## Local verification
 
@@ -289,10 +314,10 @@ key coverage, and locale-sensitive formatting.
 
 ## Getting involved
 
-Use [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for local setup and verification.
-Before proposing a new feature, check [ROADMAP.md](ROADMAP.md) and
-[Roadmap_Blocked.md](Roadmap_Blocked.md) so blocked signing, sidecar,
-redistribution, and plugin work does not get duplicated.
+Use the Development setup and Local verification sections above. Before
+proposing a feature, check [ROADMAP.md](ROADMAP.md) and
+[RESEARCH.md](RESEARCH.md) so existing implementation work and explicitly
+deferred architecture choices are not duplicated.
 
 ## License
 
