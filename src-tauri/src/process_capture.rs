@@ -5,9 +5,9 @@
 //! adb/fastboot/tool probes cannot diverge or collect unbounded output.
 
 use std::io::Read;
-use std::process::{Command, ExitStatus, Stdio};
+use std::process::{Child, Command, ExitStatus, Stdio};
 use std::sync::atomic::{AtomicU8, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -15,6 +15,10 @@ pub(crate) const DEFAULT_STREAM_LIMIT_BYTES: usize = 4 * 1024 * 1024;
 const STDOUT_LIMIT_BIT: u8 = 0b01;
 const STDERR_LIMIT_BIT: u8 = 0b10;
 const POLL_INTERVAL: Duration = Duration::from_millis(10);
+/// Post-termination grace for the pipe readers to observe EOF. A cleanly
+/// exited child can leak its pipe write-ends to a detached descendant (the
+/// classic `adb` server autostart), so an unbounded join would hang forever.
+pub(crate) const READER_EOF_GRACE: Duration = Duration::from_millis(400);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum CaptureStream {
@@ -161,12 +165,9 @@ pub(crate) fn run(
         }
     };
 
-    let stdout = stdout_reader
-        .join()
-        .map_err(|_| CaptureError::ReaderPanicked("stdout"))??;
-    let stderr = stderr_reader
-        .join()
-        .map_err(|_| CaptureError::ReaderPanicked("stderr"))??;
+    wait_for_pipe_readers(&mut child, &stdout_reader.handle, &stderr_reader.handle);
+    let stdout = collect_capture(stdout_reader, "stdout")?;
+    let stderr = collect_capture(stderr_reader, "stderr")?;
     if let StopReason::WaitFailed(error) = reason {
         return Err(CaptureError::Wait(error));
     }
@@ -203,21 +204,31 @@ pub(crate) fn run(
     })
 }
 
+/// A pipe reader whose captured bytes live behind a shared handle, so the
+/// supervisor can take a snapshot and detach the thread if a leaked write-end
+/// keeps the pipe open after the child exited.
+struct StreamCapture {
+    bytes: Arc<Mutex<Vec<u8>>>,
+    handle: thread::JoinHandle<Result<(), CaptureError>>,
+}
+
 fn spawn_reader<R: Read + Send + 'static>(
     mut reader: R,
     stream: &'static str,
     limit: usize,
     limit_bit: u8,
     exceeded: Arc<AtomicU8>,
-) -> thread::JoinHandle<Result<Vec<u8>, CaptureError>> {
-    thread::spawn(move || {
-        let mut captured = Vec::with_capacity(limit.min(4096));
+) -> StreamCapture {
+    let bytes = Arc::new(Mutex::new(Vec::with_capacity(limit.min(4096))));
+    let shared = Arc::clone(&bytes);
+    let handle = thread::spawn(move || {
         let mut buffer = [0_u8; 16 * 1024];
         loop {
             match reader.read(&mut buffer) {
                 Ok(0) => break,
                 Err(source) => return Err(CaptureError::Read { stream, source }),
                 Ok(count) => {
+                    let mut captured = shared.lock().unwrap_or_else(|error| error.into_inner());
                     let available = limit.saturating_sub(captured.len());
                     captured.extend_from_slice(&buffer[..count.min(available)]);
                     if count > available {
@@ -226,8 +237,51 @@ fn spawn_reader<R: Read + Send + 'static>(
                 }
             }
         }
-        Ok(captured)
-    })
+        Ok(())
+    });
+    StreamCapture { bytes, handle }
+}
+
+/// Wait a bounded interval for both pipe readers to observe EOF. If the child
+/// (or its killed tree) closed the pipes this returns almost immediately; if a
+/// detached descendant inherited the write-ends, kill the process group to
+/// close them and give the readers one more bounded slice. Style mirrors
+/// `CapturedTail::wait_for_eof` in `captured_tail.rs`. Shared with
+/// `operations::execute_child`, which has the same post-exit join hazard.
+pub(crate) fn wait_for_pipe_readers<A, B>(
+    child: &mut Child,
+    stdout: &thread::JoinHandle<A>,
+    stderr: &thread::JoinHandle<B>,
+) {
+    let started = Instant::now();
+    while !(stdout.is_finished() && stderr.is_finished()) && started.elapsed() < READER_EOF_GRACE {
+        thread::sleep(POLL_INTERVAL);
+    }
+    if stdout.is_finished() && stderr.is_finished() {
+        return;
+    }
+    let _ = crate::process_tree::terminate(child);
+    let started = Instant::now();
+    while !(stdout.is_finished() && stderr.is_finished()) && started.elapsed() < READER_EOF_GRACE {
+        thread::sleep(POLL_INTERVAL);
+    }
+}
+
+/// Join a finished reader (surfacing read errors/panics), or detach a stuck
+/// one and return the bytes captured so far. A detached thread holds only its
+/// bounded buffer and exits when the leaked pipe finally closes.
+fn collect_capture(capture: StreamCapture, stream: &'static str) -> Result<Vec<u8>, CaptureError> {
+    if capture.handle.is_finished() {
+        capture
+            .handle
+            .join()
+            .map_err(|_| CaptureError::ReaderPanicked(stream))??;
+    }
+    let mut bytes = capture
+        .bytes
+        .lock()
+        .unwrap_or_else(|error| error.into_inner());
+    Ok(std::mem::take(&mut *bytes))
 }
 
 /// Retain only the newest `limit` bytes. Streaming operations and long-lived
@@ -271,9 +325,8 @@ mod tests {
     #[test]
     fn reader_errors_are_not_reported_as_clean_eof() {
         let exceeded = Arc::new(AtomicU8::new(0));
-        let result = spawn_reader(FailingReader { emitted: false }, "stdout", 32, 1, exceeded)
-            .join()
-            .unwrap();
+        let capture = spawn_reader(FailingReader { emitted: false }, "stdout", 32, 1, exceeded);
+        let result = capture.handle.join().unwrap();
         assert!(matches!(
             result,
             Err(CaptureError::Read {
@@ -281,5 +334,44 @@ mod tests {
                 ..
             })
         ));
+    }
+
+    #[cfg(any(windows, unix))]
+    #[test]
+    fn leaked_pipe_write_end_does_not_block_capture_after_clean_exit() {
+        // The child exits immediately but hands its stdout write-end to a
+        // detached long-lived descendant. An unbounded reader join would
+        // block until that descendant exits (~30 s); the bounded wait must
+        // return promptly with the output captured before the exit.
+        #[cfg(windows)]
+        let mut command = {
+            let mut command = Command::new("cmd");
+            command.args([
+                "/C",
+                "echo leaked-pipe-marker& start /B ping -n 8 127.0.0.1& exit 0",
+            ]);
+            command
+        };
+        #[cfg(unix)]
+        let mut command = {
+            let mut command = Command::new("sh");
+            command.args(["-c", "echo leaked-pipe-marker; sleep 30 & exit 0"]);
+            command
+        };
+
+        let started = Instant::now();
+        let output = run(
+            &mut command,
+            Duration::from_secs(20),
+            CaptureLimits::default(),
+        )
+        .expect("capture must complete");
+        assert!(
+            started.elapsed() < Duration::from_secs(5),
+            "capture blocked on a leaked pipe write-end for {:?}",
+            started.elapsed()
+        );
+        assert!(matches!(output.termination, CaptureTermination::Exited(_)));
+        assert!(String::from_utf8_lossy(&output.stdout).contains("leaked-pipe-marker"));
     }
 }

@@ -16,6 +16,10 @@ use serde::Serialize;
 use tauri::ipc::Channel;
 
 const CAPTURE_LIMIT_BYTES: usize = 1024 * 1024;
+/// Maximum stdin payload for [`RegisteredOperation::run_stage_with_input`],
+/// matching the smallest common OS pipe buffer so a full pre-spawn write can
+/// never block against an already-chatty child.
+pub(crate) const MAX_STAGE_INPUT_BYTES: usize = 64 * 1024;
 const POLL_INTERVAL: Duration = Duration::from_millis(40);
 const PROGRESS_INTERVAL: Duration = Duration::from_millis(500);
 const CANCELLATION_HISTORY_LIMIT: usize = 256;
@@ -230,6 +234,18 @@ impl RegisteredOperation {
         timeout: Duration,
         label: &str,
     ) -> Result<ProcessOutput, OperationError> {
+        // Pipe-buffer protection: stdin is written in full before the output
+        // readers start, so input larger than the OS pipe buffer (64 KiB) can
+        // deadlock against a child that emits output before draining stdin.
+        if input.len() > MAX_STAGE_INPUT_BYTES {
+            return Err(OperationError::Input(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                format!(
+                    "stage input is {} bytes; the {MAX_STAGE_INPUT_BYTES}-byte cap prevents a stdin pipe deadlock",
+                    input.len()
+                ),
+            )));
+        }
         if self.is_cancelled() {
             return Err(OperationError::Cancelled);
         }
@@ -758,15 +774,23 @@ fn execute_child(
             }
             Err(error) => {
                 crate::process_tree::terminate(&mut child).map_err(OperationError::Terminate)?;
-                let _ = stdout_reader.join();
-                let _ = stderr_reader.join();
+                crate::process_capture::wait_for_pipe_readers(
+                    &mut child,
+                    &stdout_reader.handle,
+                    &stderr_reader.handle,
+                );
                 return Err(OperationError::Wait(error));
             }
         }
     }
 
-    let stdout_result = join_reader(stdout_reader, "stdout");
-    let stderr_result = join_reader(stderr_reader, "stderr");
+    crate::process_capture::wait_for_pipe_readers(
+        &mut child,
+        &stdout_reader.handle,
+        &stderr_reader.handle,
+    );
+    let stdout_result = collect_reader(stdout_reader, "stdout");
+    let stderr_result = collect_reader(stderr_reader, "stderr");
     let (code, timed_out, was_cancelled) = termination.expect("termination is assigned");
     if was_cancelled {
         return Err(OperationError::Cancelled);
@@ -788,15 +812,24 @@ fn execute_child(
     })
 }
 
+/// A pipe reader whose captured bytes live behind a shared handle, so
+/// `execute_child` can take a snapshot and detach the thread if a leaked pipe
+/// write-end keeps it blocked after the child exited.
+struct StreamCapture {
+    bytes: Arc<Mutex<Vec<u8>>>,
+    handle: std::thread::JoinHandle<std::io::Result<()>>,
+}
+
 fn read_stream<R: Read + Send + 'static>(
     mut reader: R,
     operation_id: String,
     stream: &'static str,
     sink: EventSink,
     capture_output: bool,
-) -> std::thread::JoinHandle<std::io::Result<Vec<u8>>> {
-    std::thread::spawn(move || {
-        let mut captured = Vec::with_capacity(4096);
+) -> StreamCapture {
+    let bytes = Arc::new(Mutex::new(Vec::with_capacity(4096)));
+    let shared = Arc::clone(&bytes);
+    let handle = std::thread::spawn(move || {
         let mut utf8_pending = Vec::with_capacity(4);
         let mut emitted_bytes = 0usize;
         let mut emitted_omission_notice = false;
@@ -819,6 +852,7 @@ fn read_stream<R: Read + Send + 'static>(
                 Err(error) => return Err(error),
                 Ok(count) => {
                     if capture_output {
+                        let mut captured = shared.lock().unwrap_or_else(|error| error.into_inner());
                         crate::process_capture::append_tail(
                             &mut captured,
                             &buffer[..count],
@@ -838,18 +872,27 @@ fn read_stream<R: Read + Send + 'static>(
                 }
             }
         }
-        Ok(captured)
-    })
+        Ok(())
+    });
+    StreamCapture { bytes, handle }
 }
 
-fn join_reader(
-    reader: std::thread::JoinHandle<std::io::Result<Vec<u8>>>,
-    stream: &'static str,
-) -> Result<Vec<u8>, OperationError> {
-    reader
-        .join()
-        .map_err(|_| OperationError::ReaderPanicked(stream))?
-        .map_err(|source| OperationError::OutputRead { stream, source })
+/// Join a finished reader (surfacing read errors/panics), or detach a stuck
+/// one and return the bytes captured so far. A detached thread holds only its
+/// bounded tail and exits when the leaked pipe finally closes.
+fn collect_reader(capture: StreamCapture, stream: &'static str) -> Result<Vec<u8>, OperationError> {
+    if capture.handle.is_finished() {
+        capture
+            .handle
+            .join()
+            .map_err(|_| OperationError::ReaderPanicked(stream))?
+            .map_err(|source| OperationError::OutputRead { stream, source })?;
+    }
+    let mut bytes = capture
+        .bytes
+        .lock()
+        .unwrap_or_else(|error| error.into_inner());
+    Ok(std::mem::take(&mut *bytes))
 }
 
 fn emit_output(
@@ -1041,6 +1084,42 @@ mod tests {
         assert!(!rapid_stream_failures_exhausted(4, Duration::from_secs(1)));
         assert!(rapid_stream_failures_exhausted(5, Duration::from_secs(1)));
         assert!(!rapid_stream_failures_exhausted(5, Duration::from_secs(31)));
+    }
+
+    #[test]
+    fn oversized_stage_input_is_rejected_before_any_spawn() {
+        let mut operation =
+            RegisteredOperation::new("stage-input-cap-test", "cap test", no_events()).unwrap();
+        let oversized = vec![b'x'; MAX_STAGE_INPUT_BYTES + 1];
+        let error = operation
+            .run_stage_with_input(
+                Path::new("droidsmith-nonexistent-tool"),
+                &[],
+                &oversized,
+                Duration::from_secs(1),
+                "oversized input",
+            )
+            .unwrap_err();
+        assert!(
+            matches!(&error, OperationError::Input(source)
+                if source.kind() == std::io::ErrorKind::InvalidInput),
+            "unexpected error: {error}"
+        );
+        assert!(error.to_string().contains("stdin pipe deadlock"));
+
+        // Input exactly at the cap passes the guard (and fails later only
+        // because the program does not exist).
+        let at_cap = vec![b'x'; MAX_STAGE_INPUT_BYTES];
+        let error = operation
+            .run_stage_with_input(
+                Path::new("droidsmith-nonexistent-tool"),
+                &[],
+                &at_cap,
+                Duration::from_secs(1),
+                "at-cap input",
+            )
+            .unwrap_err();
+        assert!(matches!(error, OperationError::Spawn { .. }));
     }
 
     #[test]

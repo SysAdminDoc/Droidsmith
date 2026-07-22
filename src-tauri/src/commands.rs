@@ -3716,7 +3716,7 @@ pub async fn scrcpy_capabilities(
 /// and track it so the renderer can poll or stop the session.
 #[tauri::command]
 #[specta::specta]
-pub fn launch_scrcpy(
+pub async fn launch_scrcpy(
     request: crate::scrcpy::LaunchScrcpyRequest,
     grants: tauri::State<'_, PathGrantStore>,
     path_grant: Option<String>,
@@ -3728,29 +3728,40 @@ pub fn launch_scrcpy(
             message: "scrcpy target does not match the requested serial".to_string(),
         });
     }
-    let (transport, _) = privileged_transport(&request.target)?;
-    let duplicate_count = transport
-        .list_devices()?
-        .into_iter()
-        .filter(|device| device.serial == request.serial)
-        .count();
-    if duplicate_count != 1 {
-        return Err(CommandError {
-            code: "ambiguous_serial",
-            message: "scrcpy cannot safely select a duplicate device serial".to_string(),
-        });
-    }
-    let scrcpy_path = which::which("scrcpy").map_err(|_| CommandError {
-        code: "scrcpy_not_found",
-        message: "scrcpy binary not found on PATH".to_string(),
-    })?;
-    let capabilities =
-        crate::scrcpy::capabilities(&scrcpy_path, &request.target).map_err(|message| {
-            CommandError {
-                code: "scrcpy_capability_probe_failed",
-                message,
-            }
+    // The adb list_devices round-trip and the capability probe (up to ~23 s on
+    // a cache miss) must not run on the IPC dispatch thread; mirror the
+    // sibling scrcpy_capabilities command.
+    let (scrcpy_path, capabilities, request) = spawn_blocking_operation(move || {
+        let (transport, _) = privileged_transport(&request.target)?;
+        let duplicate_count = transport
+            .list_devices()?
+            .into_iter()
+            .filter(|device| device.serial == request.serial)
+            .count();
+        if duplicate_count != 1 {
+            return Err(CommandError {
+                code: "ambiguous_serial",
+                message: "scrcpy cannot safely select a duplicate device serial".to_string(),
+            });
+        }
+        let scrcpy_path = which::which("scrcpy").map_err(|_| CommandError {
+            code: "scrcpy_not_found",
+            message: "scrcpy binary not found on PATH".to_string(),
         })?;
+        let capabilities =
+            crate::scrcpy::capabilities(&scrcpy_path, &request.target).map_err(|message| {
+                CommandError {
+                    code: "scrcpy_capability_probe_failed",
+                    message,
+                }
+            })?;
+        Ok((scrcpy_path, capabilities, request))
+    })
+    .await?;
+    // Grant consumption stays on the command task (managed State cannot move
+    // into the 'static blocking closure) and still happens only after a
+    // successful probe, so a failed probe does not burn the one-shot record
+    // grant. The remaining launch is a fast local process spawn.
     let record_path = path_grant
         .as_deref()
         .map(|grant| grants.consume(grant, HostPathPurpose::ScrcpyRecordSave))
@@ -3824,32 +3835,37 @@ pub fn locate_gnirehtet() -> Option<String> {
 /// poll or stop the session. Stopping restores the device's default network.
 #[tauri::command]
 #[specta::specta]
-pub fn start_gnirehtet(
+pub async fn start_gnirehtet(
     target: adb::DeviceTarget,
 ) -> Result<crate::gnirehtet::GnirehtetSession, CommandError> {
     validate_serial_arg(&target.serial)?;
-    let (transport, _) = privileged_transport(&target)?;
-    let duplicate_count = transport
-        .list_devices()?
-        .into_iter()
-        .filter(|device| device.serial == target.serial)
-        .count();
-    if duplicate_count != 1 {
-        return Err(CommandError {
-            code: "ambiguous_serial",
-            message: "gnirehtet cannot safely select a duplicate device serial".to_string(),
-        });
-    }
-    let gnirehtet_path = which::which("gnirehtet").map_err(|_| CommandError {
-        code: "gnirehtet_not_found",
-        message: "gnirehtet binary not found on PATH".to_string(),
-    })?;
-    crate::gnirehtet::start(&gnirehtet_path, target.serial, iso_now()).map_err(|message| {
-        CommandError {
-            code: "gnirehtet_spawn_failed",
-            message,
+    // The adb list_devices round-trip must not run on the IPC dispatch
+    // thread; mirror the sibling scrcpy_capabilities command.
+    spawn_blocking_operation(move || {
+        let (transport, _) = privileged_transport(&target)?;
+        let duplicate_count = transport
+            .list_devices()?
+            .into_iter()
+            .filter(|device| device.serial == target.serial)
+            .count();
+        if duplicate_count != 1 {
+            return Err(CommandError {
+                code: "ambiguous_serial",
+                message: "gnirehtet cannot safely select a duplicate device serial".to_string(),
+            });
         }
+        let gnirehtet_path = which::which("gnirehtet").map_err(|_| CommandError {
+            code: "gnirehtet_not_found",
+            message: "gnirehtet binary not found on PATH".to_string(),
+        })?;
+        crate::gnirehtet::start(&gnirehtet_path, target.serial, iso_now()).map_err(|message| {
+            CommandError {
+                code: "gnirehtet_spawn_failed",
+                message,
+            }
+        })
     })
+    .await
 }
 
 /// Return the supervised gnirehtet session already running for this device, if

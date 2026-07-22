@@ -547,6 +547,12 @@ pub fn valid_pack_id(value: &str) -> bool {
         })
 }
 
+/// Recursion ceiling for [`expand_dependencies`]. An imported pack is
+/// attacker-supplied data (512 KB of YAML fits a chain thousands of links
+/// deep); without a cap a crafted `depends_on` chain overflows the stack and
+/// aborts the process. No legitimate pack nests anywhere near this deep.
+const MAX_DEPENDENCY_DEPTH: usize = 64;
+
 /// Compute the recursive `depends_on` closure in pack order. Cycles are
 /// rejected by lint and again here so renderer input can never create a loop.
 pub fn expand_dependencies(
@@ -563,10 +569,16 @@ pub fn expand_dependencies(
 
     fn visit(
         id: &str,
+        depth: usize,
         entries: &HashMap<&str, &PackEntry>,
         expanded: &mut HashSet<String>,
         visiting: &mut HashSet<String>,
     ) -> Result<(), String> {
+        if depth >= MAX_DEPENDENCY_DEPTH {
+            return Err(format!(
+                "dependency chain at package {id:?} exceeds the {MAX_DEPENDENCY_DEPTH}-level depth cap"
+            ));
+        }
         let entry = entries
             .get(id)
             .ok_or_else(|| format!("selected package {id:?} is not in this pack"))?;
@@ -577,7 +589,7 @@ pub fn expand_dependencies(
             return Err(format!("dependency cycle includes package {id:?}"));
         }
         for dependency in &entry.depends_on {
-            visit(dependency, entries, expanded, visiting)?;
+            visit(dependency, depth + 1, entries, expanded, visiting)?;
         }
         visiting.remove(id);
         expanded.insert(id.to_string());
@@ -585,7 +597,7 @@ pub fn expand_dependencies(
     }
 
     for id in selected {
-        visit(&id, &entries, &mut expanded, &mut visiting)?;
+        visit(&id, 0, &entries, &mut expanded, &mut visiting)?;
     }
     Ok(expanded)
 }
@@ -933,6 +945,31 @@ packages:
         assert!(lint(&pack)
             .iter()
             .any(|issue| issue.contains("dependency cycle")));
+    }
+
+    #[test]
+    fn deep_dependency_chains_hit_the_depth_cap_instead_of_the_stack() {
+        // A crafted imported pack can nest `depends_on` links thousands deep;
+        // unbounded recursion would abort the process via stack overflow.
+        let mut pack: Pack = serde_yaml_ng::from_str(GOOD).unwrap();
+        let template = pack.packages[0].clone();
+        pack.packages = (0..(MAX_DEPENDENCY_DEPTH * 4))
+            .map(|index| {
+                let mut entry = template.clone();
+                entry.id = format!("com.chain.p{index}");
+                entry.depends_on = vec![format!("com.chain.p{}", index + 1)];
+                entry
+            })
+            .collect();
+        pack.packages.last_mut().unwrap().depends_on.clear();
+
+        let error = expand_dependencies(&pack, vec!["com.chain.p0".to_string()]).unwrap_err();
+        assert!(error.contains("depth cap"), "unexpected error: {error}");
+
+        // A chain safely below the cap still expands fully.
+        let selected = vec![format!("com.chain.p{}", pack.packages.len() - 8)];
+        let expanded = expand_dependencies(&pack, selected).unwrap();
+        assert_eq!(expanded.len(), 8);
     }
 
     #[test]
