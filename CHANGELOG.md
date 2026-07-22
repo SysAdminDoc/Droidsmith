@@ -14,6 +14,8 @@ completion.
 Working batches live here. Sections collapse into a versioned release on
 each milestone tag.
 
+## [0.9.9] - 2026-07-22
+
 ### Changed
 
 - Reworked the application shell and all eleven primary workspaces around a
