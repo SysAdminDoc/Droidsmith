@@ -318,6 +318,12 @@
     "reviewMutationBody": "Este comando puede cambiar el estado del dispositivo. Verifica el argv exacto y el destino antes de ejecutarlo; la intención, el resultado y la salida redactada se escribirán en el diario del dispositivo.",
     "run": "Ejecutar",
     "runReviewedMutation": "Ejecutar y registrar",
+    "earlierOutputOmitted": "[Se omitió la salida anterior]",
+    "parseErrors": {
+      "unterminatedQuote": "Cierra las comillas abiertas antes de ejecutar este comando.",
+      "trailingEscape": "El comando no puede terminar con una sola barra invertida.",
+      "emptyArgument": "No se admiten argumentos de comando vacíos."
+    },
     "running": "Ejecutando...",
     "runningFor": "Ejecutando por {{seconds}}s…",
     "starting": "Iniciando comando en segundo plano…",

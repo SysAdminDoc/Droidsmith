@@ -48,6 +48,12 @@ each milestone tag.
   and official signature verification. It also keeps only the forty largest
   entry rows during scanning, bounds control-laden display values, and reports
   Android `versionCodeMajor`-based long version codes correctly.
+- Console commands now preserve quoted and escaped argument boundaries, report
+  malformed input in every shipped language, cap retained scrollback, follow
+  streaming output only while the user remains near the bottom, and discard
+  mutation results from a superseded device target. Command Palette empty
+  results retain correct combobox state, and Tuning/APK Analyzer now have
+  visible navigation icons.
 
 ## [0.9.7] - 2026-07-21
 

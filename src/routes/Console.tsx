@@ -21,6 +21,11 @@ import {
   useAuthorizedDevices,
   useTransportAuthorization,
 } from "../lib/useAuthorizedDevices";
+import {
+  appendConsoleHistory,
+  parseConsoleCommand,
+  type ConsoleHistoryEntry,
+} from "./consoleCommand";
 
 import {
   Badge,
@@ -32,18 +37,11 @@ import {
   TransportTrustNotice,
 } from "./common";
 
-type HistoryEntry = {
-  command: string;
-  output: string;
-  error: boolean;
-  timestamp: number;
-  id: number;
-};
-
 type PendingShellAction = {
   command: string;
   plan: PlannedAction;
   dangerous: boolean;
+  generation: number;
 };
 
 let nextEntryId = 1;
@@ -63,7 +61,7 @@ export default function ConsoleRoute() {
   const [running, setRunning] = useState(false);
   const [operationStatus, setOperationStatus] = useState<string | null>(null);
   const [liveOutput, setLiveOutput] = useState("");
-  const [history, setHistory] = useState<HistoryEntry[]>([]);
+  const [history, setHistory] = useState<ConsoleHistoryEntry[]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
   const [pendingAction, setPendingAction] = useState<PendingShellAction | null>(
     null,
@@ -72,6 +70,7 @@ export default function ConsoleRoute() {
   const inputRef = useRef<HTMLInputElement>(null);
   const activeOperationRef = useRef<string | null>(null);
   const commandGenerationRef = useRef(0);
+  const stickToOutputBottomRef = useRef(true);
   const reviewTrapRef = useFocusTrap<HTMLDivElement>(pendingAction !== null);
 
   useEffect(() => {
@@ -109,14 +108,32 @@ export default function ConsoleRoute() {
   }, []);
 
   useEffect(() => {
-    if (outputRef.current) {
+    if (outputRef.current && stickToOutputBottomRef.current) {
       outputRef.current.scrollTop = outputRef.current.scrollHeight;
     }
-  }, [history]);
+  }, [history, liveOutput, operationStatus]);
 
   const runCommand = useCallback(async () => {
     const trimmed = command.trim();
     if (!trimmed || !authorizedTarget || running) return;
+
+    const parsed = parseConsoleCommand(trimmed);
+    if (parsed.error) {
+      setHistory((previous) =>
+        appendConsoleHistory(
+          previous,
+          {
+            command: trimmed,
+            output: t(`console.parseErrors.${parsed.error}`),
+            error: true,
+            timestamp: Date.now(),
+            id: nextEntryId++,
+          },
+          t("console.earlierOutputOmitted"),
+        ),
+      );
+      return;
+    }
 
     setRunning(true);
     setOperationStatus(null);
@@ -124,11 +141,14 @@ export default function ConsoleRoute() {
     setHistoryIndex(-1);
     const generation = commandGenerationRef.current + 1;
     commandGenerationRef.current = generation;
-
-    const argv = trimmed.split(/\s+/);
+    stickToOutputBottomRef.current = true;
 
     try {
-      const assessment = await callPlanShellAction(authorizedTarget, argv);
+      const assessment = await callPlanShellAction(
+        authorizedTarget,
+        parsed.argv,
+      );
+      if (commandGenerationRef.current !== generation) return;
       if (assessment.mutating) {
         if (!assessment.plan) {
           throw new Error("Audited shell planner returned no mutation plan");
@@ -137,6 +157,7 @@ export default function ConsoleRoute() {
           command: trimmed,
           plan: assessment.plan,
           dangerous: assessment.dangerous,
+          generation,
         });
         setCommand("");
         return;
@@ -144,7 +165,7 @@ export default function ConsoleRoute() {
       const operationId = newOperationId("console");
       activeOperationRef.current = operationId;
       setOperationStatus(t("console.starting"));
-      const output = await callShellRun(authorizedTarget, argv, {
+      const output = await callShellRun(authorizedTarget, parsed.argv, {
         operationId,
         onEvent: (event: OperationEvent) => {
           if (
@@ -170,28 +191,34 @@ export default function ConsoleRoute() {
       });
       if (commandGenerationRef.current !== generation) return;
       setCommand("");
-      setHistory((prev) => [
-        ...prev,
-        {
-          command: trimmed,
-          output,
-          error: false,
-          timestamp: Date.now(),
-          id: nextEntryId++,
-        },
-      ]);
+      setHistory((previous) =>
+        appendConsoleHistory(
+          previous,
+          {
+            command: trimmed,
+            output,
+            error: false,
+            timestamp: Date.now(),
+            id: nextEntryId++,
+          },
+          t("console.earlierOutputOmitted"),
+        ),
+      );
     } catch (e) {
       if (commandGenerationRef.current !== generation) return;
-      setHistory((prev) => [
-        ...prev,
-        {
-          command: trimmed,
-          output: errorMessage(e),
-          error: true,
-          timestamp: Date.now(),
-          id: nextEntryId++,
-        },
-      ]);
+      setHistory((previous) =>
+        appendConsoleHistory(
+          previous,
+          {
+            command: trimmed,
+            output: errorMessage(e),
+            error: true,
+            timestamp: Date.now(),
+            id: nextEntryId++,
+          },
+          t("console.earlierOutputOmitted"),
+        ),
+      );
     } finally {
       if (commandGenerationRef.current === generation) {
         activeOperationRef.current = null;
@@ -213,36 +240,53 @@ export default function ConsoleRoute() {
   const confirmPendingAction = useCallback(async () => {
     if (!pendingAction || running) return;
     const pending = pendingAction;
+    if (pending.generation !== commandGenerationRef.current) {
+      setPendingAction(null);
+      return;
+    }
+    const generation = commandGenerationRef.current + 1;
+    commandGenerationRef.current = generation;
     setPendingAction(null);
     setRunning(true);
+    stickToOutputBottomRef.current = true;
     try {
       const result = await callApplyAction(pending.plan);
-      setHistory((previous) => [
-        ...previous,
-        {
-          command: pending.command,
-          output: result.stdout,
-          error: false,
-          timestamp: Date.now(),
-          id: nextEntryId++,
-        },
-      ]);
+      if (commandGenerationRef.current !== generation) return;
+      setHistory((previous) =>
+        appendConsoleHistory(
+          previous,
+          {
+            command: pending.command,
+            output: result.stdout,
+            error: false,
+            timestamp: Date.now(),
+            id: nextEntryId++,
+          },
+          t("console.earlierOutputOmitted"),
+        ),
+      );
     } catch (error) {
-      setHistory((previous) => [
-        ...previous,
-        {
-          command: pending.command,
-          output: errorMessage(error),
-          error: true,
-          timestamp: Date.now(),
-          id: nextEntryId++,
-        },
-      ]);
+      if (commandGenerationRef.current !== generation) return;
+      setHistory((previous) =>
+        appendConsoleHistory(
+          previous,
+          {
+            command: pending.command,
+            output: errorMessage(error),
+            error: true,
+            timestamp: Date.now(),
+            id: nextEntryId++,
+          },
+          t("console.earlierOutputOmitted"),
+        ),
+      );
     } finally {
-      setRunning(false);
-      inputRef.current?.focus();
+      if (commandGenerationRef.current === generation) {
+        setRunning(false);
+        inputRef.current?.focus();
+      }
     }
-  }, [pendingAction, running]);
+  }, [pendingAction, running, t]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -430,6 +474,14 @@ export default function ConsoleRoute() {
           <Card className="overflow-hidden p-0">
             <div
               ref={outputRef}
+              onScroll={() => {
+                const output = outputRef.current;
+                if (!output) return;
+                stickToOutputBottomRef.current =
+                  output.scrollHeight - output.scrollTop - output.clientHeight <
+                  32;
+              }}
+              aria-busy={running}
               className="h-[28rem] overflow-y-auto bg-[#0c0d12] p-4 font-mono text-xs leading-6"
             >
               {history.length === 0 && (
@@ -439,7 +491,9 @@ export default function ConsoleRoute() {
                 <div key={entry.id} className="mb-3">
                   <div className="flex items-center gap-2">
                     <span className="text-circuit-300">$</span>
-                    <span className="text-anvil-100">{entry.command}</span>
+                    <span className="break-all text-anvil-100">
+                      {entry.command}
+                    </span>
                   </div>
                   <pre
                     className={[
@@ -475,6 +529,9 @@ export default function ConsoleRoute() {
                   )}
                 </div>
               )}
+              <span className="sr-only" role="status" aria-live="polite">
+                {operationStatus ?? (running ? t("console.running") : "")}
+              </span>
             </div>
             <div className="flex items-center gap-2 border-t border-white/10 bg-white/[0.02] px-4 py-3">
               <span className="font-mono text-sm text-circuit-300">$</span>

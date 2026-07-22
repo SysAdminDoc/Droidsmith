@@ -1220,7 +1220,13 @@
     "dangerousMutation": "Gefährliche Mutation",
     "reviewMutation": "Shell-Mutation prüfen",
     "reviewMutationBody": "Dieser Befehl kann den Gerätezustand ändern. Überprüfen Sie die genauen argv und das Ziel vor der Ausführung; Absicht, Ergebnis und geschwärzte Ausgabe werden in das Gerätejournal geschrieben.",
-    "runReviewedMutation": "Ausführen und protokollieren"
+    "runReviewedMutation": "Ausführen und protokollieren",
+    "earlierOutputOmitted": "[Frühere Ausgabe ausgelassen]",
+    "parseErrors": {
+      "unterminatedQuote": "Schließen Sie das offene Anführungszeichen, bevor Sie den Befehl ausführen.",
+      "trailingEscape": "Der Befehl darf nicht mit einem einzelnen umgekehrten Schrägstrich enden.",
+      "emptyArgument": "Leere Befehlsargumente werden nicht unterstützt."
+    }
   },
   "logcat": {
     "title": "Logcat",

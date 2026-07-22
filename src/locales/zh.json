@@ -1220,7 +1220,13 @@
     "dangerousMutation": "危险变更",
     "reviewMutation": "审查 shell 变更",
     "reviewMutationBody": "此命令可能更改设备状态。运行前请验证确切的 argv 和目标；意图、结果和脱敏输出将写入设备日志。",
-    "runReviewedMutation": "运行并记录"
+    "runReviewedMutation": "运行并记录",
+    "earlierOutputOmitted": "[已省略较早的输出]",
+    "parseErrors": {
+      "unterminatedQuote": "请先闭合引号，再运行此命令。",
+      "trailingEscape": "命令不能以单个反斜杠结尾。",
+      "emptyArgument": "不支持空命令参数。"
+    }
   },
   "logcat": {
     "title": "Logcat",

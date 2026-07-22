@@ -959,6 +959,22 @@ function NavIcon({ id, active }: { id: NavItem["id"]; active: boolean }) {
           <path d="m13 3.5-7 10h5l-1 7 7-10h-5l1-7Z" />
         </>
       )}
+      {id === "tuning" && (
+        <>
+          <path d="M4 7h5M13 7h7M4 12h9M17 12h3M4 17h2M10 17h10" />
+          <circle cx="11" cy="7" r="2" />
+          <circle cx="15" cy="12" r="2" />
+          <circle cx="8" cy="17" r="2" />
+        </>
+      )}
+      {id === "apk-analyzer" && (
+        <>
+          <path d="M6 3.5h8l4 4v5.25M14 3.5v4h4" />
+          <path d="M10.5 20.5H6v-17M8.5 11h5M8.5 14h3" />
+          <circle cx="16" cy="17" r="3" />
+          <path d="m18.25 19.25 2.25 2.25" />
+        </>
+      )}
     </svg>
   );
 }

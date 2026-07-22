@@ -738,6 +738,22 @@ async function runDesktopFlow(browser) {
   if (!firstActiveOption || firstActiveOption === secondActiveOption) {
     throw new Error("Command palette did not expose its active option");
   }
+  await paletteInput.fill("no-such-droidsmith-command");
+  await page.getByText("No matching workspace", { exact: true }).waitFor();
+  if ((await paletteInput.getAttribute("aria-expanded")) !== "true") {
+    throw new Error(
+      "Command palette collapsed its still-visible empty listbox",
+    );
+  }
+  if ((await paletteInput.getAttribute("aria-activedescendant")) !== null) {
+    throw new Error(
+      "Command palette exposed an active option for empty results",
+    );
+  }
+  await paletteInput.press("ArrowDown");
+  if ((await paletteInput.getAttribute("aria-activedescendant")) !== null) {
+    throw new Error("Command palette created an invalid empty-result index");
+  }
   await paletteInput.fill("debloat");
   await page.waitForFunction(
     (selector) =>

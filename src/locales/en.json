@@ -1220,7 +1220,13 @@
     "dangerousMutation": "Dangerous mutation",
     "reviewMutation": "Review shell mutation",
     "reviewMutationBody": "This command can change device state. Verify the exact argv and target before running it; the intent, outcome, and redacted output will be written to the device journal.",
-    "runReviewedMutation": "Run and journal"
+    "runReviewedMutation": "Run and journal",
+    "earlierOutputOmitted": "[Earlier output omitted]",
+    "parseErrors": {
+      "unterminatedQuote": "Close the open quotation mark before running this command.",
+      "trailingEscape": "The command cannot end with a single backslash.",
+      "emptyArgument": "Empty command arguments are not supported."
+    }
   },
   "logcat": {
     "title": "Logcat",

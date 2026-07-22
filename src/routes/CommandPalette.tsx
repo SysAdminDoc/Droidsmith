@@ -45,11 +45,11 @@ export function CommandPalette({
   }, [filtered.length]);
 
   useEffect(() => {
-    if (open) {
-      setQuery("");
-      setActiveIndex(0);
-      setTimeout(() => inputRef.current?.focus(), 0);
-    }
+    if (!open) return;
+    setQuery("");
+    setActiveIndex(0);
+    const focusTimer = window.setTimeout(() => inputRef.current?.focus(), 0);
+    return () => window.clearTimeout(focusTimer);
   }, [open]);
 
   const handleKeyDown = useCallback(
@@ -58,10 +58,14 @@ export function CommandPalette({
         onClose();
       } else if (e.key === "ArrowDown") {
         e.preventDefault();
-        setActiveIndex((prev) => Math.min(prev + 1, filtered.length - 1));
+        if (filtered.length > 0) {
+          setActiveIndex((prev) => Math.min(prev + 1, filtered.length - 1));
+        }
       } else if (e.key === "ArrowUp") {
         e.preventDefault();
-        setActiveIndex((prev) => Math.max(prev - 1, 0));
+        if (filtered.length > 0) {
+          setActiveIndex((prev) => Math.max(prev - 1, 0));
+        }
       } else if (e.key === "Enter" && filtered[activeIndex]) {
         e.preventDefault();
         onClose();
@@ -129,6 +133,7 @@ export function CommandPalette({
             strokeWidth="2"
             strokeLinecap="round"
             strokeLinejoin="round"
+            aria-hidden="true"
           >
             <circle cx="11" cy="11" r="8" />
             <path d="m21 21-4.3-4.3" />
@@ -142,7 +147,7 @@ export function CommandPalette({
             aria-label={t("palette.searchLabel")}
             role="combobox"
             aria-autocomplete="list"
-            aria-expanded={filtered.length > 0}
+            aria-expanded={true}
             aria-controls={listboxId}
             aria-activedescendant={
               filtered[activeIndex]
