@@ -26,6 +26,11 @@ each milestone tag.
 - File Manager mutations now preserve legal leading and trailing spaces in
   Android path components instead of silently redirecting the operation to a
   different sibling path.
+- Action-journal replay now rebuilds undo links solely from durable inverse
+  records, rejects exhausted IDs, skips oversized corrupt rows with bounded
+  memory, repairs partial tails by scanning backward, and migrates legacy
+  filenames to bounded collision-resistant per-device names that work on
+  Windows reserved-name edge cases.
 
 ## [0.9.7] - 2026-07-21
 

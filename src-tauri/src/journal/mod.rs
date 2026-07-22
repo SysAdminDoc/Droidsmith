@@ -27,14 +27,18 @@
 
 use std::collections::HashMap;
 use std::fs::{self, File, OpenOptions};
-use std::io::{BufRead, BufReader, Write};
+use std::io::{BufRead, BufReader, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 
 use crate::adb::actions::{ActionRequest, AppliedAction, PlannedAction};
+
+const MAX_JOURNAL_LINE_BYTES: usize = 1024 * 1024;
+const TAIL_SCAN_CHUNK_BYTES: usize = 8 * 1024;
 
 /// Per-device lock so the open → read → record → write cycle is atomic.
 /// Two concurrent `apply_action` calls on the same device would otherwise
@@ -174,17 +178,29 @@ impl Journal {
     pub fn open(dir: &Path, serial: &str) -> std::io::Result<Self> {
         fs::create_dir_all(dir)?;
         let path = dir.join(format!("{}.jsonl", safe_serial(serial)));
+        migrate_legacy_path(dir, serial, &path)?;
         let mut entries: Vec<JournalEntry> = Vec::new();
         let mut max_id = 0u64;
         if path.exists() {
             repair_partial_tail(&path)?;
             let f = File::open(&path)?;
-            for line in BufReader::new(f).lines() {
-                let line = line?;
-                if line.trim().is_empty() {
+            let mut reader = BufReader::new(f);
+            let mut line = Vec::new();
+            loop {
+                match read_bounded_line(&mut reader, &mut line)? {
+                    LineRead::Eof => break,
+                    LineRead::Oversized => {
+                        eprintln!(
+                            "[journal] dropping line larger than {MAX_JOURNAL_LINE_BYTES} bytes in {path:?}"
+                        );
+                        continue;
+                    }
+                    LineRead::Complete => {}
+                }
+                if line.iter().all(u8::is_ascii_whitespace) {
                     continue;
                 }
-                match serde_json::from_str::<JournalEntry>(&line) {
+                match serde_json::from_slice::<JournalEntry>(&line) {
                     Ok(e) => {
                         max_id = max_id.max(e.id);
                         if let Some(existing) = entries.iter_mut().find(|entry| entry.id == e.id) {
@@ -195,7 +211,7 @@ impl Journal {
                     }
                     Err(err) => {
                         eprintln!(
-                            "[journal] dropping corrupt line in {path:?}: {err} (line preserved at end)"
+                            "[journal] dropping corrupt line while replaying {path:?}: {err}"
                         );
                         // Don't blow up — corrupt lines are surfaced as
                         // dropped but we keep parsing the rest.
@@ -203,7 +219,12 @@ impl Journal {
                 }
             }
         }
-        let next_id = max_id + 1;
+        let next_id = max_id.checked_add(1).ok_or_else(|| {
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "journal id space is exhausted",
+            )
+        })?;
         let mut journal = Self {
             path,
             entries,
@@ -408,12 +429,11 @@ impl Journal {
     }
 
     fn rebuild_undo_links(&mut self) {
-        let known: std::collections::HashSet<u64> =
-            self.entries.iter().map(|entry| entry.id).collect();
+        // `undone_by` is derived from durable inverse rows. Never trust a stale
+        // or manually edited value from an original row: clear every cached
+        // link first, then reconstruct only links backed by a live undo entry.
         for entry in &mut self.entries {
-            if entry.undone_by.is_some_and(|id| known.contains(&id)) {
-                entry.undone_by = None;
-            }
+            entry.undone_by = None;
         }
         let links: Vec<(u64, u64)> = self
             .entries
@@ -515,17 +535,87 @@ fn same_plan(left: &PlannedAction, right: &PlannedAction) -> bool {
 /// A truncate/sync failure aborts journal open, so no mutation can proceed on
 /// top of an unrepaired log.
 fn repair_partial_tail(path: &Path) -> std::io::Result<()> {
-    let bytes = fs::read(path)?;
-    if bytes.is_empty() || bytes.last() == Some(&b'\n') {
+    let mut file = OpenOptions::new().read(true).write(true).open(path)?;
+    let length = file.metadata()?.len();
+    if length == 0 {
         return Ok(());
     }
-    let keep = bytes
-        .iter()
-        .rposition(|byte| *byte == b'\n')
-        .map_or(0, |index| index + 1);
-    let file = OpenOptions::new().write(true).open(path)?;
-    file.set_len(keep as u64)?;
+    file.seek(SeekFrom::End(-1))?;
+    let mut final_byte = [0u8; 1];
+    file.read_exact(&mut final_byte)?;
+    if final_byte[0] == b'\n' {
+        return Ok(());
+    }
+
+    let mut end = length;
+    let mut buffer = [0u8; TAIL_SCAN_CHUNK_BYTES];
+    let keep = loop {
+        let start = end.saturating_sub(TAIL_SCAN_CHUNK_BYTES as u64);
+        let chunk_length = (end - start) as usize;
+        file.seek(SeekFrom::Start(start))?;
+        file.read_exact(&mut buffer[..chunk_length])?;
+        if let Some(index) = buffer[..chunk_length]
+            .iter()
+            .rposition(|byte| *byte == b'\n')
+        {
+            break start + index as u64 + 1;
+        }
+        if start == 0 {
+            break 0;
+        }
+        end = start;
+    };
+    file.set_len(keep)?;
     file.sync_data()
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum LineRead {
+    Eof,
+    Complete,
+    Oversized,
+}
+
+fn read_bounded_line(
+    reader: &mut impl BufRead,
+    destination: &mut Vec<u8>,
+) -> std::io::Result<LineRead> {
+    destination.clear();
+    let mut oversized = false;
+    loop {
+        let available = reader.fill_buf()?;
+        if available.is_empty() {
+            return Ok(if oversized {
+                LineRead::Oversized
+            } else if destination.is_empty() {
+                LineRead::Eof
+            } else {
+                LineRead::Complete
+            });
+        }
+        let newline = available.iter().position(|byte| *byte == b'\n');
+        let consumed = newline.map_or(available.len(), |index| index + 1);
+        let content_length = newline.unwrap_or(consumed);
+        if !oversized {
+            if destination.len().saturating_add(content_length) > MAX_JOURNAL_LINE_BYTES {
+                destination.clear();
+                oversized = true;
+            } else {
+                destination.extend_from_slice(&available[..content_length]);
+            }
+        }
+        reader.consume(consumed);
+        if newline.is_some() {
+            if destination.last() == Some(&b'\r') {
+                destination.pop();
+            }
+            return Ok(if oversized {
+                LineRead::Oversized
+            } else {
+                LineRead::Complete
+            });
+        }
+    }
 }
 
 #[cfg(test)]
@@ -533,18 +623,34 @@ fn injected(point: &str) -> std::io::Error {
     std::io::Error::other(format!("injected journal {point} failure"))
 }
 
-/// Build a filename-safe variant of a device serial. Wireless serials
-/// look like `192.168.1.42:5555` which is invalid as a Windows filename
-/// (`:` is illegal). Escape problematic chars instead of replacing them
-/// so `a:b` and `a_b` never collide.
+/// Build a bounded filename-safe variant of a device serial. The readable
+/// prefix helps diagnostics, while the full SHA-256 suffix prevents distinct
+/// serials (including escaped wireless names and Windows device names) from
+/// sharing a journal file.
 fn safe_serial(serial: &str) -> String {
+    let mut prefix = String::with_capacity(serial.len().min(80));
+    for character in serial.chars().take(80) {
+        if character.is_ascii_alphanumeric() || matches!(character, '-' | '_' | '.') {
+            prefix.push(character);
+        } else {
+            prefix.push('-');
+        }
+    }
+    if prefix.is_empty() {
+        prefix.push_str("unknown");
+    }
+    let digest = Sha256::digest(serial.as_bytes());
+    format!("device-{prefix}--{digest:x}")
+}
+
+fn legacy_safe_serial(serial: &str) -> String {
     let mut out = String::with_capacity(serial.len());
-    for c in serial.chars() {
-        if c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '.' {
-            out.push(c);
+    for character in serial.chars() {
+        if character.is_ascii_alphanumeric() || matches!(character, '-' | '_' | '.') {
+            out.push(character);
         } else {
             out.push_str("_x");
-            out.push_str(&format!("{:X}", c as u32));
+            out.push_str(&format!("{:X}", character as u32));
             out.push('_');
         }
     }
@@ -553,6 +659,17 @@ fn safe_serial(serial: &str) -> String {
     } else {
         out
     }
+}
+
+fn migrate_legacy_path(dir: &Path, serial: &str, destination: &Path) -> std::io::Result<()> {
+    if destination.exists() {
+        return Ok(());
+    }
+    let legacy = dir.join(format!("{}.jsonl", legacy_safe_serial(serial)));
+    if legacy != destination && legacy.exists() {
+        fs::rename(legacy, destination)?;
+    }
+    Ok(())
 }
 
 /// Given an entry id and the journal it lives in, synthesise the
@@ -1008,11 +1125,31 @@ mod tests {
     }
 
     #[test]
-    fn safe_serial_handles_wireless_colons() {
-        assert_eq!(safe_serial("192.168.1.42:5555"), "192.168.1.42_x3A_5555");
-        assert_eq!(safe_serial("abc-123_def.0"), "abc-123_def.0");
-        assert_ne!(safe_serial("a:b"), safe_serial("a_b"));
-        assert_eq!(safe_serial(""), "unknown");
+    fn safe_serial_is_bounded_collision_resistant_and_windows_safe() {
+        let wireless = safe_serial("192.168.1.42:5555");
+        assert!(wireless.starts_with("device-192.168.1.42-5555--"));
+        assert_ne!(safe_serial("a:b"), safe_serial("a_x3A_b"));
+        assert_ne!(safe_serial("CON"), safe_serial("con"));
+        assert!(safe_serial(&"_".repeat(256)).len() < 180);
+        assert!(safe_serial("").starts_with("device-unknown--"));
+    }
+
+    #[test]
+    fn open_migrates_the_legacy_journal_filename() {
+        let dir = fresh_tmp_dir("legacy-filename");
+        fs::create_dir_all(&dir).unwrap();
+        let legacy = dir.join("192.168.1.42_x3A_5555.jsonl");
+        File::create(&legacy).unwrap().sync_data().unwrap();
+
+        let journal = Journal::open(&dir, "192.168.1.42:5555").unwrap();
+        assert!(!legacy.exists());
+        assert!(journal.path().exists());
+        assert!(journal
+            .path()
+            .file_name()
+            .unwrap()
+            .to_string_lossy()
+            .starts_with("device-192.168.1.42-5555--"));
     }
 
     #[test]
@@ -1053,6 +1190,96 @@ mod tests {
         // The corrupt line was dropped, the good one survived.
         assert_eq!(j.entries().len(), 1);
         assert_eq!(j.entries()[0].id, 1);
+    }
+
+    #[test]
+    fn oversized_line_does_not_allocate_unbounded_or_hide_later_records() {
+        let dir = fresh_tmp_dir("oversized-line");
+        fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("abc.jsonl");
+        let entry = JournalEntry {
+            id: 1,
+            applied: fake_applied("abc", "com.foo", ActionKind::Disable),
+            undone_by: None,
+            undoes: None,
+            outcome: JournalOutcome::Succeeded,
+            failure: None,
+        };
+        let mut file = File::create(path).unwrap();
+        file.write_all(&vec![b'x'; MAX_JOURNAL_LINE_BYTES + 1])
+            .unwrap();
+        writeln!(file).unwrap();
+        writeln!(file, "{}", serde_json::to_string(&entry).unwrap()).unwrap();
+        file.sync_data().unwrap();
+
+        let journal = Journal::open(&dir, "abc").unwrap();
+        assert_eq!(journal.entries().len(), 1);
+        assert_eq!(journal.entries()[0].id, 1);
+    }
+
+    #[test]
+    fn replay_discards_stale_undo_links_without_a_durable_inverse() {
+        let dir = fresh_tmp_dir("stale-undo-link");
+        fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("abc.jsonl");
+        let entry = JournalEntry {
+            id: 1,
+            applied: fake_applied("abc", "com.foo", ActionKind::Disable),
+            undone_by: Some(999),
+            undoes: None,
+            outcome: JournalOutcome::Succeeded,
+            failure: None,
+        };
+        let mut file = File::create(path).unwrap();
+        writeln!(file, "{}", serde_json::to_string(&entry).unwrap()).unwrap();
+        file.sync_data().unwrap();
+
+        let journal = Journal::open(&dir, "abc").unwrap();
+        assert_eq!(journal.entry(1).unwrap().undone_by, None);
+        assert!(undo_request_for(&journal, 1).is_some());
+    }
+
+    #[test]
+    fn replay_rejects_an_exhausted_id_space() {
+        let dir = fresh_tmp_dir("id-overflow");
+        fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("abc.jsonl");
+        let entry = JournalEntry {
+            id: u64::MAX,
+            applied: fake_applied("abc", "com.foo", ActionKind::Disable),
+            undone_by: None,
+            undoes: None,
+            outcome: JournalOutcome::Succeeded,
+            failure: None,
+        };
+        let mut file = File::create(path).unwrap();
+        writeln!(file, "{}", serde_json::to_string(&entry).unwrap()).unwrap();
+        file.sync_data().unwrap();
+
+        let error = match Journal::open(&dir, "abc") {
+            Ok(_) => panic!("an exhausted id space must prevent journal replay"),
+            Err(error) => error,
+        };
+        assert_eq!(error.kind(), std::io::ErrorKind::InvalidData);
+        assert!(error.to_string().contains("id space is exhausted"));
+    }
+
+    #[test]
+    fn partial_tail_repair_scans_backwards_without_loading_the_file() {
+        let dir = fresh_tmp_dir("large-partial-tail");
+        fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("large.jsonl");
+        let complete = vec![b'a'; TAIL_SCAN_CHUNK_BYTES * 3 + 17];
+        let mut file = File::create(&path).unwrap();
+        file.write_all(&complete).unwrap();
+        file.write_all(b"\npartial terminal row").unwrap();
+        file.sync_data().unwrap();
+        drop(file);
+
+        repair_partial_tail(&path).unwrap();
+        let repaired = fs::read(path).unwrap();
+        assert_eq!(repaired.len(), complete.len() + 1);
+        assert!(repaired.ends_with(b"\n"));
     }
 
     #[test]
