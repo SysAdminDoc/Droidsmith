@@ -94,6 +94,9 @@ pub struct ApkAnalysis {
     pub components: ComponentCounts,
     pub dex: DexSummary,
     pub signing: SigningInfo,
+    /// Optional cryptographic verification performed by the official Android
+    /// SDK `apksigner`. Static analysis above remains available without it.
+    pub signature_verification: crate::apk_signing::ApkSignatureVerification,
     /// Total number of ZIP entries in the archive.
     pub total_entries: usize,
     /// The largest entries by uncompressed size (bounded).
@@ -175,6 +178,7 @@ pub fn analyze(path: &Path) -> Result<ApkAnalysis, AnalysisError> {
         components: manifest.components,
         dex,
         signing,
+        signature_verification: crate::apk_signing::verify(path),
         total_entries,
         largest_entries,
     })

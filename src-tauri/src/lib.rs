@@ -4,6 +4,7 @@
 pub mod adb;
 mod apk_analysis;
 mod apk_metadata;
+mod apk_signing;
 mod backup;
 mod bugreport;
 mod captured_tail;

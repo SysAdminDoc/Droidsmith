@@ -828,7 +828,20 @@ async function runDesktopFlow(browser) {
   await page.getByRole("button", { name: "Choose an APK" }).click();
   await page.getByText("com.example.qa", { exact: true }).waitFor();
   await page.getByText("Multidex / 64K+", { exact: true }).waitFor();
-  await page.getByText("Signed (v2, v3)", { exact: true }).waitFor();
+  await page
+    .getByText("Signature artifacts (v2, v3)", { exact: true })
+    .waitFor();
+  await page
+    .getByText("Verified by apksigner", { exact: true })
+    .first()
+    .waitFor();
+  await page
+    .getByText("CN=Example QA Signer, O=Droidsmith QA", { exact: true })
+    .first()
+    .waitFor();
+  await page
+    .getByRole("heading", { name: "Verified proof of rotation", exact: true })
+    .waitFor();
   await page
     .getByText("android.permission.POST_NOTIFICATIONS", { exact: true })
     .waitFor();
@@ -837,6 +850,14 @@ async function runDesktopFlow(browser) {
     path: path.join(screenshotDir, "desktop-apk-analyzer.png"),
     fullPage: false,
   });
+  await page.evaluate(() => {
+    window.__DROIDSMITH_MOCK_APK_VERIFICATION__ = "not_verified";
+  });
+  await page.getByRole("button", { name: "Choose an APK" }).click();
+  await page
+    .getByText("Android SDK apksigner was not found.", { exact: true })
+    .waitFor();
+  await page.getByText("Not verified", { exact: true }).first().waitFor();
 
   await page.getByRole("button", { name: /Wireless/ }).click();
   await page.getByRole("heading", { name: "Wireless", exact: true }).waitFor();
@@ -3374,6 +3395,17 @@ async function installTauriMock(
           };
         }
         if (cmd === "analyze_apk") {
+          const signerCertificate = {
+            label: "V3.0 Signer",
+            sha256:
+              "e116fd40d2ae76931d17f3b0d5caa3e0952ff0138a687de0c44fc3aad2118793",
+            subject: "CN=Example QA Signer, O=Droidsmith QA",
+            issuer: "CN=Droidsmith QA Root, O=Droidsmith QA",
+            valid_from_unix: 1_735_689_600,
+            valid_until_unix: 2_051_222_400,
+          };
+          const notVerified =
+            window.__DROIDSMITH_MOCK_APK_VERIFICATION__ === "not_verified";
           return {
             file_name: "sample.apk",
             file_size: 4_215_872,
@@ -3402,6 +3434,71 @@ async function installTauriMock(
               exceeds_64k: true,
             },
             signing: { v1: false, v2: true, v3: true, v31: false },
+            signature_verification: notVerified
+              ? {
+                  status: "not_verified",
+                  unavailable_reason: "not_found",
+                  tool: null,
+                  verified_schemes: [],
+                  signer_count: 0,
+                  signers: [],
+                  source_stamp_verified: false,
+                  source_stamp: null,
+                  proof_of_rotation: null,
+                  warnings: [],
+                  errors: [],
+                }
+              : {
+                  status: "verified",
+                  unavailable_reason: null,
+                  tool: {
+                    version: "0.9",
+                    build_tools_version: "37.0.0",
+                    source: "android_studio",
+                  },
+                  verified_schemes: ["v2", "v3"],
+                  signer_count: 1,
+                  signers: [signerCertificate],
+                  source_stamp_verified: false,
+                  source_stamp: null,
+                  proof_of_rotation: {
+                    entries: [
+                      {
+                        position: 1,
+                        certificate: {
+                          ...signerCertificate,
+                          label: "Signer #1 in lineage",
+                          sha256:
+                            "1111111111111111111111111111111111111111111111111111111111111111",
+                          subject: "CN=Example QA Original Signer",
+                        },
+                        capabilities: {
+                          installed_data: true,
+                          shared_uid: true,
+                          permission: true,
+                          rollback: false,
+                          auth: true,
+                        },
+                      },
+                      {
+                        position: 2,
+                        certificate: {
+                          ...signerCertificate,
+                          label: "Signer #2 in lineage",
+                        },
+                        capabilities: {
+                          installed_data: true,
+                          shared_uid: false,
+                          permission: true,
+                          rollback: true,
+                          auth: true,
+                        },
+                      },
+                    ],
+                  },
+                  warnings: [],
+                  errors: [],
+                },
             total_entries: 512,
             largest_entries: [
               {

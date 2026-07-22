@@ -1,12 +1,14 @@
 import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import { formatNumber } from "../lib/i18n";
+import { formatDateTime, formatNumber } from "../lib/i18n";
 import {
   callAnalyzeApk,
   callSelectHostPath,
   errorMessage,
   type ApkAnalysis,
+  type ApkSignerCertificate,
+  type ApkSigningLineageEntry,
 } from "../lib/tauri";
 import {
   Badge,
@@ -50,7 +52,7 @@ export default function ApkAnalyzerRoute() {
     <>
       <PaneHeader
         title={t("apk.title")}
-        milestone="R-097"
+        milestone="R-097 · R-107"
         description={t("apk.description")}
         actions={
           <Button
@@ -85,7 +87,7 @@ export default function ApkAnalyzerRoute() {
 
 function AnalysisReport({ analysis }: { analysis: ApkAnalysis }) {
   const { t, i18n } = useTranslation();
-  const { components, dex, signing } = analysis;
+  const { components, dex, signing, signature_verification } = analysis;
   const language = i18n.resolvedLanguage ?? i18n.language;
   const schemes = [
     signing.v1 && "v1",
@@ -111,12 +113,25 @@ function AnalysisReport({ analysis }: { analysis: ApkAnalysis }) {
               <Badge tone="warning">{t("apk.multidex")}</Badge>
             )}
             {schemes.length === 0 ? (
-              <Badge tone="danger">{t("apk.unsigned")}</Badge>
+              <Badge tone="neutral">{t("apk.noSignatureArtifacts")}</Badge>
             ) : (
-              <Badge tone="success">
-                {t("apk.signed", { schemes: schemes.join(", ") })}
+              <Badge tone="neutral">
+                {t("apk.signatureArtifacts", {
+                  schemes: schemes.join(", "),
+                })}
               </Badge>
             )}
+            <Badge
+              tone={
+                signature_verification.status === "verified"
+                  ? "success"
+                  : signature_verification.status === "failed"
+                    ? "danger"
+                    : "warning"
+              }
+            >
+              {t(`apk.verificationBadges.${signature_verification.status}`)}
+            </Badge>
           </div>
         </div>
         <dl className="mt-4 grid grid-cols-2 gap-x-6 gap-y-2 text-sm sm:grid-cols-3">
@@ -146,6 +161,12 @@ function AnalysisReport({ analysis }: { analysis: ApkAnalysis }) {
           SHA-256: {analysis.sha256}
         </p>
       </Card>
+
+      <SignatureVerificationReport
+        verification={signature_verification}
+        staticSchemes={schemes}
+        language={language}
+      />
 
       <div className="grid gap-4 sm:grid-cols-2">
         <Card className="p-5">
@@ -253,6 +274,278 @@ function AnalysisReport({ analysis }: { analysis: ApkAnalysis }) {
   );
 }
 
+function SignatureVerificationReport({
+  verification,
+  staticSchemes,
+  language,
+}: {
+  verification: ApkAnalysis["signature_verification"];
+  staticSchemes: string[];
+  language: string;
+}) {
+  const { t } = useTranslation();
+  const toolLabel = verification.tool
+    ? t("apk.verification.toolSummary", {
+        version: verification.tool.version,
+        buildTools:
+          verification.tool.build_tools_version ?? t("apk.unknownValue"),
+        source: t(`apk.verification.sources.${verification.tool.source}`),
+      })
+    : null;
+
+  return (
+    <Card className="p-5">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h4 className="text-sm font-semibold text-anvil-50">
+            {t("apk.verification.title")}
+          </h4>
+          <p className="mt-1 max-w-3xl text-xs leading-5 text-anvil-400">
+            {t("apk.verification.body")}
+          </p>
+        </div>
+        <Badge
+          tone={
+            verification.status === "verified"
+              ? "success"
+              : verification.status === "failed"
+                ? "danger"
+                : "warning"
+          }
+        >
+          {t(`apk.verificationBadges.${verification.status}`)}
+        </Badge>
+      </div>
+
+      {verification.status === "not_verified" && (
+        <div className="mt-4 rounded-md border border-amber-300/20 bg-amber-400/[0.06] p-3">
+          <p className="text-xs font-medium text-amber-100">
+            {t(
+              `apk.verification.unavailable.${verification.unavailable_reason ?? "not_found"}`,
+            )}
+          </p>
+          <p className="mt-1 text-xs leading-5 text-amber-100/75">
+            {t("apk.verification.staticOnly", {
+              schemes:
+                staticSchemes.length > 0
+                  ? staticSchemes.join(", ")
+                  : t("apk.verification.noneDetected"),
+            })}
+          </p>
+          {toolLabel && (
+            <p className="mt-2 text-[11px] text-anvil-400">{toolLabel}</p>
+          )}
+        </div>
+      )}
+
+      {verification.status === "failed" && (
+        <div className="mt-4 rounded-md border border-red-300/20 bg-red-400/[0.06] p-3">
+          <p className="text-xs font-medium text-red-100">
+            {t("apk.verification.failedBody")}
+          </p>
+          {verification.errors.length > 0 && (
+            <ul className="mt-2 space-y-1 font-mono text-[11px] text-red-100/80">
+              {verification.errors.map((error, index) => (
+                <li key={`${index}-${error}`} className="break-all">
+                  {error}
+                </li>
+              ))}
+            </ul>
+          )}
+          {toolLabel && (
+            <p className="mt-2 text-[11px] text-anvil-400">{toolLabel}</p>
+          )}
+        </div>
+      )}
+
+      {verification.status === "verified" && (
+        <>
+          <dl className="mt-4 grid grid-cols-2 gap-x-6 gap-y-2 text-sm sm:grid-cols-3">
+            <Fact
+              label={t("apk.verification.schemes")}
+              value={verification.verified_schemes.join(", ")}
+            />
+            <Fact
+              label={t("apk.verification.signerCount")}
+              value={formatNumber(verification.signer_count, language)}
+            />
+            <Fact
+              label={t("apk.verification.sourceStamp")}
+              value={
+                verification.source_stamp_verified
+                  ? t("apk.verification.verified")
+                  : t("apk.verification.notPresent")
+              }
+            />
+          </dl>
+          {toolLabel && (
+            <p className="mt-3 text-[11px] text-anvil-400">{toolLabel}</p>
+          )}
+
+          <div className="mt-4 grid gap-3 lg:grid-cols-2">
+            {verification.signers.map((certificate) => (
+              <CertificateCard
+                key={`${certificate.label}-${certificate.sha256}`}
+                certificate={certificate}
+                language={language}
+              />
+            ))}
+          </div>
+
+          {verification.source_stamp && (
+            <div className="mt-4">
+              <h5 className="text-xs font-semibold text-anvil-200">
+                {t("apk.verification.sourceStampCertificate")}
+              </h5>
+              <div className="mt-2 max-w-2xl">
+                <CertificateCard
+                  certificate={verification.source_stamp}
+                  language={language}
+                />
+              </div>
+            </div>
+          )}
+
+          {verification.proof_of_rotation && (
+            <div className="mt-5 border-t border-white/10 pt-4">
+              <h5 className="text-xs font-semibold text-anvil-100">
+                {t("apk.verification.rotationTitle")}
+              </h5>
+              <p className="mt-1 text-xs leading-5 text-anvil-400">
+                {t("apk.verification.rotationBody", {
+                  count: verification.proof_of_rotation.entries.length,
+                })}
+              </p>
+              <ol className="mt-3 space-y-3">
+                {verification.proof_of_rotation.entries.map((entry) => (
+                  <LineageEntry
+                    key={`${entry.position}-${entry.certificate.sha256}`}
+                    entry={entry}
+                    language={language}
+                  />
+                ))}
+              </ol>
+            </div>
+          )}
+
+          {verification.warnings.length > 0 && (
+            <div className="mt-4 rounded-md border border-amber-300/20 bg-amber-400/[0.05] p-3">
+              <h5 className="text-xs font-semibold text-amber-100">
+                {t("apk.verification.warnings")}
+              </h5>
+              <ul className="mt-2 space-y-1 font-mono text-[11px] text-amber-100/75">
+                {verification.warnings.map((warning, index) => (
+                  <li key={`${index}-${warning}`} className="break-all">
+                    {warning}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </>
+      )}
+    </Card>
+  );
+}
+
+function CertificateCard({
+  certificate,
+  language,
+}: {
+  certificate: ApkSignerCertificate;
+  language: string;
+}) {
+  const { t } = useTranslation();
+  return (
+    <div className="rounded-md border border-white/10 bg-black/10 p-3">
+      <h5 className="text-xs font-semibold text-anvil-100">
+        {certificate.label}
+      </h5>
+      <dl className="mt-2 space-y-2 text-xs">
+        <CertificateFact
+          label={t("apk.verification.subject")}
+          value={certificate.subject}
+        />
+        <CertificateFact
+          label={t("apk.verification.issuer")}
+          value={certificate.issuer}
+        />
+        <CertificateFact
+          label={t("apk.verification.validity")}
+          value={t("apk.verification.validityRange", {
+            from: formatUnixDate(certificate.valid_from_unix, language),
+            until: formatUnixDate(certificate.valid_until_unix, language),
+          })}
+        />
+        <CertificateFact
+          label={t("apk.verification.fingerprint")}
+          value={formatDigest(certificate.sha256)}
+          mono
+        />
+      </dl>
+    </div>
+  );
+}
+
+function LineageEntry({
+  entry,
+  language,
+}: {
+  entry: ApkSigningLineageEntry;
+  language: string;
+}) {
+  const { t } = useTranslation();
+  const capabilities = (
+    [
+      ["installed_data", "installedData"],
+      ["shared_uid", "sharedUid"],
+      ["permission", "permissionCapability"],
+      ["rollback", "rollback"],
+      ["auth", "auth"],
+    ] as const
+  )
+    .filter(([field]) => entry.capabilities[field])
+    .map(([, key]) => t(`apk.verification.capabilities.${key}`));
+  return (
+    <li className="rounded-md border border-white/10 bg-white/[0.025] p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span className="text-xs font-semibold text-anvil-100">
+          {t("apk.verification.lineagePosition", { position: entry.position })}
+        </span>
+        <span className="text-[11px] text-anvil-400">
+          {capabilities.length > 0
+            ? capabilities.join(" · ")
+            : t("apk.verification.noCapabilities")}
+        </span>
+      </div>
+      <div className="mt-2">
+        <CertificateCard certificate={entry.certificate} language={language} />
+      </div>
+    </li>
+  );
+}
+
+function CertificateFact({
+  label,
+  value,
+  mono = false,
+}: {
+  label: string;
+  value: string;
+  mono?: boolean;
+}) {
+  return (
+    <div>
+      <dt className="text-anvil-500">{label}</dt>
+      <dd
+        className={`mt-0.5 break-all text-anvil-200 ${mono ? "font-mono text-[11px]" : ""}`}
+      >
+        {value}
+      </dd>
+    </div>
+  );
+}
+
 function Fact({ label, value }: { label: string; value?: string | null }) {
   const { t } = useTranslation();
   return (
@@ -284,4 +577,17 @@ function formatBytes(bytes: number, language: string): string {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })} MB`;
+}
+
+function formatUnixDate(seconds: number, language: string): string {
+  return formatDateTime(new Date(seconds * 1000).toISOString(), language);
+}
+
+function formatDigest(digest: string): string {
+  return (
+    digest
+      .toUpperCase()
+      .match(/.{1,2}/gu)
+      ?.join(":") ?? digest
+  );
 }

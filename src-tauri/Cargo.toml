@@ -1,6 +1,6 @@
 [package]
 name = "droidsmith"
-version = "0.9.6"
+version = "0.9.7"
 description = "Cross-platform open-source GUI for managing Android devices over ADB"
 authors = ["Droidsmith contributors"]
 license = "MIT"
@@ -33,6 +33,7 @@ which = "8"
 os_info = "3"
 base64 = "0.22.1"
 zip = { version = "=3.0.0", default-features = false, features = ["deflate-flate2-zlib-rs"] }
+x509-parser = { version = "=0.18.1", default-features = false }
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61", features = ["Win32_Storage_FileSystem"] }

@@ -1174,6 +1174,11 @@ export type ApkAnalysis = {
   dex: DexSummary;
   signing: SigningInfo;
   /**
+   * Optional cryptographic verification performed by the official Android
+   * SDK `apksigner`. Static analysis above remains available without it.
+   */
+  signature_verification: ApkSignatureVerification;
+  /**
    * Total number of ZIP entries in the archive.
    */
   total_entries: number;
@@ -1187,6 +1192,68 @@ export type ApkEntrySize = {
   compressed: number;
   uncompressed: number;
 };
+export type ApkSignatureVerification = {
+  status: ApkVerificationStatus;
+  unavailable_reason: ApkVerifierUnavailableReason | null;
+  tool: ApkSignerToolInfo | null;
+  verified_schemes: string[];
+  signer_count: number;
+  signers: ApkSignerCertificate[];
+  source_stamp_verified: boolean;
+  source_stamp: ApkSignerCertificate | null;
+  proof_of_rotation: ApkSigningLineage | null;
+  warnings: string[];
+  errors: string[];
+};
+export type ApkSignerCapabilities = {
+  installed_data: boolean;
+  shared_uid: boolean;
+  permission: boolean;
+  rollback: boolean;
+  auth: boolean;
+};
+export type ApkSignerCertificate = {
+  /**
+   * Backend-bounded label emitted by the official tool (for example
+   * `Signer #1` or `V3.0 Signer`).
+   */
+  label: string;
+  /**
+   * Lower-case SHA-256 digest of the DER certificate. This is checked
+   * against the digest printed by `apksigner` before being returned.
+   */
+  sha256: string;
+  subject: string;
+  issuer: string;
+  valid_from_unix: number;
+  valid_until_unix: number;
+};
+export type ApkSignerSource = "path" | "android_home" | "android_studio";
+export type ApkSignerToolInfo = {
+  version: string;
+  build_tools_version: string | null;
+  source: ApkSignerSource;
+};
+export type ApkSigningLineage = {
+  /**
+   * Proof-of-rotation order reported by `apksigner lineage`: oldest first,
+   * current signer last.
+   */
+  entries: ApkSigningLineageEntry[];
+};
+export type ApkSigningLineageEntry = {
+  position: number;
+  certificate: ApkSignerCertificate;
+  capabilities: ApkSignerCapabilities;
+};
+export type ApkVerificationStatus = "verified" | "failed" | "not_verified";
+export type ApkVerifierUnavailableReason =
+  | "not_found"
+  | "java_unavailable"
+  | "incompatible_version"
+  | "probe_failed"
+  | "execution_failed"
+  | "output_unsupported";
 export type AppPackage = {
   /**
    * Application package id, e.g. `com.android.chrome`.

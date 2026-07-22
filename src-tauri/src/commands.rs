@@ -4349,15 +4349,18 @@ pub fn export_device_pack(
 /// manifest, DEX headers, signing artifacts, and a per-entry size breakdown.
 #[tauri::command]
 #[specta::specta]
-pub fn analyze_apk(
+pub async fn analyze_apk(
     grants: tauri::State<'_, PathGrantStore>,
     path_grant: String,
 ) -> Result<crate::apk_analysis::ApkAnalysis, CommandError> {
     let path = grants.consume(&path_grant, HostPathPurpose::ApkAnalyzeOpen)?;
-    crate::apk_analysis::analyze(&path).map_err(|error| CommandError {
-        code: error.code(),
-        message: error.to_string(),
+    spawn_blocking_operation(move || {
+        crate::apk_analysis::analyze(&path).map_err(|error| CommandError {
+            code: error.code(),
+            message: error.to_string(),
+        })
     })
+    .await
 }
 
 #[tauri::command]

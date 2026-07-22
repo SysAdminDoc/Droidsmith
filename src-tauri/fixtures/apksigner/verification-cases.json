@@ -1,0 +1,37 @@
+[
+  {
+    "name": "valid",
+    "status": "verified",
+    "schemes": ["v2", "v3"],
+    "signer_labels": ["Signer #1"],
+    "signer_count": 1,
+    "lineage_labels": []
+  },
+  {
+    "name": "tampered",
+    "status": "failed",
+    "schemes": [],
+    "signer_labels": [],
+    "signer_count": 0,
+    "lineage_labels": []
+  },
+  {
+    "name": "multi-signer",
+    "status": "verified",
+    "schemes": ["v1", "v2"],
+    "signer_labels": ["Signer #1", "Signer #2"],
+    "signer_count": 2,
+    "lineage_labels": []
+  },
+  {
+    "name": "rotated",
+    "status": "verified",
+    "schemes": ["v3", "v3.1"],
+    "signer_labels": [
+      "Signer (minSdkVersion=33, maxSdkVersion=2147483647)",
+      "Signer (minSdkVersion=28, maxSdkVersion=32)"
+    ],
+    "signer_count": 1,
+    "lineage_labels": ["Signer #1 in lineage", "Signer #2 in lineage"]
+  }
+]

@@ -4,7 +4,7 @@
 
 <h1 align="center">Droidsmith</h1>
 
-![Version](https://img.shields.io/badge/version-0.9.6-cyan)
+![Version](https://img.shields.io/badge/version-0.9.7-cyan)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Platforms](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-blue)
 
@@ -32,9 +32,13 @@ read-only host connection diagnostics for ADB/tool/USB/driver/udev state,
 portable pre-change recovery baselines with read-only OTA drift review,
 GUI-authored schema-v2 action profiles with read-only live import diffs,
 native-selected scrcpy recording destinations, fastboot inspection, and an
-offline APK Analyzer that statically inspects a local `.apk`/`.apks`
-(manifest, permissions, DEX/multidex, signing scheme, size breakdown) with no
-device attached. A
+offline APK Analyzer that statically inspects a local `.apk` (manifest,
+permissions, DEX/multidex, signature artifacts, size breakdown) with no device
+attached. When compatible Android SDK Build Tools and Java are available, the
+same local workflow optionally uses the official `apksigner` to verify archive
+integrity, signing schemes, signer/source-stamp certificates, and
+proof-of-rotation lineage. Missing or incompatible tooling is reported as Not
+verified and never blocks the Java-free static report. A
 local-only Diagnostics center previews and saves redacted support
 bundles with tool/OS/ADB health, failed-operation records, and crash excerpts;
 it never uploads data and can wipe disposable local diagnostic history. For
@@ -88,7 +92,7 @@ validation. Detected data entries are not a promise of completeness or future
 restore compatibility; Droidsmith does not present `adb restore` as a reliable
 recovery path.
 
-The source tree and manifests are version `0.9.6`. As checked on 2026-07-21,
+The source tree and manifests are version `0.9.7`. As checked on 2026-07-21,
 the newest downloadable GitHub artifact is the older
 [v0.5.3 release](https://github.com/SysAdminDoc/Droidsmith/releases/tag/v0.5.3),
 published on 2026-07-17; changes after that tag are available from source but
@@ -238,7 +242,10 @@ Tauri 2 OS dependencies: WebView2 plus MSVC build tools on Windows, Xcode
 Command Line Tools on macOS, or WebKitGTK 4.1/GTK 3/AppIndicator/RSVG development
 packages on Linux. Install Android SDK Platform Tools separately and put `adb`
 on `PATH`, or set `ANDROID_HOME` / `ANDROID_SDK_ROOT`; the current bundles do
-not include it.
+not include it. APK signature verification is optional: install current Android
+SDK Build Tools plus Java, and Droidsmith discovers the newest stable
+`apksigner` under those SDK roots or the default Android Studio SDK. Static APK
+analysis remains available without either dependency.
 
 ```bash
 npm install

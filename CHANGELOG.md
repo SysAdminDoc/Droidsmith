@@ -14,8 +14,24 @@ completion.
 Working batches live here. Sections collapse into a versioned release on
 each milestone tag.
 
+## [0.9.7] - 2026-07-21
+
+Roadmap drain: trusted APK signature verification, bounded local Perfetto
+captures, deterministic layout accessibility audits, renderer reliability,
+portable settings, and route-level loading performance.
+
 ### Added
 
+- **R-107 — Official APK signature verification.** The offline Analyzer now
+  discovers a compatible Android SDK `apksigner` 0.9+ without making Java a
+  requirement for its existing static report. Bounded official verification
+  distinguishes verified, rejected, and Not verified outcomes; successful
+  reports expose verified schemes, signer/source-stamp counts and identities,
+  SHA-256 certificate fingerprints, subject/issuer, validity, and optional
+  proof-of-rotation lineage with carried capabilities. PEM metadata is accepted
+  only when its calculated certificate digest matches the value printed by
+  `apksigner`; valid, tampered, multi-signer, and rotated fixtures plus a live
+  Build Tools 37.0.0 probe cover the workflow.
 - **R-106 — Bounded Perfetto system traces.** Supported Android 10+ devices now
   expose fixed UI-rendering, app-startup, and system-health presets with their
   sources, duration, ring buffer, and 64 MB file ceiling shown before capture.
