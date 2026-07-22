@@ -1101,6 +1101,7 @@
     "tagFilter": "Filtro de etiqueta",
     "tailing": "Siguiendo",
     "textSearch": "Búsqueda de texto",
+    "filters": "Más filtros",
     "textSearchLabel": "Filtrar líneas de registro por texto",
     "title": "Logcat",
     "updatedAnnouncement_few": "Logcat actualizado; {{count}} líneas visibles.",

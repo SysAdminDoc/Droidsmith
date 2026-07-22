@@ -11,16 +11,13 @@ export function CompatibilityChecks({
 }) {
   const { t } = useTranslation();
   return (
-    <Card className="p-4">
-      <h4 className="text-xs font-semibold text-anvil-200">
+    <Card className="px-0 py-3">
+      <h4 className="text-sm font-semibold text-anvil-100">
         {t("debloat.compatibilityChecks")}
       </h4>
-      <ul className="mt-3 grid gap-2 sm:grid-cols-2">
+      <ul className="mt-2 grid divide-y divide-white/[0.08] sm:grid-cols-3 sm:divide-x sm:divide-y-0 sm:divide-white/[0.08]">
         {assessment.checks.map((check) => (
-          <li
-            key={check.field}
-            className="rounded-md border border-white/10 bg-white/[0.02] p-3"
-          >
+          <li key={check.field} className="px-3 py-2 first:ps-0 last:pe-0">
             <div className="flex items-center justify-between gap-2">
               <code className="font-mono text-xs text-anvil-200">
                 {check.field}
@@ -29,7 +26,7 @@ export function CompatibilityChecks({
                 {t(`debloat.compatibility.${check.status}`)}
               </Badge>
             </div>
-            <p className="mt-2 text-[11px] text-anvil-400">
+            <p className="mt-1 text-xs text-anvil-400">
               {t("debloat.expectedActual", {
                 expected: check.expected.join(", "),
                 actual: check.actual ?? t("debloat.unknownValue"),

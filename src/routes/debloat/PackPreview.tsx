@@ -71,11 +71,11 @@ export function PackPreview({
 
   return (
     <>
-      <Card className="p-5">
+      <Card className="px-0 py-3">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <h3 className="text-lg font-semibold text-anvil-50">{pack.name}</h3>
-            <p className="mt-1 text-sm text-anvil-400">{pack.description}</p>
+            <p className="sr-only">{pack.description}</p>
           </div>
           <div className="flex gap-2">
             <Badge tone="info">
@@ -89,7 +89,7 @@ export function PackPreview({
             </Badge>
           </div>
         </div>
-        <p className="mt-3 text-xs text-anvil-400">
+        <p className="mt-1 text-xs text-anvil-400">
           {t("debloat.packIdentity", {
             id: pack.id,
             revision: pack.revision,
@@ -101,14 +101,12 @@ export function PackPreview({
       <CompatibilityChecks assessment={assessment} />
 
       {presetMatches.length > 0 && (
-        <Card className="p-4">
+        <Card className="px-0 py-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h4 className="text-sm font-semibold text-anvil-50">
               {t("debloat.presets.title")}
             </h4>
-            <span className="text-xs text-anvil-400">
-              {t("debloat.presets.hint")}
-            </span>
+            <span className="sr-only">{t("debloat.presets.hint")}</span>
           </div>
           <div className="mt-3 flex flex-wrap gap-2">
             {presetMatches.map(({ preset, count }) => (
@@ -161,7 +159,7 @@ export function PackPreview({
           if (!entries?.length) return null;
           return (
             <Card key={tier} className="overflow-hidden p-0">
-              <div className="flex items-center justify-between border-b border-white/10 p-4">
+              <div className="flex items-center justify-between border-b border-white/10 px-3 py-2.5">
                 <div className="flex items-center gap-2">
                   <Badge tone={tierTone(tier)}>
                     {t(`debloat.tiers.${tier}`)}
@@ -183,7 +181,7 @@ export function PackPreview({
                   return (
                     <label
                       key={entry.id}
-                      className={`flex gap-3 p-4 transition ${
+                      className={`flex gap-3 px-3 py-3 transition ${
                         selectable
                           ? "cursor-pointer hover:bg-white/[0.03]"
                           : "cursor-not-allowed opacity-70"
@@ -212,21 +210,21 @@ export function PackPreview({
                           {entry.description}
                         </p>
                         {entry.needed_by.length > 0 && (
-                          <p className="mt-1 text-[11px] text-amber-300/80">
+                          <p className="mt-1 text-xs text-amber-300/80">
                             {t("debloat.neededBy", {
                               items: entry.needed_by.join(", "),
                             })}
                           </p>
                         )}
                         {entry.depends_on.length > 0 && (
-                          <p className="mt-1 text-[11px] text-circuit-100/80">
+                          <p className="mt-1 text-xs text-circuit-100/80">
                             {t("debloat.dependsOn", {
                               items: entry.depends_on.join(", "),
                             })}
                           </p>
                         )}
                         {support?.detail && (
-                          <p className="mt-1 text-[11px] text-red-200/80">
+                          <p className="mt-1 text-xs text-red-200/80">
                             {support.detail}
                           </p>
                         )}
@@ -235,7 +233,7 @@ export function PackPreview({
                             {entry.labels.map((l) => (
                               <span
                                 key={l}
-                                className="rounded-md border border-white/10 px-1.5 py-0.5 text-[10px] text-anvil-500"
+                                className="text-xs text-anvil-500 after:ms-1.5 after:content-['·'] last:after:hidden"
                               >
                                 {l}
                               </span>
@@ -264,7 +262,7 @@ export function PackPreview({
         </label>
       )}
 
-      <div className="flex flex-wrap justify-between gap-3">
+      <div className="sticky bottom-0 z-10 flex flex-wrap justify-between gap-3 border-t border-white/[0.1] bg-anvil-950/95 px-1 py-3 backdrop-blur">
         <Button type="button" onClick={onBack}>
           {t("debloat.back")}
         </Button>

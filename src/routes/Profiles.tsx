@@ -354,7 +354,7 @@ export default function ProfilesRoute() {
         }
       />
 
-      <section className="mt-6 max-w-7xl space-y-4">
+      <section className="mt-4 max-w-none space-y-3">
         {devicesState.kind === "no_tauri" && (
           <StatePanel title={t("common.desktopRequired")} tone="info">
             <p>{t("profiles.desktopRequiredBody")}</p>
@@ -403,7 +403,7 @@ export default function ProfilesRoute() {
         {selectedTarget && (
           <>
             <div
-              className="inline-flex rounded-lg border border-white/10 bg-anvil-900/70 p-1"
+              className="inline-flex gap-5 border-b border-white/[0.08]"
               role="tablist"
               aria-label={t("profiles.workspaceLabel")}
             >
@@ -569,30 +569,30 @@ function AuthorWorkspace(props: {
                 onChange={(event) => props.setManufacturer(event.target.value)}
               />
             </LabeledField>
-            <LabeledField label={t("profiles.modelLabel")}>
-              <FieldInput
-                value={props.model}
-                onChange={(event) => props.setModel(event.target.value)}
-              />
-            </LabeledField>
-            <div className="grid grid-cols-2 gap-3">
-              <LabeledField label={t("profiles.androidMinLabel")}>
+            <div className="sm:col-span-2">
+              <LabeledField label={t("profiles.modelLabel")}>
                 <FieldInput
-                  type="number"
-                  min={1}
-                  value={props.androidMin}
-                  onChange={(event) => props.setAndroidMin(event.target.value)}
-                />
-              </LabeledField>
-              <LabeledField label={t("profiles.androidMaxLabel")}>
-                <FieldInput
-                  type="number"
-                  min={1}
-                  value={props.androidMax}
-                  onChange={(event) => props.setAndroidMax(event.target.value)}
+                  value={props.model}
+                  onChange={(event) => props.setModel(event.target.value)}
                 />
               </LabeledField>
             </div>
+            <LabeledField label={t("profiles.androidMinLabel")}>
+              <FieldInput
+                type="number"
+                min={1}
+                value={props.androidMin}
+                onChange={(event) => props.setAndroidMin(event.target.value)}
+              />
+            </LabeledField>
+            <LabeledField label={t("profiles.androidMaxLabel")}>
+              <FieldInput
+                type="number"
+                min={1}
+                value={props.androidMax}
+                onChange={(event) => props.setAndroidMax(event.target.value)}
+              />
+            </LabeledField>
           </div>
           <div className="mt-4 grid gap-4 sm:grid-cols-2">
             <LabeledField label={t("profiles.userModeLabel")}>
@@ -1050,10 +1050,10 @@ function WorkspaceTab({
       type="button"
       role="tab"
       aria-selected={active}
-      className={`rounded-md px-4 py-2 text-sm font-medium transition ${
+      className={`-mb-px border-b-2 px-0.5 py-2 text-sm font-medium transition ${
         active
-          ? "bg-circuit-300 text-anvil-950"
-          : "text-anvil-300 hover:bg-white/[0.06] hover:text-anvil-50"
+          ? "border-circuit-300 text-circuit-100"
+          : "border-transparent text-anvil-400 hover:text-anvil-50"
       }`}
       onClick={onClick}
     >

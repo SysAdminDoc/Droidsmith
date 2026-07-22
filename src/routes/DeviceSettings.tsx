@@ -185,7 +185,7 @@ export default function DeviceSettingsRoute() {
         }
       />
 
-      <section className="mt-6 max-w-7xl space-y-4">
+      <section className="mt-4 max-w-none space-y-3">
         {devicesState.kind === "no_tauri" && (
           <StatePanel title={t("common.desktopRequired")} tone="info">
             <p>{t("tuning.desktopRequiredBody")}</p>
@@ -244,7 +244,7 @@ export default function DeviceSettingsRoute() {
         )}
 
         {selectedTarget && settings && (
-          <div className="grid gap-3 lg:grid-cols-2">
+          <div className="divide-y divide-white/[0.08] border-y border-white/[0.08]">
             {settings.map((setting) => (
               <SettingCard
                 key={setting.id}
@@ -332,8 +332,8 @@ function SettingCard({
   const validationError = validateDraft(control, trimmed, t);
 
   return (
-    <Card>
-      <div className="flex items-start justify-between gap-3">
+    <Card className="border-t-0 px-1 py-4">
+      <div className="grid items-center gap-4 md:grid-cols-[minmax(13rem,0.9fr)_minmax(9rem,0.45fr)_minmax(15rem,1fr)]">
         <div className="min-w-0">
           <h3 className="text-sm font-semibold text-anvil-50">
             {t(`tuning.items.${setting.id}.label`)}
@@ -341,59 +341,61 @@ function SettingCard({
           <p className="mt-0.5 text-xs text-anvil-400">
             {t(`tuning.items.${setting.id}.help`)}
           </p>
+          <Badge tone="neutral" className="mt-1">
+            {setting.namespace}
+          </Badge>
         </div>
-        <Badge tone="neutral">{setting.namespace}</Badge>
-      </div>
 
-      <dl className="mt-3 text-xs">
-        <div className="flex items-center gap-2">
-          <dt className="text-anvil-500">{t("tuning.current")}</dt>
-          <dd className="font-mono text-anvil-200">
-            {currentValue ?? t("tuning.unset")}
-          </dd>
-        </div>
-      </dl>
+        <dl className="text-sm">
+          <div>
+            <dt className="text-xs text-anvil-500">{t("tuning.current")}</dt>
+            <dd className="mt-0.5 font-mono text-anvil-200">
+              {currentValue ?? t("tuning.unset")}
+            </dd>
+          </div>
+        </dl>
 
-      <div className="mt-3 flex flex-wrap items-center gap-2">
-        {control.kind === "choice" ? (
-          <FieldSelect
-            aria-label={t(`tuning.items.${setting.id}.label`)}
-            value={trimmed}
-            disabled={disabled || busy}
-            onChange={(event) => onDraftChange(event.target.value)}
-          >
-            <option value="" disabled>
-              {t("tuning.choose")}
-            </option>
-            {control.options.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
+        <div className="flex flex-wrap items-center gap-2 md:justify-end">
+          {control.kind === "choice" ? (
+            <FieldSelect
+              aria-label={t(`tuning.items.${setting.id}.label`)}
+              value={trimmed}
+              disabled={disabled || busy}
+              onChange={(event) => onDraftChange(event.target.value)}
+            >
+              <option value="" disabled>
+                {t("tuning.choose")}
               </option>
-            ))}
-          </FieldSelect>
-        ) : (
-          <FieldInput
-            type="number"
-            inputMode="decimal"
-            aria-label={t(`tuning.items.${setting.id}.label`)}
-            className="w-40"
-            value={draft}
-            min={control.min}
-            max={control.max}
-            step={control.kind === "float" ? "any" : 1}
-            disabled={disabled || busy}
-            onChange={(event) => onDraftChange(event.target.value)}
-          />
-        )}
-        <Button
-          type="button"
-          size="sm"
-          variant="primary"
-          disabled={disabled || busy || !changed || validationError != null}
-          onClick={() => onApply(trimmed)}
-        >
-          {busy ? t("tuning.applying") : t("tuning.apply")}
-        </Button>
+              {control.options.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </FieldSelect>
+          ) : (
+            <FieldInput
+              type="number"
+              inputMode="decimal"
+              aria-label={t(`tuning.items.${setting.id}.label`)}
+              className="w-40"
+              value={draft}
+              min={control.min}
+              max={control.max}
+              step={control.kind === "float" ? "any" : 1}
+              disabled={disabled || busy}
+              onChange={(event) => onDraftChange(event.target.value)}
+            />
+          )}
+          <Button
+            type="button"
+            size="sm"
+            variant="primary"
+            disabled={disabled || busy || !changed || validationError != null}
+            onClick={() => onApply(trimmed)}
+          >
+            {busy ? t("tuning.applying") : t("tuning.apply")}
+          </Button>
+        </div>
       </div>
 
       {validationError && (
@@ -402,7 +404,7 @@ function SettingCard({
         </p>
       )}
 
-      <p className="mt-2 truncate font-mono text-[0.7rem] text-anvil-500">
+      <p className="mt-2 break-all font-mono text-xs text-anvil-500 md:text-end">
         {preview}
       </p>
     </Card>

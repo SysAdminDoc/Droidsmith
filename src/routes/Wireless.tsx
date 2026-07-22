@@ -280,7 +280,7 @@ export default function WirelessRoute() {
         meta={<WirelessHeaderMeta state={servicesState} />}
       />
 
-      <section className="mt-6 grid max-w-7xl gap-4 xl:grid-cols-[minmax(320px,0.85fr)_minmax(0,1.15fr)]">
+      <section className="mt-4 grid max-w-none gap-3 xl:grid-cols-[minmax(320px,0.85fr)_minmax(0,1.15fr)]">
         <Card className="p-5">
           <div className="flex flex-col gap-5 lg:flex-row xl:flex-col 2xl:flex-row">
             <div className="shrink-0">

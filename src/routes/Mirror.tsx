@@ -416,7 +416,7 @@ export default function MirrorRoute() {
         }
       />
 
-      <section className="mt-4 max-w-7xl space-y-4">
+      <section className="mt-4 max-w-none space-y-3">
         {devicesState.kind === "no_tauri" && (
           <StatePanel title={t("common.desktopRequired")} tone="info">
             <p>{t("mirror.desktopRequiredBody")}</p>

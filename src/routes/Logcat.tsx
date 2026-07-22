@@ -455,7 +455,7 @@ export default function LogcatRoute() {
         }
       />
 
-      <section className="mt-6 max-w-7xl space-y-4">
+      <section className="mt-4 max-w-none space-y-3">
         {devicesState.kind === "no_tauri" && (
           <StatePanel title={t("common.desktopRequired")} tone="info">
             <p>{t("logcat.desktopRequiredBody")}</p>
@@ -629,68 +629,88 @@ export default function LogcatRoute() {
               </label>
             </div>
 
-            <div className="flex flex-wrap items-center gap-4 text-xs text-anvil-300">
-              <label className="inline-flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={query.useRegex}
-                  onChange={(e) =>
-                    setQuery((q) => ({ ...q, useRegex: e.target.checked }))
-                  }
-                />
-                {t("logcat.queries.useRegex")}
-              </label>
-              <label className="inline-flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={query.negateTag}
-                  onChange={(e) =>
-                    setQuery((q) => ({ ...q, negateTag: e.target.checked }))
-                  }
-                />
-                {t("logcat.queries.negateTag")}
-              </label>
-              <label className="inline-flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={query.negateMessage}
-                  onChange={(e) =>
-                    setQuery((q) => ({ ...q, negateMessage: e.target.checked }))
-                  }
-                />
-                {t("logcat.queries.negateMessage")}
-              </label>
-              <label className="inline-flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={query.negatePid}
-                  onChange={(e) =>
-                    setQuery((q) => ({ ...q, negatePid: e.target.checked }))
-                  }
-                />
-                {t("logcat.queries.negatePid")}
-              </label>
-              <label className="inline-flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={query.negatePackage}
-                  onChange={(e) =>
-                    setQuery((q) => ({ ...q, negatePackage: e.target.checked }))
-                  }
-                />
-                {t("logcat.queries.negatePackage")}
-              </label>
-              <label className="inline-flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={query.negateProcess}
-                  onChange={(e) =>
-                    setQuery((q) => ({ ...q, negateProcess: e.target.checked }))
-                  }
-                />
-                {t("logcat.queries.negateProcess")}
-              </label>
-            </div>
+            <details className="group border-y border-white/[0.07] py-1">
+              <summary className="w-fit cursor-pointer list-none rounded-sm px-1 py-2 text-sm font-medium text-anvil-300 hover:text-anvil-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-circuit-300 [&::-webkit-details-marker]:hidden">
+                <span
+                  className="me-2 inline-block transition group-open:rotate-90"
+                  aria-hidden="true"
+                >
+                  ›
+                </span>
+                {t("logcat.filters")}
+              </summary>
+              <div className="flex flex-wrap items-center gap-x-5 gap-y-3 px-1 pb-2 text-sm text-anvil-300">
+                <label className="inline-flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={query.useRegex}
+                    onChange={(e) =>
+                      setQuery((q) => ({ ...q, useRegex: e.target.checked }))
+                    }
+                  />
+                  {t("logcat.queries.useRegex")}
+                </label>
+                <label className="inline-flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={query.negateTag}
+                    onChange={(e) =>
+                      setQuery((q) => ({ ...q, negateTag: e.target.checked }))
+                    }
+                  />
+                  {t("logcat.queries.negateTag")}
+                </label>
+                <label className="inline-flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={query.negateMessage}
+                    onChange={(e) =>
+                      setQuery((q) => ({
+                        ...q,
+                        negateMessage: e.target.checked,
+                      }))
+                    }
+                  />
+                  {t("logcat.queries.negateMessage")}
+                </label>
+                <label className="inline-flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={query.negatePid}
+                    onChange={(e) =>
+                      setQuery((q) => ({ ...q, negatePid: e.target.checked }))
+                    }
+                  />
+                  {t("logcat.queries.negatePid")}
+                </label>
+                <label className="inline-flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={query.negatePackage}
+                    onChange={(e) =>
+                      setQuery((q) => ({
+                        ...q,
+                        negatePackage: e.target.checked,
+                      }))
+                    }
+                  />
+                  {t("logcat.queries.negatePackage")}
+                </label>
+                <label className="inline-flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={query.negateProcess}
+                    onChange={(e) =>
+                      setQuery((q) => ({
+                        ...q,
+                        negateProcess: e.target.checked,
+                      }))
+                    }
+                  />
+                  {t("logcat.queries.negateProcess")}
+                </label>
+              </div>
+            </details>
 
             <div className="flex flex-wrap items-center gap-2">
               {!tailing ? (
@@ -795,7 +815,7 @@ export default function LogcatRoute() {
             <Card className="overflow-hidden p-0">
               <div
                 ref={outputRef}
-                className="h-[32rem] overflow-y-auto bg-[#0c0d12] p-3 font-mono text-[11px] leading-5"
+                className="h-[32rem] overflow-y-auto bg-[#0a0e13] p-3 font-mono text-sm leading-6"
                 role="log"
                 aria-live="off"
                 aria-label={t("logcat.outputLabel")}
@@ -859,15 +879,13 @@ type QueryManagerProps = {
 function QueryManager(props: QueryManagerProps) {
   const { t } = useTranslation();
   return (
-    <Card className="p-4">
+    <Card className="px-0 py-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h3 className="text-sm font-semibold text-anvil-50">
             {t("logcat.queries.title")}
           </h3>
-          <p className="mt-1 text-xs leading-5 text-anvil-400">
-            {t("logcat.queries.description")}
-          </p>
+          <p className="sr-only">{t("logcat.queries.description")}</p>
         </div>
         <Button
           type="button"
@@ -1002,7 +1020,7 @@ function QueryList(
           {props.presets.map((preset, index) => (
             <li
               key={preset.id}
-              className="flex flex-wrap items-center gap-2 rounded-md border border-white/10 bg-white/[0.03] px-3 py-2"
+              className="flex flex-wrap items-center gap-2 border-b border-white/[0.08] px-1 py-2.5 last:border-b-0"
             >
               {props.renameId === preset.id ? (
                 <>

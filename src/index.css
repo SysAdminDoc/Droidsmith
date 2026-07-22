@@ -15,7 +15,7 @@
 
   body {
     @apply bg-anvil-950 font-sans text-anvil-100 antialiased;
-    font-size: 15px;
+    font-size: 16px;
     font-feature-settings:
       "cv02" 1,
       "cv03" 1,
@@ -29,6 +29,13 @@
   select,
   textarea {
     font: inherit;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    text-wrap: balance;
   }
 
   /*

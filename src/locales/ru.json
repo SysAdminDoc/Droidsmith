@@ -1236,6 +1236,7 @@
     "tagFilter": "Фильтр тега",
     "minLevel": "Мин. уровень",
     "textSearch": "Поиск текста",
+    "filters": "Дополнительные фильтры",
     "startTail": "Начать tail",
     "stop": "Стоп",
     "pauseScroll": "Пауза прокрутки",

@@ -47,7 +47,7 @@ export function FilterChips({
 
   return (
     <div
-      className="flex flex-wrap gap-1.5 rounded-lg border border-white/10 bg-white/[0.025] p-1"
+      className="flex flex-wrap gap-4 border-b border-white/[0.08]"
       role="radiogroup"
       aria-label={t("apps.packageFilterLabel")}
     >
@@ -64,11 +64,11 @@ export function FilterChips({
           onClick={() => onChange(f.value)}
           onKeyDown={(event) => onKeyDown(event, index)}
           className={[
-            "rounded-md border px-3 py-1.5 text-xs font-medium transition",
+            "-mb-px border-b-2 px-0.5 py-2 text-sm font-medium transition",
             "focus:outline-none focus-visible:ring-2 focus-visible:ring-circuit-300",
             active === f.value
-              ? "border-circuit-300/30 bg-circuit-300/12 text-circuit-100 shadow-panel"
-              : "border-transparent text-anvil-300 hover:bg-white/[0.05] hover:text-anvil-100",
+              ? "border-circuit-300 text-circuit-100"
+              : "border-transparent text-anvil-400 hover:text-anvil-100",
           ].join(" ")}
         >
           {t(f.labelKey)}
@@ -100,12 +100,12 @@ export function BatchActionBar({
   const { t } = useTranslation();
   if (selectedCount === 0) return null;
   return (
-    <Card className="flex flex-col gap-3 border-circuit-300/20 bg-circuit-950/10 p-4 sm:flex-row sm:items-center sm:justify-between">
+    <Card className="sticky bottom-0 z-10 flex flex-col gap-3 border-t border-circuit-300/30 bg-anvil-950/95 px-3 py-2.5 backdrop-blur sm:flex-row sm:items-center sm:justify-between">
       <div>
         <p className="text-sm font-semibold text-anvil-50">
           {t("apps.batchSelected", { count: selectedCount })}
         </p>
-        <p className="mt-1 text-xs text-anvil-400">
+        <p className="sr-only">
           {selectedCount < 2
             ? t("apps.batchSelectMore")
             : t("apps.batchReviewBody")}

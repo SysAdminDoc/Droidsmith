@@ -4,9 +4,11 @@ import {
   useRef,
   useState,
   type KeyboardEvent as ReactKeyboardEvent,
+  type ReactNode,
 } from "react";
 import { useTranslation } from "react-i18next";
 
+import { cn } from "../../lib/cn";
 import {
   type ActionKind,
   type AppPackage,
@@ -187,14 +189,12 @@ export function PackageTable({
 
   return (
     <Card className="overflow-hidden p-0">
-      <div className="flex flex-col gap-3 border-b border-white/10 p-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-2 border-b border-white/10 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h3 className="text-sm font-semibold text-anvil-50">
             {t("apps.installedPackages")}
           </h3>
-          <p className="mt-1 text-xs text-anvil-400">
-            {t("apps.installedPackagesBody")}
-          </p>
+          <p className="sr-only">{t("apps.installedPackagesBody")}</p>
         </div>
         <div className="flex gap-2">
           {packages.length !== totalCount && (
@@ -308,7 +308,7 @@ export function PackageTable({
                     </Badge>
                   </TableCell>
                   <TableCell {...cellProps(rowIndex + 1, 4)}>
-                    <div className="flex min-w-[10rem] flex-wrap gap-1.5">
+                    <div className="flex min-w-[9rem] items-center justify-end gap-1.5">
                       {pkg.retained ? (
                         <Button
                           type="button"
@@ -340,16 +340,6 @@ export function PackageTable({
                           >
                             {t("apps.disable")}
                           </Button>
-                          <Button
-                            type="button"
-                            size="sm"
-                            onClick={() =>
-                              onAction(pkg.package, "uninstall_for_user")
-                            }
-                            variant="danger"
-                          >
-                            {t("apps.uninstall")}
-                          </Button>
                         </>
                       ) : (
                         <Button
@@ -361,55 +351,16 @@ export function PackageTable({
                           {t("apps.enable")}
                         </Button>
                       )}
-                      {!pkg.archived &&
-                        !pkg.retained &&
-                        archiveSupported &&
-                        !pkg.system && (
-                          <Button
-                            type="button"
-                            size="sm"
-                            onClick={() => onAction(pkg.package, "archive")}
-                          >
-                            {t("apps.archive")}
-                          </Button>
-                        )}
                       {!pkg.archived && !pkg.retained && (
-                        <>
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => onAction(pkg.package, "force_stop")}
-                          >
-                            {t("apps.stop")}
-                          </Button>
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => onInspect(pkg.package)}
-                          >
-                            {t("apps.perms")}
-                          </Button>
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => onExport(pkg.package)}
-                          >
-                            {t("apps.exportApks")}
-                          </Button>
-                        </>
-                      )}
-                      {!pkg.archived && !pkg.retained && showLegacyExport && (
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => onLegacyExport(pkg.package)}
-                        >
-                          {t("apps.legacyData")}
-                        </Button>
+                        <PackageActionMenu
+                          pkg={pkg}
+                          archiveSupported={archiveSupported}
+                          showLegacyExport={showLegacyExport}
+                          onAction={onAction}
+                          onInspect={onInspect}
+                          onExport={onExport}
+                          onLegacyExport={onLegacyExport}
+                        />
                       )}
                     </div>
                   </TableCell>
@@ -465,12 +416,128 @@ function PackageIdentity({
           {pkg.package}
         </code>
         {pkg.installer && (
-          <p className="mt-1 text-[11px] text-anvil-500">
+          <p className="mt-1 text-xs text-anvil-500">
             {t("apps.viaInstaller", { installer: pkg.installer })}
           </p>
         )}
       </div>
     </div>
+  );
+}
+
+function PackageActionMenu({
+  pkg,
+  archiveSupported,
+  showLegacyExport,
+  onAction,
+  onInspect,
+  onExport,
+  onLegacyExport,
+}: {
+  pkg: AppPackage;
+  archiveSupported: boolean;
+  showLegacyExport: boolean;
+  onAction: (pkg: string, kind: ActionKind) => void;
+  onInspect: (pkg: string) => void;
+  onExport: (pkg: string) => void;
+  onLegacyExport: (pkg: string) => void;
+}) {
+  const { t } = useTranslation();
+  const close = (button: HTMLButtonElement) => {
+    button.closest("details")?.removeAttribute("open");
+  };
+
+  return (
+    <details className="group flex flex-col items-end">
+      <summary
+        aria-label={`${t("apps.actions")}: ${pkg.package}`}
+        className="grid h-9 w-9 cursor-pointer list-none place-items-center rounded-[0.25rem] text-lg text-anvil-300 transition hover:bg-white/[0.06] hover:text-anvil-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-circuit-300 [&::-webkit-details-marker]:hidden"
+      >
+        <span aria-hidden="true">⋮</span>
+      </summary>
+      <div
+        role="menu"
+        className="mt-1 min-w-40 rounded-[0.25rem] border border-white/[0.1] bg-[#121820] p-1.5 shadow-2xl"
+      >
+        <MenuAction
+          onClick={(button) => {
+            close(button);
+            onAction(pkg.package, "uninstall_for_user");
+          }}
+          danger
+        >
+          {t("apps.uninstall")}
+        </MenuAction>
+        {archiveSupported && !pkg.system && (
+          <MenuAction
+            onClick={(button) => {
+              close(button);
+              onAction(pkg.package, "archive");
+            }}
+          >
+            {t("apps.archive")}
+          </MenuAction>
+        )}
+        <MenuAction
+          onClick={(button) => {
+            close(button);
+            onAction(pkg.package, "force_stop");
+          }}
+        >
+          {t("apps.stop")}
+        </MenuAction>
+        <MenuAction
+          onClick={(button) => {
+            close(button);
+            onInspect(pkg.package);
+          }}
+        >
+          {t("apps.perms")}
+        </MenuAction>
+        <MenuAction
+          onClick={(button) => {
+            close(button);
+            onExport(pkg.package);
+          }}
+        >
+          {t("apps.exportApks")}
+        </MenuAction>
+        {showLegacyExport && (
+          <MenuAction
+            onClick={(button) => {
+              close(button);
+              onLegacyExport(pkg.package);
+            }}
+          >
+            {t("apps.legacyData")}
+          </MenuAction>
+        )}
+      </div>
+    </details>
+  );
+}
+
+function MenuAction({
+  children,
+  onClick,
+  danger = false,
+}: {
+  children: ReactNode;
+  onClick: (button: HTMLButtonElement) => void;
+  danger?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      role="menuitem"
+      onClick={(event) => onClick(event.currentTarget)}
+      className={cn(
+        "block w-full rounded-sm px-3 py-2 text-start text-sm transition hover:bg-white/[0.06] focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-circuit-300",
+        danger ? "text-red-200" : "text-anvil-200",
+      )}
+    >
+      {children}
+    </button>
   );
 }
 

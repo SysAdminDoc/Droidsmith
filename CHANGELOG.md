@@ -14,6 +14,27 @@ completion.
 Working batches live here. Sections collapse into a versioned release on
 each milestone tag.
 
+### Changed
+
+- Reworked the application shell and all eleven primary workspaces around a
+  flatter, denser visual system: larger readable type, compact route headers,
+  hairline section separators, quieter status treatment, consistent control
+  grouping, and a narrower navigation rail replace the previous wall of
+  outlined cards and pills.
+- Apps now uses underline filters, a compact installed-package table, and a
+  per-row overflow menu for secondary commands; Logcat moves advanced filters
+  behind disclosure and gives live output a larger, more legible terminal;
+  Profiles, Debloat, Console, Tuning, and the remaining tools use route-specific
+  workspace layouts instead of repeating the same card stack.
+- Rendered-route coverage now captures every menu page and checks all eleven at
+  desktop and narrow widths, in addition to the existing end-to-end workflows.
+
+### Fixed
+
+- Profiles constraints no longer collide or clip at desktop or mobile widths,
+  Tuning command previews wrap safely on narrow screens, and compact shell
+  actions no longer overflow the reduced navigation rail.
+
 ## [0.9.8] - 2026-07-22
 
 Production audit: command and host-file trust boundaries, durable recovery,

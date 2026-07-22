@@ -26,19 +26,17 @@ export function PaneHeader({
   meta?: ReactNode;
 }) {
   return (
-    <header className="border-b border-white/[0.08] pb-4 sm:pb-5">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+    <header className="border-b border-white/[0.09] pb-3.5">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2.5">
-            <h2 className="text-2xl font-semibold tracking-[-0.025em] text-anvil-50">
+          <div className="flex flex-wrap items-center gap-3">
+            <h2 className="text-[1.75rem] font-semibold leading-9 tracking-[-0.025em] text-anvil-50">
               {title}
             </h2>
             <MilestoneBadge milestone={milestone} />
+            {meta && <div>{meta}</div>}
           </div>
-          <p className="mt-1.5 max-w-3xl text-sm text-anvil-400">
-            {description}
-          </p>
-          {meta && <div className="mt-3">{meta}</div>}
+          <p className="sr-only">{description}</p>
         </div>
         {actions && (
           <div className="flex shrink-0 flex-wrap items-center gap-2 sm:justify-end">
@@ -53,12 +51,20 @@ export function PaneHeader({
 export function Card({
   children,
   className,
+  surface = "section",
   ...props
-}: ComponentPropsWithoutRef<"div">) {
+}: ComponentPropsWithoutRef<"div"> & {
+  surface?: "section" | "panel" | "dialog";
+}) {
   return (
     <div
       className={cn(
-        "rounded-lg border border-transparent bg-white/[0.035] shadow-panel",
+        surface === "section" &&
+          "rounded-none border-0 border-t border-white/[0.085] bg-transparent shadow-none",
+        surface === "panel" &&
+          "rounded-sm border border-white/[0.085] bg-black/10 shadow-panel",
+        surface === "dialog" &&
+          "rounded-lg border border-white/[0.1] bg-[#121820] shadow-2xl",
         className ?? "p-4",
       )}
       {...props}
@@ -82,14 +88,14 @@ export function Button({
     <button
       type="button"
       className={cn(
-        "inline-flex items-center justify-center gap-2 rounded-md font-medium transition duration-150",
+        "inline-flex items-center justify-center gap-2 rounded-[0.25rem] font-medium transition duration-150",
         "focus:outline-none focus-visible:ring-2 focus-visible:ring-circuit-300 focus-visible:ring-offset-2 focus-visible:ring-offset-anvil-950",
         "disabled:cursor-not-allowed disabled:opacity-50",
-        size === "sm" ? "min-h-9 px-3 text-xs" : "min-h-10 px-4 text-sm",
+        size === "sm" ? "min-h-9 px-3 text-sm" : "min-h-10 px-4 text-sm",
         variant === "primary" &&
           "bg-circuit-300 text-anvil-950 shadow-sm hover:bg-circuit-200 active:bg-circuit-400",
         variant === "secondary" &&
-          "bg-white/[0.06] text-anvil-100 hover:bg-white/[0.1] active:bg-white/[0.13]",
+          "bg-white/[0.045] text-anvil-100 hover:bg-white/[0.08] active:bg-white/[0.11]",
         variant === "ghost" &&
           "text-anvil-200 hover:bg-white/[0.07] hover:text-anvil-50 active:bg-white/[0.1]",
         variant === "danger" &&
@@ -209,17 +215,17 @@ export function Badge({
         className,
       )}
     >
-      <span
-        className={cn(
-          "h-1.5 w-1.5 shrink-0 rounded-full",
-          tone === "neutral" && "bg-anvil-500",
-          tone === "info" && "bg-circuit-300",
-          tone === "success" && "bg-emerald-300",
-          tone === "warning" && "bg-amber-300",
-          tone === "danger" && "bg-red-300",
-        )}
-        aria-hidden="true"
-      />
+      {tone !== "neutral" && tone !== "info" && (
+        <span
+          className={cn(
+            "h-1.5 w-1.5 shrink-0 rounded-full",
+            tone === "success" && "bg-emerald-300",
+            tone === "warning" && "bg-amber-300",
+            tone === "danger" && "bg-red-300",
+          )}
+          aria-hidden="true"
+        />
+      )}
       {children}
     </span>
   );
@@ -303,7 +309,7 @@ export function StatePanel({
       }
       aria-atomic={live ? true : undefined}
       className={cn(
-        "rounded-md border-s-2 p-4 shadow-none",
+        "rounded-none border-0 border-s-2 py-3 ps-4 pe-3 shadow-none",
         tone === "neutral" && "border-s-white/20 bg-white/[0.025]",
         tone === "info" && "border-s-circuit-300/60 bg-circuit-950/20",
         tone === "success" && "border-s-emerald-300/60 bg-emerald-950/15",
@@ -343,7 +349,7 @@ export function FieldInput({
   return (
     <input
       className={cn(
-        "h-10 rounded-md border border-white/[0.09] bg-white/[0.045] px-3 text-sm text-anvil-50 outline-none transition",
+        "h-10 rounded-[0.25rem] border border-white/[0.12] bg-black/15 px-3 text-sm text-anvil-50 outline-none transition",
         "placeholder:text-anvil-600 hover:border-white/20 focus:border-circuit-300/60 focus:ring-2 focus:ring-circuit-300/20",
         "disabled:cursor-not-allowed disabled:opacity-50",
         className,
@@ -360,7 +366,7 @@ export function FieldSelect({
   return (
     <select
       className={cn(
-        "h-10 rounded-md border border-white/[0.09] bg-white/[0.045] px-3 text-sm text-anvil-50 outline-none transition",
+        "h-10 rounded-[0.25rem] border border-white/[0.12] bg-black/15 px-3 text-sm text-anvil-50 outline-none transition",
         "hover:border-white/20 focus:border-circuit-300/60 focus:ring-2 focus:ring-circuit-300/20",
         "disabled:cursor-not-allowed disabled:opacity-50",
         className,
@@ -377,7 +383,7 @@ export function FieldTextArea({
   return (
     <textarea
       className={cn(
-        "w-full rounded-md border border-white/[0.09] bg-white/[0.045] px-3 py-2 text-sm text-anvil-50 outline-none transition",
+        "w-full rounded-[0.25rem] border border-white/[0.12] bg-black/15 px-3 py-2 text-sm text-anvil-50 outline-none transition",
         "placeholder:text-anvil-600 hover:border-white/20 focus:border-circuit-300/60 focus:ring-2 focus:ring-circuit-300/20",
         "disabled:cursor-not-allowed disabled:opacity-50",
         className,
@@ -450,7 +456,7 @@ export function TableHeaderCell({
   return (
     <th
       className={cn(
-        "px-4 py-3 text-xs font-medium text-anvil-400",
+        "px-3 py-2.5 text-xs font-medium text-anvil-400",
         align === "right" ? "text-end" : "text-start",
         // Grid-mode cells (role="columnheader") show a focus ring when they
         // become the roving tab stop; native table headers are unaffected.
@@ -478,7 +484,7 @@ export function TableCell({
   return (
     <td
       className={cn(
-        "px-4 py-4 align-middle text-anvil-200",
+        "px-3 py-3 align-middle text-anvil-200",
         align === "right" && "text-end",
         rest.role === "gridcell" &&
           "focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-circuit-300",

@@ -322,13 +322,16 @@ export default function ConsoleRoute() {
         <div
           ref={reviewTrapRef}
           tabIndex={-1}
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 outline-none backdrop-blur-sm"
+          className="fixed inset-0 z-50 flex items-end justify-end bg-black/55 p-3 outline-none backdrop-blur-sm sm:p-5"
           role="alertdialog"
           aria-modal="true"
           aria-labelledby="console-review-title"
           aria-describedby="console-review-description"
         >
-          <Card className="w-full max-w-xl p-6">
+          <Card
+            surface="dialog"
+            className="max-h-[calc(100vh-2.5rem)] w-full max-w-xl overflow-y-auto p-5"
+          >
             <div className="flex items-center gap-2">
               <Badge tone={pendingAction.dangerous ? "danger" : "warning"}>
                 {pendingAction.dangerous
@@ -408,7 +411,7 @@ export default function ConsoleRoute() {
         }
       />
 
-      <section className="mt-6 max-w-7xl space-y-4">
+      <section className="mt-4 max-w-none space-y-3">
         {devicesState.kind === "no_tauri" && (
           <StatePanel title={t("common.desktopRequired")} tone="info">
             <p>{t("console.desktopRequiredBody")}</p>
@@ -482,7 +485,7 @@ export default function ConsoleRoute() {
                   32;
               }}
               aria-busy={running}
-              className="h-[28rem] overflow-y-auto bg-[#0c0d12] p-4 font-mono text-xs leading-6"
+              className="h-[32rem] overflow-y-auto bg-[#090d12] p-4 font-mono text-sm leading-6"
             >
               {history.length === 0 && (
                 <p className="text-anvil-600">{t("console.hint")}</p>

@@ -1160,7 +1160,7 @@ export default function AppsRoute() {
         }
       />
 
-      <section className="mt-6 max-w-7xl space-y-4">
+      <section className="mt-4 max-w-none space-y-3">
         {devicesState.kind === "no_tauri" && (
           <StatePanel title={t("common.desktopRequired")} tone="info">
             <p>{t("apps.desktopRequiredBody")}</p>
@@ -1503,7 +1503,7 @@ function ActionOverlay({
         aria-labelledby="confirm-dialog-title"
         aria-describedby="confirm-dialog-description"
       >
-        <Card className="w-full max-w-lg p-6">
+        <Card surface="dialog" className="w-full max-w-lg p-6">
           <Badge tone="warning">{t("apps.reviewBeforeApplying")}</Badge>
           <h3
             id="confirm-dialog-title"
@@ -1577,7 +1577,7 @@ function ActionOverlay({
         aria-labelledby="applying-dialog-title"
         aria-describedby="applying-dialog-description"
       >
-        <Card className="w-full max-w-lg p-6">
+        <Card surface="dialog" className="w-full max-w-lg p-6">
           <h3
             id="applying-dialog-title"
             className="text-sm font-semibold text-anvil-50"

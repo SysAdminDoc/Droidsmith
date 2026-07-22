@@ -24,7 +24,7 @@ export default {
         ],
       },
       fontSize: {
-        xs: ["0.8125rem", { lineHeight: "1.25rem" }],
+        xs: ["0.875rem", { lineHeight: "1.25rem" }],
         sm: ["0.9375rem", { lineHeight: "1.375rem" }],
         base: ["1rem", { lineHeight: "1.5rem" }],
       },
@@ -63,8 +63,7 @@ export default {
       },
       boxShadow: {
         glow: "0 1px 2px rgba(0, 0, 0, 0.24), 0 14px 36px rgba(0, 0, 0, 0.16)",
-        panel:
-          "0 1px 0 rgba(255, 255, 255, 0.035) inset, 0 16px 40px rgba(0, 0, 0, 0.12)",
+        panel: "0 1px 0 rgba(255, 255, 255, 0.025) inset",
       },
     },
   },

@@ -479,12 +479,14 @@ async function runDesktopFlow(browser) {
   const exampleAppRow = page
     .getByRole("row")
     .filter({ hasText: "com.example.app" });
-  await exampleAppRow.getByRole("button", { name: "Export APKs" }).click();
+  await exampleAppRow.getByLabel("Actions: com.example.app").click();
+  await exampleAppRow.getByRole("menuitem", { name: "Export APKs" }).click();
   await page.getByText("APK export verified", { exact: true }).waitFor();
   await page.getByText(/Exported and hashed 2 base\/split APK files/).waitFor();
   await page.getByRole("button", { name: "Dismiss", exact: true }).click();
   await page.getByRole("button", { name: "Show advanced data export" }).click();
-  await exampleAppRow.getByRole("button", { name: "Legacy data…" }).click();
+  await exampleAppRow.getByLabel("Actions: com.example.app").click();
+  await exampleAppRow.getByRole("menuitem", { name: "Legacy data…" }).click();
   await page
     .getByText("Review deprecated data export", { exact: true })
     .waitFor();
@@ -505,7 +507,8 @@ async function runDesktopFlow(browser) {
   const reattachedExampleRow = page
     .getByRole("row")
     .filter({ hasText: "com.example.app" });
-  await reattachedExampleRow.getByRole("button", { name: "Perms" }).click();
+  await reattachedExampleRow.getByLabel("Actions: com.example.app").click();
+  await reattachedExampleRow.getByRole("menuitem", { name: "Perms" }).click();
   const permissionsPanel = page
     .getByRole("heading", { name: "Permissions", exact: true })
     .locator("xpath=../../..");
@@ -631,9 +634,9 @@ async function runDesktopFlow(browser) {
 
   const archiveActionRow = page
     .getByRole("row")
-    .filter({ hasText: "com.example.app" })
-    .filter({ has: page.getByRole("button", { name: "Archive" }) });
-  await archiveActionRow.getByRole("button", { name: "Archive" }).click();
+    .filter({ hasText: "com.example.app" });
+  await archiveActionRow.getByLabel("Actions: com.example.app").click();
+  await archiveActionRow.getByRole("menuitem", { name: "Archive" }).click();
   const archiveReview = page.getByRole("alertdialog", {
     name: "Apply package action",
   });
@@ -683,7 +686,7 @@ async function runDesktopFlow(browser) {
     .waitFor();
   if (
     (await restoredPackageRow
-      .getByRole("button", { name: "Archive" })
+      .getByRole("menuitem", { name: "Archive" })
       .count()) !== 0
   ) {
     throw new Error("Android 14 exposed an unsupported archive action");
@@ -1440,26 +1443,69 @@ async function runStaticRecoveryFallbackFlow(browser) {
   await page.close();
 }
 
-// Render the README's published routes from mocked-native state, assert none of
-// them show the browser-only "desktop shell required" placeholder, and — when
-// invoked with --capture-docs — refresh the committed screenshots. Also renders
-// each at a narrow width so the documented workflows are verified at both sizes.
+// Render every primary workspace from mocked-native state so visual-system
+// changes cannot be verified only on the default route. The three README views
+// are also refreshed when invoked with --capture-docs. Every route is exercised
+// at a narrow width to catch reflow regressions in secondary workflows.
 async function runDocCaptureFlow(browser) {
   const shots = [
     {
-      name: "droidsmith-overview",
+      id: "devices",
+      docName: "droidsmith-overview",
       nav: /Devices/,
-      anchor: (page) => page.getByText("ADB lifecycle health", { exact: true }),
+      title: "Devices",
     },
     {
-      name: "droidsmith-apps",
+      id: "wireless",
+      nav: /Wireless/,
+      title: "Wireless",
+    },
+    {
+      id: "apps",
+      docName: "droidsmith-apps",
       nav: /Apps/,
-      anchor: (page) => page.getByText("com.example.app").first(),
+      title: "Apps",
     },
     {
-      name: "droidsmith-mirror",
+      id: "debloat",
+      nav: /Debloat/,
+      title: "Debloat",
+    },
+    {
+      id: "profiles",
+      nav: /Profiles/,
+      title: "Profiles",
+    },
+    {
+      id: "mirror",
+      docName: "droidsmith-mirror",
       nav: /Mirror/,
-      anchor: (page) => page.getByText("scrcpy 4.0", { exact: true }),
+      title: "Mirror",
+    },
+    {
+      id: "console",
+      nav: /Console/,
+      title: "Console",
+    },
+    {
+      id: "logcat",
+      nav: /Logcat/,
+      title: "Logcat",
+    },
+    {
+      id: "fastboot",
+      nav: /Fastboot/,
+      title: "Fastboot",
+    },
+    {
+      id: "tuning",
+      nav: /Tuning/,
+      title: "Tuning",
+    },
+    {
+      id: "apk-analyzer",
+      nav: /APK Analyzer/,
+      title: "APK Analyzer",
     },
   ];
 
@@ -1474,19 +1520,25 @@ async function runDocCaptureFlow(browser) {
 
   for (const shot of shots) {
     await page.getByRole("button", { name: shot.nav }).first().click();
-    await shot.anchor(page).waitFor();
+    await page
+      .getByRole("heading", { name: shot.title, exact: true })
+      .waitFor();
     if (
       (await page
         .getByText("Desktop shell required", { exact: true })
         .count()) !== 0
     ) {
       throw new Error(
-        `${shot.name} still renders the desktop-required placeholder`,
+        `${shot.id} still renders the desktop-required placeholder`,
       );
     }
-    if (captureDocs) {
+    await page.screenshot({
+      path: path.join(screenshotDir, `design-${shot.id}.png`),
+      fullPage: false,
+    });
+    if (captureDocs && shot.docName) {
       await page.screenshot({
-        path: path.join(docsScreenshotDir, `${shot.name}.png`),
+        path: path.join(docsScreenshotDir, `${shot.docName}.png`),
         fullPage: false,
       });
     }
@@ -1496,8 +1548,10 @@ async function runDocCaptureFlow(browser) {
   await page.setViewportSize({ width: 390, height: 844 });
   for (const shot of shots) {
     await page.getByRole("button", { name: shot.nav }).first().click();
-    await shot.anchor(page).waitFor();
-    await assertNoHorizontalOverflow(page, `narrow ${shot.name}`);
+    await page
+      .getByRole("heading", { name: shot.title, exact: true })
+      .waitFor();
+    await assertNoHorizontalOverflow(page, `narrow ${shot.id}`);
   }
 
   assertNoConsoleErrors(errors, "doc capture smoke");

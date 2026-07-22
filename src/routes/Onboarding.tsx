@@ -74,7 +74,10 @@ export default function OnboardingTour({
   const isLast = step === STEPS.length - 1;
 
   return (
-    <Card className="mx-auto max-h-[94vh] max-w-2xl overflow-y-auto p-6">
+    <Card
+      surface="dialog"
+      className="mx-auto max-h-[94vh] max-w-2xl overflow-y-auto p-6"
+    >
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <h2

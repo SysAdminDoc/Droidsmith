@@ -272,7 +272,7 @@ export default function App() {
       <div className="relative flex min-h-full flex-col lg:h-full lg:flex-row">
         <aside
           ref={sidebarRef}
-          className="border-b border-white/[0.08] bg-[#11151b] p-4 lg:sticky lg:top-0 lg:flex lg:h-screen lg:w-[15.5rem] lg:shrink-0 lg:flex-col lg:overflow-y-auto lg:border-b-0 lg:border-e lg:p-4"
+          className="border-b border-white/[0.08] bg-[#0f141a] px-3 py-3 lg:sticky lg:top-0 lg:flex lg:h-screen lg:w-[13.5rem] lg:shrink-0 lg:flex-col lg:overflow-y-auto lg:border-b-0 lg:border-e lg:px-3 lg:py-4"
           aria-label={t("app.sidebarLabel")}
         >
           <div className="flex items-start justify-between gap-4 lg:block">
@@ -280,7 +280,7 @@ export default function App() {
           </div>
 
           <nav
-            className="nav-strip mt-4 flex snap-x gap-2 overflow-x-auto pb-2 text-sm lg:block lg:space-y-1 lg:overflow-visible lg:pb-0"
+            className="nav-strip mt-3 flex snap-x gap-1.5 overflow-x-auto pb-2 text-sm lg:block lg:space-y-0.5 lg:overflow-visible lg:pb-0"
             aria-label={t("app.primaryNav")}
           >
             {NAV_ITEMS.map((item) => (
@@ -310,7 +310,7 @@ export default function App() {
           id="main-content"
           tabIndex={-1}
           aria-label={t(activeItem.labelKey)}
-          className="min-w-0 flex-1 overflow-auto px-4 py-5 outline-none sm:px-6 lg:h-full lg:px-8 lg:py-6 xl:px-10"
+          className="min-w-0 flex-1 overflow-auto px-4 py-4 outline-none sm:px-5 lg:h-full lg:px-6 lg:py-4 xl:px-7"
         >
           <div className="mx-auto max-w-[88rem]">
             <LazyRoute item={activeItem} />
@@ -647,12 +647,12 @@ function ShellActions({
   const { t } = useTranslation();
 
   return (
-    <div className={cn("grid grid-cols-3 gap-1", className)}>
+    <div className={cn("grid gap-0.5", className)}>
       <Button
         type="button"
         variant="ghost"
         size="sm"
-        className="w-full px-1.5"
+        className="w-full justify-start px-2"
         onClick={onOpenSettings}
       >
         <SettingsIcon />
@@ -662,7 +662,7 @@ function ShellActions({
         type="button"
         variant="ghost"
         size="sm"
-        className="w-full px-1.5"
+        className="w-full justify-start px-2"
         onClick={onOpenGuide}
       >
         <HelpIcon />
@@ -672,7 +672,7 @@ function ShellActions({
         type="button"
         variant="ghost"
         size="sm"
-        className="w-full px-1.5"
+        className="w-full justify-start px-2"
         onClick={onOpenAbout}
       >
         <AboutIcon />
@@ -769,12 +769,10 @@ function Brand({ state }: { state: LoadState }) {
       <div className="flex items-center gap-3">
         <LogoMark />
         <div className="min-w-0">
-          <h1 className="truncate text-lg font-semibold tracking-tight text-anvil-50">
+          <h1 className="truncate text-base font-semibold tracking-tight text-anvil-50">
             {t("app.name")}
           </h1>
-          <p className="mt-0.5 text-xs leading-5 text-anvil-400">
-            {t("app.tagline")}
-          </p>
+          <p className="sr-only">{t("app.tagline")}</p>
         </div>
       </div>
       {state.status === "ok" && (
@@ -810,12 +808,12 @@ function NavStub({
       aria-current={active ? "page" : undefined}
       aria-describedby={`${item.id}-description`}
       className={cn(
-        "group relative flex min-w-[11.5rem] items-center gap-3 rounded-md px-3 py-2.5 text-start transition duration-150 lg:min-w-0",
+        "group relative flex min-w-[11.5rem] items-center gap-2.5 rounded-[0.2rem] px-3 py-2 text-start transition duration-150 lg:min-w-0",
         "snap-start",
         "focus:outline-none focus-visible:ring-2 focus-visible:ring-circuit-300 focus-visible:ring-offset-2 focus-visible:ring-offset-anvil-950",
         active
-          ? "bg-circuit-300/[0.11] text-anvil-50 before:absolute before:inset-y-2 before:start-0 before:w-0.5 before:rounded-full before:bg-circuit-300"
-          : "text-anvil-300 hover:bg-white/[0.045] hover:text-anvil-50",
+          ? "bg-white/[0.055] text-anvil-50 before:absolute before:inset-y-1.5 before:start-0 before:w-0.5 before:bg-circuit-300"
+          : "text-anvil-300 hover:bg-white/[0.035] hover:text-anvil-50",
       )}
     >
       <NavIcon id={item.id} active={active} />
@@ -835,7 +833,7 @@ function LogoMark() {
     <img
       src={droidsmithLogo}
       alt=""
-      className="h-14 w-14 shrink-0 rounded-2xl"
+      className="h-10 w-10 shrink-0 rounded-lg"
       aria-hidden="true"
     />
   );

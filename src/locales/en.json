@@ -1236,6 +1236,7 @@
     "tagFilter": "Tag filter",
     "minLevel": "Min level",
     "textSearch": "Text search",
+    "filters": "More filters",
     "startTail": "Start tail",
     "stop": "Stop",
     "pauseScroll": "Pause scroll",

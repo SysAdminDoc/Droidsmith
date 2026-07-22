@@ -66,7 +66,7 @@ export default function ApkAnalyzerRoute() {
         }
       />
 
-      <section className="mt-6 max-w-5xl space-y-4">
+      <section className="mt-4 max-w-none space-y-3">
         {state.kind === "idle" && (
           <StatePanel title={t("apk.emptyTitle")} tone="info">
             <p>{t("apk.emptyBody")}</p>
@@ -433,7 +433,7 @@ function SignatureVerificationReport({
               <h5 className="text-xs font-semibold text-amber-100">
                 {t("apk.verification.warnings")}
               </h5>
-              <ul className="mt-2 space-y-1 font-mono text-[11px] text-amber-100/75">
+              <ul className="mt-2 space-y-1 font-mono text-xs text-amber-100/75">
                 {verification.warnings.map((warning, index) => (
                   <li key={`${index}-${warning}`} className="break-all">
                     {warning}
@@ -512,7 +512,7 @@ function LineageEntry({
         <span className="text-xs font-semibold text-anvil-100">
           {t("apk.verification.lineagePosition", { position: entry.position })}
         </span>
-        <span className="text-[11px] text-anvil-400">
+        <span className="text-xs text-anvil-400">
           {capabilities.length > 0
             ? capabilities.join(" · ")
             : t("apk.verification.noCapabilities")}
