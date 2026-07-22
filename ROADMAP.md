@@ -37,16 +37,4 @@ IDs continue from R-096 / IMP-73.
 
 ### P3
 
-- [ ] P3 — IMP-75 — Extract `Debloat.tsx` into `src/routes/debloat/`
-  Why: 1,928 LOC with ~10 inline sub-components; matches the completed IMP-67
-  (Devices) / IMP-72 refactor pattern; improves maintainability and testability.
-  Evidence: `src/routes/Debloat.tsx` (DebloatApplyReview, PackErrors,
-  PackImportControl, PackCard, PackPicker, PackPreview, CompatibilityChecks,
-  QueueApply*, QuirkHint).
-  Touches: `src/routes/Debloat.tsx` → new `src/routes/debloat/` modules.
-  Acceptance: each panel lives in its own file under `src/routes/debloat/`;
-  `Debloat.tsx` becomes a thin composition root; typecheck/lint/tests and
-  `ui:smoke` stay green with no behavior change.
-  Complexity: M
-
 
