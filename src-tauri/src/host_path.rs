@@ -12,6 +12,12 @@ const MAX_ACTIVE_GRANTS: usize = 64;
 /// folder" request. Bounded so a long session cannot grow the set without limit.
 const MAX_REVEALABLE_ARTIFACTS: usize = 64;
 
+#[derive(Debug)]
+struct ProducedArtifact {
+    display_path: String,
+    canonical_path: PathBuf,
+}
+
 /// A native-dialog purpose is also the authorization scope. Read grants can
 /// never reach write commands (or another read command), and vice versa.
 #[derive(specta::Type, Debug, Clone, Copy, PartialEq, Eq, Hash, Deserialize, Serialize)]
@@ -169,7 +175,7 @@ pub struct PathGrantStore {
     /// Display paths of artifacts Droidsmith has written this session, kept so a
     /// later "reveal in folder" request can be authorized against a path the app
     /// itself produced instead of an arbitrary renderer-supplied path.
-    revealable: Mutex<VecDeque<String>>,
+    revealable: Mutex<VecDeque<ProducedArtifact>>,
     ttl: Duration,
 }
 
@@ -220,11 +226,6 @@ impl PathGrantStore {
         );
         drop(grants);
         let local_path = crate::fs_util::display_path(&path);
-        // Save-dialog destinations are the only paths a reveal request may later
-        // target. Read grants (file pickers) never become revealable.
-        if purpose.is_write() {
-            self.record_revealable(&local_path);
-        }
         Ok(HostPathGrant {
             id,
             purpose,
@@ -232,27 +233,60 @@ impl PathGrantStore {
         })
     }
 
-    fn record_revealable(&self, local_path: &str) {
-        let Ok(mut revealable) = self.revealable.lock() else {
-            return;
-        };
-        if revealable.iter().any(|existing| existing == local_path) {
-            return;
+    /// Authorize reveal/open only after a producer has successfully committed a
+    /// regular file. Issuing or consuming a save destination is not proof that
+    /// Droidsmith wrote it: validation, ADB, or disk I/O may still fail.
+    pub fn record_produced(&self, local_path: &str) -> Result<(), PathGrantError> {
+        let path = Path::new(local_path);
+        let metadata = fs::symlink_metadata(path)
+            .map_err(|error| PathGrantError::InvalidPath(error.to_string()))?;
+        if metadata.file_type().is_symlink() || !metadata.is_file() {
+            return Err(PathGrantError::InvalidPath(
+                "produced artifact is not a regular file".to_string(),
+            ));
+        }
+        let canonical_path = fs::canonicalize(path)
+            .map_err(|error| PathGrantError::InvalidPath(error.to_string()))?;
+        let mut revealable = self
+            .revealable
+            .lock()
+            .map_err(|_| PathGrantError::RegistryUnavailable)?;
+        if let Some(index) = revealable
+            .iter()
+            .position(|existing| existing.display_path == local_path)
+        {
+            revealable.remove(index);
         }
         if revealable.len() >= MAX_REVEALABLE_ARTIFACTS {
             revealable.pop_front();
         }
-        revealable.push_back(local_path.to_string());
+        revealable.push_back(ProducedArtifact {
+            display_path: local_path.to_string(),
+            canonical_path,
+        });
+        Ok(())
     }
 
-    /// True only for a path Droidsmith itself wrote via a save-dialog grant this
-    /// session. Everything else — including arbitrary renderer-supplied paths —
-    /// is rejected, so the renderer can never drive an open of an unrelated path.
-    pub fn is_revealable(&self, local_path: &str) -> bool {
-        self.revealable
-            .lock()
-            .map(|revealable| revealable.iter().any(|existing| existing == local_path))
-            .unwrap_or(false)
+    /// Resolve an exact produced-artifact display path back to the canonical
+    /// regular file that was recorded. Re-canonicalization prevents a later
+    /// symlink swap from redirecting the OS opener to another host path.
+    pub fn resolve_produced(&self, local_path: &str) -> Option<PathBuf> {
+        let revealable = self.revealable.lock().ok()?;
+        let produced = revealable
+            .iter()
+            .find(|existing| existing.display_path == local_path)?;
+        let path = Path::new(local_path);
+        let metadata = fs::symlink_metadata(path).ok()?;
+        if metadata.file_type().is_symlink() || !metadata.is_file() {
+            return None;
+        }
+        let canonical = fs::canonicalize(path).ok()?;
+        (canonical == produced.canonical_path).then_some(canonical)
+    }
+
+    #[cfg(test)]
+    fn is_revealable(&self, local_path: &str) -> bool {
+        self.resolve_produced(local_path).is_some()
     }
 
     /// Consume exactly one matching grant. Wrong-purpose probes do not burn a
@@ -352,7 +386,9 @@ pub fn validate_suggested_file_name(
         || name.len() > 255
         || name != name.trim()
         || name.chars().any(char::is_control)
-        || name.contains(['/', '\\'])
+        || name.contains(['<', '>', ':', '"', '/', '\\', '|', '?', '*'])
+        || name.ends_with('.')
+        || is_windows_reserved_name(&name)
         || matches!(name.as_str(), "." | "..")
     {
         return Err(PathGrantError::InvalidPath(
@@ -360,6 +396,19 @@ pub fn validate_suggested_file_name(
         ));
     }
     Ok(Some(name))
+}
+
+fn is_windows_reserved_name(name: &str) -> bool {
+    let stem = name
+        .split('.')
+        .next()
+        .unwrap_or_default()
+        .to_ascii_uppercase();
+    matches!(stem.as_str(), "CON" | "PRN" | "AUX" | "NUL")
+        || stem
+            .strip_prefix("COM")
+            .or_else(|| stem.strip_prefix("LPT"))
+            .is_some_and(|suffix| suffix.len() == 1 && matches!(suffix.as_bytes()[0], b'1'..=b'9'))
 }
 
 fn normalize_selected_path(
@@ -573,10 +622,14 @@ mod tests {
         store.issue(&source, HostPathPurpose::InstallOpen).unwrap();
         assert!(!store.is_revealable(&crate::fs_util::display_path(&source)));
 
-        // A save destination is revealable by the exact display path returned.
+        // Issuing a save destination is not evidence that the producer wrote
+        // it; a failed save must not authorize a pre-existing arbitrary file.
         let grant = store
             .issue(&saved, HostPathPurpose::PackageExportSave)
             .unwrap();
+        assert!(!store.is_revealable(&grant.local_path));
+        fs::write(&saved, b"zip").unwrap();
+        store.record_produced(&grant.local_path).unwrap();
         assert!(store.is_revealable(&grant.local_path));
         // An arbitrary renderer-supplied path is rejected.
         assert!(!store.is_revealable("/etc/passwd"));
@@ -585,23 +638,53 @@ mod tests {
 
     #[test]
     fn revealable_registry_is_bounded_and_deduplicated() {
-        // Exercise the registry directly: `issue` also consumes the separate
-        // one-shot grant map, whose own cap is unrelated to this bound.
+        let dir = test_dir("reveal-bound");
         let store = PathGrantStore::default();
-        store.record_revealable("/artifacts/a.zip");
-        store.record_revealable("/artifacts/a.zip");
+        let first = dir.join("a.zip");
+        fs::write(&first, b"a").unwrap();
+        let first = crate::fs_util::display_path(&first);
+        store.record_produced(&first).unwrap();
+        store.record_produced(&first).unwrap();
         assert_eq!(store.revealable.lock().unwrap().len(), 1);
-        assert!(store.is_revealable("/artifacts/a.zip"));
+        assert!(store.is_revealable(&first));
 
         for index in 0..MAX_REVEALABLE_ARTIFACTS {
-            store.record_revealable(&format!("/artifacts/fill-{index}.zip"));
+            let path = dir.join(format!("fill-{index}.zip"));
+            fs::write(&path, index.to_string()).unwrap();
+            store
+                .record_produced(&crate::fs_util::display_path(&path))
+                .unwrap();
         }
         assert_eq!(
             store.revealable.lock().unwrap().len(),
             MAX_REVEALABLE_ARTIFACTS
         );
         // The oldest entry was evicted once the bound was exceeded.
-        assert!(!store.is_revealable("/artifacts/a.zip"));
+        assert!(!store.is_revealable(&first));
+    }
+
+    #[test]
+    fn produced_registry_rejects_symlink_retargeting() {
+        let dir = test_dir("reveal-symlink");
+        let artifact = dir.join("artifact.txt");
+        fs::write(&artifact, b"artifact").unwrap();
+        let display = crate::fs_util::display_path(&artifact);
+        let store = PathGrantStore::default();
+        store.record_produced(&display).unwrap();
+        assert!(store.is_revealable(&display));
+
+        fs::remove_file(&artifact).unwrap();
+        let replacement = dir.join("replacement.txt");
+        fs::write(&replacement, b"replacement").unwrap();
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(&replacement, &artifact).unwrap();
+        #[cfg(windows)]
+        if std::os::windows::fs::symlink_file(&replacement, &artifact).is_err() {
+            // Windows may require Developer Mode or elevated privileges to
+            // create the test link; production still rejects symlink metadata.
+            return;
+        }
+        assert!(!store.is_revealable(&display));
     }
 
     #[test]
@@ -610,7 +693,21 @@ mod tests {
             validate_suggested_file_name(Some("capture.png".to_string())).unwrap(),
             Some("capture.png".to_string())
         );
-        for invalid in ["", ".", "..", "../escape", "sub/file", "sub\\file"] {
+        for invalid in [
+            "",
+            ".",
+            "..",
+            "../escape",
+            "sub/file",
+            "sub\\file",
+            "bad:name.txt",
+            "report?.txt",
+            "trailing.",
+            "CON",
+            "nul.txt",
+            "COM1.log",
+            "LPT9",
+        ] {
             assert_eq!(
                 validate_suggested_file_name(Some(invalid.to_string()))
                     .unwrap_err()

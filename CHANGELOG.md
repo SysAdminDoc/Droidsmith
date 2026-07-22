@@ -20,6 +20,10 @@ each milestone tag.
   device-side logs, resize buffers, or invoke mutating `dumpsys` service verbs
   now require the same reviewed and journaled execution path as other device
   mutations.
+- Reveal and Open With authorization is now registered only after Droidsmith
+  successfully produces a regular artifact, then revalidates its canonical
+  identity before launching the OS. Merely choosing a save destination—and
+  later symlink retargeting—can no longer authorize an unrelated host file.
 
 ### Fixed
 
@@ -31,6 +35,10 @@ each milestone tag.
   memory, repairs partial tails by scanning backward, and migrates legacy
   filenames to bounded collision-resistant per-device names that work on
   Windows reserved-name edge cases.
+- Diagnostics, Logcat, and Layout Inspector exports now commit through sibling
+  staging files instead of truncating their destination in place; failed writes
+  leave the prior artifact intact. Suggested save names also reject Windows
+  device names and invalid filename characters before opening the native dialog.
 
 ## [0.9.7] - 2026-07-21
 

@@ -527,23 +527,24 @@ pub async fn save_diagnostics(
         code: "no_app_data_dir",
         message: error.to_string(),
     })?;
-    spawn_blocking_operation(move || {
+    let result = spawn_blocking_operation(move || {
         let preview = build_support_preview(&app_data_dir)?;
-        let mut file = OpenOptions::new()
-            .create(true)
-            .truncate(true)
-            .write(true)
-            .open(&path)?;
+        let staged = StagedArtifact::new(&path)?;
+        let mut file = OpenOptions::new().write(true).open(staged.path())?;
         file.write_all(preview.content.as_bytes())?;
         file.flush()?;
         file.sync_data()?;
+        drop(file);
+        let artifact = staged.commit(ArtifactKind::AnyFile)?;
         Ok(support_bundle::SavedResult {
-            path: path.display().to_string(),
+            path: artifact.local_path,
             byte_size: preview.byte_size,
             generated_at: preview.generated_at,
         })
     })
-    .await
+    .await?;
+    grants.record_produced(&result.path)?;
+    Ok(result)
 }
 
 /// Remove only erasable diagnostic history: rotating crash logs and host-wide
@@ -884,7 +885,9 @@ pub fn save_profile(
     profile: profile::Profile,
 ) -> Result<HostArtifact, CommandError> {
     let path = grants.consume(&path_grant, HostPathPurpose::ProfileSave)?;
-    Ok(profile::save(&path, &profile)?)
+    let artifact = profile::save(&path, &profile)?;
+    grants.record_produced(&artifact.local_path)?;
+    Ok(artifact)
 }
 
 fn profile_preview_rows(
@@ -1483,8 +1486,11 @@ pub async fn export_settings(
 ) -> Result<settings::SettingsExportResult, CommandError> {
     let destination = grants.consume(&path_grant, HostPathPurpose::SettingsExport)?;
     let app_data_dir = settings_app_data_dir(&app)?;
-    spawn_blocking_operation(move || Ok(settings::export(&app_data_dir, scope, &destination)?))
-        .await
+    let result =
+        spawn_blocking_operation(move || Ok(settings::export(&app_data_dir, scope, &destination)?))
+            .await?;
+    grants.record_produced(&result.path)?;
+    Ok(result)
 }
 
 /// Parse and validate a portable settings document, then return only a
@@ -1655,20 +1661,12 @@ pub fn reveal_in_folder(
     grants: tauri::State<'_, PathGrantStore>,
     path: String,
 ) -> Result<(), CommandError> {
-    if !grants.is_revealable(&path) {
-        return Err(CommandError {
-            code: "reveal_path_not_produced",
-            message: "only artifacts Droidsmith produced this session can be revealed".to_string(),
-        });
-    }
-    let target = Path::new(&path);
-    if !target.exists() {
-        return Err(CommandError {
-            code: "reveal_path_missing",
-            message: "the artifact is no longer at that location".to_string(),
-        });
-    }
-    let (program, args) = reveal_command(target);
+    let target = grants.resolve_produced(&path).ok_or_else(|| CommandError {
+        code: "reveal_path_not_produced",
+        message: "only intact artifacts Droidsmith produced this session can be revealed"
+            .to_string(),
+    })?;
+    let (program, args) = reveal_command(&target);
     std::process::Command::new(&program)
         .args(&args)
         .spawn()
@@ -1687,20 +1685,11 @@ pub fn open_artifact_with(
     grants: tauri::State<'_, PathGrantStore>,
     path: String,
 ) -> Result<(), CommandError> {
-    if !grants.is_revealable(&path) {
-        return Err(CommandError {
-            code: "open_path_not_produced",
-            message: "only artifacts Droidsmith produced this session can be opened".to_string(),
-        });
-    }
-    let target = Path::new(&path);
-    if !target.is_file() {
-        return Err(CommandError {
-            code: "open_path_missing",
-            message: "the artifact is no longer at that location".to_string(),
-        });
-    }
-    let (program, args) = open_with_command(target);
+    let target = grants.resolve_produced(&path).ok_or_else(|| CommandError {
+        code: "open_path_not_produced",
+        message: "only intact artifacts Droidsmith produced this session can be opened".to_string(),
+    })?;
+    let (program, args) = open_with_command(&target);
     std::process::Command::new(&program)
         .args(&args)
         .spawn()
@@ -2184,7 +2173,9 @@ pub fn export_recovery_baseline(
     }
     let packages = adb::list_packages(&transport, &target, adb::PackageFilter::All, userId)?;
     let baseline = recovery_baseline::build(&target, userId, pack, &packages, actions, iso_now())?;
-    Ok(recovery_baseline::save(&path, &baseline)?)
+    let artifact = recovery_baseline::save(&path, &baseline)?;
+    grants.record_produced(&artifact.local_path)?;
+    Ok(artifact)
 }
 
 /// Load and compare a baseline without mutating the device. Returned plans are
@@ -2506,12 +2497,14 @@ pub async fn save_logcat_export(
             message: "Logcat export target must not be a symbolic link".to_string(),
         });
     }
-    let display_path = path.display().to_string();
-    spawn_blocking_operation(move || {
-        std::fs::write(&path, contents.as_bytes())?;
-        Ok(display_path)
+    let result = spawn_blocking_operation(move || {
+        let staged = StagedArtifact::new(&path)?;
+        std::fs::write(staged.path(), contents.as_bytes())?;
+        Ok(staged.commit(ArtifactKind::AnyFile)?.local_path)
     })
-    .await
+    .await?;
+    grants.record_produced(&result)?;
+    Ok(result)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -2914,7 +2907,7 @@ pub async fn pull_file(
     let selector = target.adb_selector();
     let adb_path = transport.adb_path.clone();
     let sink = operations::channel_sink(on_event);
-    spawn_blocking_operation(move || {
+    let artifact = spawn_blocking_operation(move || {
         let staged = StagedArtifact::new(&output_target)?;
         let mut args = selector;
         args.extend([
@@ -2933,7 +2926,9 @@ pub async fn pull_file(
         completed_adb_output(output, "adb pull")?;
         Ok(staged.commit(ArtifactKind::AnyFile)?)
     })
-    .await
+    .await?;
+    grants.record_produced(&artifact.local_path)?;
+    Ok(artifact)
 }
 
 #[derive(specta::Type, Debug, Clone, Serialize)]
@@ -3242,7 +3237,7 @@ pub async fn export_package_apks(
     let preflight = backup::preflight(&transport, &target, &package, userId)?;
     let adb_path = transport.adb_path.clone();
     let sink = operations::channel_sink(on_event);
-    spawn_blocking_operation(move || {
+    let result = spawn_blocking_operation(move || {
         Ok(backup::export_apks(
             &adb_path,
             &target,
@@ -3252,7 +3247,9 @@ pub async fn export_package_apks(
             sink,
         )?)
     })
-    .await
+    .await?;
+    grants.record_produced(&result.artifact.local_path)?;
+    Ok(result)
 }
 
 /// Capture an opaque Android bugreport only after a dedicated privacy
@@ -3280,7 +3277,7 @@ pub async fn capture_bugreport(
     let platform_tools_version = adb::locate_adb().version;
     let adb_path = transport.adb_path;
     let sink = operations::channel_sink(on_event);
-    spawn_blocking_operation(move || {
+    let result = spawn_blocking_operation(move || {
         Ok(bugreport::capture(
             &adb_path,
             &target,
@@ -3290,7 +3287,10 @@ pub async fn capture_bugreport(
             sink,
         )?)
     })
-    .await
+    .await?;
+    grants.record_produced(&result.report.local_path)?;
+    grants.record_produced(&result.sidecar.local_path)?;
+    Ok(result)
 }
 
 /// Probe the selected device for the platform Perfetto service and return only
@@ -3332,7 +3332,7 @@ pub async fn capture_perfetto_trace(
     let destination = grants.consume(&path_grant, HostPathPurpose::PerfettoTraceSave)?;
     let adb_path = transport.adb_path;
     let sink = operations::channel_sink(on_event);
-    spawn_blocking_operation(move || {
+    let result = spawn_blocking_operation(move || {
         Ok(perfetto::capture(
             &adb_path,
             &target,
@@ -3342,7 +3342,9 @@ pub async fn capture_perfetto_trace(
             sink,
         )?)
     })
-    .await
+    .await?;
+    grants.record_produced(&result.artifact.local_path)?;
+    Ok(result)
 }
 
 /// Advanced-only deprecated `adb backup` path. The produced `.ab` is forced
@@ -3366,7 +3368,7 @@ pub async fn backup_package(
     let preflight = backup::preflight(&transport, &target, &package, userId)?;
     let adb_path = transport.adb_path.clone();
     let sink = operations::channel_sink(on_event);
-    spawn_blocking_operation(move || {
+    let result = spawn_blocking_operation(move || {
         Ok(backup::export_legacy_data(
             &adb_path,
             &target,
@@ -3376,7 +3378,9 @@ pub async fn backup_package(
             sink,
         )?)
     })
-    .await
+    .await?;
+    grants.record_produced(&result.artifact.local_path)?;
+    Ok(result)
 }
 
 /// List runtime permissions for a package.
@@ -3598,12 +3602,14 @@ pub async fn save_layout_export(
             message: "Layout export target must not be a symbolic link".to_string(),
         });
     }
-    let display_path = path.display().to_string();
-    spawn_blocking_operation(move || {
-        std::fs::write(&path, contents.as_bytes())?;
-        Ok(display_path)
+    let result = spawn_blocking_operation(move || {
+        let staged = StagedArtifact::new(&path)?;
+        std::fs::write(staged.path(), contents.as_bytes())?;
+        Ok(staged.commit(ArtifactKind::AnyFile)?.local_path)
     })
-    .await
+    .await?;
+    grants.record_produced(&result)?;
+    Ok(result)
 }
 
 /// Take a screenshot on the device and pull it to a local path.
@@ -3630,7 +3636,9 @@ pub fn take_screenshot(
     // partial capture never leaks onto /sdcard.
     let _ = transport.shell_target(&target, &["rm", "-f", &remote]);
     pulled?;
-    Ok(staged.commit(ArtifactKind::Png)?)
+    let artifact = staged.commit(ArtifactKind::Png)?;
+    grants.record_produced(&artifact.local_path)?;
+    Ok(artifact)
 }
 
 /// Build a per-capture unique `/sdcard` path. Uses the process id plus a
@@ -3747,21 +3755,43 @@ pub fn launch_scrcpy(
 #[tauri::command]
 #[specta::specta]
 pub fn scrcpy_session_status(
+    grants: tauri::State<'_, PathGrantStore>,
     session_id: u64,
 ) -> Result<crate::scrcpy::ScrcpySession, CommandError> {
-    crate::scrcpy::status(session_id).map_err(|e| CommandError {
+    let session = crate::scrcpy::status(session_id).map_err(|e| CommandError {
         code: "scrcpy_session_not_found",
         message: e,
-    })
+    })?;
+    if let Some(path) =
+        crate::scrcpy::finished_recording(session_id).map_err(|message| CommandError {
+            code: "scrcpy_session_not_found",
+            message,
+        })?
+    {
+        grants.record_produced(&path)?;
+    }
+    Ok(session)
 }
 
 #[tauri::command]
 #[specta::specta]
-pub fn stop_scrcpy(session_id: u64) -> Result<crate::scrcpy::ScrcpySession, CommandError> {
-    crate::scrcpy::stop(session_id).map_err(|e| CommandError {
+pub fn stop_scrcpy(
+    grants: tauri::State<'_, PathGrantStore>,
+    session_id: u64,
+) -> Result<crate::scrcpy::ScrcpySession, CommandError> {
+    let session = crate::scrcpy::stop(session_id).map_err(|e| CommandError {
         code: "scrcpy_stop_failed",
         message: e,
-    })
+    })?;
+    if let Some(path) =
+        crate::scrcpy::finished_recording(session_id).map_err(|message| CommandError {
+            code: "scrcpy_stop_failed",
+            message,
+        })?
+    {
+        grants.record_produced(&path)?;
+    }
+    Ok(session)
 }
 
 /// Locate the gnirehtet binary on the system. Returns the path if found.
@@ -3908,7 +3938,7 @@ pub async fn extract_apk(
     let selector = target.adb_selector();
     let adb_path = transport.adb_path.clone();
     let sink = operations::channel_sink(on_event);
-    spawn_blocking_operation(move || {
+    let artifact = spawn_blocking_operation(move || {
         let staged = StagedArtifact::new(&output_target)?;
         let mut args = selector;
         args.extend([
@@ -3927,7 +3957,9 @@ pub async fn extract_apk(
         completed_adb_output(output, "adb pull")?;
         Ok(staged.commit(ArtifactKind::Apk)?)
     })
-    .await
+    .await?;
+    grants.record_produced(&artifact.local_path)?;
+    Ok(artifact)
 }
 
 /// List all debloat packs from the app's `packs/` resource directory.
@@ -4367,6 +4399,7 @@ pub fn export_device_pack(
             code: "io_error",
             message: error.to_string(),
         })?;
+    grants.record_produced(&artifact.local_path)?;
 
     Ok(ExportedDevicePack {
         pack_id: pack.id,

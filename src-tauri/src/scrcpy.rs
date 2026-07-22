@@ -136,6 +136,7 @@ struct ManagedScrcpySession {
     session: ScrcpySession,
     child: Child,
     stderr: CapturedTail,
+    record_path: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -326,6 +327,7 @@ pub fn launch(
             session: session.clone(),
             child,
             stderr,
+            record_path: record_path.map(Path::to_path_buf),
         },
     );
     Ok(session)
@@ -370,6 +372,28 @@ pub fn stop(session_id: u64) -> Result<ScrcpySession, String> {
     // Drop any other terminated sessions now that we hold the lock.
     reap_locked(&mut guard, Some(session_id));
     Ok(session)
+}
+
+/// Return a completed recording only after scrcpy has exited and closed it.
+/// The command layer then registers this exact regular file for Reveal/Open
+/// With; merely selecting a recording destination grants no such authority.
+pub fn finished_recording(session_id: u64) -> Result<Option<String>, String> {
+    let guard = sessions()
+        .lock()
+        .map_err(|_| "scrcpy session supervisor lock poisoned".to_string())?;
+    let managed = guard
+        .get(&session_id)
+        .ok_or_else(|| format!("scrcpy session {session_id} is not tracked"))?;
+    if managed.session.state == ScrcpySessionState::Running {
+        return Ok(None);
+    }
+    let Some(path) = managed.record_path.as_deref() else {
+        return Ok(None);
+    };
+    let metadata = std::fs::symlink_metadata(path).ok();
+    Ok(metadata
+        .filter(|metadata| metadata.is_file() && !metadata.file_type().is_symlink())
+        .map(|_| crate::fs_util::display_path(path)))
 }
 
 fn refresh_status(managed: &mut ManagedScrcpySession) -> Result<(), String> {
