@@ -75,6 +75,7 @@ function main() {
   runSchemaLint();
   runNpm("bundle:check");
   runNpm("release:smoke");
+  validateBuiltRendererBundle(readJson(policyPath).rendererBundle);
 
   stdout.write("Authoritative release policy gate OK\n");
 }
@@ -89,6 +90,7 @@ function validatePolicy() {
     Array.isArray(policy.exceptions),
     "release-policy.json exceptions must be an array",
   );
+  validateRendererBundlePolicy(policy.rendererBundle);
 
   const byKind = new Map();
   for (const exception of policy.exceptions) {
@@ -127,6 +129,75 @@ function validatePolicy() {
   validatePlatformToolsPolicy();
   validateLanguageContract();
   validateSubprocessCaptureContract();
+}
+
+function validateRendererBundlePolicy(policy) {
+  assert(
+    Number.isSafeInteger(policy?.initialJavaScriptBudgetBytes) &&
+      policy.initialJavaScriptBudgetBytes > 0 &&
+      policy.initialJavaScriptBudgetBytes < 903_182,
+    "renderer initialJavaScriptBudgetBytes must be a positive integer below the pre-split 903182-byte entry",
+  );
+  assert(
+    Array.isArray(policy.dynamicRouteEntries) &&
+      policy.dynamicRouteEntries.length === 11 &&
+      new Set(policy.dynamicRouteEntries).size === 11 &&
+      policy.dynamicRouteEntries.every((entry) =>
+        /^src\/routes\/[A-Za-z]+\.tsx$/u.test(entry),
+      ),
+    "renderer dynamicRouteEntries must list the eleven unique route entry modules",
+  );
+}
+
+function validateBuiltRendererBundle(policy) {
+  const distRoot = path.join(repoRoot, "dist");
+  const manifest = readJson(path.join(distRoot, ".vite", "manifest.json"));
+  const assetSizes = Object.fromEntries(
+    Object.values(manifest)
+      .filter((entry) => typeof entry?.file === "string")
+      .map((entry) => [
+        entry.file,
+        fs.statSync(path.join(distRoot, entry.file)).size,
+      ]),
+  );
+  const result = validateRendererBundleManifest(policy, manifest, assetSizes);
+  stdout.write(
+    `Renderer entry budget OK (${result.initialBytes}/${policy.initialJavaScriptBudgetBytes} bytes; ${policy.dynamicRouteEntries.length} dynamic routes)\n`,
+  );
+}
+
+export function validateRendererBundleManifest(policy, manifest, assetSizes) {
+  validateRendererBundlePolicy(policy);
+  const entries = Object.entries(manifest).filter(
+    ([, value]) => value?.isEntry === true,
+  );
+  assert(entries.length === 1, "Vite manifest must contain one renderer entry");
+  const [, entry] = entries[0];
+  const dynamicImports = new Set(entry.dynamicImports ?? []);
+
+  for (const route of policy.dynamicRouteEntries) {
+    assert(
+      dynamicImports.has(route),
+      `renderer entry is missing dynamic route import: ${route}`,
+    );
+    assert(
+      typeof manifest[route]?.file === "string" &&
+        Number.isSafeInteger(assetSizes[manifest[route].file]) &&
+        assetSizes[manifest[route].file] > 0,
+      `renderer route chunk is missing or empty: ${route}`,
+    );
+  }
+
+  const initialBytes = assetSizes[entry.file];
+  assert(
+    Number.isSafeInteger(initialBytes),
+    `renderer entry asset is missing: ${entry.file}`,
+  );
+  assert(
+    initialBytes <= policy.initialJavaScriptBudgetBytes,
+    `renderer entry ${entry.file} is ${initialBytes} bytes; budget is ${policy.initialJavaScriptBudgetBytes}`,
+  );
+  return { entryFile: entry.file, initialBytes };
 }
 
 function validateSubprocessCaptureContract() {

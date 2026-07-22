@@ -14,7 +14,12 @@
     "aboutDescription": "Eine fokussierte Desktop-Werkstatt zum Inspizieren, Verbinden und Verwalten von Android-Geräten mit nachvollziehbaren ADB-Operationen.",
     "sidebarLabel": "Anwendungs-Seitenleiste",
     "primaryNav": "Hauptnavigation",
-    "routeChanged": "{{route}}-Arbeitsbereich geladen"
+    "routeChanged": "{{route}}-Arbeitsbereich geladen",
+    "routeLoading": "{{route}} wird geladen…",
+    "routeLoadingBody": "Dieser Arbeitsbereich wird im Hintergrund vorbereitet.",
+    "routeLoadFailed": "{{route}} konnte nicht geladen werden",
+    "routeLoadFailedBody": "Das Arbeitsbereichsmodul wurde nicht geladen. Prüfen Sie die lokale Installation oder Verbindung und versuchen Sie es erneut.",
+    "retryRoute": "Arbeitsbereich erneut laden"
   },
   "language": {
     "label": "Sprache",

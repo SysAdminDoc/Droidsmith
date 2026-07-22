@@ -14,7 +14,12 @@
     "aboutDescription": "A focused desktop workshop for inspecting, connecting, and managing Android devices with traceable ADB operations.",
     "sidebarLabel": "Application sidebar",
     "primaryNav": "Primary navigation",
-    "routeChanged": "{{route}} workspace loaded"
+    "routeChanged": "{{route}} workspace loaded",
+    "routeLoading": "Loading {{route}}…",
+    "routeLoadingBody": "Preparing this workspace in the background.",
+    "routeLoadFailed": "Could not load {{route}}",
+    "routeLoadFailedBody": "The workspace module did not load. Check the local installation or connection, then retry.",
+    "retryRoute": "Retry workspace"
   },
   "language": {
     "label": "Language",

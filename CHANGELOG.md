@@ -16,6 +16,11 @@ each milestone tag.
 
 ### Added
 
+- **IMP-83 — Route-level renderer chunks.** All eleven workspaces now load as
+  dynamic modules with localized loading and keyboard-recoverable failure
+  states. Focus/hover and delayed adjacent-route preloads stay speculative, and
+  the release gate now verifies Vite's manifest plus a 700,000-byte initial
+  JavaScript ceiling (down from the prior roughly 934 KB entry).
 - **IMP-79 — Reversible display controls.** Density and night-mode changes now
   capture the current user-bound raw/effective state before mutation, verify
   the resulting state, and persist the exact inverse in the action journal.

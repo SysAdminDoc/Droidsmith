@@ -28,6 +28,9 @@ export default defineConfig({
   },
   envPrefix: ["VITE_", "TAURI_ENV_"],
   build: {
+    // The release gate consumes Vite's manifest to prove every major route is
+    // dynamically split and to enforce the initial-entry byte budget.
+    manifest: true,
     // Tauri sets TAURI_ENV_PLATFORM in the build step. Windows WebView2
     // is current Chrome; Linux WebKitGTK / macOS WKWebView are Safari-ish.
     target:

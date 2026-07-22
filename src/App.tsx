@@ -1,5 +1,14 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { ChangeEvent, ReactNode } from "react";
+import {
+  Component,
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import type { ChangeEvent, ComponentType, ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 
 import {
@@ -19,19 +28,17 @@ import OnboardingTour from "./routes/Onboarding";
 import DiagnosticsCenter from "./routes/DiagnosticsCenter";
 import SettingsDataControls from "./routes/SettingsDataControls";
 
-import DevicesRoute from "./routes/Devices";
-import WirelessRoute from "./routes/Wireless";
-import AppsRoute from "./routes/Apps";
-import DebloatRoute from "./routes/Debloat";
-import ApkAnalyzerRoute from "./routes/ApkAnalyzer";
-import ProfilesRoute from "./routes/Profiles";
-import ConsoleRoute from "./routes/Console";
-import LogcatRoute from "./routes/Logcat";
-import MirrorRoute from "./routes/Mirror";
-import FastbootRoute from "./routes/Fastboot";
-import DeviceSettingsRoute from "./routes/DeviceSettings";
-import { Button } from "./routes/common";
+import { Button, StatePanel } from "./routes/common";
 import droidsmithLogo from "./assets/droidsmith-logo.png";
+
+declare global {
+  interface Window {
+    __DROIDSMITH_SMOKE_ROUTE_FAILURE__?: NavItem["id"];
+  }
+}
+
+type RouteModule = { default: ComponentType };
+type RouteLoader = () => Promise<RouteModule>;
 
 export type NavItem = {
   id:
@@ -49,7 +56,7 @@ export type NavItem = {
   labelKey: string;
   milestone: string;
   descriptionKey: string;
-  render: () => ReactNode;
+  load: RouteLoader;
 };
 
 /** Single source of truth for the sidebar. Exported so tests can verify
@@ -60,79 +67,113 @@ export const NAV_ITEMS: ReadonlyArray<NavItem> = [
     labelKey: "nav.devices",
     milestone: "R-012",
     descriptionKey: "devices.description",
-    render: () => <DevicesRoute />,
+    load: () => import("./routes/Devices"),
   },
   {
     id: "wireless",
     labelKey: "nav.wireless",
     milestone: "R-015",
     descriptionKey: "wireless.description",
-    render: () => <WirelessRoute />,
+    load: () => import("./routes/Wireless"),
   },
   {
     id: "apps",
     labelKey: "nav.apps",
     milestone: "R-020",
     descriptionKey: "apps.description",
-    render: () => <AppsRoute />,
+    load: () => import("./routes/Apps"),
   },
   {
     id: "debloat",
     labelKey: "nav.debloat",
     milestone: "R-033",
     descriptionKey: "debloat.description",
-    render: () => <DebloatRoute />,
+    load: () => import("./routes/Debloat"),
   },
   {
     id: "profiles",
     labelKey: "nav.profiles",
     milestone: "R-034",
     descriptionKey: "profiles.description",
-    render: () => <ProfilesRoute />,
+    load: () => import("./routes/Profiles"),
   },
   {
     id: "mirror",
     labelKey: "nav.mirror",
     milestone: "R-040",
     descriptionKey: "mirror.description",
-    render: () => <MirrorRoute />,
+    load: () => import("./routes/Mirror"),
   },
   {
     id: "console",
     labelKey: "nav.console",
     milestone: "R-050",
     descriptionKey: "console.description",
-    render: () => <ConsoleRoute />,
+    load: () => import("./routes/Console"),
   },
   {
     id: "logcat",
     labelKey: "nav.logcat",
     milestone: "R-051",
     descriptionKey: "logcat.description",
-    render: () => <LogcatRoute />,
+    load: () => import("./routes/Logcat"),
   },
   {
     id: "fastboot",
     labelKey: "nav.fastboot",
     milestone: "R-052",
     descriptionKey: "fastboot.description",
-    render: () => <FastbootRoute />,
+    load: () => import("./routes/Fastboot"),
   },
   {
     id: "tuning",
     labelKey: "nav.tuning",
     milestone: "R-082",
     descriptionKey: "tuning.description",
-    render: () => <DeviceSettingsRoute />,
+    load: () => import("./routes/DeviceSettings"),
   },
   {
     id: "apk-analyzer",
     labelKey: "nav.apkAnalyzer",
     milestone: "R-097",
     descriptionKey: "apk.description",
-    render: () => <ApkAnalyzerRoute />,
+    load: () => import("./routes/ApkAnalyzer"),
   },
 ] as const;
+
+const routeModuleCache = new Map<NavItem["id"], Promise<RouteModule>>();
+
+function loadRouteModule(item: NavItem): Promise<RouteModule> {
+  const cached = routeModuleCache.get(item.id);
+  if (cached) return cached;
+
+  const promise = Promise.resolve()
+    .then(() => {
+      if (
+        import.meta.env.DEV &&
+        window.__DROIDSMITH_SMOKE_ROUTE_FAILURE__ === item.id
+      ) {
+        window.__DROIDSMITH_SMOKE_ROUTE_FAILURE__ = undefined;
+        throw new Error(`Synthetic route load failure: ${item.id}`);
+      }
+      return item.load();
+    })
+    .catch((error: unknown) => {
+      if (routeModuleCache.get(item.id) === promise) {
+        routeModuleCache.delete(item.id);
+      }
+      throw error;
+    });
+  routeModuleCache.set(item.id, promise);
+  return promise;
+}
+
+function preloadRoute(item: NavItem): void {
+  void loadRouteModule(item).catch(() => {
+    // Preloading is speculative. A failed request is evicted above so route
+    // activation can retry through the visible, recoverable error surface.
+  });
+}
 
 type LoadState =
   | { status: "loading" }
@@ -196,6 +237,15 @@ export default function App() {
   }, []);
 
   const activeItem = NAV_ITEMS.find((i) => i.id === active) ?? NAV_ITEMS[0];
+
+  useEffect(() => {
+    const activeIndex = NAV_ITEMS.findIndex((item) => item.id === active);
+    const likelyNext = NAV_ITEMS[activeIndex + 1];
+    if (!likelyNext) return;
+    const timeout = window.setTimeout(() => preloadRoute(likelyNext), 1_500);
+    return () => window.clearTimeout(timeout);
+  }, [active]);
+
   const activateRoute = useCallback((route: NavItem["id"]) => {
     setActive(route);
     setRouteAnnouncement(route);
@@ -236,6 +286,7 @@ export default function App() {
                 label={t(item.labelKey)}
                 description={t(item.descriptionKey)}
                 active={active === item.id}
+                onPreload={() => preloadRoute(item)}
                 onActivate={() => activateRoute(item.id)}
               />
             ))}
@@ -255,9 +306,11 @@ export default function App() {
           id="main-content"
           tabIndex={-1}
           aria-label={t(activeItem.labelKey)}
-          className="min-w-0 flex-1 overflow-auto px-4 py-5 sm:px-6 lg:h-full lg:px-8 lg:py-6 xl:px-10"
+          className="min-w-0 flex-1 overflow-auto px-4 py-5 outline-none sm:px-6 lg:h-full lg:px-8 lg:py-6 xl:px-10"
         >
-          <div className="mx-auto max-w-[88rem]">{activeItem.render()}</div>
+          <div className="mx-auto max-w-[88rem]">
+            <LazyRoute item={activeItem} />
+          </div>
         </main>
       </div>
       <div
@@ -308,6 +361,91 @@ export default function App() {
       />
     </div>
   );
+}
+
+function LazyRoute({ item }: { item: NavItem }) {
+  const { t } = useTranslation();
+  const [attempt, setAttempt] = useState(0);
+  const routeLabel = t(item.labelKey);
+
+  const retry = () => {
+    routeModuleCache.delete(item.id);
+    setAttempt((current) => current + 1);
+    requestAnimationFrame(() => {
+      document.getElementById("main-content")?.focus();
+    });
+  };
+
+  const failure = (
+    <StatePanel
+      title={t("app.routeLoadFailed", { route: routeLabel })}
+      tone="danger"
+      live="assertive"
+      actions={
+        <Button type="button" variant="danger" size="sm" onClick={retry}>
+          {t("app.retryRoute")}
+        </Button>
+      }
+    >
+      <p>{t("app.routeLoadFailedBody")}</p>
+    </StatePanel>
+  );
+
+  const loading = (
+    <StatePanel
+      title={t("app.routeLoading", { route: routeLabel })}
+      tone="info"
+      live="polite"
+    >
+      <p>{t("app.routeLoadingBody")}</p>
+    </StatePanel>
+  );
+
+  return (
+    <RouteAttempt
+      key={`${item.id}:${attempt}`}
+      item={item}
+      failure={failure}
+      loading={loading}
+    />
+  );
+}
+
+function RouteAttempt({
+  item,
+  failure,
+  loading,
+}: {
+  item: NavItem;
+  failure: ReactNode;
+  loading: ReactNode;
+}) {
+  const RouteComponent = useMemo(
+    () => lazy(() => loadRouteModule(item)),
+    [item],
+  );
+  return (
+    <RouteErrorBoundary fallback={failure}>
+      <Suspense fallback={loading}>
+        <RouteComponent />
+      </Suspense>
+    </RouteErrorBoundary>
+  );
+}
+
+class RouteErrorBoundary extends Component<
+  { children: ReactNode; fallback: ReactNode },
+  { failed: boolean }
+> {
+  state = { failed: false };
+
+  static getDerivedStateFromError(): { failed: boolean } {
+    return { failed: true };
+  }
+
+  render(): ReactNode {
+    return this.state.failed ? this.props.fallback : this.props.children;
+  }
 }
 
 function OnboardingModal({ onDismiss }: { onDismiss: () => void }) {
@@ -632,18 +770,22 @@ function NavStub({
   label,
   description,
   active,
+  onPreload,
   onActivate,
 }: {
   item: NavItem;
   label: string;
   description: string;
   active: boolean;
+  onPreload: () => void;
   onActivate: () => void;
 }) {
   return (
     <button
       type="button"
       onClick={onActivate}
+      onFocus={onPreload}
+      onPointerEnter={onPreload}
       aria-current={active ? "page" : undefined}
       aria-describedby={`${item.id}-description`}
       className={cn(

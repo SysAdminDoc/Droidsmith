@@ -1,5 +1,21 @@
 {
   "schemaVersion": 1,
+  "rendererBundle": {
+    "initialJavaScriptBudgetBytes": 700000,
+    "dynamicRouteEntries": [
+      "src/routes/Devices.tsx",
+      "src/routes/Wireless.tsx",
+      "src/routes/Apps.tsx",
+      "src/routes/Debloat.tsx",
+      "src/routes/Profiles.tsx",
+      "src/routes/Mirror.tsx",
+      "src/routes/Console.tsx",
+      "src/routes/Logcat.tsx",
+      "src/routes/Fastboot.tsx",
+      "src/routes/DeviceSettings.tsx",
+      "src/routes/ApkAnalyzer.tsx"
+    ]
+  },
   "exceptions": [
     {
       "kind": "rust_advisories",

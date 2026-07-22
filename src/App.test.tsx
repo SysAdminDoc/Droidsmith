@@ -17,6 +17,8 @@ describe("NAV_ITEMS", () => {
     for (const item of NAV_ITEMS) {
       expect(item.labelKey).toMatch(/^nav\./);
       expect(item.descriptionKey).toMatch(/^[a-z]+\./);
+      expect(item.load).toBeTypeOf("function");
+      expect("render" in item).toBe(false);
     }
   });
 

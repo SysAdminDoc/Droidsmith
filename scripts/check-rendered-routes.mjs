@@ -49,6 +49,7 @@ try {
     await runMobileFlow(browser);
     await runLocaleZoomFlow(browser);
     await runApkAccessibilityFlow(browser);
+    await runLazyRouteRecoveryFlow(browser);
     await runResilienceFlow(browser);
     await runWatcherFallbackFlow(browser);
     await runRendererErrorFlow(browser);
@@ -1109,6 +1110,78 @@ async function runApkAccessibilityFlow(browser) {
     assertNoConsoleErrors(errors, `${code} APK accessibility route`);
     await context.close();
   }
+}
+
+// IMP-83: a speculative route preload failure must not poison activation, and
+// an active chunk failure must expose a keyboard-reachable retry that restores
+// focus to the active workspace after the module loads.
+async function runLazyRouteRecoveryFlow(browser) {
+  const preloadPage = await browser.newPage({
+    viewport: { width: 1100, height: 760 },
+  });
+  await installTauriMock(preloadPage);
+  await preloadPage.goto(baseUrl, { waitUntil: "networkidle" });
+  await preloadPage
+    .getByRole("heading", { name: "Devices", exact: true })
+    .waitFor();
+  const preloadNav = preloadPage.locator(
+    'button[aria-describedby="apk-analyzer-description"]',
+  );
+  await preloadPage.evaluate(() => {
+    window.__DROIDSMITH_SMOKE_ROUTE_FAILURE__ = "apk-analyzer";
+  });
+  await preloadNav.focus();
+  await preloadPage.waitForFunction(
+    () => window.__DROIDSMITH_SMOKE_ROUTE_FAILURE__ === undefined,
+  );
+  await preloadPage.keyboard.press("Enter");
+  await preloadPage
+    .getByRole("heading", { name: "APK Analyzer", exact: true })
+    .waitFor();
+  await assertMainFocused(preloadPage, "APK Analyzer");
+  if (
+    (await preloadPage.getByText("Could not load APK Analyzer").count()) !== 0
+  ) {
+    throw new Error("A failed speculative preload poisoned route activation");
+  }
+  await preloadPage.close();
+
+  const retryPage = await browser.newPage({
+    viewport: { width: 1100, height: 760 },
+  });
+  await installTauriMock(retryPage);
+  await retryPage.goto(baseUrl, { waitUntil: "networkidle" });
+  await retryPage
+    .getByRole("heading", { name: "Devices", exact: true })
+    .waitFor();
+  await retryPage.evaluate(() => {
+    window.__DROIDSMITH_SMOKE_ROUTE_FAILURE__ = "apk-analyzer";
+    document
+      .querySelector('button[aria-describedby="apk-analyzer-description"]')
+      ?.click();
+  });
+  await retryPage
+    .getByRole("alert")
+    .filter({
+      has: retryPage.getByRole("heading", {
+        name: "Could not load APK Analyzer",
+        exact: true,
+      }),
+    })
+    .waitFor();
+  await retryPage.screenshot({
+    path: path.join(screenshotDir, "desktop-route-load-recovery.png"),
+    fullPage: false,
+  });
+  await assertMainFocused(retryPage, "APK Analyzer");
+  await retryPage.keyboard.press("Tab");
+  await assertFocusedButton(retryPage, "Retry workspace");
+  await retryPage.keyboard.press("Enter");
+  await retryPage
+    .getByRole("heading", { name: "APK Analyzer", exact: true })
+    .waitFor();
+  await assertMainFocused(retryPage, "APK Analyzer");
+  await retryPage.close();
 }
 
 // IMP-51: exercise the loading, error, and empty rendered states plus a

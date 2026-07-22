@@ -14,7 +14,12 @@
     "aboutDescription": "一个专注的桌面工坊，用于通过可追溯的 ADB 操作来检查、连接和管理 Android 设备。",
     "sidebarLabel": "应用侧边栏",
     "primaryNav": "主导航",
-    "routeChanged": "{{route}} 工作区已加载"
+    "routeChanged": "{{route}} 工作区已加载",
+    "routeLoading": "正在加载{{route}}…",
+    "routeLoadingBody": "正在后台准备此工作区。",
+    "routeLoadFailed": "无法加载{{route}}",
+    "routeLoadFailedBody": "工作区模块未能加载。请检查本地安装或连接，然后重试。",
+    "retryRoute": "重试工作区"
   },
   "language": {
     "label": "语言",

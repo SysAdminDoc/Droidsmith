@@ -3,10 +3,25 @@ import test from "node:test";
 
 import {
   collectCargoDuplicates,
+  validateRendererBundleManifest,
   validateExpiry,
   validatePlatformToolsDocumentation,
   validateVersionValues,
 } from "./check-release-policy.mjs";
+
+const rendererRoutes = [
+  "Devices",
+  "Wireless",
+  "Apps",
+  "Debloat",
+  "Profiles",
+  "Mirror",
+  "Console",
+  "Logcat",
+  "Fastboot",
+  "DeviceSettings",
+  "ApkAnalyzer",
+].map((name) => `src/routes/${name}.tsx`);
 
 test("exception dates are absolute, valid, and unexpired", () => {
   const now = new Date("2026-07-15T12:00:00Z");
@@ -72,5 +87,59 @@ test("release versions must all exist and match", () => {
   assert.throws(
     () => validateVersionValues({ package: "0.1.0", cargo: undefined }),
     /release versions differ/u,
+  );
+});
+
+test("renderer manifest keeps every route dynamic and the entry under budget", () => {
+  const policy = {
+    initialJavaScriptBudgetBytes: 700_000,
+    dynamicRouteEntries: rendererRoutes,
+  };
+  const manifest = {
+    "index.html": {
+      file: "assets/index.js",
+      isEntry: true,
+      dynamicImports: rendererRoutes,
+    },
+    ...Object.fromEntries(
+      rendererRoutes.map((route, index) => [
+        route,
+        { file: `assets/route-${index}.js`, isDynamicEntry: true },
+      ]),
+    ),
+  };
+  const assetSizes = {
+    "assets/index.js": 699_999,
+    ...Object.fromEntries(
+      rendererRoutes.map((_, index) => [`assets/route-${index}.js`, 1_024]),
+    ),
+  };
+
+  assert.deepEqual(
+    validateRendererBundleManifest(policy, manifest, assetSizes),
+    { entryFile: "assets/index.js", initialBytes: 699_999 },
+  );
+  assert.throws(
+    () =>
+      validateRendererBundleManifest(policy, manifest, {
+        ...assetSizes,
+        "assets/index.js": 700_001,
+      }),
+    /budget is 700000/u,
+  );
+  assert.throws(
+    () =>
+      validateRendererBundleManifest(
+        policy,
+        {
+          ...manifest,
+          "index.html": {
+            ...manifest["index.html"],
+            dynamicImports: rendererRoutes.slice(1),
+          },
+        },
+        assetSizes,
+      ),
+    /missing dynamic route import/u,
   );
 });
