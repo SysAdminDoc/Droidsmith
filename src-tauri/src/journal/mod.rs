@@ -70,9 +70,122 @@ where
 {
     let lock = device_lock(serial);
     let _guard = lock.lock().unwrap_or_else(|e| e.into_inner());
+    // The in-process mutex above cannot serialize the GUI against the CLI —
+    // default_journal_dir is deliberately shared between both binaries. The
+    // OS-level advisory lock covers the whole open→mutate cycle so a second
+    // process cannot mint duplicate ids, mark this process's live Pending
+    // intent Interrupted, or truncate the tail we are appending to.
+    let _file_lock = JournalFileLock::acquire(dir, serial)?;
     let mut journal = Journal::open(dir, serial)?;
     f(&mut journal)
 }
+
+/// Cross-process advisory lock for one device's journal file, held for the
+/// duration of [`with_journal`]. Acquisition blocks until the peer process
+/// releases the lock (journal cycles are short; device work inside the
+/// closure is already serialized per device by design). The `<journal>.lock`
+/// file sits next to the `.jsonl` file and is ignored by replay and the
+/// support-bundle collector (both filter on the `jsonl` extension).
+struct JournalFileLock {
+    file: File,
+}
+
+impl JournalFileLock {
+    fn acquire(dir: &Path, serial: &str) -> std::io::Result<Self> {
+        fs::create_dir_all(dir)?;
+        let path = dir.join(format!("{}.lock", safe_serial(serial)));
+        let file = OpenOptions::new()
+            .create(true)
+            .truncate(false)
+            .read(true)
+            .write(true)
+            .open(path)?;
+        lock_file_exclusive(&file)?;
+        Ok(Self { file })
+    }
+}
+
+impl Drop for JournalFileLock {
+    fn drop(&mut self) {
+        unlock_file(&self.file);
+    }
+}
+
+#[cfg(windows)]
+fn lock_file_exclusive(file: &File) -> std::io::Result<()> {
+    use std::os::windows::io::AsRawHandle;
+    use windows_sys::Win32::Storage::FileSystem::{LockFileEx, LOCKFILE_EXCLUSIVE_LOCK};
+    use windows_sys::Win32::System::IO::OVERLAPPED;
+    // SAFETY: OVERLAPPED is a plain C struct for which zeroed is a valid
+    // (synchronous, offset 0) initialization, and the handle comes from a
+    // live File borrowed for the whole call. Blocking exclusive byte-range
+    // lock over the entire file; released in Drop and on handle close.
+    #[allow(unsafe_code)]
+    let locked = unsafe {
+        let mut overlapped: OVERLAPPED = std::mem::zeroed();
+        LockFileEx(
+            file.as_raw_handle(),
+            LOCKFILE_EXCLUSIVE_LOCK,
+            0,
+            u32::MAX,
+            u32::MAX,
+            &mut overlapped,
+        )
+    };
+    if locked == 0 {
+        return Err(std::io::Error::last_os_error());
+    }
+    Ok(())
+}
+
+#[cfg(windows)]
+fn unlock_file(file: &File) {
+    use std::os::windows::io::AsRawHandle;
+    use windows_sys::Win32::Storage::FileSystem::UnlockFileEx;
+    use windows_sys::Win32::System::IO::OVERLAPPED;
+    // SAFETY: mirrors lock_file_exclusive; the OS also releases the region
+    // when the handle closes, so a failure here is not fatal.
+    #[allow(unsafe_code)]
+    let _ = unsafe {
+        let mut overlapped: OVERLAPPED = std::mem::zeroed();
+        UnlockFileEx(file.as_raw_handle(), 0, u32::MAX, u32::MAX, &mut overlapped)
+    };
+}
+
+#[cfg(unix)]
+fn lock_file_exclusive(file: &File) -> std::io::Result<()> {
+    use std::os::unix::io::AsRawFd;
+    loop {
+        // SAFETY: flock on a live owned descriptor; blocking exclusive lock,
+        // released in Drop and automatically when the descriptor closes.
+        #[allow(unsafe_code)]
+        let result = unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_EX) };
+        if result == 0 {
+            return Ok(());
+        }
+        let error = std::io::Error::last_os_error();
+        if error.kind() != std::io::ErrorKind::Interrupted {
+            return Err(error);
+        }
+    }
+}
+
+#[cfg(unix)]
+fn unlock_file(file: &File) {
+    use std::os::unix::io::AsRawFd;
+    // SAFETY: mirrors lock_file_exclusive; the OS also releases the lock when
+    // the descriptor closes, so a failure here is not fatal.
+    #[allow(unsafe_code)]
+    let _ = unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_UN) };
+}
+
+#[cfg(not(any(windows, unix)))]
+fn lock_file_exclusive(_file: &File) -> std::io::Result<()> {
+    Ok(())
+}
+
+#[cfg(not(any(windows, unix)))]
+fn unlock_file(_file: &File) {}
 
 #[derive(specta::Type, Debug, Clone, Serialize, Deserialize)]
 pub struct JournalEntry {
@@ -947,6 +1060,52 @@ mod tests {
         ids.sort_unstable();
         ids.dedup();
         assert_eq!(ids.len(), THREADS, "all journal ids must be unique");
+    }
+
+    #[test]
+    fn with_journal_holds_and_releases_the_cross_process_file_lock() {
+        let dir = fresh_tmp_dir("file-lock");
+        with_journal(&dir, "abc", |journal| {
+            journal.record(fake_applied("abc", "com.foo", ActionKind::Disable))?;
+            Ok::<_, std::io::Error>(())
+        })
+        .unwrap();
+
+        // The lock file exists next to the journal and was released: a fresh
+        // handle can immediately take the exclusive lock again.
+        let lock_path = dir.join(format!("{}.lock", safe_serial("abc")));
+        assert!(lock_path.exists());
+        let reacquired = JournalFileLock::acquire(&dir, "abc").unwrap();
+        drop(reacquired);
+    }
+
+    #[cfg(any(windows, unix))]
+    #[test]
+    fn with_journal_blocks_while_another_holder_owns_the_file_lock() {
+        let dir = fresh_tmp_dir("file-lock-contention");
+        let holder = JournalFileLock::acquire(&dir, "abc").unwrap();
+
+        let (sender, receiver) = std::sync::mpsc::channel();
+        let contended_dir = dir.clone();
+        let worker = std::thread::spawn(move || {
+            with_journal(&contended_dir, "abc", |journal| {
+                journal.record(fake_applied("abc", "com.foo", ActionKind::Disable))?;
+                Ok::<_, std::io::Error>(())
+            })
+            .unwrap();
+            sender.send(()).unwrap();
+        });
+
+        // While the lock is held the journal cycle cannot start.
+        assert!(receiver
+            .recv_timeout(std::time::Duration::from_millis(300))
+            .is_err());
+        drop(holder);
+        // Releasing the lock unblocks the waiting cycle.
+        receiver
+            .recv_timeout(std::time::Duration::from_secs(10))
+            .expect("journal cycle must proceed after the lock is released");
+        worker.join().unwrap();
     }
 
     #[test]

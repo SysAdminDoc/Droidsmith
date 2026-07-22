@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -137,6 +137,21 @@ struct ManagedScrcpySession {
     child: Child,
     stderr: CapturedTail,
     record_path: Option<PathBuf>,
+    /// Set once [`finished_recording`] has handed this session's recording to
+    /// the command layer, so eviction does not re-preserve a claimed file.
+    recording_claimed: bool,
+}
+
+/// Finished recordings that outlived their reaped session. Between the
+/// renderer's `scrcpy_session_status` and follow-up `finished_recording`
+/// lookups, a concurrent status/stop call for another session can evict the
+/// finished session; without this side map that would permanently lose the
+/// recording grant. Bounded so an inattentive renderer cannot grow it.
+const EVICTED_RECORDING_LIMIT: usize = 16;
+
+fn evicted_recordings() -> &'static Mutex<VecDeque<(u64, PathBuf)>> {
+    static EVICTED: OnceLock<Mutex<VecDeque<(u64, PathBuf)>>> = OnceLock::new();
+    EVICTED.get_or_init(|| Mutex::new(VecDeque::new()))
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -320,7 +335,7 @@ pub fn launch(
     let mut guard = sessions()
         .lock()
         .map_err(|_| "scrcpy session supervisor lock poisoned".to_string())?;
-    reap_locked(&mut guard, None);
+    reap_sessions(&mut guard, None)?;
     guard.insert(
         session.id,
         ManagedScrcpySession {
@@ -328,6 +343,7 @@ pub fn launch(
             child,
             stderr,
             record_path: record_path.map(Path::to_path_buf),
+            recording_claimed: false,
         },
     );
     Ok(session)
@@ -347,7 +363,7 @@ pub fn status(session_id: u64) -> Result<ScrcpySession, String> {
     // Evict other terminated sessions so the map does not grow unbounded when a
     // long-lived renderer polls one session but never launches another. The
     // queried session is preserved so this poll still observes its final state.
-    reap_locked(&mut guard, Some(session_id));
+    reap_sessions(&mut guard, Some(session_id))?;
     Ok(session)
 }
 
@@ -370,7 +386,7 @@ pub fn stop(session_id: u64) -> Result<ScrcpySession, String> {
     }
     let session = managed.session.clone();
     // Drop any other terminated sessions now that we hold the lock.
-    reap_locked(&mut guard, Some(session_id));
+    reap_sessions(&mut guard, Some(session_id))?;
     Ok(session)
 }
 
@@ -378,22 +394,71 @@ pub fn stop(session_id: u64) -> Result<ScrcpySession, String> {
 /// The command layer then registers this exact regular file for Reveal/Open
 /// With; merely selecting a recording destination grants no such authority.
 pub fn finished_recording(session_id: u64) -> Result<Option<String>, String> {
-    let guard = sessions()
+    let mut guard = sessions()
         .lock()
         .map_err(|_| "scrcpy session supervisor lock poisoned".to_string())?;
-    let managed = guard
-        .get(&session_id)
-        .ok_or_else(|| format!("scrcpy session {session_id} is not tracked"))?;
-    if managed.session.state == ScrcpySessionState::Running {
-        return Ok(None);
+    if let Some(managed) = guard.get_mut(&session_id) {
+        if managed.session.state == ScrcpySessionState::Running {
+            return Ok(None);
+        }
+        let Some(path) = managed.record_path.clone() else {
+            return Ok(None);
+        };
+        let verified = verified_recording(&path);
+        if verified.is_some() {
+            managed.recording_claimed = true;
+        }
+        return Ok(verified);
     }
-    let Some(path) = managed.record_path.as_deref() else {
-        return Ok(None);
-    };
+    drop(guard);
+    // The session may have been reaped by a concurrent status/stop call for
+    // another session between the renderer's status() and finished_recording()
+    // round-trips; consult the bounded eviction side map (claim removes it).
+    let mut evicted = evicted_recordings()
+        .lock()
+        .map_err(|_| "scrcpy recording side map lock poisoned".to_string())?;
+    if let Some(path) = claim_evicted_recording(&mut evicted, session_id) {
+        return Ok(verified_recording(&path));
+    }
+    Err(format!("scrcpy session {session_id} is not tracked"))
+}
+
+fn verified_recording(path: &Path) -> Option<String> {
     let metadata = std::fs::symlink_metadata(path).ok();
-    Ok(metadata
+    metadata
         .filter(|metadata| metadata.is_file() && !metadata.file_type().is_symlink())
-        .map(|_| crate::fs_util::display_path(path)))
+        .map(|_| crate::fs_util::display_path(path))
+}
+
+fn claim_evicted_recording(
+    evicted: &mut VecDeque<(u64, PathBuf)>,
+    session_id: u64,
+) -> Option<PathBuf> {
+    let index = evicted.iter().position(|(id, _)| *id == session_id)?;
+    evicted.remove(index).map(|(_, path)| path)
+}
+
+/// Kill every tracked Running session. Invoked from the Tauri exit path:
+/// `process_tree::configure` detaches children from the app's lifetime, so
+/// without this an app close would orphan a live mirror window or recording.
+pub fn terminate_all() {
+    let mut guard = sessions().lock().unwrap_or_else(|error| error.into_inner());
+    terminate_all_locked(&mut guard);
+}
+
+fn terminate_all_locked(sessions: &mut HashMap<u64, ManagedScrcpySession>) {
+    for managed in sessions.values_mut() {
+        let _ = refresh_status(managed);
+        if managed.session.state == ScrcpySessionState::Running {
+            if let Err(error) = crate::process_tree::terminate(&mut managed.child) {
+                eprintln!(
+                    "[scrcpy] failed to stop session {} on exit: {error}",
+                    managed.session.id
+                );
+            }
+        }
+    }
+    sessions.clear();
 }
 
 fn refresh_status(managed: &mut ManagedScrcpySession) -> Result<(), String> {
@@ -419,14 +484,45 @@ fn refresh_status(managed: &mut ManagedScrcpySession) -> Result<(), String> {
     Ok(())
 }
 
-fn reap_locked(sessions: &mut HashMap<u64, ManagedScrcpySession>, keep: Option<u64>) {
+/// Reap under the sessions lock, routing evictions through the global
+/// recording side map.
+fn reap_sessions(
+    sessions: &mut HashMap<u64, ManagedScrcpySession>,
+    keep: Option<u64>,
+) -> Result<(), String> {
+    let mut evicted = evicted_recordings()
+        .lock()
+        .map_err(|_| "scrcpy recording side map lock poisoned".to_string())?;
+    reap_locked(sessions, keep, &mut evicted);
+    Ok(())
+}
+
+fn reap_locked(
+    sessions: &mut HashMap<u64, ManagedScrcpySession>,
+    keep: Option<u64>,
+    evicted_recordings: &mut VecDeque<(u64, PathBuf)>,
+) {
     for (id, managed) in sessions.iter_mut() {
         if Some(*id) != keep {
             let _ = refresh_status(managed);
         }
     }
     sessions.retain(|id, managed| {
-        Some(*id) == keep || managed.session.state == ScrcpySessionState::Running
+        if Some(*id) == keep || managed.session.state == ScrcpySessionState::Running {
+            return true;
+        }
+        // Preserve an unclaimed finished recording across eviction so a
+        // concurrent poll for another session cannot lose the grant the
+        // renderer is about to collect via finished_recording().
+        if !managed.recording_claimed {
+            if let Some(path) = managed.record_path.take() {
+                evicted_recordings.push_back((*id, path));
+                while evicted_recordings.len() > EVICTED_RECORDING_LIMIT {
+                    evicted_recordings.pop_front();
+                }
+            }
+        }
+        false
     });
 }
 
@@ -1345,5 +1441,124 @@ mod tests {
                 .unwrap_err()
                 .contains(".mp4 or .mkv")
         );
+    }
+
+    #[cfg(any(windows, unix))]
+    mod supervision {
+        use super::super::{
+            claim_evicted_recording, reap_locked, terminate_all_locked, ManagedScrcpySession,
+            ScrcpySession, ScrcpySessionState, EVICTED_RECORDING_LIMIT,
+        };
+        use crate::captured_tail::CapturedTail;
+        use std::collections::{HashMap, VecDeque};
+        use std::path::PathBuf;
+        use std::process::{Command, Stdio};
+
+        fn managed_session(
+            id: u64,
+            long_running: bool,
+            record_path: Option<PathBuf>,
+            recording_claimed: bool,
+        ) -> ManagedScrcpySession {
+            #[cfg(windows)]
+            let mut command = {
+                let mut command = Command::new("cmd");
+                if long_running {
+                    command.args(["/C", "ping", "-n", "30", "127.0.0.1"]);
+                } else {
+                    command.args(["/C", "exit", "0"]);
+                }
+                command
+            };
+            #[cfg(unix)]
+            let mut command = {
+                let mut command = Command::new(if long_running { "sleep" } else { "true" });
+                if long_running {
+                    command.arg("30");
+                }
+                command
+            };
+            command
+                .stdin(Stdio::null())
+                .stdout(Stdio::null())
+                .stderr(Stdio::null());
+            crate::process_tree::configure(&mut command);
+            let mut child = command.spawn().expect("spawn helper child");
+            if !long_running {
+                // Reap now; Child caches the status so refresh_status's
+                // try_wait deterministically observes the exit.
+                child.wait().expect("wait for quick child");
+            }
+            ManagedScrcpySession {
+                session: ScrcpySession {
+                    id,
+                    serial: "DEVICE123".to_string(),
+                    pid: child.id(),
+                    args: Vec::new(),
+                    started_at: "2026-07-22T12:00:00Z".to_string(),
+                    state: ScrcpySessionState::Running,
+                    exit_code: None,
+                    exit_reason: None,
+                    stderr_tail: String::new(),
+                },
+                child,
+                stderr: CapturedTail::spawn(std::io::empty()),
+                record_path,
+                recording_claimed,
+            }
+        }
+
+        #[test]
+        fn reaping_preserves_unclaimed_recordings_and_claims_are_single_shot() {
+            let recording = PathBuf::from("evicted-session.mp4");
+            let mut sessions = HashMap::new();
+            sessions.insert(7, managed_session(7, false, Some(recording.clone()), false));
+            sessions.insert(
+                8,
+                managed_session(8, false, Some("claimed.mp4".into()), true),
+            );
+            sessions.insert(9, managed_session(9, false, None, false));
+            let mut evicted = VecDeque::new();
+
+            reap_locked(&mut sessions, None, &mut evicted);
+            assert!(sessions.is_empty(), "exited sessions must be evicted");
+            // Only the unclaimed recording survives eviction.
+            assert_eq!(evicted.len(), 1);
+            assert_eq!(
+                claim_evicted_recording(&mut evicted, 7).as_deref(),
+                Some(recording.as_path())
+            );
+            // A claim removes the entry; a second lookup finds nothing.
+            assert!(claim_evicted_recording(&mut evicted, 7).is_none());
+        }
+
+        #[test]
+        fn evicted_recording_side_map_is_bounded() {
+            let mut evicted: VecDeque<(u64, PathBuf)> = (0..EVICTED_RECORDING_LIMIT as u64)
+                .map(|id| (id, PathBuf::from(format!("recording-{id}.mp4"))))
+                .collect();
+            let mut sessions = HashMap::new();
+            sessions.insert(
+                99,
+                managed_session(99, false, Some("newest.mp4".into()), false),
+            );
+
+            reap_locked(&mut sessions, None, &mut evicted);
+            assert_eq!(evicted.len(), EVICTED_RECORDING_LIMIT);
+            // The oldest entry was dropped; the newest eviction is retained.
+            assert!(claim_evicted_recording(&mut evicted, 0).is_none());
+            assert!(claim_evicted_recording(&mut evicted, 99).is_some());
+        }
+
+        #[test]
+        fn terminate_all_kills_running_sessions_and_clears_the_map() {
+            let mut sessions = HashMap::new();
+            sessions.insert(1, managed_session(1, true, None, false));
+            let started = std::time::Instant::now();
+            terminate_all_locked(&mut sessions);
+            assert!(sessions.is_empty());
+            // The 30-second helper was force-killed, not waited out.
+            assert!(started.elapsed() < std::time::Duration::from_secs(20));
+        }
     }
 }

@@ -249,20 +249,33 @@ pub fn run() {
         .invoke_handler(ipc.invoke_handler());
 
     let context = tauri::generate_context!();
-    if let Err(e) = builder.run(context) {
-        // Builder errors do NOT trigger the panic hook (it returns Err
-        // not panics), so we must explicitly record them — otherwise the
-        // dialog's "a crash log was written" claim is a lie.
-        let message = format!("{e}");
-        diagnostics::log_fatal(&log_dir, "tauri-builder", &message);
-        diagnostics::fatal_dialog(
-            "Droidsmith failed to start",
-            &format!(
-                "{message}\n\nA crash log was written to:\n{}",
-                log_dir.display()
-            ),
-        );
-        std::process::exit(1);
+    match builder.build(context) {
+        Ok(app) => app.run(|_app_handle, event| {
+            if let tauri::RunEvent::Exit = event {
+                // process_tree::configure detaches supervised children from
+                // the app's lifetime, so a plain window close would orphan a
+                // live scrcpy mirror or gnirehtet relay (the latter keeps the
+                // device reverse-tethered and blocks the relay port, so the
+                // next launch fails with RelayFailed and no way to recover).
+                scrcpy::terminate_all();
+                gnirehtet::terminate_all();
+            }
+        }),
+        Err(e) => {
+            // Builder errors do NOT trigger the panic hook (it returns Err
+            // not panics), so we must explicitly record them — otherwise the
+            // dialog's "a crash log was written" claim is a lie.
+            let message = format!("{e}");
+            diagnostics::log_fatal(&log_dir, "tauri-builder", &message);
+            diagnostics::fatal_dialog(
+                "Droidsmith failed to start",
+                &format!(
+                    "{message}\n\nA crash log was written to:\n{}",
+                    log_dir.display()
+                ),
+            );
+            std::process::exit(1);
+        }
     }
 }
 

@@ -176,6 +176,31 @@ pub fn stop(session_id: u64) -> Result<GnirehtetSession, String> {
     Ok(session)
 }
 
+/// Kill every tracked Running session. Invoked from the Tauri exit path:
+/// `process_tree::configure` detaches the relay from the app's lifetime, so
+/// without this an app close orphans `gnirehtet run` — the device stays
+/// reverse-tethered and the next launch fails with RelayFailed (relay port
+/// still in use) with no in-app way to stop the orphan.
+pub fn terminate_all() {
+    let mut guard = sessions().lock().unwrap_or_else(|error| error.into_inner());
+    terminate_all_locked(&mut guard);
+}
+
+fn terminate_all_locked(sessions: &mut HashMap<u64, ManagedSession>) {
+    for managed in sessions.values_mut() {
+        let _ = refresh_status(managed);
+        if managed.session.state == GnirehtetSessionState::Running {
+            if let Err(error) = crate::process_tree::terminate(&mut managed.child) {
+                eprintln!(
+                    "[gnirehtet] failed to stop session {} on exit: {error}",
+                    managed.session.id
+                );
+            }
+        }
+    }
+    sessions.clear();
+}
+
 fn refresh_status(managed: &mut ManagedSession) -> Result<(), String> {
     if managed.session.state != GnirehtetSessionState::Running {
         return Ok(());
@@ -283,5 +308,60 @@ mod tests {
             classify_exit_reason(Some(0), "shutting down"),
             GnirehtetExitReason::ProcessExited
         );
+    }
+
+    #[cfg(any(windows, unix))]
+    #[test]
+    fn terminate_all_kills_running_sessions_and_clears_the_map() {
+        use super::{
+            terminate_all_locked, GnirehtetSession, GnirehtetSessionState, ManagedSession,
+        };
+        use crate::captured_tail::CapturedTail;
+        use std::collections::HashMap;
+        use std::process::{Command, Stdio};
+
+        #[cfg(windows)]
+        let mut command = {
+            let mut command = Command::new("cmd");
+            command.args(["/C", "ping", "-n", "30", "127.0.0.1"]);
+            command
+        };
+        #[cfg(unix)]
+        let mut command = {
+            let mut command = Command::new("sleep");
+            command.arg("30");
+            command
+        };
+        command
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null());
+        crate::process_tree::configure(&mut command);
+        let child = command.spawn().expect("spawn helper child");
+        let mut sessions = HashMap::new();
+        sessions.insert(
+            1,
+            ManagedSession {
+                session: GnirehtetSession {
+                    id: 1,
+                    serial: "DEVICE123".to_string(),
+                    pid: child.id(),
+                    args: Vec::new(),
+                    started_at: "2026-07-22T12:00:00Z".to_string(),
+                    state: GnirehtetSessionState::Running,
+                    exit_code: None,
+                    exit_reason: None,
+                    stderr_tail: String::new(),
+                },
+                child,
+                stderr: CapturedTail::spawn(std::io::empty()),
+            },
+        );
+
+        let started = std::time::Instant::now();
+        terminate_all_locked(&mut sessions);
+        assert!(sessions.is_empty());
+        // The 30-second helper was force-killed, not waited out.
+        assert!(started.elapsed() < std::time::Duration::from_secs(20));
     }
 }
