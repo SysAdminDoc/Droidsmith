@@ -144,7 +144,10 @@ fn parse_getprop(stdout: &str) -> Vec<(String, String)> {
             continue;
         };
         let key = key_part.trim_start_matches('[');
-        let val = val_part.trim_end_matches(']');
+        // Strip exactly the one closing bracket of the `[value]` wrapper.
+        // `trim_end_matches` would also eat a ']' that belongs to the value
+        // itself (e.g. a property whose value is "[1,2,3]").
+        let val = val_part.strip_suffix(']').unwrap_or(val_part);
         out.push((key.to_string(), val.to_string()));
     }
     out
@@ -238,12 +241,33 @@ fn battery_status_label(code: &str) -> String {
     }
 }
 
+/// Tokenize the data rows of `df -k` output, rejoining wrapped rows. When a
+/// device name is too long, `df` wraps it onto its own line and the numeric
+/// columns land on the next line; tokenizing the lines independently would
+/// transpose every field (total=used, used=available, available="78%").
+fn df_rows(stdout: &str) -> Vec<Vec<&str>> {
+    let mut rows: Vec<Vec<&str>> = Vec::new();
+    let mut lines = stdout.lines().skip(1).peekable();
+    while let Some(line) = lines.next() {
+        let mut tokens: Vec<&str> = line.split_whitespace().collect();
+        if tokens.len() == 1 && tokens[0].parse::<u64>().is_err() {
+            // A lone non-numeric token is a wrapped device name; its numeric
+            // columns are on the following line.
+            if let Some(continuation) = lines.peek() {
+                tokens.extend(continuation.split_whitespace());
+                lines.next();
+            }
+        }
+        rows.push(tokens);
+    }
+    rows
+}
+
 fn parse_df(stdout: &str) -> Option<StorageInfo> {
     // `df -k /data` reports 1K-block units on every Android variant. Format:
     //   Filesystem  1K-blocks  Used  Available  Use%  Mounted on
     //   /dev/...    123456     78900  44556      64%   /data
-    for line in stdout.lines().skip(1) {
-        let tokens: Vec<&str> = line.split_whitespace().collect();
+    for tokens in df_rows(stdout) {
         if tokens.len() >= 4 {
             let total_kb = tokens[1].parse().ok();
             let used_kb = tokens[2].parse().ok();
@@ -276,8 +300,7 @@ const PARTITION_MOUNTS: &[&str] = &["/system", "/vendor", "/data", "/cache"];
 
 fn parse_df_partitions(stdout: &str) -> Vec<StoragePartition> {
     let mut found: Vec<StoragePartition> = Vec::new();
-    for line in stdout.lines().skip(1) {
-        let tokens: Vec<&str> = line.split_whitespace().collect();
+    for tokens in df_rows(stdout) {
         // Filesystem 1K-blocks Used Available Use% Mounted-on
         if tokens.len() < 6 {
             continue;
@@ -394,6 +417,18 @@ garbage line
     }
 
     #[test]
+    fn parse_getprop_keeps_a_trailing_bracket_inside_the_value() {
+        let stdout = "[persist.vendor.channels]: [[1,2,3]]\n[ro.empty]: []\n";
+        let props = parse_getprop(stdout);
+        assert_eq!(
+            get_prop(&props, "persist.vendor.channels").as_deref(),
+            Some("[1,2,3]")
+        );
+        // An empty value stays empty (and get_prop filters it out).
+        assert_eq!(get_prop(&props, "ro.empty"), None);
+    }
+
+    #[test]
     fn parse_battery_extracts_level_and_status() {
         let stdout = "\
 Current Battery Service state:
@@ -479,5 +514,37 @@ Filesystem     1K-blocks    Used Available Use% Mounted on
     #[test]
     fn parse_df_returns_none_on_garbage() {
         assert!(parse_df("nothing useful").is_none());
+    }
+
+    #[test]
+    fn parse_df_rejoins_a_wrapped_device_name_row() {
+        // A long device name wraps onto its own line; the numeric columns land
+        // on the next line. The row must not be parsed transposed.
+        let stdout = "\
+Filesystem     1K-blocks    Used Available Use% Mounted on
+/dev/block/bootdevice/by-name/userdata-with-a-very-long-mapper-name
+                113021876 87654320  25367556  78% /data
+";
+        let info = parse_df(stdout).unwrap();
+        assert_eq!(info.total_kb, Some(113_021_876));
+        assert_eq!(info.used_kb, Some(87_654_320));
+        assert_eq!(info.available_kb, Some(25_367_556));
+    }
+
+    #[test]
+    fn parse_df_partitions_rejoins_wrapped_rows() {
+        let stdout = "\
+Filesystem     1K-blocks    Used Available Use% Mounted on
+/dev/block/bootdevice/by-name/userdata-with-a-very-long-mapper-name
+                113021876 87654320  25367556  78% /data
+/dev/block/dm-0   2500000 2400000    100000  96% /system
+";
+        let parts = parse_df_partitions(stdout);
+        let mounts: Vec<&str> = parts.iter().map(|p| p.mount.as_str()).collect();
+        assert_eq!(mounts, vec!["/system", "/data"]);
+        let data = parts.iter().find(|p| p.mount == "/data").unwrap();
+        assert_eq!(data.total_kb, Some(113_021_876));
+        assert_eq!(data.used_kb, Some(87_654_320));
+        assert_eq!(data.available_kb, Some(25_367_556));
     }
 }
