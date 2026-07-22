@@ -7,11 +7,12 @@
 //! and reports a per-entry size breakdown. Nothing is pulled from a device and
 //! no code is executed — only bounded reads over a ZIP on disk.
 
-use std::fs::File;
-use std::io::{Read, Seek, SeekFrom};
-use std::path::Path;
+use std::fs::{File, OpenOptions};
+use std::io::{Read, Seek, SeekFrom, Write};
+use std::path::{Path, PathBuf};
 
 use serde::Serialize;
+use sha2::{Digest, Sha256};
 
 use crate::apk_metadata::{le_u16, le_u32, parse_resource_table, parse_string_pool, ResourceTable};
 
@@ -21,6 +22,7 @@ const MAX_RESOURCES_BYTES: u64 = 32 * 1024 * 1024;
 const MAX_ZIP_ENTRIES: usize = 65_536;
 const MAX_PERMISSIONS: usize = 4096;
 const MAX_ENTRY_ROWS: usize = 40;
+const MAX_DISPLAY_VALUE_CHARS: usize = 512;
 const MAX_SIGNING_BLOCK_BYTES: u64 = 32 * 1024 * 1024;
 const DEX_METHOD_LIMIT: u32 = 65_536;
 
@@ -131,19 +133,14 @@ impl AnalysisError {
 
 /// Analyze a local APK file. `path` is a validated host path (grant-consumed).
 pub fn analyze(path: &Path) -> Result<ApkAnalysis, AnalysisError> {
-    let metadata =
-        std::fs::metadata(path).map_err(|error| AnalysisError::Open(error.to_string()))?;
-    if metadata.len() > MAX_APK_BYTES {
-        return Err(AnalysisError::TooLarge);
-    }
-    let file_name = path
-        .file_name()
-        .map(|name| name.to_string_lossy().into_owned())
-        .unwrap_or_default();
-    let sha256 = crate::fs_util::sha256_file(path)
-        .map_err(|error| AnalysisError::Open(error.to_string()))?;
+    // Every parser and verifier must inspect the same immutable bytes. Opening
+    // the renderer-selected path independently for metadata, hashing, ZIP
+    // parsing, signing-block inspection, and apksigner allowed a concurrent
+    // replacement to produce one report assembled from different files.
+    let snapshot = AnalysisSnapshot::create(path)?;
 
-    let file = File::open(path).map_err(|error| AnalysisError::Open(error.to_string()))?;
+    let file =
+        File::open(&snapshot.path).map_err(|error| AnalysisError::Open(error.to_string()))?;
     let mut zip =
         zip::ZipArchive::new(file).map_err(|error| AnalysisError::Archive(error.to_string()))?;
     if zip.len() > MAX_ZIP_ENTRIES {
@@ -161,13 +158,13 @@ pub fn analyze(path: &Path) -> Result<ApkAnalysis, AnalysisError> {
     let manifest = summarize_manifest(&elements, &table);
 
     let (total_entries, largest_entries, dex, signing_v1) = scan_entries(&mut zip)?;
-    let mut signing = detect_signing_block(path)?;
+    let mut signing = detect_signing_block(&snapshot.path)?;
     signing.v1 = signing_v1;
 
     Ok(ApkAnalysis {
-        file_name,
-        file_size: metadata.len(),
-        sha256,
+        file_name: snapshot.file_name.clone(),
+        file_size: snapshot.size,
+        sha256: snapshot.sha256.clone(),
         package: manifest.package,
         version_code: manifest.version_code,
         version_name: manifest.version_name,
@@ -178,10 +175,90 @@ pub fn analyze(path: &Path) -> Result<ApkAnalysis, AnalysisError> {
         components: manifest.components,
         dex,
         signing,
-        signature_verification: crate::apk_signing::verify(path),
+        signature_verification: crate::apk_signing::verify(&snapshot.path),
         total_entries,
         largest_entries,
     })
+}
+
+struct AnalysisSnapshot {
+    path: PathBuf,
+    file_name: String,
+    size: u64,
+    sha256: String,
+}
+
+impl AnalysisSnapshot {
+    fn create(source_path: &Path) -> Result<Self, AnalysisError> {
+        let file_name = source_path
+            .file_name()
+            .map(|name| bounded_display(&name.to_string_lossy()))
+            .unwrap_or_default();
+        let mut source =
+            File::open(source_path).map_err(|error| AnalysisError::Open(error.to_string()))?;
+        if source
+            .metadata()
+            .map_err(|error| AnalysisError::Open(error.to_string()))?
+            .len()
+            > MAX_APK_BYTES
+        {
+            return Err(AnalysisError::TooLarge);
+        }
+
+        let path = std::env::temp_dir().join(format!(
+            ".droidsmith-apk-analysis-{}-{}.apk",
+            std::process::id(),
+            uuid::Uuid::new_v4()
+        ));
+        let mut created = false;
+        let result = (|| {
+            let mut destination = OpenOptions::new()
+                .create_new(true)
+                .write(true)
+                .open(&path)
+                .map_err(|error| AnalysisError::Open(error.to_string()))?;
+            created = true;
+            let mut hasher = Sha256::new();
+            let mut size = 0_u64;
+            let mut buffer = [0_u8; 64 * 1024];
+            loop {
+                let read = source
+                    .read(&mut buffer)
+                    .map_err(|error| AnalysisError::Open(error.to_string()))?;
+                if read == 0 {
+                    break;
+                }
+                size = size.saturating_add(read as u64);
+                if size > MAX_APK_BYTES {
+                    return Err(AnalysisError::TooLarge);
+                }
+                hasher.update(&buffer[..read]);
+                destination
+                    .write_all(&buffer[..read])
+                    .map_err(|error| AnalysisError::Open(error.to_string()))?;
+            }
+            destination
+                .flush()
+                .and_then(|()| destination.sync_data())
+                .map_err(|error| AnalysisError::Open(error.to_string()))?;
+            Ok(Self {
+                path: path.clone(),
+                file_name,
+                size,
+                sha256: format!("{:x}", hasher.finalize()),
+            })
+        })();
+        if result.is_err() && created {
+            let _ = std::fs::remove_file(&path);
+        }
+        result
+    }
+}
+
+impl Drop for AnalysisSnapshot {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_file(&self.path);
+    }
 }
 
 fn read_entry(
@@ -363,9 +440,16 @@ fn summarize_manifest(elements: &[Element], table: &ResourceTable) -> ManifestSu
     for element in elements {
         match element.name.as_str() {
             "manifest" => {
-                summary.package = attr(element, "package").and_then(|v| v.resolve(table));
-                summary.version_code = attr(element, "versionCode").and_then(TypedValue::as_int);
-                summary.version_name = attr(element, "versionName").and_then(|v| v.resolve(table));
+                summary.package = attr(element, "package")
+                    .and_then(|v| v.resolve(table))
+                    .map(|value| bounded_display(&value));
+                let version_code = attr(element, "versionCode").and_then(TypedValue::as_int);
+                let version_code_major =
+                    attr(element, "versionCodeMajor").and_then(TypedValue::as_int);
+                summary.version_code = long_version_code(version_code, version_code_major);
+                summary.version_name = attr(element, "versionName")
+                    .and_then(|v| v.resolve(table))
+                    .map(|value| bounded_display(&value));
                 summary.compile_sdk =
                     attr(element, "compileSdkVersion").and_then(TypedValue::as_int);
             }
@@ -376,6 +460,7 @@ fn summarize_manifest(elements: &[Element], table: &ResourceTable) -> ManifestSu
             "uses-permission" | "uses-permission-sdk-23" => {
                 if summary.permissions.len() < MAX_PERMISSIONS {
                     if let Some(name) = attr(element, "name").and_then(|v| v.resolve(table)) {
+                        let name = bounded_display(&name);
                         if !summary.permissions.contains(&name) {
                             summary.permissions.push(name);
                         }
@@ -393,11 +478,41 @@ fn summarize_manifest(elements: &[Element], table: &ResourceTable) -> ManifestSu
     summary
 }
 
+fn long_version_code(lower: Option<i64>, major: Option<i64>) -> Option<i64> {
+    let lower = lower?;
+    let Some(major) = major else {
+        return Some(lower);
+    };
+    let lower = u32::try_from(lower).ok()? as u64;
+    let major = u32::try_from(major).ok()? as u64;
+    i64::try_from((major << 32) | lower).ok()
+}
+
+fn bounded_display(value: &str) -> String {
+    let mut output = String::with_capacity(value.len().min(MAX_DISPLAY_VALUE_CHARS));
+    let mut truncated = false;
+    for (index, character) in value.chars().enumerate() {
+        if index >= MAX_DISPLAY_VALUE_CHARS {
+            truncated = true;
+            break;
+        }
+        output.push(if character.is_control() {
+            '\u{fffd}'
+        } else {
+            character
+        });
+    }
+    if truncated {
+        output.push('…');
+    }
+    output
+}
+
 type EntryScan = (usize, Vec<ApkEntrySize>, DexSummary, bool);
 
 fn scan_entries(zip: &mut zip::ZipArchive<File>) -> Result<EntryScan, AnalysisError> {
     let total_entries = zip.len();
-    let mut sizes: Vec<ApkEntrySize> = Vec::with_capacity(total_entries.min(1024));
+    let mut sizes: Vec<ApkEntrySize> = Vec::with_capacity(MAX_ENTRY_ROWS + 1);
     let mut dex = DexSummary::default();
     let mut v1 = false;
 
@@ -407,10 +522,16 @@ fn scan_entries(zip: &mut zip::ZipArchive<File>) -> Result<EntryScan, AnalysisEr
             .map_err(|error| AnalysisError::Archive(error.to_string()))?;
         let name = entry.name().to_string();
         sizes.push(ApkEntrySize {
-            name: name.clone(),
+            name: bounded_display(&name),
             compressed: entry.compressed_size(),
             uncompressed: entry.size(),
         });
+        sizes.sort_by(|a, b| {
+            b.uncompressed
+                .cmp(&a.uncompressed)
+                .then(a.name.cmp(&b.name))
+        });
+        sizes.truncate(MAX_ENTRY_ROWS);
         if is_v1_signature(&name) {
             v1 = true;
         }
@@ -426,12 +547,6 @@ fn scan_entries(zip: &mut zip::ZipArchive<File>) -> Result<EntryScan, AnalysisEr
     }
 
     dex.exceeds_64k = dex.files > 1 || dex.method_refs > DEX_METHOD_LIMIT;
-    sizes.sort_by(|a, b| {
-        b.uncompressed
-            .cmp(&a.uncompressed)
-            .then(a.name.cmp(&b.name))
-    });
-    sizes.truncate(MAX_ENTRY_ROWS);
     Ok((total_entries, sizes, dex, v1))
 }
 
@@ -605,6 +720,77 @@ mod tests {
         assert!(!scan(1, 100));
         assert!(scan(2, 100));
         assert!(scan(1, 70_000));
+    }
+
+    #[test]
+    fn long_version_code_combines_the_manifest_major_component() {
+        assert_eq!(long_version_code(Some(42), None), Some(42));
+        assert_eq!(
+            long_version_code(Some(42), Some(3)),
+            Some((3_i64 << 32) | 42)
+        );
+        assert_eq!(long_version_code(Some(-1), Some(3)), None);
+        assert_eq!(long_version_code(Some(42), Some(-1)), None);
+    }
+
+    #[test]
+    fn display_values_are_bounded_and_strip_controls() {
+        assert_eq!(bounded_display("safe value"), "safe value");
+        assert_eq!(bounded_display("line\nfeed"), "line�feed");
+        let bounded = bounded_display(&"x".repeat(MAX_DISPLAY_VALUE_CHARS + 20));
+        assert_eq!(bounded.chars().count(), MAX_DISPLAY_VALUE_CHARS + 1);
+        assert!(bounded.ends_with('…'));
+    }
+
+    #[test]
+    fn entry_scan_keeps_only_bounded_largest_rows() {
+        let dir = std::env::temp_dir().join(format!("apk-rows-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let archive = dir.join("rows.apk");
+        {
+            let file = File::create(&archive).unwrap();
+            let mut writer = zip::ZipWriter::new(file);
+            for index in 0..(MAX_ENTRY_ROWS + 20) {
+                writer
+                    .start_file(
+                        format!("entry-{index:03}.bin"),
+                        zip::write::SimpleFileOptions::default(),
+                    )
+                    .unwrap();
+                writer.write_all(&vec![b'x'; index + 1]).unwrap();
+            }
+            writer.finish().unwrap();
+        }
+        let file = File::open(&archive).unwrap();
+        let mut zip = zip::ZipArchive::new(file).unwrap();
+        let (total, rows, _, _) = scan_entries(&mut zip).unwrap();
+        let _ = std::fs::remove_dir_all(&dir);
+
+        assert_eq!(total, MAX_ENTRY_ROWS + 20);
+        assert_eq!(rows.len(), MAX_ENTRY_ROWS);
+        assert_eq!(rows[0].uncompressed, (MAX_ENTRY_ROWS + 20) as u64);
+        assert_eq!(rows.last().unwrap().uncompressed, 21);
+    }
+
+    #[test]
+    fn snapshot_keeps_hash_and_parsers_on_one_immutable_file() {
+        let dir = std::env::temp_dir().join(format!("apk-snapshot-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let source = dir.join("selected.apk");
+        std::fs::write(&source, b"first bytes").unwrap();
+        let snapshot = AnalysisSnapshot::create(&source).unwrap();
+        let snapshot_path = snapshot.path.clone();
+        std::fs::write(&source, b"replacement bytes").unwrap();
+
+        assert_eq!(std::fs::read(&snapshot.path).unwrap(), b"first bytes");
+        assert_eq!(snapshot.size, 11);
+        assert_eq!(
+            snapshot.sha256,
+            format!("{:x}", Sha256::digest(b"first bytes"))
+        );
+        drop(snapshot);
+        assert!(!snapshot_path.exists());
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

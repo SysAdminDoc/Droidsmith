@@ -43,6 +43,11 @@ each milestone tag.
   termination failures instead of returning partial output as success. Captured
   operations cap live IPC output with an omission notice, and rapidly exiting
   Logcat children stop after five reconnect attempts instead of retrying forever.
+- APK Analyzer now snapshots and hashes the selected package once, then feeds
+  the same bounded immutable bytes to ZIP parsing, signing-block inspection,
+  and official signature verification. It also keeps only the forty largest
+  entry rows during scanning, bounds control-laden display values, and reports
+  Android `versionCodeMajor`-based long version codes correctly.
 
 ## [0.9.7] - 2026-07-21
 
