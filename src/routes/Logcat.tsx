@@ -55,6 +55,21 @@ import {
 
 const MAX_LOG_LINES = 2_000;
 
+/** Display name for a saved/builtin query. Builtin ids are stable, so their
+ *  names resolve through the locale files at render time; the stored English
+ *  name stays as the fallback. */
+function presetDisplayName(
+  preset: WorkingQuery,
+  t: ReturnType<typeof useTranslation>["t"],
+): string {
+  if (preset.id.startsWith("builtin-")) {
+    return t(`logcat.queries.builtinNames.${preset.id}`, {
+      defaultValue: preset.name,
+    });
+  }
+  return preset.name || t("logcat.queries.unnamed");
+}
+
 export default function LogcatRoute() {
   const { t } = useTranslation();
   const { devicesState, authorizedDevices } = useAuthorizedDevices();
@@ -181,7 +196,10 @@ export default function LogcatRoute() {
         flushPartialLogcatLine(partialLineRef, setLines);
         appendBoundedLines(setLines, [
           parseLogcatLine(
-            `--- ${event.message ?? "Logcat disconnected; reconnecting"} (attempt ${event.attempt ?? "?"}) ---`,
+            t("logcat.reconnectLine", {
+              message: event.message ?? t("logcat.reconnectFallback"),
+              attempt: event.attempt ?? "?",
+            }),
           ),
         ]);
         queueLogAnnouncement();
@@ -209,6 +227,7 @@ export default function LogcatRoute() {
     liveSelectedTarget,
     queueLogAnnouncement,
     streamOperation,
+    t,
   ]);
 
   const stopTailing = useCallback(() => {
@@ -334,7 +353,9 @@ export default function LogcatRoute() {
       const copy: WorkingQuery = {
         ...preset,
         id: newQueryId(),
-        name: t("logcat.queries.copyName", { name: preset.name }),
+        name: t("logcat.queries.copyName", {
+          name: presetDisplayName(preset, t),
+        }),
       };
       const next = [...scopeList(target), copy];
       await persistScope(target, next, t("logcat.queries.saved"));
@@ -629,7 +650,7 @@ export default function LogcatRoute() {
               </label>
             </div>
 
-            <details className="group border-y border-white/[0.07] py-1">
+            <details className="group border-y border-white/10 py-1">
               <summary className="w-fit cursor-pointer list-none rounded-sm px-1 py-2 text-sm font-medium text-anvil-300 hover:text-anvil-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-circuit-300 [&::-webkit-details-marker]:hidden">
                 <span
                   className="me-2 inline-block transition group-open:rotate-90"
@@ -815,7 +836,7 @@ export default function LogcatRoute() {
             <Card className="overflow-hidden p-0">
               <div
                 ref={outputRef}
-                className="h-[32rem] overflow-y-auto bg-[#0a0e13] p-3 font-mono text-sm leading-6"
+                className="h-[32rem] overflow-y-auto bg-surface-terminal p-3 font-mono text-sm leading-6"
                 role="log"
                 aria-live="off"
                 aria-label={t("logcat.outputLabel")}
@@ -939,7 +960,7 @@ function QueryManager(props: QueryManagerProps) {
             onChange={(e) => props.onImportTextChange(e.target.value)}
             spellCheck={false}
             aria-label={t("logcat.queries.transfer")}
-            className="h-40 bg-[#0c0d12] p-2 font-mono text-[11px] text-anvil-100"
+            className="h-40 bg-surface-terminal p-2 font-mono text-[11px] text-anvil-100"
             placeholder={t("logcat.queries.importPlaceholder")}
           />
           <div className="mt-2 flex justify-end">
@@ -969,7 +990,7 @@ function QueryManager(props: QueryManagerProps) {
                 onClick={() => props.onApply(preset)}
                 className="rounded-md border border-white/10 bg-white/[0.04] px-2 py-1 text-xs text-anvil-200 hover:border-white/20"
               >
-                {preset.name || t("logcat.queries.unnamed")}
+                {presetDisplayName(preset, t)}
               </button>
             ))}
           </div>
@@ -1020,7 +1041,7 @@ function QueryList(
           {props.presets.map((preset, index) => (
             <li
               key={preset.id}
-              className="flex flex-wrap items-center gap-2 border-b border-white/[0.08] px-1 py-2.5 last:border-b-0"
+              className="flex flex-wrap items-center gap-2 border-b border-white/10 px-1 py-2.5 last:border-b-0"
             >
               {props.renameId === preset.id ? (
                 <>
@@ -1050,7 +1071,7 @@ function QueryList(
               ) : (
                 <>
                   <span className="min-w-0 flex-1 truncate text-sm text-anvil-100">
-                    {preset.name || t("logcat.queries.unnamed")}
+                    {presetDisplayName(preset, t)}
                   </span>
                   {props.builtin && (
                     <Badge tone="neutral">
@@ -1089,7 +1110,9 @@ function QueryList(
                         size="sm"
                         variant="ghost"
                         disabled={index === 0}
-                        aria-label={t("logcat.queries.moveUp")}
+                        aria-label={t("logcat.queries.moveUp", {
+                          name: presetDisplayName(preset, t),
+                        })}
                         onClick={() => props.onMove(props.scope, index, -1)}
                       >
                         ↑
@@ -1099,7 +1122,9 @@ function QueryList(
                         size="sm"
                         variant="ghost"
                         disabled={index === props.presets.length - 1}
-                        aria-label={t("logcat.queries.moveDown")}
+                        aria-label={t("logcat.queries.moveDown", {
+                          name: presetDisplayName(preset, t),
+                        })}
                         onClick={() => props.onMove(props.scope, index, 1)}
                       >
                         ↓

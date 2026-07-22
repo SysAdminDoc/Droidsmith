@@ -41,10 +41,10 @@
       "mirrorPresets": "按设备的镜像预设"
     },
     "export": "导出范围",
-    "exporting": "正在导出...",
+    "exporting": "正在导出…",
     "exportSaved": "设置已导出至 {{path}}。",
     "import": "导入设置",
-    "importReading": "正在读取...",
+    "importReading": "正在读取…",
     "importPreviewTitle": "检查便携设置",
     "importPreviewBody": "版本 {{version}} · {{scope}}。请选择将导入的集合与当前值合并，还是替换当前值。",
     "importMode": "导入方式",
@@ -54,10 +54,10 @@
     },
     "importMachineLocal": "以下本机字段保持不变且永不导入：{{fields}}。",
     "importApply": "应用导入",
-    "importApplying": "正在应用...",
+    "importApplying": "正在应用…",
     "importComplete": "已使用“{{mode}}”导入设置。导入前备份可供恢复。",
     "importRestore": "恢复导入前备份",
-    "importRestoring": "正在恢复...",
+    "importRestoring": "正在恢复…",
     "importBackupRestored": "已恢复导入前的设置备份。",
     "importDiff": {
       "language": "语言",
@@ -73,7 +73,7 @@
     "resetConfirmTitle": "重置此设置范围？",
     "resetConfirmBody": "{{scope}} 将恢复为默认值。其他设置范围不受影响。",
     "confirmReset": "重置所选范围",
-    "resetting": "正在重置...",
+    "resetting": "正在重置…",
     "resetComplete": "{{scope}} 已重置为默认值。",
     "operationFailed": "设置操作失败：{{message}}"
   },
@@ -135,10 +135,10 @@
     "preview": "已脱敏的包预览",
     "wipe": "清除本地诊断历史",
     "save": "保存包",
-    "saving": "正在保存...",
+    "saving": "正在保存…",
     "wipeTitle": "清除可擦除的诊断历史？",
     "wipeBody": "此操作将删除轮转的崩溃日志和主机级恢复记录。按设备的操作日志和安装审计记录将被保留，因为它们支持审计和恢复。已保存到 Droidsmith 外部的包不会被删除。",
-    "wiping": "正在清除...",
+    "wiping": "正在清除…",
     "confirmWipe": "确认清除",
     "wiped": "已移除 {{count}} 个诊断文件（{{size}}）。操作和安装审计日志已保留。",
     "wipeFailed": "无法清除诊断历史：{{message}}"
@@ -155,12 +155,12 @@
     "privacyContract": "Droidsmith 将 ZIP 视为不透明文件：它仅验证归档结构，写入脱敏的元数据附件，不检查、上传、附加或打开报告内容。",
     "acknowledge": "我了解可能包含的内容，并希望在本地保存此敏感报告。",
     "chooseDestination": "选择目标位置并捕获",
-    "starting": "正在启动 Android 错误报告捕获...",
+    "starting": "正在启动 Android 错误报告捕获…",
     "running": "Android 正在构建错误报告。这可能需要几分钟。",
     "selecting": "在原生保存对话框中选择本地 .zip 目标位置。",
     "captureInProgress": "错误报告捕获进行中",
     "cancelCapture": "取消捕获",
-    "cancelling": "正在取消并移除部分输出...",
+    "cancelling": "正在取消并移除部分输出…",
     "failed": "错误报告捕获失败",
     "saved": "敏感错误报告已保存到本地",
     "report": "错误报告 ZIP",
@@ -173,7 +173,7 @@
     "description": "跳转到 Droidsmith 工作区。",
     "close": "关闭命令面板",
     "searchLabel": "命令面板搜索",
-    "searchPlaceholder": "搜索命令、包、路由...",
+    "searchPlaceholder": "搜索命令、包、路由…",
     "noMatchesTitle": "没有匹配的工作区",
     "noMatchesHint": "请尝试输入路由名称。",
     "navigationCategory": "导航",
@@ -237,7 +237,13 @@
     },
     "invalidChoice": "不是允许的值",
     "notANumber": "请输入数字",
-    "outOfRange": "请输入 {{min}} 到 {{max}} 之间的值"
+    "outOfRange": "请输入 {{min}} 到 {{max}} 之间的值",
+    "options": {
+      "stay_on_while_plugged_in": {
+        "0": "关闭",
+        "7": "开启（任何充电器）"
+      }
+    }
   },
   "devices": {
     "title": "设备",
@@ -250,7 +256,7 @@
     "transportTrustBody": "{{transport}} 不提供 Android 无线调试的认证配对保证。流量和设备数据可能暴露给此网络上的其他人。",
     "transportTrustAcknowledge": "允许通过此连接执行特权操作，直到我选择其他设备。",
     "refresh": "刷新",
-    "scanning": "正在扫描...",
+    "scanning": "正在扫描…",
     "moreActions": "更多设备选项",
     "connected": "已连接的设备",
     "selectHint": "选择一个设备以查看其仪表板。在执行任何操作之前，请检查状态和传输方式。",
@@ -300,7 +306,7 @@
     "noProductMetadata": "无产品元数据",
     "transportId": "传输 {{id}}",
     "loadingDeviceInfo": "正在加载设备信息",
-    "queryingSerial": "正在查询 {{serial}}...",
+    "queryingSerial": "正在查询 {{serial}}…",
     "deviceInfoFailed": "无法加载设备信息",
     "detailTitle": "设备详情",
     "disconnect": "断开连接",
@@ -346,7 +352,7 @@
       "stopped": "监控已停止",
       "wifiTwoDetected": "检测到 Wi-Fi 2.0",
       "observed": "最后观察时间 {{time}}",
-      "probing": "正在探测 ADB 服务器和发现后端...",
+      "probing": "正在探测 ADB 服务器和发现后端…",
       "reviewRecovery": "查看恢复",
       "client": "客户端版本",
       "server": "服务器版本",
@@ -371,8 +377,8 @@
       "wifiTwoDevices": "Wi-Fi 2.0 设备",
       "noneDetected": "未检测到",
       "mdnsCheck": "mDNS 检查",
-      "starting": "正在启动 ADB 恢复...",
-      "cancelling": "正在取消并等待当前 ADB 进程退出...",
+      "starting": "正在启动 ADB 恢复…",
+      "cancelling": "正在取消并等待当前 ADB 进程退出…",
       "recoveryTitle": "查看 ADB 重启和重新连接",
       "recoveryBody": "此主机级操作将重启本地 ADB 服务器，然后仅请求离线传输重新连接。确切的操作序列如下所示，在第一个命令运行之前会写入持久的操作记录。",
       "recoveryWarning": "所有共享此 ADB 服务器的已连接工具可能会短暂断开。不会更改设备数据，但活动的传输和 shell 会话可能会中断。",
@@ -607,7 +613,7 @@
     "title": "无线",
     "description": "通过 Wi-Fi 配对和连接 Android 设备。",
     "scanMdns": "扫描 mDNS",
-    "scanning": "正在扫描...",
+    "scanning": "正在扫描…",
     "scanningMdns": "正在扫描 mDNS",
     "mdnsScanFailed": "mDNS 扫描失败",
     "qrAlt": "无线 ADB 配对二维码",
@@ -668,7 +674,12 @@
     "forget": "移除",
     "lastConnected": "上次连接",
     "autoReconnect": "启动时重新连接已知设备",
-    "autoReconnectHint": "Droidsmith 启动时会尝试重新连接下面已保存的端点。"
+    "autoReconnectHint": "Droidsmith 启动时会尝试重新连接下面已保存的端点。",
+    "serviceKind": {
+      "pairing": "配对",
+      "connect": "连接",
+      "other": "其他"
+    }
   },
   "apps": {
     "otaDriftTitle": "设备自上次使用后已更新",
@@ -702,7 +713,7 @@
     "installOverrideAudit": "仅此次重试接受覆盖。确切的标志和此明确确认将写入本地安装审计日志。",
     "installConfirmOverride": "使用覆盖安装",
     "installGrantExpired": "所选包的授权已过期。请在重试之前重新选择该包。",
-    "loading": "正在加载...",
+    "loading": "正在加载…",
     "filterAll": "全部",
     "filterUser": "用户",
     "filterSystem": "系统",
@@ -713,7 +724,7 @@
     "retainedLabel": "已卸载 · 数据已保留",
     "retainedBody": "已为此 Android 用户卸载，但 PackageManager 仍保留其残留数据。移除它将是一次完全且不可逆的清除。",
     "removeRetainedData": "移除保留的数据",
-    "searchPlaceholder": "搜索包...",
+    "searchPlaceholder": "搜索包…",
     "searchLabel": "按名称筛选包",
     "userLabel": "用户",
     "userCurrent": "当前",
@@ -775,11 +786,11 @@
     "batchUndoCompleted": "批量撤销：{{succeeded}} 个已还原，{{failed}} 个失败。",
     "recoveryInspect": "检查恢复基线",
     "recoveryExportBeforeApply": "导出变更前基线",
-    "recoveryExporting": "正在导出基线...",
+    "recoveryExporting": "正在导出基线…",
     "recoveryExportedReady": "基线已导出。此经审查的操作尚未执行。",
     "recoveryExportError": "基线导出失败：{{message}}",
-    "recoveryInspecting": "正在将基线与在线设备比较...",
-    "recoveryApplying": "正在应用 {{count}} 个经审查的恢复操作...",
+    "recoveryInspecting": "正在将基线与在线设备比较…",
+    "recoveryApplying": "正在应用 {{count}} 个经审查的恢复操作…",
     "recoveryWorking": "恢复基线",
     "recoverySavedTitle": "恢复基线已导出",
     "recoverySaved": "便携式恢复证据已保存至 {{path}}。",
@@ -849,7 +860,7 @@
     "journalEntryCount_many": "{{count}} 条记录",
     "journalEntryCount_other": "{{count}} 条记录",
     "journalRefresh": "刷新日志",
-    "journalLoading": "正在加载日志...",
+    "journalLoading": "正在加载日志…",
     "journalLoadFailed": "日志加载失败",
     "journalEmpty": "暂无日志条目",
     "journalEmptyBody": "应用一个包操作，Droidsmith 将在此处记录。",
@@ -857,7 +868,7 @@
     "journalAction": "操作",
     "journalOutput": "ADB 输出",
     "journalUndo": "撤销",
-    "journalUndoing": "正在撤销...",
+    "journalUndoing": "正在撤销…",
     "journalUndoCompleted": "已完成 {{package}} 的撤销。",
     "journalPending": "进行中",
     "journalFailed": "已安全失败",
@@ -874,7 +885,7 @@
     "journalBatchMeta": "批次 {{id}} · {{count}} 个包",
     "journalBatchMember": "批次的一部分",
     "journalUndoBatch": "撤销批次（{{count}}）",
-    "journalUndoingBatch": "正在撤销批次...",
+    "journalUndoingBatch": "正在撤销批次…",
     "actionKind": {
       "disable": "禁用",
       "enable": "启用",
@@ -920,7 +931,7 @@
     "unsafeSelectedBody": "这些条目可能会破坏核心设备或 OEM 功能。请在继续之前验证每个包 ID。",
     "unsafeAcknowledge": "我了解这些不安全等级的包可能会破坏设备或 OEM 功能，并接受风险。",
     "noUnsafeSelected": "未选择不安全等级的包。",
-    "searchPlaceholder": "搜索包或描述...",
+    "searchPlaceholder": "搜索包或描述…",
     "searchLabel": "按 ID、描述或标签筛选方案包条目",
     "presets": {
       "title": "预设",
@@ -941,7 +952,7 @@
     "back": "返回",
     "recoveryBaseline": "便携式恢复基线",
     "recoveryExport": "应用前导出基线",
-    "recoveryExporting": "正在导出基线...",
+    "recoveryExporting": "正在导出基线…",
     "recoverySaved": "基线已保存至 {{path}}（sha256 {{sha256}}）。",
     "complete": "精简完成",
     "startOver": "重新开始",
@@ -1020,7 +1031,7 @@
     "journalUndo": "所有更改已记录在按设备的日志中，可从“应用”选项卡撤销。",
     "failedPackages": "失败的包",
     "currentPackage": "当前包：{{package}}",
-    "preparingQueue": "正在准备队列...",
+    "preparingQueue": "正在准备队列…",
     "cancelAfterCurrent": "完成当前后取消",
     "cancelRequested": "已请求取消",
     "cancelledBeforeApply": "在应用此包之前已取消。",
@@ -1134,7 +1145,7 @@
     "presetLoadFailed": "无法加载已保存的预设；已使用默认值。{{message}}",
     "presetSaveFailed": "无法保存预设设置。{{message}}",
     "launch": "启动镜像",
-    "launching": "正在启动...",
+    "launching": "正在启动…",
     "sessionActive": "会话活跃",
     "stopSession": "停止会话",
     "scrcpyMissing": "scrcpy 未安装",
@@ -1197,7 +1208,8 @@
     },
     "noVdDestroyContent": "保留虚拟显示内容",
     "displayImePolicy": "虚拟显示输入法",
-    "displayImePolicyDefault": "默认"
+    "displayImePolicyDefault": "默认",
+    "scrcpyInstallSuffix": "或通过包管理器安装："
   },
   "console": {
     "title": "控制台",
@@ -1213,7 +1225,7 @@
     "desktopRequiredBody": "Shell 命令在 Tauri 运行时中运行。",
     "noAuthorizedBody": "连接并授权设备以使用控制台。",
     "noOutput": "（无输出）",
-    "running": "正在运行...",
+    "running": "正在运行…",
     "starting": "正在启动后台命令…",
     "runningFor": "已运行 {{seconds}} 秒…",
     "cancelling": "正在取消并停止 ADB…",
@@ -1228,7 +1240,8 @@
       "unterminatedQuote": "请先闭合引号，再运行此命令。",
       "trailingEscape": "命令不能以单个反斜杠结尾。",
       "emptyArgument": "不支持空命令参数。"
-    }
+    },
+    "plannerNoPlan": "经审计的 shell 规划器未返回任何变更计划"
   },
   "logcat": {
     "title": "Logcat",
@@ -1264,7 +1277,7 @@
     "textSearchLabel": "按文本筛选日志行",
     "outputLabel": "Logcat 输出",
     "startHint": "按“开始跟踪”以开始捕获日志。",
-    "waiting": "正在等待日志输出...",
+    "waiting": "正在等待日志输出…",
     "updatedAnnouncement_one": "Logcat 已更新；{{count}} 行可见。",
     "updatedAnnouncement_few": "Logcat 已更新；{{count}} 行可见。",
     "updatedAnnouncement_many": "Logcat 已更新；{{count}} 行可见。",
@@ -1294,8 +1307,8 @@
       "duplicate": "复制",
       "rename": "重命名",
       "delete": "删除",
-      "moveUp": "上移",
-      "moveDown": "下移",
+      "moveUp": "上移 {{name}}",
+      "moveDown": "下移 {{name}}",
       "transfer": "导入 / 导出",
       "close": "关闭",
       "import": "导入",
@@ -1327,8 +1340,14 @@
         "format": "该导入不是有效的查询导出。",
         "empty": "导入内容不包含任何查询。",
         "tooMany": "要导入的查询过多（最多 64 个）。"
+      },
+      "builtinNames": {
+        "builtin-crash": "崩溃和 ANR",
+        "builtin-stacktrace": "堆栈跟踪"
       }
-    }
+    },
+    "reconnectFallback": "Logcat 已断开；正在重新连接",
+    "reconnectLine": "--- {{message}}（第 {{attempt}} 次尝试）---"
   },
   "profiles": {
     "title": "配置文件",
@@ -1366,7 +1385,7 @@
     "actionCount_many": "{{count}} 个操作",
     "actionCount_other": "{{count}} 个操作",
     "packageSearchLabel": "搜索包以添加配置文件操作",
-    "packageSearchPlaceholder": "搜索包 ID...",
+    "packageSearchPlaceholder": "搜索包 ID…",
     "actionKindLabel": "要添加的操作",
     "addSelected": "添加已选（{{count}}）",
     "noPackagesTitle": "没有匹配的包",
@@ -1390,7 +1409,7 @@
     "importTitle": "只读导入预览",
     "importBody": "选择一个 YAML 配置文件来验证其架构、设备和用户约束、当前包状态、预期结果和确切的 ADB 计划。预览不会更改设备。",
     "chooseProfile": "选择配置文件",
-    "importing": "正在读取...",
+    "importing": "正在读取…",
     "previewing": "正在构建实时模拟差异",
     "importFailed": "配置文件导入失败",
     "migrationTitle": "需要显式迁移：v{{from}} 到 v{{to}}",
@@ -1423,6 +1442,16 @@
       "restoreExistingForUser": "恢复保留的系统应用",
       "clearData": "清除应用数据",
       "forceStop": "强制停止"
+    },
+    "states": {
+      "enabled": "已启用",
+      "disabled": "已禁用",
+      "archived": "已归档",
+      "missing": "缺失",
+      "uninstalledForUser": "已为用户卸载",
+      "dataCleared": "数据已清除",
+      "stopped": "已停止",
+      "reviewedAction": "经审查的操作"
     }
   },
   "fastboot": {
@@ -1440,24 +1469,29 @@
     "installPrefix": "Droidsmith 使用平台工具的",
     "installSuffix": "二进制文件。请从 Android SDK 安装或运行平台工具获取脚本。",
     "fastbootAt": "fastboot 位于",
-    "scanning": "正在扫描...",
+    "scanning": "正在扫描…",
     "noBootloaderDevices": "没有处于引导程序/fastboot 模式的设备。使用以下命令将设备重启到引导程序",
     "noBootloaderDevicesSuffix": "或使用硬件按键组合。",
     "mode": "模式",
     "product": "产品",
-    "querying": "正在查询...",
+    "querying": "正在查询…",
     "queryHint": "按“查询变量”以读取设备信息。",
     "queryAllFailed": "无法读取任何 fastboot 变量。设备可能已离开 fastboot 模式，或引导程序拒绝了查询。请重新连接并重试。",
     "queryNoValues": "查询已完成，但设备未报告这些变量的值。",
     "queryPartial": "{{total}} 个变量中有 {{failed}} 个无法读取。",
-    "parseIssue": "解析问题"
+    "parseIssue": "解析问题",
+    "modes": {
+      "fastboot": "Fastboot",
+      "fastbootd": "Fastbootd（用户空间）",
+      "no_permissions": "无权限"
+    }
   },
   "hostDoctor": {
     "title": "主机连接医生",
     "readOnly": "只读",
     "description": "在不更改任何内容的情况下检查 ADB、USB、驱动程序和主机先决条件。",
     "run": "运行连接医生",
-    "scanning": "正在扫描主机...",
+    "scanning": "正在扫描主机…",
     "idle": "尚未运行扫描。医生不会安装驱动程序、编辑规则、重启 ADB 或保留序列号和密钥。",
     "failed": "连接医生失败",
     "adbVersion": "ADB {{version}}",
@@ -1472,56 +1506,145 @@
     "officialGuidance": "打开官方指南",
     "findings": {
       "usb_mdns_backend_toggles": {
-        "title": "USB 和 mDNS 后端排障开关"
+        "title": "USB 和 mDNS 后端排障开关",
+        "summary": "platform-tools 37.0.1 更改了默认的 USB 和 mDNS 后端。如果有线设备未被检测到或无线发现失败，通过这些环境变量切换后端可能有帮助。",
+        "remediation": {
+          "0": "设置上方对应平台的开关，然后运行 `adb kill-server` 并重启 Droidsmith，让新服务器生效。",
+          "1": "openscreen mDNS 后端已在 37.0.1 中移除；ADB_MDNS_OPENSCREEN 现在不再起作用。"
+        }
       },
       "adb_missing": {
-        "title": "未找到 ADB"
+        "title": "未找到 ADB",
+        "summary": "在 PATH、Android SDK 位置或平台默认路径中均未找到 Platform Tools 安装。",
+        "remediation": {
+          "0": "从官方来源安装最新的 Android SDK Platform Tools。",
+          "1": "更改 PATH 或 Android SDK 环境后请重启 Droidsmith。"
+        }
       },
       "adb_unrunnable": {
-        "title": "已找到 ADB 但无法枚举传输"
+        "title": "已找到 ADB 但无法枚举传输",
+        "summary": "已解析的可执行文件未能完成只读设备查询。",
+        "remediation": {
+          "0": "在终端中运行已解析 ADB 的版本命令，并检查系统执行策略或文件权限。",
+          "1": "用最新官方版本替换损坏或不兼容的 Platform Tools。"
+        }
       },
       "adb_version_unknown": {
-        "title": "无法验证 ADB 版本"
+        "title": "无法验证 ADB 版本",
+        "summary": "传输枚举正常，但可执行文件未报告可识别的 Platform Tools 版本。",
+        "remediation": {
+          "0": "安装最新的未修改 Platform Tools 版本后重新扫描。"
+        }
       },
       "adb_ready": {
-        "title": "ADB 可执行文件已就绪"
+        "title": "ADB 可执行文件已就绪",
+        "summary": "Droidsmith 已解析 ADB、读取其版本并完成传输枚举。",
+        "remediation": {
+          "0": "当 Android 设备支持发生变化时，请保持 Platform Tools 为最新。"
+        }
       },
       "platform_tools_blocked": {
-        "title": "此 Platform Tools 版本存在已知问题"
+        "title": "此 Platform Tools 版本存在已知问题",
+        "remediation": {
+          "0": "继续之前，请将此版本替换为策略推荐的官方 Platform Tools 版本。"
+        }
       },
       "platform_tools_warning": {
-        "title": "Platform Tools 兼容性需要关注"
+        "title": "Platform Tools 兼容性需要关注",
+        "remediation": {
+          "0": "安装推荐的官方 Platform Tools 版本，然后重新扫描。"
+        }
       },
       "unauthorized": {
-        "title": "Android 正在等待 USB 调试授权"
+        "title": "Android 正在等待 USB 调试授权",
+        "summary": "ADB 检测到传输，但设备尚未信任此主机的密钥。",
+        "remediation": {
+          "0": "解锁设备并查看「允许 USB 调试」提示。",
+          "1": "接受前请核对 RSA 指纹；若未出现提示，请重新连接数据线。"
+        }
       },
       "offline": {
-        "title": "ADB 传输处于离线状态"
+        "title": "ADB 传输处于离线状态",
+        "summary": "主机服务器有传输记录，但无法与这些设备通信。",
+        "remediation": {
+          "0": "唤醒并解锁设备，然后重新连接确认可传输数据的数据线，或重新选择「文件传输」模式。",
+          "1": "只有在完成物理检查后，才使用 Droidsmith 单独审查的 ADB 恢复操作。"
+        }
       },
       "no_permissions": {
-        "title": "Linux 无法打开 Android USB 设备"
+        "title": "Linux 无法打开 Android USB 设备",
+        "summary": "ADB 检测到 USB 硬件，但当前账户缺少通过组成员身份或 udev 规则获得的访问权限。",
+        "remediation": {
+          "0": "按照官方 Linux 设备设置加入相应的组并安装厂商 udev 规则。",
+          "1": "更改组后注销并重新登录，然后重新连接设备。"
+        }
       },
       "usb_visible_adb_missing": {
-        "title": "Android USB 硬件可见但未出现在 ADB 中"
+        "title": "Android USB 硬件可见但未出现在 ADB 中",
+        "summary": "操作系统检测到疑似 Android 的 USB 硬件，但 ADB 未报告任何传输。很可能是仅充电/错误的 USB 模式、数据线或主机驱动问题。",
+        "remediation": {
+          "0": "解锁设备、启用 USB 调试，并选择「文件传输」或其他支持调试的 USB 模式。",
+          "1": "尝试确认可传输数据的数据线，并直接连接主机 USB 端口。"
+        }
       },
       "no_usb_transport": {
-        "title": "未检测到 Android USB 传输"
+        "title": "未检测到 Android USB 传输",
+        "summary": "ADB 和主机的受限 USB 探测均未发现可识别的 Android 硬件。",
+        "remediation": {
+          "0": "确认设备已开机、已解锁，并使用可传输数据的数据线连接。",
+          "1": "重新扫描前选择「文件传输」或其他支持调试的 USB 模式。"
+        }
       },
       "windows_driver_missing": {
-        "title": "Windows 没有可识别的 ADB 接口"
+        "title": "Windows 没有可识别的 ADB 接口",
+        "summary": "存在疑似 Android 的 USB 硬件，但主机清单中没有 ADB 接口。可能缺少 OEM USB 驱动或绑定不正确。",
+        "remediation": {
+          "0": "安装厂商官方的 Windows USB 驱动，或为受支持设备安装 Google 驱动。",
+          "1": "在设备管理器中查找带警告图标的 Android 设备；避免使用第三方驱动捆绑包。"
+        }
       },
       "linux_access_incomplete": {
-        "title": "Linux Android USB 访问不完整"
+        "title": "Linux Android USB 访问不完整",
+        "summary": "当前账户或 udev 配置缺少非 root ADB 访问的常见前提条件。",
+        "remediation": {
+          "0": "使用发行版提供的 Android udev 规则包或官方厂商规则指南。",
+          "1": "加入推荐的设备访问组并重新登录；避免使用全局可写的 0666 规则。"
+        }
       },
       "server_config_override": {
-        "title": "自定义 ADB 服务器配置已激活"
+        "title": "自定义 ADB 服务器配置已激活",
+        "summary": "环境变量覆盖了 ADB 默认的服务器套接字、端口或厂商密钥查找，可能将 Droidsmith 路由到竞争的服务器。",
+        "remediation": {
+          "0": "在启动 Droidsmith 的 shell 中检查列出的环境变量。",
+          "1": "除非有意配置远程服务器，否则请使用默认的本地 ADB 服务器。"
+        }
       },
       "client_server_mismatch": {
-        "title": "ADB 客户端和服务器版本不一致"
+        "title": "ADB 客户端和服务器版本不一致",
+        "summary": "运行中的服务器可能属于另一个 ADB 安装，从而导致功能和协议不一致。",
+        "remediation": {
+          "0": "查找重复的 ADB 安装，让 PATH 只解析到预期的 Platform Tools 版本。",
+          "1": "在选择单独的重启操作之前，先检查运行中的服务器。"
+        }
       },
       "server_status_unavailable": {
-        "title": "ADB 服务器详情不可用"
+        "title": "ADB 服务器详情不可用",
+        "summary": "此 ADB 版本不提供 server-status，因此无法验证服务器归属和后端详情。",
+        "remediation": {
+          "0": "如需服务器诊断，请更新 Platform Tools。"
+        }
       }
+    },
+    "platforms": {
+      "windows": "Windows",
+      "linux": "Linux",
+      "macos": "macOS",
+      "other": "其他系统"
+    },
+    "privacyItems": {
+      "0": "未对驱动程序、udev、服务或 ADB 服务器做任何更改。",
+      "1": "报告不包含设备序列号、USB 实例 ID、环境变量值或 ADB 密钥材料。",
+      "2": "除非用户明确复制或导出，报告始终保留在本地。"
     }
   },
   "onboarding": {
@@ -1590,7 +1713,7 @@
     "noAuthorized": "没有已授权的设备",
     "desktopRequired": "需要桌面外壳",
     "dismiss": "关闭",
-    "loading": "正在加载...",
+    "loading": "正在加载…",
     "refresh": "刷新",
     "load": "加载",
     "roadmap": "路线图 {{milestone}}",
@@ -1598,7 +1721,7 @@
     "checkAgain": "再次检查",
     "retryScan": "重试扫描",
     "scanAgain": "重新扫描",
-    "checking": "正在检查...",
+    "checking": "正在检查…",
     "targetDevice": "目标设备",
     "notReported": "未报告",
     "selected": "已选择",

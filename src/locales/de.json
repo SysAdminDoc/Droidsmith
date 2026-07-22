@@ -41,10 +41,10 @@
       "mirrorPresets": "Gerätespezifische Spiegelungsvorlagen"
     },
     "export": "Bereich exportieren",
-    "exporting": "Exportiere...",
+    "exporting": "Exportiere…",
     "exportSaved": "Einstellungen nach {{path}} exportiert.",
     "import": "Einstellungen importieren",
-    "importReading": "Wird gelesen...",
+    "importReading": "Wird gelesen…",
     "importPreviewTitle": "Portable Einstellungen prüfen",
     "importPreviewBody": "Version {{version}} · {{scope}}. Wählen Sie, ob importierte Sammlungen mit den aktuellen Werten zusammengeführt werden oder diese ersetzen.",
     "importMode": "Importverhalten",
@@ -54,10 +54,10 @@
     },
     "importMachineLocal": "Rechnerlokale Felder bleiben unverändert und werden nie importiert: {{fields}}.",
     "importApply": "Import anwenden",
-    "importApplying": "Wird angewendet...",
+    "importApplying": "Wird angewendet…",
     "importComplete": "Einstellungen wurden mit {{mode}} importiert. Eine Sicherung vor dem Import ist verfügbar.",
     "importRestore": "Sicherung vor Import wiederherstellen",
-    "importRestoring": "Wird wiederhergestellt...",
+    "importRestoring": "Wird wiederhergestellt…",
     "importBackupRestored": "Die Einstellungssicherung vor dem Import wurde wiederhergestellt.",
     "importDiff": {
       "language": "Sprache",
@@ -73,7 +73,7 @@
     "resetConfirmTitle": "Diesen Einstellungsbereich zurücksetzen?",
     "resetConfirmBody": "{{scope}} wird auf Standardwerte zurückgesetzt. Andere Einstellungsbereiche bleiben unverändert.",
     "confirmReset": "Ausgewählten Bereich zurücksetzen",
-    "resetting": "Setze zurück...",
+    "resetting": "Setze zurück…",
     "resetComplete": "{{scope}} auf Standardwerte zurückgesetzt.",
     "operationFailed": "Einstellungsoperation fehlgeschlagen: {{message}}"
   },
@@ -135,10 +135,10 @@
     "preview": "Geschwärzte Paketvorschau",
     "wipe": "Lokalen Diagnoseverlauf löschen",
     "save": "Paket speichern",
-    "saving": "Speichere...",
+    "saving": "Speichere…",
     "wipeTitle": "Löschbaren Diagnoseverlauf löschen?",
     "wipeBody": "Dies löscht rotierende Absturzprotokolle und hostweite Wiederherstellungseinträge. Gerätespezifische Aktionsjournale und Installationsaudit-Einträge bleiben erhalten, da sie für Audit und Wiederherstellung benötigt werden. Gespeicherte Pakete außerhalb von Droidsmith werden nicht gelöscht.",
-    "wiping": "Lösche...",
+    "wiping": "Lösche…",
     "confirmWipe": "Löschung bestätigen",
     "wiped": "{{count}} Diagnosedatei(en) entfernt ({{size}}). Aktions- und Installationsaudit-Journale wurden beibehalten.",
     "wipeFailed": "Diagnoseverlauf konnte nicht gelöscht werden: {{message}}"
@@ -155,12 +155,12 @@
     "privacyContract": "Droidsmith behandelt das ZIP als undurchsichtig: Es validiert nur die Archivstruktur, schreibt eine geschwärzte Metadaten-Begleitdatei und inspiziert den Bericht nicht auf Schwärzung, lädt ihn nicht hoch, hängt ihn nicht an und öffnet ihn nicht.",
     "acknowledge": "Ich verstehe den wahrscheinlichen Inhalt und möchte diesen sensiblen Bericht lokal speichern.",
     "chooseDestination": "Ziel auswählen und erfassen",
-    "starting": "Starte Android-Fehlerberichterfassung...",
+    "starting": "Starte Android-Fehlerberichterfassung…",
     "running": "Android erstellt den Fehlerbericht. Dies kann einige Minuten dauern.",
     "selecting": "Wählen Sie ein lokales .zip-Ziel im nativen Speicherdialog.",
     "captureInProgress": "Fehlerberichterfassung läuft",
     "cancelCapture": "Erfassung abbrechen",
-    "cancelling": "Breche ab und entferne Teilausgabe...",
+    "cancelling": "Breche ab und entferne Teilausgabe…",
     "failed": "Fehlerberichterfassung fehlgeschlagen",
     "saved": "Sensibler Fehlerbericht lokal gespeichert",
     "report": "Fehlerbericht-ZIP",
@@ -173,7 +173,7 @@
     "description": "Zu einem Droidsmith-Arbeitsbereich springen.",
     "close": "Befehlspalette schließen",
     "searchLabel": "Befehlspalette-Suche",
-    "searchPlaceholder": "Befehle, Pakete, Routen suchen...",
+    "searchPlaceholder": "Befehle, Pakete, Routen suchen…",
     "noMatchesTitle": "Kein passender Arbeitsbereich",
     "noMatchesHint": "Versuchen Sie einen Routennamen.",
     "navigationCategory": "Navigation",
@@ -237,7 +237,13 @@
     },
     "invalidChoice": "Kein zulässiger Wert",
     "notANumber": "Zahl eingeben",
-    "outOfRange": "Wert zwischen {{min}} und {{max}} eingeben"
+    "outOfRange": "Wert zwischen {{min}} und {{max}} eingeben",
+    "options": {
+      "stay_on_while_plugged_in": {
+        "0": "Aus",
+        "7": "An (jedes Ladegerät)"
+      }
+    }
   },
   "devices": {
     "title": "Geräte",
@@ -250,7 +256,7 @@
     "transportTrustBody": "{{transport}} bietet nicht die authentifizierten Kopplungsgarantien von Android Wireless Debugging. Datenverkehr und Gerätedaten können für andere in diesem Netzwerk zugänglich sein.",
     "transportTrustAcknowledge": "Privilegierte Operationen über diese Verbindung zulassen, bis ich ein anderes Gerät auswähle.",
     "refresh": "Aktualisieren",
-    "scanning": "Scanne...",
+    "scanning": "Scanne…",
     "moreActions": "Weitere Geräteoptionen",
     "connected": "Verbundene Geräte",
     "selectHint": "Wählen Sie ein Gerät aus, um sein Dashboard anzuzeigen. Überprüfen Sie Zustand und Transport, bevor Sie eine Aktion starten.",
@@ -300,7 +306,7 @@
     "noProductMetadata": "Keine Produktmetadaten",
     "transportId": "Transport {{id}}",
     "loadingDeviceInfo": "Lade Geräteinformationen",
-    "queryingSerial": "Abfrage von {{serial}}...",
+    "queryingSerial": "Abfrage von {{serial}}…",
     "deviceInfoFailed": "Geräteinformationen konnten nicht geladen werden",
     "detailTitle": "Gerätedetails",
     "disconnect": "Trennen",
@@ -346,7 +352,7 @@
       "stopped": "Überwachung gestoppt",
       "wifiTwoDetected": "Wi-Fi 2.0 erkannt",
       "observed": "Zuletzt beobachtet {{time}}",
-      "probing": "Prüfe ADB-Server und Discovery-Backend...",
+      "probing": "Prüfe ADB-Server und Discovery-Backend…",
       "reviewRecovery": "Wiederherstellung prüfen",
       "client": "Client-Version",
       "server": "Server-Version",
@@ -371,8 +377,8 @@
       "wifiTwoDevices": "Wi-Fi-2.0-Geräte",
       "noneDetected": "Keines erkannt",
       "mdnsCheck": "mDNS-Prüfung",
-      "starting": "Starte ADB-Wiederherstellung...",
-      "cancelling": "Breche ab und warte auf das Beenden des aktuellen ADB-Prozesses...",
+      "starting": "Starte ADB-Wiederherstellung…",
+      "cancelling": "Breche ab und warte auf das Beenden des aktuellen ADB-Prozesses…",
       "recoveryTitle": "ADB-Neustart und Wiederverbindung prüfen",
       "recoveryBody": "Diese hostweite Aktion startet den lokalen ADB-Server neu und fordert dann nur Offline-Transporte zur Wiederverbindung auf. Die genaue Sequenz wird unten angezeigt und ein dauerhafter Operationseintrag wird vor dem ersten Befehl geschrieben.",
       "recoveryWarning": "Alle verbundenen Tools, die diesen ADB-Server teilen, können kurzzeitig die Verbindung verlieren. Keine Gerätedaten werden geändert, aber aktive Übertragungen und Shell-Sitzungen können unterbrochen werden.",
@@ -607,7 +613,7 @@
     "title": "Drahtlos",
     "description": "Android-Geräte über Wi-Fi koppeln und verbinden.",
     "scanMdns": "mDNS scannen",
-    "scanning": "Scanne...",
+    "scanning": "Scanne…",
     "scanningMdns": "Scanne mDNS",
     "mdnsScanFailed": "mDNS-Scan fehlgeschlagen",
     "qrAlt": "Drahtloser ADB-Kopplungs-QR-Code",
@@ -668,7 +674,12 @@
     "forget": "Entfernen",
     "lastConnected": "Zuletzt verbunden",
     "autoReconnect": "Bekannte Geräte beim Start erneut verbinden",
-    "autoReconnectHint": "Beim Start von Droidsmith wird versucht, die unten gespeicherten Endpunkte erneut zu verbinden."
+    "autoReconnectHint": "Beim Start von Droidsmith wird versucht, die unten gespeicherten Endpunkte erneut zu verbinden.",
+    "serviceKind": {
+      "pairing": "Kopplung",
+      "connect": "Verbinden",
+      "other": "Sonstiges"
+    }
   },
   "apps": {
     "otaDriftTitle": "Gerät seit der letzten Nutzung aktualisiert",
@@ -702,7 +713,7 @@
     "installOverrideAudit": "Nur dieser Wiederholungsversuch erhält die Überschreibung. Das genaue Flag und diese explizite Bestätigung werden in das lokale Installationsaudit-Journal geschrieben.",
     "installConfirmOverride": "Mit Überschreibung installieren",
     "installGrantExpired": "Die Autorisierung für das ausgewählte Paket ist abgelaufen. Wählen Sie das Paket erneut aus, bevor Sie es erneut versuchen.",
-    "loading": "Lade...",
+    "loading": "Lade…",
     "filterAll": "Alle",
     "filterUser": "Benutzer",
     "filterSystem": "System",
@@ -713,7 +724,7 @@
     "retainedLabel": "Deinstalliert · Daten beibehalten",
     "retainedBody": "Für diesen Android-Benutzer deinstalliert, aber PackageManager hält noch die verbliebenen Daten. Das Entfernen ist eine vollständige, unwiderrufliche Löschung.",
     "removeRetainedData": "Beibehaltene Daten entfernen",
-    "searchPlaceholder": "Pakete suchen...",
+    "searchPlaceholder": "Pakete suchen…",
     "searchLabel": "Pakete nach Namen filtern",
     "userLabel": "Benutzer",
     "userCurrent": "aktuell",
@@ -775,11 +786,11 @@
     "batchUndoCompleted": "Batch-Rückgängig: {{succeeded}} zurückgesetzt, {{failed}} fehlgeschlagen.",
     "recoveryInspect": "Wiederherstellungsbasis inspizieren",
     "recoveryExportBeforeApply": "Voränderungsbasis exportieren",
-    "recoveryExporting": "Exportiere Basis...",
+    "recoveryExporting": "Exportiere Basis…",
     "recoveryExportedReady": "Basis exportiert. Diese geprüfte Aktion wurde noch nicht ausgeführt.",
     "recoveryExportError": "Basisexport fehlgeschlagen: {{message}}",
-    "recoveryInspecting": "Vergleiche Basis mit dem Live-Gerät...",
-    "recoveryApplying": "Wende {{count}} geprüfte Wiederherstellungsaktionen an...",
+    "recoveryInspecting": "Vergleiche Basis mit dem Live-Gerät…",
+    "recoveryApplying": "Wende {{count}} geprüfte Wiederherstellungsaktionen an…",
     "recoveryWorking": "Wiederherstellungsbasis",
     "recoverySavedTitle": "Wiederherstellungsbasis exportiert",
     "recoverySaved": "Portable Wiederherstellungsnachweise nach {{path}} gespeichert.",
@@ -849,7 +860,7 @@
     "journalEntryCount_many": "{{count}} Einträge",
     "journalEntryCount_other": "{{count}} Einträge",
     "journalRefresh": "Journal aktualisieren",
-    "journalLoading": "Lade Journal...",
+    "journalLoading": "Lade Journal…",
     "journalLoadFailed": "Journal laden fehlgeschlagen",
     "journalEmpty": "Noch keine Journaleinträge",
     "journalEmptyBody": "Wenden Sie eine Paketaktion an und Droidsmith wird sie hier protokollieren.",
@@ -857,7 +868,7 @@
     "journalAction": "Aktion",
     "journalOutput": "ADB-Ausgabe",
     "journalUndo": "Rückgängig",
-    "journalUndoing": "Wird rückgängig gemacht...",
+    "journalUndoing": "Wird rückgängig gemacht…",
     "journalUndoCompleted": "Rückgängig abgeschlossen für {{package}}.",
     "journalPending": "In Bearbeitung",
     "journalFailed": "Sicher fehlgeschlagen",
@@ -874,7 +885,7 @@
     "journalBatchMeta": "Batch {{id}} · {{count}} Pakete",
     "journalBatchMember": "Teil eines Batches",
     "journalUndoBatch": "Batch rückgängig ({{count}})",
-    "journalUndoingBatch": "Batch wird rückgängig gemacht...",
+    "journalUndoingBatch": "Batch wird rückgängig gemacht…",
     "actionKind": {
       "disable": "Deaktivieren",
       "enable": "Aktivieren",
@@ -920,7 +931,7 @@
     "unsafeSelectedBody": "Diese Einträge können Kernfunktionen des Geräts oder OEM-Funktionen beeinträchtigen. Überprüfen Sie jede Paket-ID vor dem Fortfahren.",
     "unsafeAcknowledge": "Ich verstehe, dass diese unsicheren Pakete Geräte- oder OEM-Funktionen beeinträchtigen können und akzeptiere das Risiko.",
     "noUnsafeSelected": "Keine Pakete der Stufe Unsicher sind ausgewählt.",
-    "searchPlaceholder": "Pakete oder Beschreibungen suchen...",
+    "searchPlaceholder": "Pakete oder Beschreibungen suchen…",
     "searchLabel": "Paketeinträge nach ID, Beschreibung oder Label filtern",
     "presets": {
       "title": "Voreinstellungen",
@@ -941,7 +952,7 @@
     "back": "Zurück",
     "recoveryBaseline": "Portable Wiederherstellungsbasis",
     "recoveryExport": "Basis vor dem Anwenden exportieren",
-    "recoveryExporting": "Exportiere Basis...",
+    "recoveryExporting": "Exportiere Basis…",
     "recoverySaved": "Basis nach {{path}} gespeichert (sha256 {{sha256}}).",
     "complete": "Debloat abgeschlossen",
     "startOver": "Neu beginnen",
@@ -1020,7 +1031,7 @@
     "journalUndo": "Alle Änderungen sind im gerätespezifischen Journal protokolliert und können über den Apps-Tab rückgängig gemacht werden.",
     "failedPackages": "Fehlgeschlagene Pakete",
     "currentPackage": "Aktuelles Paket: {{package}}",
-    "preparingQueue": "Warteschlange wird vorbereitet...",
+    "preparingQueue": "Warteschlange wird vorbereitet…",
     "cancelAfterCurrent": "Nach aktuellem abbrechen",
     "cancelRequested": "Abbruch angefordert",
     "cancelledBeforeApply": "Vor der Anwendung dieses Pakets abgebrochen.",
@@ -1134,7 +1145,7 @@
     "presetLoadFailed": "Gespeicherte Vorlage konnte nicht geladen werden; Standardwerte sind aktiv. {{message}}",
     "presetSaveFailed": "Vorlageneinstellungen konnten nicht gespeichert werden. {{message}}",
     "launch": "Spiegelung starten",
-    "launching": "Starte...",
+    "launching": "Starte…",
     "sessionActive": "Sitzung aktiv",
     "stopSession": "Sitzung beenden",
     "scrcpyMissing": "scrcpy ist nicht installiert",
@@ -1197,7 +1208,8 @@
     },
     "noVdDestroyContent": "Inhalt des virtuellen Displays behalten",
     "displayImePolicy": "IME für virtuelles Display",
-    "displayImePolicyDefault": "Standard"
+    "displayImePolicyDefault": "Standard",
+    "scrcpyInstallSuffix": "oder über Ihren Paketmanager:"
   },
   "console": {
     "title": "Konsole",
@@ -1213,7 +1225,7 @@
     "desktopRequiredBody": "Shell-Befehle laufen innerhalb der Tauri-Laufzeitumgebung.",
     "noAuthorizedBody": "Verbinden und autorisieren Sie ein Gerät, um die Konsole zu verwenden.",
     "noOutput": "(keine Ausgabe)",
-    "running": "Wird ausgeführt...",
+    "running": "Wird ausgeführt…",
     "starting": "Starte Hintergrundbefehl…",
     "runningFor": "Läuft seit {{seconds}}s…",
     "cancelling": "Breche ab und stoppe ADB…",
@@ -1228,7 +1240,8 @@
       "unterminatedQuote": "Schließen Sie das offene Anführungszeichen, bevor Sie den Befehl ausführen.",
       "trailingEscape": "Der Befehl darf nicht mit einem einzelnen umgekehrten Schrägstrich enden.",
       "emptyArgument": "Leere Befehlsargumente werden nicht unterstützt."
-    }
+    },
+    "plannerNoPlan": "Der geprüfte Shell-Planer hat keinen Änderungsplan zurückgegeben"
   },
   "logcat": {
     "title": "Logcat",
@@ -1264,7 +1277,7 @@
     "textSearchLabel": "Protokollzeilen nach Text filtern",
     "outputLabel": "Logcat-Ausgabe",
     "startHint": "Drücken Sie Tail starten, um die Protokollerfassung zu beginnen.",
-    "waiting": "Warte auf Protokollausgabe...",
+    "waiting": "Warte auf Protokollausgabe…",
     "updatedAnnouncement_one": "Logcat aktualisiert; {{count}} sichtbare Zeile.",
     "updatedAnnouncement_few": "Logcat aktualisiert; {{count}} sichtbare Zeilen.",
     "updatedAnnouncement_many": "Logcat aktualisiert; {{count}} sichtbare Zeilen.",
@@ -1294,8 +1307,8 @@
       "duplicate": "Duplizieren",
       "rename": "Umbenennen",
       "delete": "Löschen",
-      "moveUp": "Nach oben",
-      "moveDown": "Nach unten",
+      "moveUp": "{{name}} nach oben verschieben",
+      "moveDown": "{{name}} nach unten verschieben",
       "transfer": "Import / Export",
       "close": "Schließen",
       "import": "Importieren",
@@ -1327,8 +1340,14 @@
         "format": "Dieser Import ist kein gültiger Abfrageexport.",
         "empty": "Der Import enthielt keine Abfragen.",
         "tooMany": "Zu viele Abfragen zum Importieren (max. 64)."
+      },
+      "builtinNames": {
+        "builtin-crash": "Abstürze & ANRs",
+        "builtin-stacktrace": "Stacktraces"
       }
-    }
+    },
+    "reconnectFallback": "Logcat getrennt; Verbindung wird wiederhergestellt",
+    "reconnectLine": "--- {{message}} (Versuch {{attempt}}) ---"
   },
   "profiles": {
     "title": "Profile",
@@ -1366,7 +1385,7 @@
     "actionCount_many": "{{count}} Aktionen",
     "actionCount_other": "{{count}} Aktionen",
     "packageSearchLabel": "Pakete für Profilaktionen suchen",
-    "packageSearchPlaceholder": "Paket-IDs suchen...",
+    "packageSearchPlaceholder": "Paket-IDs suchen…",
     "actionKindLabel": "Hinzuzufügende Aktion",
     "addSelected": "Ausgewählte hinzufügen ({{count}})",
     "noPackagesTitle": "Keine passenden Pakete",
@@ -1390,7 +1409,7 @@
     "importTitle": "Schreibgeschützte Importvorschau",
     "importBody": "Wählen Sie ein YAML-Profil, um Schema, Geräte- und Benutzereinschränkungen, aktuellen Paketstatus, erwartete Ergebnisse und den genauen ADB-Plan zu validieren. Die Vorschau ändert niemals das Gerät.",
     "chooseProfile": "Profil wählen",
-    "importing": "Lese...",
+    "importing": "Lese…",
     "previewing": "Erstelle Live-Trockenlauf-Diff",
     "importFailed": "Profilimport fehlgeschlagen",
     "migrationTitle": "Explizite Migration erforderlich: v{{from}} zu v{{to}}",
@@ -1423,6 +1442,16 @@
       "restoreExistingForUser": "Beibehaltene System-App wiederherstellen",
       "clearData": "App-Daten löschen",
       "forceStop": "Beenden erzwingen"
+    },
+    "states": {
+      "enabled": "Aktiviert",
+      "disabled": "Deaktiviert",
+      "archived": "Archiviert",
+      "missing": "Fehlt",
+      "uninstalledForUser": "Für Benutzer deinstalliert",
+      "dataCleared": "Daten gelöscht",
+      "stopped": "Beendet",
+      "reviewedAction": "Geprüfte Aktion"
     }
   },
   "fastboot": {
@@ -1440,24 +1469,29 @@
     "installPrefix": "Droidsmith verwendet die Plattformtools-",
     "installSuffix": "Binärdatei. Installieren Sie sie aus dem Android SDK oder führen Sie das Plattformtools-Abrufskript aus.",
     "fastbootAt": "fastboot unter",
-    "scanning": "Scanne...",
+    "scanning": "Scanne…",
     "noBootloaderDevices": "Keine Geräte im Bootloader-/Fastboot-Modus. Starten Sie ein Gerät mit dem Befehl in den Bootloader neu",
     "noBootloaderDevicesSuffix": "oder der Hardware-Tastenkombination.",
     "mode": "Modus",
     "product": "Produkt",
-    "querying": "Abfrage...",
+    "querying": "Abfrage…",
     "queryHint": "Drücken Sie Variablen abfragen, um Geräteinformationen zu lesen.",
     "queryAllFailed": "Es konnten keine Fastboot-Variablen gelesen werden. Das Gerät hat möglicherweise den Fastboot-Modus verlassen, oder der Bootloader hat die Abfrage abgelehnt. Verbinden Sie erneut und versuchen Sie es noch einmal.",
     "queryNoValues": "Die Abfrage wurde abgeschlossen, aber das Gerät hat keine Werte für diese Variablen gemeldet.",
     "queryPartial": "{{failed}} von {{total}} Variablen konnten nicht gelesen werden.",
-    "parseIssue": "Analyseproblem"
+    "parseIssue": "Analyseproblem",
+    "modes": {
+      "fastboot": "Fastboot",
+      "fastbootd": "Fastbootd (Userspace)",
+      "no_permissions": "Keine Berechtigungen"
+    }
   },
   "hostDoctor": {
     "title": "Host-Verbindungsarzt",
     "readOnly": "Schreibgeschützt",
     "description": "ADB, USB, Treiber und Host-Voraussetzungen prüfen, ohne etwas zu ändern.",
     "run": "Verbindungsarzt ausführen",
-    "scanning": "Scanne Host...",
+    "scanning": "Scanne Host…",
     "idle": "Kein Scan wurde ausgeführt. Der Arzt installiert keine Treiber, bearbeitet keine Regeln, startet ADB nicht neu und speichert keine Seriennummern und Schlüssel.",
     "failed": "Verbindungsarzt fehlgeschlagen",
     "adbVersion": "ADB {{version}}",
@@ -1472,56 +1506,145 @@
     "officialGuidance": "Offizielle Anleitung öffnen",
     "findings": {
       "usb_mdns_backend_toggles": {
-        "title": "USB- und mDNS-Backend-Fehlerbehebungsschalter"
+        "title": "USB- und mDNS-Backend-Fehlerbehebungsschalter",
+        "summary": "platform-tools 37.0.1 hat die Standard-USB- und mDNS-Backends geändert. Wird ein kabelgebundenes Gerät nicht erkannt oder schlägt die drahtlose Erkennung fehl, kann ein Backend-Wechsel über diese Umgebungsvariablen helfen.",
+        "remediation": {
+          "0": "Setzen Sie den obigen Plattform-Schalter, führen Sie dann `adb kill-server` aus und starten Sie Droidsmith neu, damit der neue Server ihn übernimmt.",
+          "1": "Das openscreen-mDNS-Backend wurde in 37.0.1 entfernt; ADB_MDNS_OPENSCREEN ist jetzt wirkungslos."
+        }
       },
       "adb_missing": {
-        "title": "ADB wurde nicht gefunden"
+        "title": "ADB wurde nicht gefunden",
+        "summary": "In PATH, den Android-SDK-Verzeichnissen oder den Plattform-Standardpfaden wurde keine Platform-Tools-Installation gefunden.",
+        "remediation": {
+          "0": "Installieren Sie aktuelle Android SDK Platform Tools aus der offiziellen Quelle.",
+          "1": "Starten Sie Droidsmith nach Änderungen an PATH oder der Android-SDK-Umgebung neu."
+        }
       },
       "adb_unrunnable": {
-        "title": "ADB wurde gefunden, konnte aber keine Transporte auflisten"
+        "title": "ADB wurde gefunden, konnte aber keine Transporte auflisten",
+        "summary": "Die gefundene ausführbare Datei konnte eine schreibgeschützte Geräteabfrage nicht abschließen.",
+        "remediation": {
+          "0": "Führen Sie den Versionsbefehl des gefundenen ADB in einem Terminal aus und prüfen Sie Ausführungsrichtlinien und Dateiberechtigungen.",
+          "1": "Ersetzen Sie beschädigte oder inkompatible Platform Tools durch die aktuelle offizielle Version."
+        }
       },
       "adb_version_unknown": {
-        "title": "ADB-Version konnte nicht verifiziert werden"
+        "title": "ADB-Version konnte nicht verifiziert werden",
+        "summary": "Die Transportaufzählung funktionierte, aber die ausführbare Datei meldete keine erkannte Platform-Tools-Version.",
+        "remediation": {
+          "0": "Installieren Sie eine aktuelle, unveränderte Platform-Tools-Version und scannen Sie erneut."
+        }
       },
       "adb_ready": {
-        "title": "ADB-Programm ist bereit"
+        "title": "ADB-Programm ist bereit",
+        "summary": "Droidsmith hat ADB gefunden, die Version gelesen und die Transportaufzählung abgeschlossen.",
+        "remediation": {
+          "0": "Halten Sie Platform Tools aktuell, wenn sich die Android-Geräteunterstützung ändert."
+        }
       },
       "platform_tools_blocked": {
-        "title": "Dieses Platform-Tools-Release ist bekanntermaßen fehlerhaft"
+        "title": "Dieses Platform-Tools-Release ist bekanntermaßen fehlerhaft",
+        "remediation": {
+          "0": "Ersetzen Sie diese Version vor dem Fortfahren durch die von der Richtlinie empfohlene offizielle Platform-Tools-Version."
+        }
       },
       "platform_tools_warning": {
-        "title": "Platform-Tools-Kompatibilität erfordert Aufmerksamkeit"
+        "title": "Platform-Tools-Kompatibilität erfordert Aufmerksamkeit",
+        "remediation": {
+          "0": "Installieren Sie die empfohlene offizielle Platform-Tools-Version und scannen Sie erneut."
+        }
       },
       "unauthorized": {
-        "title": "Android wartet auf USB-Debugging-Autorisierung"
+        "title": "Android wartet auf USB-Debugging-Autorisierung",
+        "summary": "ADB sieht einen Transport, aber das Gerät vertraut dem Schlüssel dieses Hosts noch nicht.",
+        "remediation": {
+          "0": "Entsperren Sie das Gerät und prüfen Sie die Abfrage „USB-Debugging zulassen“.",
+          "1": "Überprüfen Sie den RSA-Fingerabdruck vor dem Bestätigen; verbinden Sie das Kabel neu, wenn keine Abfrage erscheint."
+        }
       },
       "offline": {
-        "title": "ADB-Transporte sind offline"
+        "title": "ADB-Transporte sind offline",
+        "summary": "Der Host-Server hat Transporteinträge, kann aber nicht mit diesen Geräten kommunizieren.",
+        "remediation": {
+          "0": "Wecken und entsperren Sie das Gerät, verbinden Sie dann ein bekanntes datenfähiges Kabel neu oder wählen Sie erneut den Dateiübertragungsmodus.",
+          "1": "Verwenden Sie die separat geprüfte ADB-Wiederherstellungsaktion von Droidsmith erst nach physischen Prüfungen."
+        }
       },
       "no_permissions": {
-        "title": "Linux kann das Android-USB-Gerät nicht öffnen"
+        "title": "Linux kann das Android-USB-Gerät nicht öffnen",
+        "summary": "ADB hat USB-Hardware erkannt, aber dem aktuellen Konto fehlt der Zugriff über Gruppenmitgliedschaft oder udev-Regeln.",
+        "remediation": {
+          "0": "Folgen Sie der offiziellen Linux-Geräteeinrichtung, um der passenden Gruppe beizutreten und Hersteller-udev-Regeln zu installieren.",
+          "1": "Melden Sie sich nach Gruppenänderungen ab und wieder an und verbinden Sie das Gerät neu."
+        }
       },
       "usb_visible_adb_missing": {
-        "title": "Android-USB-Hardware ist sichtbar, aber fehlt in ADB"
+        "title": "Android-USB-Hardware ist sichtbar, aber fehlt in ADB",
+        "summary": "Das Betriebssystem sieht Android-ähnliche USB-Hardware, während ADB keinen Transport meldet. Wahrscheinlich ist ein Nur-Laden-/falscher USB-Modus, ein Kabel- oder Host-Treiberproblem.",
+        "remediation": {
+          "0": "Entsperren Sie das Gerät, aktivieren Sie USB-Debugging und wählen Sie Dateiübertragung oder einen anderen debugfähigen USB-Modus.",
+          "1": "Probieren Sie ein bekanntes datenfähiges Kabel und einen direkten USB-Anschluss am Host."
+        }
       },
       "no_usb_transport": {
-        "title": "Kein Android-USB-Transport erkannt"
+        "title": "Kein Android-USB-Transport erkannt",
+        "summary": "Weder ADB noch die begrenzte USB-Prüfung des Hosts fanden erkennbare Android-Hardware.",
+        "remediation": {
+          "0": "Stellen Sie sicher, dass das Gerät eingeschaltet, entsperrt und mit einem datenfähigen Kabel verbunden ist.",
+          "1": "Wählen Sie vor dem erneuten Scan Dateiübertragung oder einen anderen debugfähigen USB-Modus."
+        }
       },
       "windows_driver_missing": {
-        "title": "Windows hat keine erkannte ADB-Schnittstelle"
+        "title": "Windows hat keine erkannte ADB-Schnittstelle",
+        "summary": "Android-ähnliche USB-Hardware ist vorhanden, aber das Host-Inventar zeigt keine ADB-Schnittstelle. Der OEM-USB-Treiber fehlt möglicherweise oder ist falsch gebunden.",
+        "remediation": {
+          "0": "Installieren Sie den offiziellen Windows-USB-Treiber des Herstellers oder Googles Treiber für unterstützte Geräte.",
+          "1": "Prüfen Sie im Geräte-Manager auf ein Android-Gerät mit Warnsymbol; vermeiden Sie Treiberpakete von Drittanbietern."
+        }
       },
       "linux_access_incomplete": {
-        "title": "Linux-Android-USB-Zugriff ist unvollständig"
+        "title": "Linux-Android-USB-Zugriff ist unvollständig",
+        "summary": "Dem aktuellen Konto oder der udev-Konfiguration fehlt eine übliche Voraussetzung für ADB-Zugriff ohne Root.",
+        "remediation": {
+          "0": "Verwenden Sie das Android-udev-Regelpaket der Distribution oder die offiziellen Herstellerregeln.",
+          "1": "Treten Sie der empfohlenen Gerätezugriffsgruppe bei und melden Sie sich neu an; vermeiden Sie weltweit beschreibbare 0666-Regeln."
+        }
       },
       "server_config_override": {
-        "title": "Benutzerdefinierte ADB-Server-Konfiguration ist aktiv"
+        "title": "Benutzerdefinierte ADB-Server-Konfiguration ist aktiv",
+        "summary": "Umgebungsvariablen überschreiben ADBs Standard-Server-Socket, -Port oder die Vendor-Key-Suche und können Droidsmith zu einem konkurrierenden Server leiten.",
+        "remediation": {
+          "0": "Prüfen Sie die genannten Umgebungsvariablen in der Shell, die Droidsmith startet.",
+          "1": "Verwenden Sie den lokalen Standard-ADB-Server, sofern kein bewusstes Remote-Server-Setup erforderlich ist."
+        }
       },
       "client_server_mismatch": {
-        "title": "ADB-Client- und Server-Versionen unterscheiden sich"
+        "title": "ADB-Client- und Server-Versionen unterscheiden sich",
+        "summary": "Möglicherweise gehört der laufende Server einer anderen ADB-Installation, was zu Funktions- und Protokollabweichungen führt.",
+        "remediation": {
+          "0": "Finden Sie doppelte ADB-Installationen und lassen Sie PATH auf eine beabsichtigte Platform-Tools-Version auflösen.",
+          "1": "Prüfen Sie den laufenden Server, bevor Sie eine separate Neustart-Aktion wählen."
+        }
       },
       "server_status_unavailable": {
-        "title": "ADB-Serverdetails sind nicht verfügbar"
+        "title": "ADB-Serverdetails sind nicht verfügbar",
+        "summary": "Diese ADB-Version stellt keinen server-status bereit, daher konnten Server-Eigentum und Backend-Details nicht überprüft werden.",
+        "remediation": {
+          "0": "Aktualisieren Sie Platform Tools, wenn Server-Diagnosen benötigt werden."
+        }
       }
+    },
+    "platforms": {
+      "windows": "Windows",
+      "linux": "Linux",
+      "macos": "macOS",
+      "other": "Anderes Betriebssystem"
+    },
+    "privacyItems": {
+      "0": "Es wurden keine Treiber-, udev-, Dienst- oder ADB-Server-Änderungen vorgenommen.",
+      "1": "Der Bericht enthält keine Geräte-Seriennummern, USB-Instanz-IDs, Umgebungswerte oder ADB-Schlüsselmaterial.",
+      "2": "Der Bericht bleibt lokal, sofern der Benutzer ihn nicht ausdrücklich kopiert oder exportiert."
     }
   },
   "onboarding": {
@@ -1590,7 +1713,7 @@
     "noAuthorized": "Keine autorisierten Geräte",
     "desktopRequired": "Desktop-Shell erforderlich",
     "dismiss": "Schließen",
-    "loading": "Lade...",
+    "loading": "Lade…",
     "refresh": "Aktualisieren",
     "load": "Laden",
     "roadmap": "Roadmap {{milestone}}",
@@ -1598,7 +1721,7 @@
     "checkAgain": "Erneut prüfen",
     "retryScan": "Scan wiederholen",
     "scanAgain": "Erneut scannen",
-    "checking": "Prüfe...",
+    "checking": "Prüfe…",
     "targetDevice": "Zielgerät",
     "notReported": "Nicht gemeldet",
     "selected": "Ausgewählt",

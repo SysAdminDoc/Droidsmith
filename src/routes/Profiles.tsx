@@ -79,6 +79,27 @@ function actionKindLabel(
   return labelKey ? t(labelKey) : kind;
 }
 
+const PACKAGE_STATE_KEYS: Record<string, string> = {
+  enabled: "profiles.states.enabled",
+  disabled: "profiles.states.disabled",
+  archived: "profiles.states.archived",
+  missing: "profiles.states.missing",
+  uninstalled_for_user: "profiles.states.uninstalledForUser",
+  data_cleared: "profiles.states.dataCleared",
+  stopped: "profiles.states.stopped",
+  reviewed_action: "profiles.states.reviewedAction",
+};
+
+/** Localize the dry-run diff's current/expected package states; unknown
+ *  backend tokens render raw instead of disappearing. */
+function packageStateLabel(
+  state: string,
+  t: ReturnType<typeof useTranslation>["t"],
+): string {
+  const labelKey = PACKAGE_STATE_KEYS[state];
+  return labelKey ? t(labelKey) : state;
+}
+
 type InventoryState =
   | { kind: "idle" }
   | { kind: "loading" }
@@ -403,8 +424,8 @@ export default function ProfilesRoute() {
         {selectedTarget && (
           <>
             <div
-              className="inline-flex gap-5 border-b border-white/[0.08]"
-              role="tablist"
+              className="inline-flex gap-5 border-b border-white/10"
+              role="group"
               aria-label={t("profiles.workspaceLabel")}
             >
               <WorkspaceTab
@@ -969,7 +990,8 @@ function ProfileDiff({
                     </TableCell>
                     <TableCell>
                       <span className="whitespace-nowrap">
-                        {row.current_state} &rarr; {row.expected_state}
+                        {packageStateLabel(row.current_state, t)} &rarr;{" "}
+                        {packageStateLabel(row.expected_state, t)}
                       </span>
                     </TableCell>
                     <TableCell>
@@ -1048,8 +1070,7 @@ function WorkspaceTab({
   return (
     <button
       type="button"
-      role="tab"
-      aria-selected={active}
+      aria-pressed={active}
       className={`-mb-px border-b-2 px-0.5 py-2 text-sm font-medium transition ${
         active
           ? "border-circuit-300 text-circuit-100"

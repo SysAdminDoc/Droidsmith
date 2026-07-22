@@ -703,7 +703,7 @@ async function runDesktopFlow(browser) {
   await page.getByRole("button", { name: "Add selected (1)" }).click();
   await page.getByRole("button", { name: "Validate and export" }).click();
   await page.getByText("Profile saved", { exact: true }).waitFor();
-  await page.getByRole("tab", { name: "Import and preview" }).click();
+  await page.getByRole("button", { name: "Import and preview" }).click();
   await page.getByRole("button", { name: "Choose profile" }).click();
   await page.getByText("Full dry-run diff", { exact: true }).waitFor();
   await page

@@ -35,7 +35,7 @@ export default function HostDoctor() {
 
   return (
     <Card
-      className="rounded-none border-t border-white/[0.08] bg-transparent px-0 py-4 shadow-none"
+      className="rounded-none border-t border-white/10 bg-transparent px-0 py-4 shadow-none"
       aria-labelledby={titleId}
     >
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -98,7 +98,11 @@ export default function HostDoctor() {
                   })
                 : t("hostDoctor.adbUnverified")}
             </Badge>
-            <Badge tone="neutral">{state.report.platform}</Badge>
+            <Badge tone="neutral">
+              {t(`hostDoctor.platforms.${state.report.platform}`, {
+                defaultValue: state.report.platform,
+              })}
+            </Badge>
             <span>
               {t("hostDoctor.scanned", {
                 date: formatDateTime(state.report.scanned_at, i18n.language),
@@ -115,8 +119,12 @@ export default function HostDoctor() {
               {t("hostDoctor.privacy")}
             </summary>
             <ul className="mt-2 list-disc space-y-1 ps-5">
-              {state.report.privacy.map((item) => (
-                <li key={item}>{item}</li>
+              {state.report.privacy.map((item, index) => (
+                <li key={item}>
+                  {t(`hostDoctor.privacyItems.${index}`, {
+                    defaultValue: item,
+                  })}
+                </li>
               ))}
             </ul>
           </details>
@@ -134,13 +142,20 @@ function Finding({ finding }: { finding: HostFinding }) {
       : finding.severity === "warning"
         ? "warning"
         : "info";
+  // Prefer locale overrides keyed by the stable finding code; the
+  // Rust-provided English strings remain the fallback for codes a locale
+  // does not cover (e.g. findings whose summary is composed dynamically).
+  // Evidence is raw probe output and intentionally stays untranslated.
   const title = t(`hostDoctor.findings.${finding.code}.title`, {
     defaultValue: finding.title,
+  });
+  const summary = t(`hostDoctor.findings.${finding.code}.summary`, {
+    defaultValue: finding.summary,
   });
 
   return (
     <StatePanel title={title} tone={tone}>
-      <p>{finding.summary}</p>
+      <p>{summary}</p>
       {finding.evidence.length > 0 && (
         <ul className="mt-2 list-disc space-y-1 ps-5 font-mono text-xs text-anvil-300">
           {finding.evidence.map((item) => (
@@ -149,8 +164,12 @@ function Finding({ finding }: { finding: HostFinding }) {
         </ul>
       )}
       <ol className="mt-3 list-decimal space-y-1 ps-5">
-        {finding.remediation.map((item) => (
-          <li key={item}>{item}</li>
+        {finding.remediation.map((item, index) => (
+          <li key={item}>
+            {t(`hostDoctor.findings.${finding.code}.remediation.${index}`, {
+              defaultValue: item,
+            })}
+          </li>
         ))}
       </ol>
       <a

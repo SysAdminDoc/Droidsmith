@@ -418,7 +418,7 @@ export default function WirelessRoute() {
         </Card>
       </section>
 
-      <section className="mt-4 max-w-7xl" aria-live="polite">
+      <section className="mt-4 max-w-7xl">
         <ActionStatus state={actionState} />
       </section>
 
@@ -434,7 +434,7 @@ export default function WirelessRoute() {
         </section>
       )}
 
-      <section className="mt-4 max-w-7xl" aria-live="polite">
+      <section className="mt-4 max-w-7xl">
         <ServicesPanel
           state={servicesState}
           onRefresh={() => void loadServices()}
@@ -737,7 +737,7 @@ function ServicesPanel({
                 </TableCell>
                 <TableCell>
                   <Badge tone={serviceKindTone(service.kind)}>
-                    {service.kind}
+                    {serviceKindLabel(service.kind, t)}
                   </Badge>
                 </TableCell>
                 <TableCell>
@@ -1003,6 +1003,22 @@ function formatTimestamp(ms: number, language: string): string {
   } catch {
     return "—";
   }
+}
+
+const SERVICE_KIND_KEYS: Record<string, string> = {
+  pairing: "wireless.serviceKind.pairing",
+  connect: "wireless.serviceKind.connect",
+  other: "wireless.serviceKind.other",
+};
+
+/// Localize the backend's discovery-kind enum; unknown values fall back to the
+/// raw wire value so a newer backend never renders an empty badge.
+function serviceKindLabel(
+  kind: WirelessAdbService["kind"],
+  t: ReturnType<typeof useTranslation>["t"],
+): string {
+  const key = SERVICE_KIND_KEYS[kind];
+  return key ? t(key) : kind;
 }
 
 function serviceKindTone(

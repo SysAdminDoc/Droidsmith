@@ -1,6 +1,7 @@
 import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { formatBytes } from "../lib/format";
 import { formatDateTime, formatNumber } from "../lib/i18n";
 import {
   callAnalyzeApk,
@@ -563,20 +564,6 @@ function formatOptionalNumber(
   language: string,
 ): string | undefined {
   return value == null ? undefined : formatNumber(value, language);
-}
-
-function formatBytes(bytes: number, language: string): string {
-  if (bytes < 1024) return `${formatNumber(bytes, language)} B`;
-  if (bytes < 1024 * 1024) {
-    return `${formatNumber(bytes / 1024, language, {
-      minimumFractionDigits: 1,
-      maximumFractionDigits: 1,
-    })} KB`;
-  }
-  return `${formatNumber(bytes / (1024 * 1024), language, {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })} MB`;
 }
 
 function formatUnixDate(seconds: number, language: string): string {

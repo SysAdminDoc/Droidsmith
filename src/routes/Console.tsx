@@ -151,7 +151,7 @@ export default function ConsoleRoute() {
       if (commandGenerationRef.current !== generation) return;
       if (assessment.mutating) {
         if (!assessment.plan) {
-          throw new Error("Audited shell planner returned no mutation plan");
+          throw new Error(t("console.plannerNoPlan"));
         }
         setPendingAction({
           command: trimmed,
@@ -485,7 +485,7 @@ export default function ConsoleRoute() {
                   32;
               }}
               aria-busy={running}
-              className="h-[32rem] overflow-y-auto bg-[#090d12] p-4 font-mono text-sm leading-6"
+              className="h-[32rem] overflow-y-auto bg-surface-terminal p-4 font-mono text-sm leading-6"
             >
               {history.length === 0 && (
                 <p className="text-anvil-600">{t("console.hint")}</p>
@@ -547,7 +547,7 @@ export default function ConsoleRoute() {
                 placeholder={t("console.placeholder")}
                 disabled={running}
                 aria-label={t("console.commandLabel")}
-                className="h-8 flex-1 bg-transparent font-mono text-sm text-anvil-50 outline-none placeholder:text-anvil-600"
+                className="h-8 flex-1 rounded-sm bg-transparent font-mono text-sm text-anvil-50 outline-none placeholder:text-anvil-600 focus-visible:ring-2 focus-visible:ring-circuit-300/40"
               />
               <Button
                 type="button"

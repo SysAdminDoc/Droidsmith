@@ -244,7 +244,7 @@ export default function DeviceSettingsRoute() {
         )}
 
         {selectedTarget && settings && (
-          <div className="divide-y divide-white/[0.08] border-y border-white/[0.08]">
+          <div className="divide-y divide-white/10 border-y border-white/10">
             {settings.map((setting) => (
               <SettingCard
                 key={setting.id}
@@ -368,7 +368,9 @@ function SettingCard({
               </option>
               {control.options.map((option) => (
                 <option key={option.value} value={option.value}>
-                  {option.label}
+                  {t(`tuning.options.${setting.id}.${option.value}`, {
+                    defaultValue: option.label,
+                  })}
                 </option>
               ))}
             </FieldSelect>

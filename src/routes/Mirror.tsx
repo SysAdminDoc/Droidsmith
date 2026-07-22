@@ -426,8 +426,8 @@ export default function MirrorRoute() {
         {scrcpyState.kind === "not_found" && (
           <StatePanel title={t("mirror.scrcpyMissing")} tone="warning">
             <p>
-              {t("mirror.scrcpyInstallPrefix")} <code>scrcpy.org</code> or your
-              package manager:
+              {t("mirror.scrcpyInstallPrefix")} <code>scrcpy.org</code>{" "}
+              {t("mirror.scrcpyInstallSuffix")}
             </p>
             <pre className="mt-2 rounded-md border border-white/10 bg-white/[0.04] p-3 font-mono text-xs text-anvil-200">
               {`# Windows (scoop)\nscoop install scrcpy\n\n# macOS (brew)\nbrew install scrcpy\n\n# Linux (apt)\nsudo apt install scrcpy`}
@@ -1100,7 +1100,11 @@ export default function MirrorRoute() {
             )}
 
             {session.kind === "error" && (
-              <StatePanel title={t("mirror.launchFailed")} tone="danger">
+              <StatePanel
+                title={t("mirror.launchFailed")}
+                tone="danger"
+                live="assertive"
+              >
                 <p>{session.message}</p>
               </StatePanel>
             )}
@@ -1146,7 +1150,7 @@ function Toggle({
   label: string;
 }) {
   return (
-    <label className="flex min-h-10 items-center gap-2 border-b border-white/[0.07] px-1 py-2">
+    <label className="flex min-h-10 items-center gap-2 border-b border-white/10 px-1 py-2">
       <input
         type="checkbox"
         checked={checked}

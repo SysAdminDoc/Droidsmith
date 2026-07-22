@@ -10,6 +10,8 @@ import {
   type SupportPreview,
   type WipeDiagnosticsResult,
 } from "../lib/tauri";
+import { formatBytes } from "../lib/format";
+import { formatNumber } from "../lib/i18n";
 import { useFocusTrap } from "../lib/useFocusTrap";
 import {
   Badge,
@@ -32,7 +34,7 @@ export default function DiagnosticsCenter({
 }: {
   onDismiss: () => void;
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [state, setState] = useState<PreviewState>({ kind: "loading" });
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -87,7 +89,7 @@ export default function DiagnosticsCenter({
       setMessage(
         t("diagnostics.saved", {
           path: result.path,
-          size: formatBytes(result.byte_size),
+          size: formatBytes(result.byte_size, i18n.language),
         }),
       );
     } catch (error) {
@@ -99,7 +101,7 @@ export default function DiagnosticsCenter({
     } finally {
       setSaving(false);
     }
-  }, [state, t]);
+  }, [i18n, state, t]);
 
   const wipe = useCallback(async () => {
     setWiping(true);
@@ -107,7 +109,7 @@ export default function DiagnosticsCenter({
     try {
       const result = await callWipeDiagnostics(true);
       setWipeConfirm(false);
-      setMessage(wipeMessage(result, t));
+      setMessage(wipeMessage(result, t, i18n.language));
       const preview = await callPreviewDiagnostics();
       setState({ kind: "ok", preview });
     } catch (error) {
@@ -119,7 +121,7 @@ export default function DiagnosticsCenter({
     } finally {
       setWiping(false);
     }
-  }, [t]);
+  }, [i18n, t]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-3 backdrop-blur-sm sm:p-5">
@@ -210,19 +212,25 @@ export default function DiagnosticsCenter({
             <dl className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <SummaryMetric
                 label={t("diagnostics.bundleSize")}
-                value={formatBytes(state.preview.byte_size)}
+                value={formatBytes(state.preview.byte_size, i18n.language)}
               />
               <SummaryMetric
                 label={t("diagnostics.devices")}
-                value={String(state.preview.device_count)}
+                value={formatNumber(state.preview.device_count, i18n.language)}
               />
               <SummaryMetric
                 label={t("diagnostics.failures")}
-                value={String(state.preview.failed_operation_count)}
+                value={formatNumber(
+                  state.preview.failed_operation_count,
+                  i18n.language,
+                )}
               />
               <SummaryMetric
                 label={t("diagnostics.crashLines")}
-                value={String(state.preview.crash_line_count)}
+                value={formatNumber(
+                  state.preview.crash_line_count,
+                  i18n.language,
+                )}
               />
             </dl>
 
@@ -364,18 +372,13 @@ function SummaryMetric({ label, value }: { label: string; value: string }) {
   );
 }
 
-function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
 function wipeMessage(
   result: WipeDiagnosticsResult,
   t: ReturnType<typeof useTranslation>["t"],
+  language: string,
 ): string {
   return t("diagnostics.wiped", {
     count: result.files_removed,
-    size: formatBytes(result.bytes_removed),
+    size: formatBytes(result.bytes_removed, language),
   });
 }

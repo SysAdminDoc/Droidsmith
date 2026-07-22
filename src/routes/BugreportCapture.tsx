@@ -19,6 +19,7 @@ import {
   useAuthorizedDevices,
   useTransportAuthorization,
 } from "../lib/useAuthorizedDevices";
+import { formatBytes } from "../lib/format";
 import {
   Badge,
   Button,
@@ -288,7 +289,11 @@ export default function BugreportCapture() {
         state.kind === "running" ||
         state.kind === "cancelling") && (
         <div className="mt-4">
-          <StatePanel title={t("bugreport.captureInProgress")} tone="warning">
+          <StatePanel
+            title={t("bugreport.captureInProgress")}
+            tone="warning"
+            live="polite"
+          >
             <p>
               {state.kind === "selecting"
                 ? t("bugreport.selecting")
@@ -315,7 +320,11 @@ export default function BugreportCapture() {
 
       {state.kind === "error" && (
         <div className="mt-4">
-          <StatePanel title={t("bugreport.failed")} tone="danger">
+          <StatePanel
+            title={t("bugreport.failed")}
+            tone="danger"
+            live="assertive"
+          >
             <p>{state.message}</p>
           </StatePanel>
         </div>
@@ -323,7 +332,7 @@ export default function BugreportCapture() {
 
       {state.kind === "success" && (
         <div className="mt-4">
-          <StatePanel title={t("bugreport.saved")} tone="success">
+          <StatePanel title={t("bugreport.saved")} tone="success" live="polite">
             <dl className="grid gap-3 sm:grid-cols-2">
               <ArtifactResult
                 label={t("bugreport.report")}
@@ -359,7 +368,7 @@ function ArtifactResult({
   size: number;
   sha256: string;
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   return (
     <div className="min-w-0 rounded-md border border-white/10 bg-black/20 p-3">
       <dt className="font-medium text-anvil-100">{label}</dt>
@@ -367,17 +376,13 @@ function ArtifactResult({
         {path}
       </dd>
       <dd className="mt-2 text-xs text-anvil-400">
-        {t("bugreport.artifactSize", { size: formatBytes(size) })}
+        {t("bugreport.artifactSize", {
+          size: formatBytes(size, i18n.language),
+        })}
       </dd>
       <dd className="mt-1 break-all font-mono text-[11px] text-anvil-500">
         SHA-256 {sha256}
       </dd>
     </div>
   );
-}
-
-function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }

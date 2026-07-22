@@ -45,6 +45,22 @@ const GETVAR_KEYS = [
   "battery-voltage",
 ];
 
+const FASTBOOT_MODE_KEYS: Record<string, string> = {
+  fastboot: "fastboot.modes.fastboot",
+  fastbootd: "fastboot.modes.fastbootd",
+  no_permissions: "fastboot.modes.no_permissions",
+};
+
+/// Localize the parser's mode token; an unrecognized token renders raw so
+/// unusual bootloader states stay visible.
+function fastbootModeLabel(
+  mode: string,
+  t: ReturnType<typeof useTranslation>["t"],
+): string {
+  const key = FASTBOOT_MODE_KEYS[mode];
+  return key ? t(key) : mode;
+}
+
 export default function FastbootRoute() {
   const { t } = useTranslation();
   const [fbState, setFbState] = useState<FastbootState>({ kind: "checking" });
@@ -243,7 +259,9 @@ export default function FastbootRoute() {
                               </code>
                             </TableCell>
                             <TableCell>
-                              <Badge tone="info">{d.mode}</Badge>
+                              <Badge tone="info">
+                                {fastbootModeLabel(d.mode, t)}
+                              </Badge>
                               {d.parse_error && (
                                 <Badge tone="warning" className="ms-2">
                                   {t("fastboot.parseIssue")}

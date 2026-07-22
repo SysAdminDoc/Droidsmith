@@ -52,9 +52,21 @@ export function CommandPalette({
     return () => window.clearTimeout(focusTimer);
   }, [open]);
 
+  // Keep the active option visible while ArrowUp/Down moves through a list
+  // taller than the scroll viewport.
+  useEffect(() => {
+    if (!open) return;
+    document
+      .getElementById(`command-palette-option-${activeIndex}`)
+      ?.scrollIntoView?.({ block: "nearest" });
+  }, [activeIndex, open]);
+
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
       if (e.key === "Escape") {
+        // Consume the event so document-level Escape listeners (App modals,
+        // Diagnostics, Console review) don't also dismiss their surfaces.
+        e.stopPropagation();
         onClose();
       } else if (e.key === "ArrowDown") {
         e.preventDefault();
@@ -154,7 +166,7 @@ export function CommandPalette({
                 ? `command-palette-option-${activeIndex}`
                 : undefined
             }
-            className="h-8 flex-1 bg-transparent text-sm text-anvil-50 outline-none placeholder:text-anvil-500"
+            className="h-8 flex-1 rounded-sm bg-transparent text-sm text-anvil-50 outline-none placeholder:text-anvil-500 focus-visible:ring-2 focus-visible:ring-circuit-300/40"
           />
         </div>
 

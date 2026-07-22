@@ -41,10 +41,10 @@
       "mirrorPresets": "Пресеты зеркалирования для устройств"
     },
     "export": "Экспортировать область",
-    "exporting": "Экспорт...",
+    "exporting": "Экспорт…",
     "exportSaved": "Настройки экспортированы в {{path}}.",
     "import": "Импортировать настройки",
-    "importReading": "Чтение...",
+    "importReading": "Чтение…",
     "importPreviewTitle": "Проверка переносимых настроек",
     "importPreviewBody": "Версия {{version}} · {{scope}}. Выберите: объединить импортируемые коллекции с текущими значениями или заменить их.",
     "importMode": "Режим импорта",
@@ -54,10 +54,10 @@
     },
     "importMachineLocal": "Локальные для компьютера поля не меняются и не импортируются: {{fields}}.",
     "importApply": "Применить импорт",
-    "importApplying": "Применение...",
+    "importApplying": "Применение…",
     "importComplete": "Настройки импортированы в режиме «{{mode}}». Доступна резервная копия до импорта.",
     "importRestore": "Восстановить копию до импорта",
-    "importRestoring": "Восстановление...",
+    "importRestoring": "Восстановление…",
     "importBackupRestored": "Резервная копия настроек до импорта восстановлена.",
     "importDiff": {
       "language": "Язык",
@@ -73,7 +73,7 @@
     "resetConfirmTitle": "Сбросить эту область настроек?",
     "resetConfirmBody": "{{scope}} вернётся к значениям по умолчанию. Остальные области не изменятся.",
     "confirmReset": "Сбросить выбранную область",
-    "resetting": "Сброс...",
+    "resetting": "Сброс…",
     "resetComplete": "{{scope}} сброшено к значениям по умолчанию.",
     "operationFailed": "Ошибка операции с настройками: {{message}}"
   },
@@ -135,10 +135,10 @@
     "preview": "Предпросмотр очищенного пакета",
     "wipe": "Очистить локальную историю диагностики",
     "save": "Сохранить пакет",
-    "saving": "Сохранение...",
+    "saving": "Сохранение…",
     "wipeTitle": "Очистить удаляемую историю диагностики?",
     "wipeBody": "Будут удалены ротационные журналы сбоев и записи восстановления ADB на компьютере. Журналы действий устройств и аудит установок сохраняются, потому что нужны для аудита и восстановления. Уже сохранённые вне Droidsmith пакеты не удаляются.",
-    "wiping": "Очистка...",
+    "wiping": "Очистка…",
     "confirmWipe": "Подтвердить очистку",
     "wiped": "Удалено диагностических файлов: {{count}} ({{size}}). Журналы действий и аудита установок сохранены.",
     "wipeFailed": "Не удалось очистить историю диагностики: {{message}}"
@@ -155,12 +155,12 @@
     "privacyContract": "Droidsmith считает ZIP непрозрачным: проверяет только структуру архива, создаёт очищенный файл метаданных и не просматривает отчёт для очистки, не отправляет, не прикрепляет и не открывает его.",
     "acknowledge": "Я понимаю возможное содержимое и хочу сохранить этот конфиденциальный отчёт локально.",
     "chooseDestination": "Выбрать место и создать отчёт",
-    "starting": "Запуск создания отчёта Android...",
+    "starting": "Запуск создания отчёта Android…",
     "running": "Android создаёт отчёт. Это может занять несколько минут.",
     "selecting": "Выберите локальный файл .zip в системном диалоге сохранения.",
     "captureInProgress": "Создание отчёта выполняется",
     "cancelCapture": "Отменить создание",
-    "cancelling": "Отмена и удаление неполного файла...",
+    "cancelling": "Отмена и удаление неполного файла…",
     "failed": "Не удалось создать отчёт",
     "saved": "Конфиденциальный отчёт сохранён локально",
     "report": "ZIP отчёта",
@@ -173,7 +173,7 @@
     "description": "Переход к рабочей области Droidsmith.",
     "close": "Закрыть палитру команд",
     "searchLabel": "Поиск в палитре команд",
-    "searchPlaceholder": "Поиск команд, пакетов, маршрутов...",
+    "searchPlaceholder": "Поиск команд, пакетов, маршрутов…",
     "noMatchesTitle": "Совпадений нет",
     "noMatchesHint": "Попробуйте название раздела.",
     "navigationCategory": "Навигация",
@@ -237,7 +237,13 @@
     },
     "invalidChoice": "Недопустимое значение",
     "notANumber": "Введите число",
-    "outOfRange": "Введите значение от {{min}} до {{max}}"
+    "outOfRange": "Введите значение от {{min}} до {{max}}",
+    "options": {
+      "stay_on_while_plugged_in": {
+        "0": "Выкл.",
+        "7": "Вкл. (любое зарядное устройство)"
+      }
+    }
   },
   "devices": {
     "title": "Устройства",
@@ -250,7 +256,7 @@
     "transportTrustBody": "{{transport}} не обеспечивает гарантии аутентифицированного сопряжения Android Wireless Debugging. Трафик и данные устройства могут быть доступны другим участникам сети.",
     "transportTrustAcknowledge": "Разрешить привилегированные операции через это подключение, пока я не выберу другое устройство.",
     "refresh": "Обновить",
-    "scanning": "Сканирование...",
+    "scanning": "Сканирование…",
     "moreActions": "Дополнительные действия с устройствами",
     "connected": "Подключенные устройства",
     "selectHint": "Выберите устройство, чтобы открыть его панель. Проверьте состояние и транспорт перед запуском действий.",
@@ -283,7 +289,7 @@
     "noAdbBodySuffix": "когда появится встроенный sidecar.",
     "noDevicesStep1": "Подключите USB и включите параметры разработчика.",
     "noDevicesStep2Prefix": "Примите",
-    "allowUsbDebugging": "Allow USB debugging",
+    "allowUsbDebugging": "Разрешить отладку по USB",
     "noDevicesStep2Suffix": "на устройстве.",
     "noDevicesStep3": "Или используйте вкладку Wireless для пары по Wi-Fi.",
     "linuxPermsBody": "Одно или несколько устройств сообщают no permissions. Не используйте общедоступные правила 0666; настройте группу доступа устройства и поддерживаемые Android udev rules вашего дистрибутива.",
@@ -292,15 +298,15 @@
     "unusableStateBody": "Эти устройства подключены, но не находятся в управляемом состоянии ADB — например, offline, в режиме bootloader/recovery/sideload или в нераспознанном состоянии. Переподключите кабель, разблокируйте экран или выйдите из специального режима, затем повторите сканирование.",
     "scanningBridge": "Сканирование моста",
     "waitingForAdb": "Ожидание ADB",
-    "serial": "Serial",
+    "serial": "Серийный номер",
     "state": "Состояние",
     "identity": "Идентификация",
     "transport": "Транспорт",
     "unknownModel": "Неизвестная модель",
     "noProductMetadata": "Нет метаданных продукта",
-    "transportId": "transport {{id}}",
+    "transportId": "транспорт {{id}}",
     "loadingDeviceInfo": "Загрузка данных устройства",
-    "queryingSerial": "Запрос {{serial}}...",
+    "queryingSerial": "Запрос {{serial}}…",
     "deviceInfoFailed": "Не удалось загрузить данные устройства",
     "detailTitle": "Сведения об устройстве",
     "disconnect": "Отключить",
@@ -313,8 +319,8 @@
     "apiLevelLabel": "API платформы",
     "moreDeviceActions": "Дополнительные действия для {{device}}",
     "apiLevel": "API {{level}}",
-    "hwSerial": "HW Serial",
-    "buildFingerprint": "Build fingerprint",
+    "hwSerial": "Аппаратный серийный номер",
+    "buildFingerprint": "Отпечаток сборки",
     "securityPatch": "Патч безопасности",
     "wifiIp": "Wi-Fi IP",
     "battery": "Батарея",
@@ -346,7 +352,7 @@
       "stopped": "Наблюдение остановлено",
       "wifiTwoDetected": "Wi-Fi 2.0 обнаружен",
       "observed": "Последняя проверка: {{time}}",
-      "probing": "Проверка сервера ADB и механизма обнаружения...",
+      "probing": "Проверка сервера ADB и механизма обнаружения…",
       "reviewRecovery": "Проверить восстановление",
       "client": "Версия клиента",
       "server": "Версия сервера",
@@ -371,8 +377,8 @@
       "wifiTwoDevices": "Устройства Wi-Fi 2.0",
       "noneDetected": "Не обнаружены",
       "mdnsCheck": "Проверка mDNS",
-      "starting": "Запуск восстановления ADB...",
-      "cancelling": "Отмена и ожидание завершения текущего процесса ADB...",
+      "starting": "Запуск восстановления ADB…",
+      "cancelling": "Отмена и ожидание завершения текущего процесса ADB…",
       "recoveryTitle": "Проверка перезапуска и переподключения ADB",
       "recoveryBody": "Это действие для всего компьютера перезапускает локальный сервер ADB, затем запрашивает переподключение только отключённых транспортов. Точная последовательность показана ниже, а надёжная запись операции сохраняется до запуска первой команды.",
       "recoveryWarning": "Все подключённые инструменты с этим сервером ADB могут ненадолго отключиться. Данные устройств не изменяются, но активные передачи и shell-сеансы могут прерваться.",
@@ -607,24 +613,24 @@
     "title": "Беспроводное",
     "description": "Подключайте Android-устройства по Wi-Fi.",
     "scanMdns": "Сканировать mDNS",
-    "scanning": "Сканирование...",
+    "scanning": "Сканирование…",
     "scanningMdns": "Сканирование mDNS",
     "mdnsScanFailed": "Сканирование mDNS не удалось",
     "qrAlt": "QR-код беспроводной пары ADB",
     "qrPairing": "QR-пара",
     "name": "Имя",
     "code": "Код",
-    "payload": "Payload",
+    "payload": "Полезная нагрузка",
     "regenerate": "Сгенерировать заново",
     "refreshServices": "Обновить сервисы",
     "pairingCode": "Код пары",
-    "pairedEndpoint": "Paired endpoint",
+    "pairedEndpoint": "Сопряжённая конечная точка",
     "legacyTcpEndpoint": "Эта конечная точка использует устаревший adb tcpip без аутентификации. Не выбирайте этот вариант для конечной точки сопряжения Android Wireless Debugging.",
     "host": "Host",
-    "port": "Port",
-    "pair": "Pair",
+    "port": "Порт",
+    "pair": "Сопрячь",
     "connect": "Подключить",
-    "pairing": "Pairing",
+    "pairing": "Сопряжение",
     "connecting": "Подключение",
     "serviceCount_one": "{{count}} сервис",
     "serviceCount_few": "{{count}} сервиса",
@@ -642,7 +648,7 @@
     "foundCount_many": "{{count}} найдено",
     "foundCount_other": "{{count}} найдено",
     "kind": "Тип",
-    "endpoint": "Endpoint",
+    "endpoint": "Конечная точка",
     "action": "Действие",
     "actionInProgress": "{{action}} выполняется",
     "actionFailed": "{{action}} не удалось",
@@ -668,7 +674,12 @@
     "forget": "Забыть",
     "lastConnected": "Последнее подключение",
     "autoReconnect": "Переподключать известные устройства при запуске",
-    "autoReconnectHint": "При запуске Droidsmith попытается переподключить сохранённые адреса ниже."
+    "autoReconnectHint": "При запуске Droidsmith попытается переподключить сохранённые адреса ниже.",
+    "serviceKind": {
+      "pairing": "Сопряжение",
+      "connect": "Подключение",
+      "other": "Другое"
+    }
   },
   "apps": {
     "otaDriftTitle": "Устройство обновлено с момента последнего использования",
@@ -702,7 +713,7 @@
     "installOverrideAudit": "Исключение действует только для этой повторной попытки. Точный параметр и явное подтверждение записываются в локальный журнал аудита установок.",
     "installConfirmOverride": "Установить с исключением",
     "installGrantExpired": "Срок разрешения для выбранного пакета истёк. Перед повтором выберите пакет ещё раз.",
-    "loading": "Загрузка...",
+    "loading": "Загрузка…",
     "filterAll": "Все",
     "filterUser": "Пользовательские",
     "filterSystem": "Системные",
@@ -713,7 +724,7 @@
     "retainedLabel": "Удалён · данные сохранены",
     "retainedBody": "Удалён для этого пользователя Android, но PackageManager всё ещё хранит оставшиеся данные. Их удаление — полная и необратимая очистка.",
     "removeRetainedData": "Удалить сохранённые данные",
-    "searchPlaceholder": "Поиск пакетов...",
+    "searchPlaceholder": "Поиск пакетов…",
     "searchLabel": "Фильтр пакетов по имени",
     "userLabel": "Пользователь",
     "userCurrent": "текущий",
@@ -721,12 +732,12 @@
     "installedPackages": "Установленные пакеты",
     "installedPackagesBody": "Действия показывают предпросмотр перед применением. Отключение, включение, архивация и разархивация обратимы через журнал.",
     "archiveUnavailable": "Архивация приложений недоступна",
-    "disable": "Disable",
-    "enable": "Enable",
-    "uninstall": "Uninstall",
+    "disable": "Отключить",
+    "enable": "Включить",
+    "uninstall": "Удалить",
     "archive": "Архивировать",
     "unarchive": "Разархивировать",
-    "stop": "Stop",
+    "stop": "Остановить",
     "perms": "Права",
     "exportApks": "Экспорт APK",
     "legacyData": "Устаревшие данные…",
@@ -775,11 +786,11 @@
     "batchUndoCompleted": "Отмена пакета: возвращено {{succeeded}}, с ошибками {{failed}}.",
     "recoveryInspect": "Проверить baseline восстановления",
     "recoveryExportBeforeApply": "Экспорт baseline до изменения",
-    "recoveryExporting": "Экспорт baseline...",
+    "recoveryExporting": "Экспорт baseline…",
     "recoveryExportedReady": "Baseline экспортирован. Проверенное действие еще не выполнено.",
     "recoveryExportError": "Не удалось экспортировать baseline: {{message}}",
-    "recoveryInspecting": "Сравнение baseline с устройством...",
-    "recoveryApplying": "Применение проверенных действий восстановления: {{count}}...",
+    "recoveryInspecting": "Сравнение baseline с устройством…",
+    "recoveryApplying": "Применение проверенных действий восстановления: {{count}}…",
     "recoveryWorking": "Baseline восстановления",
     "recoverySavedTitle": "Baseline восстановления экспортирован",
     "recoverySaved": "Переносимые данные восстановления сохранены в {{path}}.",
@@ -837,10 +848,10 @@
     "noPermissionsFound": "Разрешения не найдены",
     "noPermissionsFoundBody": "Этот пакет не сообщил runtime или install permissions.",
     "permissionToggleFailed": "Не удалось изменить это разрешение: {{message}}. Некоторые разрешения заданы системой или политикой приложения и не переключаются здесь.",
-    "granted": "Granted",
+    "granted": "Предоставлено",
     "grantPermission": "Предоставить {{permission}}",
     "revokePermission": "Отозвать {{permission}}",
-    "denied": "Denied",
+    "denied": "Отклонено",
     "loadingPackages": "Загрузка пакетов",
     "journalTitle": "Журнал действий",
     "journalBody": "Недавние действия с пакетами для этого устройства. Отключение, включение, архивацию и разархивацию можно отменить после проверки состояния.",
@@ -849,7 +860,7 @@
     "journalEntryCount_many": "{{count}} записей",
     "journalEntryCount_other": "{{count}} записей",
     "journalRefresh": "Обновить журнал",
-    "journalLoading": "Загрузка журнала...",
+    "journalLoading": "Загрузка журнала…",
     "journalLoadFailed": "Не удалось загрузить журнал",
     "journalEmpty": "Записей журнала пока нет",
     "journalEmptyBody": "Примените действие с пакетом, и Droidsmith запишет его здесь.",
@@ -857,7 +868,7 @@
     "journalAction": "Действие",
     "journalOutput": "Вывод ADB",
     "journalUndo": "Отменить",
-    "journalUndoing": "Отмена...",
+    "journalUndoing": "Отмена…",
     "journalUndoCompleted": "Отмена выполнена для {{package}}.",
     "journalPending": "Выполняется",
     "journalFailed": "Безопасно завершено с ошибкой",
@@ -874,16 +885,16 @@
     "journalBatchMeta": "Пакет {{id}} · {{count}} пакетов",
     "journalBatchMember": "Часть пакета",
     "journalUndoBatch": "Отменить пакет ({{count}})",
-    "journalUndoingBatch": "Отмена пакета...",
+    "journalUndoingBatch": "Отмена пакета…",
     "actionKind": {
-      "disable": "Disable",
-      "enable": "Enable",
+      "disable": "Отключить",
+      "enable": "Включить",
       "archive": "Архивировать",
       "request_unarchive": "Запросить разархивацию",
-      "uninstall_for_user": "Uninstall for user",
+      "uninstall_for_user": "Удалить для пользователя",
       "restore_existing_for_user": "Восстановить сохранённое системное приложение",
-      "clear_data": "Clear data",
-      "force_stop": "Force stop",
+      "clear_data": "Очистить данные",
+      "force_stop": "Принудительно остановить",
       "grant_permission": "Выдать разрешение",
       "revoke_permission": "Отозвать разрешение",
       "shell": "Проверенная shell-мутация"
@@ -920,7 +931,7 @@
     "unsafeSelectedBody": "Эти элементы могут нарушить основные функции устройства или OEM. Проверьте каждый ID пакета перед продолжением.",
     "unsafeAcknowledge": "Я понимаю, что эти небезопасные пакеты могут нарушить функции устройства или OEM, и принимаю риск.",
     "noUnsafeSelected": "Небезопасные пакеты не выбраны.",
-    "searchPlaceholder": "Поиск пакетов или описаний...",
+    "searchPlaceholder": "Поиск пакетов или описаний…",
     "searchLabel": "Фильтр записей пакета по id, описанию или метке",
     "presets": {
       "title": "Пресеты",
@@ -941,14 +952,14 @@
     "back": "Назад",
     "recoveryBaseline": "Переносимый baseline восстановления",
     "recoveryExport": "Экспортировать baseline перед применением",
-    "recoveryExporting": "Экспорт baseline...",
+    "recoveryExporting": "Экспорт baseline…",
     "recoverySaved": "Baseline сохранен в {{path}} (sha256 {{sha256}}).",
     "complete": "очистка завершена",
     "startOver": "Начать заново",
-    "packCount_one": "{{count}} pack",
-    "packCount_few": "{{count}} packs",
-    "packCount_many": "{{count}} packs",
-    "packCount_other": "{{count}} packs",
+    "packCount_one": "{{count}} набор",
+    "packCount_few": "{{count}} набора",
+    "packCount_many": "{{count}} наборов",
+    "packCount_other": "{{count}} набора",
     "desktopRequiredBody": "Операции очистки выполняются внутри среды Tauri.",
     "noAuthorizedBody": "Подключите устройство и примите USB debugging prompt.",
     "loadPacksFailed": "Не удалось загрузить packs",
@@ -973,10 +984,10 @@
     "noPacksBodyPrefix": "Поместите",
     "noPacksBodyMiddle": "pack-файлы в каталог",
     "noPacksBodySuffix": "Схему см. в",
-    "packageShortCount_one": "{{count}} pkg",
-    "packageShortCount_few": "{{count}} pkgs",
-    "packageShortCount_many": "{{count}} pkgs",
-    "packageShortCount_other": "{{count}} pkgs",
+    "packageShortCount_one": "{{count}} пакет",
+    "packageShortCount_few": "{{count}} пакета",
+    "packageShortCount_many": "{{count}} пакетов",
+    "packageShortCount_other": "{{count}} пакета",
     "tiers": {
       "recommended": "Рекомендовано",
       "advanced": "Продвинутый",
@@ -1020,7 +1031,7 @@
     "journalUndo": "Все изменения записаны в журнал устройства и могут быть отменены из вкладки Apps.",
     "failedPackages": "Неудачные пакеты",
     "currentPackage": "Текущий пакет: {{package}}",
-    "preparingQueue": "Подготовка очереди...",
+    "preparingQueue": "Подготовка очереди…",
     "cancelAfterCurrent": "Отменить после текущего",
     "cancelRequested": "Отмена запрошена",
     "cancelledBeforeApply": "Отменено до применения к этому пакету.",
@@ -1134,7 +1145,7 @@
     "presetLoadFailed": "Сохранённый пресет не удалось загрузить; используются значения по умолчанию. {{message}}",
     "presetSaveFailed": "Не удалось сохранить настройки пресета. {{message}}",
     "launch": "Запустить зеркало",
-    "launching": "Запуск...",
+    "launching": "Запуск…",
     "sessionActive": "Сессия активна",
     "stopSession": "Остановить сессию",
     "scrcpyMissing": "scrcpy не установлен",
@@ -1197,7 +1208,8 @@
     },
     "noVdDestroyContent": "Сохранять содержимое виртуального дисплея",
     "displayImePolicy": "IME виртуального дисплея",
-    "displayImePolicyDefault": "По умолчанию"
+    "displayImePolicyDefault": "По умолчанию",
+    "scrcpyInstallSuffix": "или через пакетный менеджер:"
   },
   "console": {
     "title": "Консоль",
@@ -1213,7 +1225,7 @@
     "desktopRequiredBody": "Shell-команды выполняются внутри среды Tauri.",
     "noAuthorizedBody": "Подключите и авторизуйте устройство, чтобы использовать консоль.",
     "noOutput": "(нет вывода)",
-    "running": "Выполнение...",
+    "running": "Выполнение…",
     "starting": "Запуск фоновой команды…",
     "runningFor": "Выполняется {{seconds}} с…",
     "cancelling": "Отмена и остановка ADB…",
@@ -1228,7 +1240,8 @@
       "unterminatedQuote": "Закройте открытую кавычку перед запуском команды.",
       "trailingEscape": "Команда не может заканчиваться одиночной обратной косой чертой.",
       "emptyArgument": "Пустые аргументы команды не поддерживаются."
-    }
+    },
+    "plannerNoPlan": "Проверенный планировщик shell не вернул план изменения"
   },
   "logcat": {
     "title": "Logcat",
@@ -1246,13 +1259,13 @@
     "exportTitle": "Экспорт буфера Logcat",
     "exportSaved": "Logcat сохранен в {{path}}",
     "exportFailed": "Не удалось экспортировать Logcat: {{message}}",
-    "verbose": "Verbose",
-    "debug": "Debug",
-    "info": "Info",
-    "warning": "Warning",
-    "error": "Error",
-    "fatal": "Fatal",
-    "tailing": "Tailing",
+    "verbose": "Подробный",
+    "debug": "Отладка",
+    "info": "Инфо",
+    "warning": "Предупреждение",
+    "error": "Ошибка",
+    "fatal": "Критический",
+    "tailing": "Отслеживание",
     "reconnecting": "Переподключение",
     "streamFailed": "Ошибка потока Logcat",
     "lineCount_one": "{{count}} строка",
@@ -1264,7 +1277,7 @@
     "textSearchLabel": "Фильтр строк лога по тексту",
     "outputLabel": "Вывод Logcat",
     "startHint": "Нажмите Start tail, чтобы начать захват логов.",
-    "waiting": "Ожидание вывода логов...",
+    "waiting": "Ожидание вывода логов…",
     "updatedAnnouncement_one": "Logcat обновлён; видна {{count}} строка.",
     "updatedAnnouncement_few": "Logcat обновлён; видно {{count}} строки.",
     "updatedAnnouncement_many": "Logcat обновлён; видно {{count}} строк.",
@@ -1294,8 +1307,8 @@
       "duplicate": "Дублировать",
       "rename": "Переименовать",
       "delete": "Удалить",
-      "moveUp": "Вверх",
-      "moveDown": "Вниз",
+      "moveUp": "Переместить «{{name}}» вверх",
+      "moveDown": "Переместить «{{name}}» вниз",
       "transfer": "Импорт / экспорт",
       "close": "Закрыть",
       "import": "Импорт",
@@ -1327,8 +1340,14 @@
         "format": "Импорт не является корректным экспортом запросов.",
         "empty": "Импорт не содержит запросов.",
         "tooMany": "Слишком много запросов для импорта (максимум 64)."
+      },
+      "builtinNames": {
+        "builtin-crash": "Сбои и ANR",
+        "builtin-stacktrace": "Трассировки стека"
       }
-    }
+    },
+    "reconnectFallback": "Logcat отключён; переподключение",
+    "reconnectLine": "--- {{message}} (попытка {{attempt}}) ---"
   },
   "profiles": {
     "title": "Профили",
@@ -1366,7 +1385,7 @@
     "actionCount_many": "{{count}} действий",
     "actionCount_other": "{{count}} действия",
     "packageSearchLabel": "Поиск пакетов для действий профиля",
-    "packageSearchPlaceholder": "Поиск по ID пакета...",
+    "packageSearchPlaceholder": "Поиск по ID пакета…",
     "actionKindLabel": "Добавляемое действие",
     "addSelected": "Добавить выбранные ({{count}})",
     "noPackagesTitle": "Подходящие пакеты не найдены",
@@ -1390,7 +1409,7 @@
     "importTitle": "Предварительная проверка без изменений",
     "importBody": "Выберите профиль YAML, чтобы проверить схему, ограничения устройства и пользователя, текущее состояние пакетов, ожидаемый результат и точный план ADB. Предварительный просмотр не изменяет устройство.",
     "chooseProfile": "Выбрать профиль",
-    "importing": "Чтение...",
+    "importing": "Чтение…",
     "previewing": "Построение актуального плана изменений",
     "importFailed": "Не удалось импортировать профиль",
     "migrationTitle": "Требуется явная миграция: v{{from}} в v{{to}}",
@@ -1423,6 +1442,16 @@
       "restoreExistingForUser": "Восстановить системное приложение",
       "clearData": "Очистить данные приложения",
       "forceStop": "Принудительно остановить"
+    },
+    "states": {
+      "enabled": "Включено",
+      "disabled": "Отключено",
+      "archived": "Архивировано",
+      "missing": "Отсутствует",
+      "uninstalledForUser": "Удалено для пользователя",
+      "dataCleared": "Данные очищены",
+      "stopped": "Остановлено",
+      "reviewedAction": "Проверенное действие"
     }
   },
   "fastboot": {
@@ -1440,24 +1469,29 @@
     "installPrefix": "Droidsmith использует binary platform-tools",
     "installSuffix": ". Установите его из Android SDK или запустите скрипт получения platform-tools.",
     "fastbootAt": "fastboot по пути",
-    "scanning": "Сканирование...",
+    "scanning": "Сканирование…",
     "noBootloaderDevices": "Нет устройств в режиме bootloader/fastboot. Перезагрузите устройство в bootloader командой",
     "noBootloaderDevicesSuffix": "или аппаратной комбинацией клавиш.",
     "mode": "Режим",
-    "product": "Product",
-    "querying": "Запрос...",
+    "product": "Продукт",
+    "querying": "Запрос…",
     "queryHint": "Нажмите Query vars, чтобы прочитать информацию устройства.",
     "queryAllFailed": "Не удалось прочитать ни одной переменной fastboot. Устройство могло выйти из режима fastboot, или загрузчик отклонил запрос. Переподключите и повторите.",
     "queryNoValues": "Запрос выполнен, но устройство не вернуло значений для этих переменных.",
     "queryPartial": "Не удалось прочитать переменные: {{failed}} из {{total}}.",
-    "parseIssue": "Проблема разбора"
+    "parseIssue": "Проблема разбора",
+    "modes": {
+      "fastboot": "Fastboot",
+      "fastbootd": "Fastbootd (пользовательский режим)",
+      "no_permissions": "Нет прав доступа"
+    }
   },
   "hostDoctor": {
     "title": "Диагностика подключения хоста",
     "readOnly": "Только чтение",
     "description": "Проверяйте ADB, USB, драйверы и хост без внесения изменений.",
     "run": "Запустить диагностику",
-    "scanning": "Сканирование хоста...",
+    "scanning": "Сканирование хоста…",
     "idle": "Сканирование еще не запускалось. Диагностика не устанавливает драйверы, не меняет rules, не перезапускает ADB и не сохраняет serials или keys.",
     "failed": "Диагностика подключения не удалась",
     "adbVersion": "ADB {{version}}",
@@ -1472,56 +1506,145 @@
     "officialGuidance": "Открыть официальную инструкцию",
     "findings": {
       "usb_mdns_backend_toggles": {
-        "title": "Переключатели диагностики USB- и mDNS-бэкендов"
+        "title": "Переключатели диагностики USB- и mDNS-бэкендов",
+        "summary": "В platform-tools 37.0.1 изменились бэкенды USB и mDNS по умолчанию. Если проводное устройство не обнаруживается или не работает беспроводной поиск, может помочь переключение бэкендов через эти переменные окружения.",
+        "remediation": {
+          "0": "Установите указанный выше переключатель для вашей платформы, затем выполните `adb kill-server` и перезапустите Droidsmith, чтобы новый сервер применил его.",
+          "1": "Бэкенд mDNS openscreen удалён в 37.0.1; переменная ADB_MDNS_OPENSCREEN больше не действует."
+        }
       },
       "adb_missing": {
-        "title": "ADB не найден"
+        "title": "ADB не найден",
+        "summary": "Установка Platform Tools не найдена ни в PATH, ни в каталогах Android SDK, ни в стандартных путях платформы.",
+        "remediation": {
+          "0": "Установите актуальные Android SDK Platform Tools из официального источника.",
+          "1": "Перезапустите Droidsmith после изменения PATH или переменных окружения Android SDK."
+        }
       },
       "adb_unrunnable": {
-        "title": "ADB найден, но не может перечислить transports"
+        "title": "ADB найден, но не может перечислить transports",
+        "summary": "Найденный исполняемый файл не смог выполнить запрос списка устройств (только чтение).",
+        "remediation": {
+          "0": "Выполните команду версии найденного ADB в терминале и проверьте политику запуска ОС и права на файлы.",
+          "1": "Замените повреждённые или несовместимые Platform Tools актуальным официальным выпуском."
+        }
       },
       "adb_version_unknown": {
-        "title": "Версию ADB не удалось проверить"
+        "title": "Версию ADB не удалось проверить",
+        "summary": "Перечисление транспортов сработало, но исполняемый файл не сообщил распознаваемую версию Platform Tools.",
+        "remediation": {
+          "0": "Установите актуальный немодифицированный выпуск Platform Tools и повторите сканирование."
+        }
       },
       "adb_ready": {
-        "title": "Исполняемый файл ADB готов"
+        "title": "Исполняемый файл ADB готов",
+        "summary": "Droidsmith нашёл ADB, прочитал его версию и завершил перечисление транспортов.",
+        "remediation": {
+          "0": "Обновляйте Platform Tools, когда меняется поддержка Android-устройств."
+        }
       },
       "platform_tools_blocked": {
-        "title": "Эта версия Platform Tools имеет известную проблему"
+        "title": "Эта версия Platform Tools имеет известную проблему",
+        "remediation": {
+          "0": "Прежде чем продолжить, замените этот выпуск официальной версией Platform Tools, рекомендованной политикой."
+        }
       },
       "platform_tools_warning": {
-        "title": "Совместимость Platform Tools требует внимания"
+        "title": "Совместимость Platform Tools требует внимания",
+        "remediation": {
+          "0": "Установите рекомендованный официальный выпуск Platform Tools и повторите сканирование."
+        }
       },
       "unauthorized": {
-        "title": "Android ожидает авторизации USB debugging"
+        "title": "Android ожидает авторизации USB debugging",
+        "summary": "ADB видит транспорт, но устройство ещё не доверяет ключу этого хоста.",
+        "remediation": {
+          "0": "Разблокируйте устройство и проверьте запрос «Разрешить отладку по USB».",
+          "1": "Перед подтверждением сверьте отпечаток RSA; если запрос не появился, переподключите кабель."
+        }
       },
       "offline": {
-        "title": "ADB transports находятся offline"
+        "title": "ADB transports находятся offline",
+        "summary": "Сервер на хосте имеет записи о транспортах, но не может связаться с этими устройствами.",
+        "remediation": {
+          "0": "Разбудите и разблокируйте устройство, затем переподключите заведомо рабочий кабель для передачи данных или заново выберите режим «Передача файлов».",
+          "1": "Используйте отдельно проверяемое действие восстановления ADB в Droidsmith только после физических проверок."
+        }
       },
       "no_permissions": {
-        "title": "Linux не может открыть Android USB device"
+        "title": "Linux не может открыть Android USB device",
+        "summary": "ADB обнаружил USB-устройство, но у текущей учётной записи нет доступа через членство в группе или правила udev.",
+        "remediation": {
+          "0": "Следуйте официальной инструкции по настройке устройств в Linux: вступите в нужную группу и установите правила udev производителя.",
+          "1": "После изменения групп выйдите из системы и войдите снова, затем переподключите устройство."
+        }
       },
       "usb_visible_adb_missing": {
-        "title": "Android USB виден ОС, но отсутствует в ADB"
+        "title": "Android USB виден ОС, но отсутствует в ADB",
+        "summary": "ОС видит USB-устройство, похожее на Android, но ADB не сообщает о транспорте. Вероятны режим «только зарядка», неверный режим USB, кабель или драйвер хоста.",
+        "remediation": {
+          "0": "Разблокируйте устройство, включите отладку по USB и выберите «Передача файлов» или другой режим USB с поддержкой отладки.",
+          "1": "Попробуйте заведомо рабочий кабель для передачи данных и прямой USB-порт хоста."
+        }
       },
       "no_usb_transport": {
-        "title": "Android USB transport не обнаружен"
+        "title": "Android USB transport не обнаружен",
+        "summary": "Ни ADB, ни ограниченная проверка USB на хосте не обнаружили распознаваемое Android-устройство.",
+        "remediation": {
+          "0": "Убедитесь, что устройство включено, разблокировано и подключено кабелем с поддержкой передачи данных.",
+          "1": "Перед повторным сканированием выберите «Передача файлов» или другой режим USB с поддержкой отладки."
+        }
       },
       "windows_driver_missing": {
-        "title": "Windows не распознает ADB interface"
+        "title": "Windows не распознает ADB interface",
+        "summary": "USB-устройство, похожее на Android, присутствует, но в системе нет интерфейса ADB. Возможно, OEM-драйвер USB отсутствует или привязан неверно.",
+        "remediation": {
+          "0": "Установите официальный USB-драйвер производителя для Windows или драйвер Google для поддерживаемых устройств.",
+          "1": "Проверьте в диспетчере устройств Android-устройство со значком предупреждения; избегайте сторонних сборок драйверов."
+        }
       },
       "linux_access_incomplete": {
-        "title": "Доступ Linux к Android USB настроен не полностью"
+        "title": "Доступ Linux к Android USB настроен не полностью",
+        "summary": "У текущей учётной записи или конфигурации udev отсутствует типичное условие для доступа ADB без root.",
+        "remediation": {
+          "0": "Используйте пакет правил udev для Android из вашего дистрибутива или официальные правила производителя.",
+          "1": "Вступите в рекомендованную группу доступа к устройствам и войдите заново; избегайте правил 0666, доступных всем на запись."
+        }
       },
       "server_config_override": {
-        "title": "Активна пользовательская конфигурация ADB server"
+        "title": "Активна пользовательская конфигурация ADB server",
+        "summary": "Переменные окружения переопределяют стандартный сокет, порт или поиск vendor-ключей ADB и могут направить Droidsmith на конкурирующий сервер.",
+        "remediation": {
+          "0": "Проверьте указанные переменные окружения в оболочке, из которой запускается Droidsmith.",
+          "1": "Используйте локальный сервер ADB по умолчанию, если намеренная настройка удалённого сервера не требуется."
+        }
       },
       "client_server_mismatch": {
-        "title": "Версии ADB client и server различаются"
+        "title": "Версии ADB client и server различаются",
+        "summary": "Запущенным сервером может владеть другая установка ADB, что вызывает несоответствия функций и протокола.",
+        "remediation": {
+          "0": "Найдите дублирующиеся установки ADB и настройте PATH так, чтобы он указывал на один нужный выпуск Platform Tools.",
+          "1": "Проверьте запущенный сервер, прежде чем выбирать отдельное действие перезапуска."
+        }
       },
       "server_status_unavailable": {
-        "title": "Детали ADB server недоступны"
+        "title": "Детали ADB server недоступны",
+        "summary": "Эта сборка ADB не поддерживает server-status, поэтому владельца сервера и сведения о бэкенде проверить не удалось.",
+        "remediation": {
+          "0": "Обновите Platform Tools, если нужна диагностика сервера."
+        }
       }
+    },
+    "platforms": {
+      "windows": "Windows",
+      "linux": "Linux",
+      "macos": "macOS",
+      "other": "Другая ОС"
+    },
+    "privacyItems": {
+      "0": "Никакие драйверы, правила udev, службы или сервер ADB не изменялись.",
+      "1": "Отчёт не содержит серийных номеров устройств, идентификаторов USB, значений переменных окружения и ключей ADB.",
+      "2": "Отчёт остаётся локальным, пока пользователь явно не скопирует или не экспортирует его."
     }
   },
   "onboarding": {
@@ -1590,15 +1713,15 @@
     "noAuthorized": "Нет авторизованных устройств",
     "desktopRequired": "Требуется десктопная оболочка",
     "dismiss": "Закрыть",
-    "loading": "Загрузка...",
+    "loading": "Загрузка…",
     "refresh": "Обновить",
     "load": "Загрузить",
-    "roadmap": "Roadmap {{milestone}}",
+    "roadmap": "Дорожная карта {{milestone}}",
     "tauriIpcRequired": "Требуется Tauri IPC",
     "checkAgain": "Проверить снова",
     "retryScan": "Повторить сканирование",
     "scanAgain": "Сканировать снова",
-    "checking": "Проверка...",
+    "checking": "Проверка…",
     "targetDevice": "Целевое устройство",
     "notReported": "Не сообщено",
     "selected": "Выбрано",
