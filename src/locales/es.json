@@ -1453,6 +1453,19 @@
     },
     "title": "Preferencias y ajustes preestablecidos"
   },
+  "rendererError": {
+    "eyebrow": "Recuperación de la interfaz",
+    "title": "Droidsmith encontró un error de visualización inesperado",
+    "body": "No se restableció ninguna configuración ni acción del dispositivo. Recarga la interfaz o abre la carpeta de diagnóstico local y copia el resumen redactado para investigar el problema.",
+    "summaryLabel": "Resumen de error redactado",
+    "reload": "Recargar Droidsmith",
+    "openLogs": "Abrir carpeta de diagnóstico",
+    "copySummary": "Copiar resumen redactado",
+    "copied": "Resumen de error redactado copiado.",
+    "copyFailed": "No se pudo acceder al portapapeles. Selecciona y copia el resumen manualmente.",
+    "logsOpened": "Se abrió la carpeta de diagnóstico local.",
+    "openFailed": "No se pudo abrir la carpeta de diagnóstico local."
+  },
   "wireless": {
     "action": "Acción",
     "actionComplete": "{{action}} completado",

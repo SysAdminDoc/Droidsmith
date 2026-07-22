@@ -207,6 +207,14 @@ export const commands = {
     return await TAURI_INVOKE("reveal_in_folder", { path });
   },
   /**
+   * Open Droidsmith's backend-resolved crash-log directory. The command accepts
+   * no path or grant from the renderer, so an error surface cannot be repurposed
+   * to open an arbitrary host location.
+   */
+  async revealDiagnosticsDirectory(): Promise<null> {
+    return await TAURI_INVOKE("reveal_diagnostics_directory");
+  },
+  /**
    * Build a bounded, redacted support snapshot entirely on the local machine.
    * The payload deliberately excludes resolver paths and raw device targets.
    */

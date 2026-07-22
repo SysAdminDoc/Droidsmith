@@ -71,6 +71,19 @@
     "resetComplete": "{{scope}} reset to defaults.",
     "operationFailed": "Settings operation failed: {{message}}"
   },
+  "rendererError": {
+    "eyebrow": "Renderer recovery",
+    "title": "Droidsmith hit an unexpected display error",
+    "body": "No settings or device actions were reset. Reload the interface, or open the local diagnostics folder and copy the redacted summary for troubleshooting.",
+    "summaryLabel": "Redacted error summary",
+    "reload": "Reload Droidsmith",
+    "openLogs": "Open diagnostics folder",
+    "copySummary": "Copy redacted summary",
+    "copied": "Redacted error summary copied.",
+    "copyFailed": "Clipboard access failed. Select and copy the summary manually.",
+    "logsOpened": "Opened the local diagnostics folder.",
+    "openFailed": "Could not open the local diagnostics folder."
+  },
   "runtime": {
     "desktop": "Desktop runtime",
     "starting": "Starting",

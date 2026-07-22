@@ -304,6 +304,19 @@ pub fn reveal_command(path: &Path) -> (String, Vec<String>) {
     }
 }
 
+/// Resolve the OS file-manager invocation that opens a backend-selected
+/// directory. Unlike `reveal_command`, no renderer-authored path participates
+/// in this flow.
+pub fn open_directory_command(path: &Path) -> (String, Vec<String>) {
+    if cfg!(target_os = "windows") {
+        ("explorer.exe".to_string(), vec![path.display().to_string()])
+    } else if cfg!(target_os = "macos") {
+        ("open".to_string(), vec![path.display().to_string()])
+    } else {
+        ("xdg-open".to_string(), vec![path.display().to_string()])
+    }
+}
+
 pub fn validate_suggested_file_name(
     name: Option<String>,
 ) -> Result<Option<String>, PathGrantError> {
@@ -500,6 +513,27 @@ mod tests {
             assert_eq!(program, "xdg-open");
             assert_eq!(args, vec!["/home/tester".to_string()]);
         }
+    }
+
+    #[test]
+    fn directory_command_opens_only_the_resolved_directory() {
+        let path = if cfg!(target_os = "windows") {
+            PathBuf::from(r"C:\Users\tester\AppData\Roaming\Droidsmith")
+        } else {
+            PathBuf::from("/home/tester/.config/Droidsmith")
+        };
+        let (program, args) = open_directory_command(&path);
+        assert_eq!(args, vec![path.display().to_string()]);
+        assert_eq!(
+            program,
+            if cfg!(target_os = "windows") {
+                "explorer.exe"
+            } else if cfg!(target_os = "macos") {
+                "open"
+            } else {
+                "xdg-open"
+            }
+        );
     }
 
     #[test]

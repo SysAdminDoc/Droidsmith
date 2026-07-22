@@ -71,6 +71,19 @@
     "resetComplete": "{{scope}} 已重置为默认值。",
     "operationFailed": "设置操作失败：{{message}}"
   },
+  "rendererError": {
+    "eyebrow": "界面恢复",
+    "title": "Droidsmith 遇到意外显示错误",
+    "body": "设置和设备操作均未重置。请重新加载界面，或打开本地诊断文件夹并复制已脱敏的摘要以便排查。",
+    "summaryLabel": "已脱敏的错误摘要",
+    "reload": "重新加载 Droidsmith",
+    "openLogs": "打开诊断文件夹",
+    "copySummary": "复制已脱敏摘要",
+    "copied": "已复制脱敏错误摘要。",
+    "copyFailed": "无法访问剪贴板。请手动选择并复制摘要。",
+    "logsOpened": "已打开本地诊断文件夹。",
+    "openFailed": "无法打开本地诊断文件夹。"
+  },
   "runtime": {
     "desktop": "桌面运行时",
     "starting": "正在启动",

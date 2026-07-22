@@ -16,6 +16,11 @@ each milestone tag.
 
 ### Added
 
+- **IMP-78 — Renderer crash recovery.** Added a localized top-level error
+  boundary with reload, backend-owned diagnostics-folder reveal, and a bounded
+  redacted summary that remains manually selectable if clipboard access fails.
+  A failure inside the recovery UI itself degrades to dependency-free static
+  guidance instead of another blank window.
 - **R-104 — Portable settings round-trip.** Expanded versioned settings exports
   to include language, mirror presets, Logcat query libraries, wireless history,
   and auto-reconnect. Imports validate before mutation, show a redacted

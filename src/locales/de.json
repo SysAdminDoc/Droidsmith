@@ -71,6 +71,19 @@
     "resetComplete": "{{scope}} auf Standardwerte zurückgesetzt.",
     "operationFailed": "Einstellungsoperation fehlgeschlagen: {{message}}"
   },
+  "rendererError": {
+    "eyebrow": "Renderer-Wiederherstellung",
+    "title": "Droidsmith hat einen unerwarteten Anzeigefehler festgestellt",
+    "body": "Es wurden keine Einstellungen oder Geräteaktionen zurückgesetzt. Laden Sie die Oberfläche neu oder öffnen Sie den lokalen Diagnoseordner und kopieren Sie die redigierte Zusammenfassung zur Fehleranalyse.",
+    "summaryLabel": "Redigierte Fehlerzusammenfassung",
+    "reload": "Droidsmith neu laden",
+    "openLogs": "Diagnoseordner öffnen",
+    "copySummary": "Redigierte Zusammenfassung kopieren",
+    "copied": "Redigierte Fehlerzusammenfassung kopiert.",
+    "copyFailed": "Der Zugriff auf die Zwischenablage ist fehlgeschlagen. Markieren und kopieren Sie die Zusammenfassung manuell.",
+    "logsOpened": "Der lokale Diagnoseordner wurde geöffnet.",
+    "openFailed": "Der lokale Diagnoseordner konnte nicht geöffnet werden."
+  },
   "runtime": {
     "desktop": "Desktop-Laufzeitumgebung",
     "starting": "Starte",

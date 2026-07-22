@@ -1,4 +1,4 @@
-/* global window, document, getComputedStyle, HTMLElement, requestAnimationFrame */
+/* global window, document, navigator, getComputedStyle, HTMLElement, requestAnimationFrame */
 import fs from "node:fs";
 import http from "node:http";
 import net from "node:net";
@@ -37,6 +37,8 @@ try {
     await runLocaleZoomFlow(browser);
     await runResilienceFlow(browser);
     await runWatcherFallbackFlow(browser);
+    await runRendererErrorFlow(browser);
+    await runStaticRecoveryFallbackFlow(browser);
     await runDocCaptureFlow(browser);
   } finally {
     await browser.close();
@@ -1025,6 +1027,80 @@ async function runWatcherFallbackFlow(browser) {
   await page.close();
 }
 
+async function runRendererErrorFlow(browser) {
+  const page = await browser.newPage({
+    viewport: { width: 1100, height: 760 },
+  });
+  await installTauriMock(page, {
+    initialSettingsLanguage: "es",
+    rendererFailure: true,
+    mockClipboard: true,
+  });
+  await page.goto(baseUrl, { waitUntil: "networkidle" });
+
+  await page
+    .getByRole("heading", {
+      name: "Droidsmith encontró un error de visualización inesperado",
+    })
+    .waitFor();
+  const summary = page.getByLabel("Resumen de error redactado");
+  const value = await summary.inputValue();
+  if (
+    value.includes("QA123") ||
+    value.includes("Users\\QA") ||
+    !value.includes("<redacted>") ||
+    !value.includes("<path>")
+  ) {
+    throw new Error("Renderer recovery summary was not redacted");
+  }
+  await page.getByRole("button", { name: "Copiar resumen redactado" }).click();
+  await page.getByText("Resumen de error redactado copiado.").waitFor();
+  const copied = await page.evaluate(
+    () => window.__DROIDSMITH_MOCK_CLIPBOARD__,
+  );
+  if (copied !== value) {
+    throw new Error("Renderer recovery did not copy the redacted summary");
+  }
+  await page
+    .getByRole("button", { name: "Abrir carpeta de diagnóstico" })
+    .click();
+  await page.getByText("Se abrió la carpeta de diagnóstico local.").waitFor();
+  if (
+    !(await page.evaluate(
+      () => window.__DROIDSMITH_MOCK_DIAGNOSTICS_REVEALED__,
+    ))
+  ) {
+    throw new Error("Renderer recovery did not request the backend log folder");
+  }
+  await page.getByRole("button", { name: "Recargar Droidsmith" }).waitFor();
+  await page.screenshot({
+    path: path.join(screenshotDir, "renderer-error-recovery.png"),
+    fullPage: false,
+  });
+  await page.close();
+}
+
+async function runStaticRecoveryFallbackFlow(browser) {
+  const page = await browser.newPage({
+    viewport: { width: 900, height: 600 },
+  });
+  await installTauriMock(page, {
+    rendererFailure: true,
+    recoveryFailure: true,
+  });
+  await page.goto(baseUrl, { waitUntil: "networkidle" });
+  await page
+    .getByRole("heading", {
+      name: "Droidsmith could not render its recovery controls.",
+    })
+    .waitFor();
+  await page.getByText("Close and reopen Droidsmith to continue.").waitFor();
+  if ((await page.getByRole("button").count()) !== 0) {
+    throw new Error("Second recovery failure did not degrade to static text");
+  }
+  await page.close();
+}
+
 // Render the README's published routes from mocked-native state, assert none of
 // them show the browser-only "desktop shell required" placeholder, and — when
 // invoked with --capture-docs — refresh the committed screenshots. Also renders
@@ -1248,17 +1324,49 @@ async function assertNoHorizontalOverflow(page, label) {
 
 async function installTauriMock(
   page,
-  { failStartupCommands = [], failAlwaysCommands = [] } = {},
+  {
+    failStartupCommands = [],
+    failAlwaysCommands = [],
+    initialSettingsLanguage = "en",
+    rendererFailure = false,
+    recoveryFailure = false,
+    mockClipboard = false,
+  } = {},
 ) {
   await page.addInitScript(
     (options) => {
       window.__DROIDSMITH_MOCK_OPTIONS__ = options;
     },
-    { failStartupCommands, failAlwaysCommands },
+    {
+      failStartupCommands,
+      failAlwaysCommands,
+      initialSettingsLanguage,
+      rendererFailure,
+      recoveryFailure,
+      mockClipboard,
+    },
   );
   await page.addInitScript(() => {
-    const { failStartupCommands, failAlwaysCommands } =
-      window.__DROIDSMITH_MOCK_OPTIONS__;
+    const {
+      failStartupCommands,
+      failAlwaysCommands,
+      initialSettingsLanguage,
+      rendererFailure,
+      recoveryFailure,
+      mockClipboard,
+    } = window.__DROIDSMITH_MOCK_OPTIONS__;
+    window.__DROIDSMITH_SMOKE_RENDER_FAILURE__ = rendererFailure;
+    window.__DROIDSMITH_SMOKE_RECOVERY_FAILURE__ = recoveryFailure;
+    if (mockClipboard) {
+      Object.defineProperty(navigator, "clipboard", {
+        configurable: true,
+        value: {
+          async writeText(value) {
+            window.__DROIDSMITH_MOCK_CLIPBOARD__ = value;
+          },
+        },
+      });
+    }
     const callbacks = new Map();
     const channelIndexes = new Map();
     const pendingOperations = new Map();
@@ -1361,7 +1469,7 @@ async function installTauriMock(
     let scrcpyLaunches = 0;
     let fingerprintObserved = false;
     let gnirehtetStopped = false;
-    let settingsLanguage = "en";
+    let settingsLanguage = initialSettingsLanguage;
     let settingsImportBackupAvailable = false;
     const logcatQueries = { global: [] };
     let archiveApi = 35;
@@ -1497,6 +1605,10 @@ async function installTauriMock(
           return nextEventId++;
         }
         if (cmd === "plugin:event|unlisten") {
+          return null;
+        }
+        if (cmd === "reveal_diagnostics_directory") {
+          window.__DROIDSMITH_MOCK_DIAGNOSTICS_REVEALED__ = true;
           return null;
         }
         if (cmd === "select_host_path") {

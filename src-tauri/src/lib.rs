@@ -51,11 +51,12 @@ use commands::{
     plan_remote_file_mutation, plan_shell_action, preflight_package_backup, preview_diagnostics,
     preview_settings_import, pull_file, push_file, put_device_setting, recover_adb,
     remove_imported_pack, reset_settings, reset_settings_mirror_preset,
-    restore_settings_import_backup, reveal_in_folder, run_host_doctor, save_diagnostics,
-    save_layout_export, save_logcat_export, save_logcat_queries, save_profile, scrcpy_capabilities,
-    scrcpy_session_status, select_host_path, set_permission, set_settings_language,
-    set_settings_mirror_preset, set_wireless_auto_reconnect, shell_run, start_gnirehtet,
-    stop_gnirehtet, stop_scrcpy, stream_logcat, take_screenshot, watch_devices, wipe_diagnostics,
+    restore_settings_import_backup, reveal_diagnostics_directory, reveal_in_folder,
+    run_host_doctor, save_diagnostics, save_layout_export, save_logcat_export, save_logcat_queries,
+    save_profile, scrcpy_capabilities, scrcpy_session_status, select_host_path, set_permission,
+    set_settings_language, set_settings_mirror_preset, set_wireless_auto_reconnect, shell_run,
+    start_gnirehtet, stop_gnirehtet, stop_scrcpy, stream_logcat, take_screenshot, watch_devices,
+    wipe_diagnostics,
 };
 
 fn ipc_builder() -> tauri_specta::Builder<tauri::Wry> {
@@ -86,6 +87,7 @@ fn ipc_builder() -> tauri_specta::Builder<tauri::Wry> {
             grant_dropped_path,
             disconnect_device,
             reveal_in_folder,
+            reveal_diagnostics_directory,
             preview_diagnostics,
             save_diagnostics,
             wipe_diagnostics,

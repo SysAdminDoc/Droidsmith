@@ -48,6 +48,7 @@
     recover_adb: [["confirmed", "operation_id", "on_event"], []],
     select_host_path: [["purpose", "suggested_name"], []],
     reveal_in_folder: [["path"], []],
+    reveal_diagnostics_directory: [[], []],
     initialize_settings: [["legacy"], []],
     set_settings_language: [["language"], []],
     get_settings_mirror_preset: [["deviceIdentity"], []],

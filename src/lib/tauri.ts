@@ -471,6 +471,10 @@ export async function callRevealInFolder(path: string): Promise<void> {
   await commands.revealInFolder(path);
 }
 
+export async function callRevealDiagnosticsDirectory(): Promise<void> {
+  await commands.revealDiagnosticsDirectory();
+}
+
 export async function callSaveDiagnostics(
   pathGrant: string,
 ): Promise<SavedDiagnostics> {

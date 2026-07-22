@@ -32,8 +32,8 @@ use crate::backup;
 use crate::bugreport;
 use crate::fs_util::{ArtifactError, ArtifactKind, HostArtifact, StagedArtifact};
 use crate::host_path::{
-    reveal_command, validate_suggested_file_name, HostPathGrant, HostPathPurpose, PathGrantError,
-    PathGrantStore,
+    open_directory_command, reveal_command, validate_suggested_file_name, HostPathGrant,
+    HostPathPurpose, PathGrantError, PathGrantStore,
 };
 use crate::install;
 use crate::journal::{self, Journal, JournalEntry};
@@ -1660,6 +1660,28 @@ pub fn reveal_in_folder(
         .map_err(|error| CommandError {
             code: "reveal_failed",
             message: format!("could not open the file manager: {error}"),
+        })?;
+    Ok(())
+}
+
+/// Open Droidsmith's backend-resolved crash-log directory. The command accepts
+/// no path or grant from the renderer, so an error surface cannot be repurposed
+/// to open an arbitrary host location.
+#[tauri::command]
+#[specta::specta]
+pub fn reveal_diagnostics_directory() -> Result<(), CommandError> {
+    let directory = crate::diagnostics::fallback_log_dir();
+    std::fs::create_dir_all(&directory).map_err(|error| CommandError {
+        code: "diagnostics_directory_unavailable",
+        message: format!("could not prepare the diagnostics directory: {error}"),
+    })?;
+    let (program, args) = open_directory_command(&directory);
+    std::process::Command::new(&program)
+        .args(&args)
+        .spawn()
+        .map_err(|error| CommandError {
+            code: "reveal_failed",
+            message: format!("could not open the diagnostics directory: {error}"),
         })?;
     Ok(())
 }

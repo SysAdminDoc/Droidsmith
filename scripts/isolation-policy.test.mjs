@@ -105,6 +105,19 @@ test("passes a schema-valid sensitive command", () => {
   assert.equal(hook(valid), valid);
 });
 
+test("opens only the backend-resolved diagnostics directory", () => {
+  const valid = message("reveal_diagnostics_directory", {});
+  assert.equal(hook(valid), valid);
+  assert.equal(
+    hook(
+      message("reveal_diagnostics_directory", {
+        path: "C:/Users/QA/Documents",
+      }),
+    ).cmd,
+    blockedCommand,
+  );
+});
+
 test("accepts exactly every shipped settings language", () => {
   const supported = languageContract.languages.map((language) => language.code);
   assert.deepEqual(supported, ["de", "en", "es", "ru", "zh"]);

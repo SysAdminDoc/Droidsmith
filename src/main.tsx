@@ -1,6 +1,10 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
+import {
+  DevelopmentRendererFailureProbe,
+  RendererErrorBoundary,
+} from "./RendererErrorBoundary";
 import i18n from "./lib/i18n";
 import { initializeSettings } from "./lib/settings";
 import "./index.css";
@@ -16,7 +20,10 @@ async function bootstrap() {
   }
   ReactDOM.createRoot(document.getElementById("root")!).render(
     <React.StrictMode>
-      <App />
+      <RendererErrorBoundary>
+        <DevelopmentRendererFailureProbe />
+        <App />
+      </RendererErrorBoundary>
     </React.StrictMode>,
   );
 }
