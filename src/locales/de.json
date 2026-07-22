@@ -18,6 +18,7 @@
   },
   "language": {
     "label": "Sprache",
+    "saveFailed": "Die Spracheinstellung konnte nicht gespeichert werden: {{message}}",
     "english": "English",
     "russian": "Русский",
     "german": "Deutsch",

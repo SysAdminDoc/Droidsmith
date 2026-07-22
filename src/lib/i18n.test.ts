@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 import { NAV_ITEMS } from "../App";
+import languageContract from "../../language-contract.json";
 import {
   applyDocumentLanguage,
   detectInitialLanguage,
@@ -12,6 +13,8 @@ import {
   formatNumber,
   LANGUAGE_STORAGE_KEY,
   languageMetadata,
+  resources,
+  SUPPORTED_LANGUAGES,
 } from "./i18n";
 import de from "../locales/de.json";
 import en from "../locales/en.json";
@@ -24,6 +27,13 @@ type LocaleTree = Record<string, unknown>;
 const locales: Record<string, LocaleTree> = { de, es, ru, zh };
 
 describe("i18n resources", () => {
+  it("uses the release-checked language contract for every resource", () => {
+    expect(SUPPORTED_LANGUAGES).toEqual(languageContract.languages);
+    expect(Object.keys(resources).sort()).toEqual(
+      languageContract.languages.map((language) => language.code).sort(),
+    );
+  });
+
   it.each(Object.keys(locales))(
     "keeps %s keys aligned with English keys",
     (code) => {

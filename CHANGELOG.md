@@ -14,6 +14,13 @@ completion.
 Working batches live here. Sections collapse into a versioned release on
 each milestone tag.
 
+### Fixed
+
+- **IMP-76 — Locale persistence contract.** Unified the renderer, Rust settings,
+  and isolation allowlists behind a release-checked five-locale contract. Every
+  shipped locale now survives restart, while a failed save remains visible
+  without undoing the user's in-session language change.
+
 ## [0.9.6] - 2026-07-21
 
 Roadmap drain: the Debloat workspace is now split into focused workflow panels

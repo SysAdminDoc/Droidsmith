@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "languages": [
+    {
+      "code": "de",
+      "labelKey": "language.german",
+      "dir": "ltr",
+      "locale": "de-DE"
+    },
+    {
+      "code": "en",
+      "labelKey": "language.english",
+      "dir": "ltr",
+      "locale": "en-US"
+    },
+    {
+      "code": "es",
+      "labelKey": "language.spanish",
+      "dir": "ltr",
+      "locale": "es-ES"
+    },
+    {
+      "code": "ru",
+      "labelKey": "language.russian",
+      "dir": "ltr",
+      "locale": "ru-RU"
+    },
+    {
+      "code": "zh",
+      "labelKey": "language.chinese",
+      "dir": "ltr",
+      "locale": "zh-CN"
+    }
+  ]
+}

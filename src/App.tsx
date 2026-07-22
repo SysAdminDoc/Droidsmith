@@ -2,7 +2,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ChangeEvent, ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 
-import { callHeartbeat, inTauri, type Heartbeat } from "./lib/tauri";
+import {
+  callHeartbeat,
+  errorMessage,
+  inTauri,
+  type Heartbeat,
+} from "./lib/tauri";
 import { startDeviceLifecycle, stopDeviceLifecycle } from "./lib/deviceStore";
 import { cn } from "./lib/cn";
 import { normalizeLanguage, SUPPORTED_LANGUAGES } from "./lib/i18n";
@@ -537,15 +542,31 @@ function ShellActions({
 
 function LanguageSelector({ className }: { className?: string }) {
   const { t, i18n } = useTranslation();
+  const [persistenceError, setPersistenceError] = useState<string | null>(null);
+  const persistenceRevision = useRef(0);
+  const persistenceQueue = useRef<Promise<void>>(Promise.resolve());
   const currentLanguage =
     normalizeLanguage(i18n.resolvedLanguage ?? i18n.language) ?? "en";
 
   const handleChange = useCallback(
-    (event: ChangeEvent<HTMLSelectElement>) => {
+    async (event: ChangeEvent<HTMLSelectElement>) => {
       const nextLanguage = normalizeLanguage(event.target.value);
       if (!nextLanguage) return;
-      void setStoredLanguage(nextLanguage);
-      void i18n.changeLanguage(nextLanguage);
+      const revision = ++persistenceRevision.current;
+      setPersistenceError(null);
+      await i18n.changeLanguage(nextLanguage);
+
+      const save = persistenceQueue.current.then(async () => {
+        await setStoredLanguage(nextLanguage);
+      });
+      persistenceQueue.current = save.catch(() => undefined);
+      try {
+        await save;
+      } catch (error) {
+        if (revision === persistenceRevision.current) {
+          setPersistenceError(errorMessage(error));
+        }
+      }
     },
     [i18n],
   );
@@ -555,8 +576,11 @@ function LanguageSelector({ className }: { className?: string }) {
       <span className="sr-only">{t("language.label")}</span>
       <select
         value={currentLanguage}
-        onChange={handleChange}
+        onChange={(event) => void handleChange(event)}
         aria-label={t("language.label")}
+        aria-describedby={
+          persistenceError ? "language-persistence-error" : undefined
+        }
         className="h-9 w-full rounded-md border border-transparent bg-white/[0.035] px-3 text-xs text-anvil-300 outline-none transition hover:bg-white/[0.06] focus:border-circuit-300/60 focus:ring-2 focus:ring-circuit-300/20"
       >
         {SUPPORTED_LANGUAGES.map((language) => (
@@ -565,6 +589,15 @@ function LanguageSelector({ className }: { className?: string }) {
           </option>
         ))}
       </select>
+      {persistenceError && (
+        <span
+          id="language-persistence-error"
+          role="alert"
+          className="mt-1 block text-xs text-red-300"
+        >
+          {t("language.saveFailed", { message: persistenceError })}
+        </span>
+      )}
     </label>
   );
 }

@@ -14,6 +14,9 @@ const tauriConfig = JSON.parse(
     "utf8",
   ),
 );
+const languageContract = JSON.parse(
+  await readFile(new URL("../language-contract.json", import.meta.url), "utf8"),
+);
 const tauriLib = await readFile(
   new URL("../src-tauri/src/lib.rs", import.meta.url),
   "utf8",
@@ -100,6 +103,21 @@ test("passes a schema-valid sensitive command", () => {
     on_event: 99,
   });
   assert.equal(hook(valid), valid);
+});
+
+test("accepts exactly every shipped settings language", () => {
+  const supported = languageContract.languages.map((language) => language.code);
+  assert.deepEqual(supported, ["de", "en", "es", "ru", "zh"]);
+  for (const language of supported) {
+    const valid = message("set_settings_language", { language });
+    assert.equal(hook(valid), valid);
+  }
+  for (const language of ["", "fr", "EN", "../de", 7, null]) {
+    assert.equal(
+      hook(message("set_settings_language", { language })).cmd,
+      blockedCommand,
+    );
+  }
 });
 
 test("permits only explicitly confirmed structured file mutations", () => {

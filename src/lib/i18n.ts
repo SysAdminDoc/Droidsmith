@@ -1,22 +1,28 @@
 import i18n from "i18next";
 import { initReactI18next } from "react-i18next";
 
+import languageContract from "../../language-contract.json";
 import de from "../locales/de.json";
 import en from "../locales/en.json";
 import es from "../locales/es.json";
 import ru from "../locales/ru.json";
 import zh from "../locales/zh.json";
+import type { SettingsLanguage } from "./bindings";
 
 export const LANGUAGE_STORAGE_KEY = "droidsmith.language";
-export const SUPPORTED_LANGUAGES = [
-  { code: "de", labelKey: "language.german", dir: "ltr", locale: "de-DE" },
-  { code: "en", labelKey: "language.english", dir: "ltr", locale: "en-US" },
-  { code: "es", labelKey: "language.spanish", dir: "ltr", locale: "es-ES" },
-  { code: "ru", labelKey: "language.russian", dir: "ltr", locale: "ru-RU" },
-  { code: "zh", labelKey: "language.chinese", dir: "ltr", locale: "zh-CN" },
-] as const;
+export type SupportedLanguage = SettingsLanguage;
+type LanguageMetadata = {
+  code: SupportedLanguage;
+  labelKey: `language.${string}`;
+  dir: "ltr" | "rtl";
+  locale: string;
+};
 
-export type SupportedLanguage = (typeof SUPPORTED_LANGUAGES)[number]["code"];
+// language-contract.json is the runtime source used by the renderer. The
+// release gate proves that its codes also match the Rust enum, isolation
+// allowlist, locale resources, and selector metadata before a build can ship.
+export const SUPPORTED_LANGUAGES =
+  languageContract.languages as readonly LanguageMetadata[];
 type LanguageStorage = Pick<Storage, "getItem">;
 
 const resources = {

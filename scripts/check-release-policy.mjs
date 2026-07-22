@@ -14,6 +14,7 @@ const platformToolsPolicyPath = path.join(
   repoRoot,
   "platform-tools-policy.json",
 );
+const languageContractPath = path.join(repoRoot, "language-contract.json");
 
 if (path.resolve(argv[1] ?? "") === fileURLToPath(import.meta.url)) {
   main();
@@ -124,6 +125,112 @@ function validatePolicy() {
   );
   validateVersionParity();
   validatePlatformToolsPolicy();
+  validateLanguageContract();
+}
+
+function validateLanguageContract() {
+  const contract = readJson(languageContractPath);
+  assert(
+    contract.schemaVersion === 1,
+    "language-contract.json schemaVersion must be 1",
+  );
+  assert(
+    Array.isArray(contract.languages) && contract.languages.length > 0,
+    "language-contract.json languages must be a non-empty array",
+  );
+
+  const codes = [];
+  for (const language of contract.languages) {
+    assert(
+      language && typeof language === "object" && !Array.isArray(language),
+      "language contract entries must be objects",
+    );
+    assert(
+      typeof language.code === "string" && /^[a-z]{2}$/u.test(language.code),
+      "language contract codes must be two lowercase ASCII letters",
+    );
+    assert(
+      !codes.includes(language.code),
+      `duplicate language contract code: ${language.code}`,
+    );
+    assert(
+      typeof language.labelKey === "string" &&
+        /^language\.[a-z][a-zA-Z]*$/u.test(language.labelKey),
+      `language ${language.code} labelKey is invalid`,
+    );
+    assert(
+      language.dir === "ltr" || language.dir === "rtl",
+      `language ${language.code} direction must be ltr or rtl`,
+    );
+    assert(
+      typeof language.locale === "string" &&
+        /^[a-z]{2}-[A-Z]{2}$/u.test(language.locale),
+      `language ${language.code} locale must use ll-CC form`,
+    );
+    const localePath = path.join(
+      repoRoot,
+      "src",
+      "locales",
+      `${language.code}.json`,
+    );
+    assert(
+      fs.existsSync(localePath),
+      `language ${language.code} is missing ${path.relative(repoRoot, localePath)}`,
+    );
+    const locale = readJson(localePath);
+    assert(
+      readNested(locale, language.labelKey) !== undefined,
+      `language ${language.code} is missing ${language.labelKey}`,
+    );
+    codes.push(language.code);
+  }
+
+  const isolationSource = fs.readFileSync(
+    path.join(repoRoot, "isolation", "index.js"),
+    "utf8",
+  );
+  const isolationBlock = isolationSource.match(
+    /SUPPORTED_LANGUAGE_CODES = new Set\(\[([\s\S]*?)\]\);/u,
+  )?.[1];
+  assert(isolationBlock, "isolation language allowlist is missing");
+  const isolationCodes = [...isolationBlock.matchAll(/"([a-z]{2})"/gu)].map(
+    (match) => match[1],
+  );
+
+  const settingsSource = fs.readFileSync(
+    path.join(repoRoot, "src-tauri", "src", "settings.rs"),
+    "utf8",
+  );
+  const rustBlock = settingsSource.match(
+    /pub enum SettingsLanguage\s*\{([\s\S]*?)^\}/mu,
+  )?.[1];
+  assert(rustBlock, "Rust SettingsLanguage enum is missing");
+  const rustCodes = [
+    ...rustBlock.matchAll(/^\s+([A-Z][A-Za-z0-9]*),\s*$/gmu),
+  ].map((match) => match[1].toLowerCase());
+
+  assertEqualJson(isolationCodes, codes, "isolation language codes differ");
+  assertEqualJson(rustCodes, codes, "Rust settings language codes differ");
+
+  const rendererSource = fs.readFileSync(
+    path.join(repoRoot, "src", "lib", "i18n.ts"),
+    "utf8",
+  );
+  assert(
+    rendererSource.includes('from "../../language-contract.json"'),
+    "renderer must consume language-contract.json",
+  );
+}
+
+function readNested(value, dottedPath) {
+  let cursor = value;
+  for (const segment of dottedPath.split(".")) {
+    if (!cursor || typeof cursor !== "object" || !(segment in cursor)) {
+      return undefined;
+    }
+    cursor = cursor[segment];
+  }
+  return cursor;
 }
 
 function validatePlatformToolsPolicy() {

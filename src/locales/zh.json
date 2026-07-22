@@ -18,6 +18,7 @@
   },
   "language": {
     "label": "语言",
+    "saveFailed": "无法保存语言偏好：{{message}}",
     "english": "English",
     "russian": "Русский",
     "spanish": "Español",

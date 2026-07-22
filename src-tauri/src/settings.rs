@@ -1683,6 +1683,27 @@ mod tests {
     }
 
     #[test]
+    fn every_shipped_language_persists_across_reload() {
+        let dir = temp_dir("languages");
+        initialize(&dir, LegacySettingsImport::default()).unwrap();
+
+        for language in [
+            SettingsLanguage::De,
+            SettingsLanguage::En,
+            SettingsLanguage::Es,
+            SettingsLanguage::Ru,
+            SettingsLanguage::Zh,
+        ] {
+            let saved = set_language(&dir, language).unwrap();
+            assert_eq!(saved.language, Some(language));
+            let reloaded = initialize(&dir, LegacySettingsImport::default()).unwrap();
+            assert_eq!(reloaded.settings.language, Some(language));
+        }
+
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
     fn scoped_export_omits_unselected_preferences() {
         let dir = temp_dir("export");
         initialize(&dir, legacy()).unwrap();

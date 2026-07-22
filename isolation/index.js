@@ -7,6 +7,9 @@
   const MAX_IDENTIFIER_LENGTH = 512;
   const MAX_STRING_LENGTH = 64 * 1024;
   const MAX_LOGCAT_EXPORT_LENGTH = 8 * 1024 * 1024;
+  // Mirrored from language-contract.json. The release-policy gate fails if
+  // this allowlist, the renderer contract, or the Rust enum diverges.
+  const SUPPORTED_LANGUAGE_CODES = new Set(["de", "en", "es", "ru", "zh"]);
 
   const READ_ONLY_COMMANDS = new Set([
     "heartbeat",
@@ -704,7 +707,8 @@
     if (command === "initialize_settings")
       validateLegacySettings(payload.legacy);
     if (command === "set_settings_language") {
-      if (!["en", "ru"].includes(payload.language)) reject("settings_language");
+      if (!SUPPORTED_LANGUAGE_CODES.has(payload.language))
+        reject("settings_language");
     }
     if (
       [

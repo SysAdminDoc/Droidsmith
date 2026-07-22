@@ -926,6 +926,7 @@
     "english": "English",
     "german": "Deutsch",
     "label": "Idioma",
+    "saveFailed": "No se pudo guardar la preferencia de idioma: {{message}}",
     "russian": "Русский",
     "spanish": "Español"
   },

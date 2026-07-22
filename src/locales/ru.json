@@ -18,6 +18,7 @@
   },
   "language": {
     "label": "Язык",
+    "saveFailed": "Не удалось сохранить язык: {{message}}",
     "chinese": "中文",
     "english": "English",
     "german": "Deutsch",

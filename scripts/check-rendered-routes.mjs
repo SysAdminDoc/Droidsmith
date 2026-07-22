@@ -788,11 +788,30 @@ async function runDesktopFlow(browser) {
       document.documentElement.dir === "ltr",
   );
 
-  // IMP-68: exercise Settings export and reset flows. The selector's
-  // accessible name follows the active locale, so after switching to Russian
-  // above it is now labelled "Язык"; target that to switch back to English.
-  await page.getByLabel("Язык", { exact: true }).selectOption("en");
+  // IMP-76: a desktop persistence rejection is visible while the selected
+  // locale remains active for this session.
+  await page.evaluate(() =>
+    window.__DROIDSMITH_MOCK_FAIL_NEXT__("set_settings_language"),
+  );
+  await page.getByLabel("Язык", { exact: true }).selectOption("es");
+  await page.waitForFunction(() => document.documentElement.lang === "es");
+  await page
+    .getByRole("alert")
+    .getByText(/set_settings_language/)
+    .waitFor();
+  if (
+    (await page.getByLabel("Idioma", { exact: true }).inputValue()) !== "es"
+  ) {
+    throw new Error("Language persistence failure reverted the active locale");
+  }
+
+  // IMP-68: exercise Settings export and reset flows. A subsequent successful
+  // save clears the persistence error and returns the smoke flow to English.
+  await page.getByLabel("Idioma", { exact: true }).selectOption("en");
   await page.waitForFunction(() => document.documentElement.lang === "en");
+  if (await page.getByText(/set_settings_language/).isVisible()) {
+    throw new Error("Language persistence error did not clear after a retry");
+  }
   await page.getByRole("button", { name: "Export scope" }).click();
   await page.getByText(/Settings exported to/).waitFor();
   await page.getByRole("button", { name: "Reset scope" }).click();
