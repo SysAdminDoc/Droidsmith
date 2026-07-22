@@ -97,6 +97,12 @@ describe("i18n resources", () => {
   it("formats dates and numbers with the selected locale", () => {
     expect(formatNumber(1234, "en")).toBe("1,234");
     expect(formatNumber(1234, "ru")).toMatch(/^1\s234$/u);
+    expect(
+      formatNumber(1.5, "de", {
+        minimumFractionDigits: 1,
+        maximumFractionDigits: 1,
+      }),
+    ).toBe("1,5");
     expect(formatDateTime("not-a-date", "ru")).toBe("not-a-date");
     expect(formatDateTime("2026-06-29T10:05:00Z", "ru")).not.toBe(
       formatDateTime("2026-06-29T10:05:00Z", "en"),

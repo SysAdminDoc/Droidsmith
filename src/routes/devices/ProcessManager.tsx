@@ -1,6 +1,7 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { useFocusTrap } from "../../lib/useFocusTrap";
 import {
   errorMessage,
   callApplyAction,
@@ -25,6 +26,16 @@ export function ProcessManager({ target }: { target: DeviceTarget }) {
   const [confirmPackage, setConfirmPackage] = useState<string | null>(null);
   const [stopping, setStopping] = useState<string | null>(null);
   const [stopError, setStopError] = useState<string | null>(null);
+  const confirmTrapRef = useFocusTrap<HTMLDivElement>(confirmPackage !== null);
+
+  useEffect(() => {
+    if (!confirmPackage) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setConfirmPackage(null);
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [confirmPackage]);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -112,43 +123,64 @@ export function ProcessManager({ target }: { target: DeviceTarget }) {
         </div>
       </div>
       {error && (
-        <div className="border-b border-red-500/20 bg-red-500/10 px-4 py-3 text-xs text-red-200">
+        <div
+          role="alert"
+          className="border-b border-red-500/20 bg-red-500/10 px-4 py-3 text-xs text-red-200"
+        >
           {t("devices.controls.processReadFailed", { message: error })}
         </div>
       )}
       {stopError && (
-        <div className="border-b border-red-500/20 bg-red-500/10 px-4 py-3 text-xs text-red-200">
+        <div
+          role="alert"
+          className="border-b border-red-500/20 bg-red-500/10 px-4 py-3 text-xs text-red-200"
+        >
           {stopError}
         </div>
       )}
       {confirmPackage && (
-        <div
-          role="alertdialog"
-          aria-label={t("devices.controls.forceStopConfirmTitle")}
-          className="flex flex-col gap-3 border-b border-amber-300/25 bg-amber-300/[0.06] px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
-        >
-          <p className="text-xs text-anvil-100">
-            {t("devices.controls.forceStopConfirmBody", {
-              package: confirmPackage,
-            })}
-          </p>
-          <div className="flex gap-2">
-            <Button
-              type="button"
-              size="sm"
-              variant="danger"
-              onClick={() => void forceStop(confirmPackage)}
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
+          <div
+            ref={confirmTrapRef}
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="force-stop-dialog-title"
+            aria-describedby="force-stop-dialog-description"
+            tabIndex={-1}
+            className="w-full max-w-lg rounded-lg border border-amber-300/25 bg-anvil-950 p-5 shadow-2xl outline-none"
+          >
+            <h4
+              id="force-stop-dialog-title"
+              className="text-lg font-semibold text-anvil-50"
             >
-              {t("devices.controls.forceStop")}
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant="ghost"
-              onClick={() => setConfirmPackage(null)}
+              {t("devices.controls.forceStopConfirmTitle")}
+            </h4>
+            <p
+              id="force-stop-dialog-description"
+              className="mt-2 text-sm leading-6 text-anvil-300"
             >
-              {t("common.cancel")}
-            </Button>
+              {t("devices.controls.forceStopConfirmBody", {
+                package: confirmPackage,
+              })}
+            </p>
+            <div className="mt-5 flex justify-end gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={() => setConfirmPackage(null)}
+              >
+                {t("common.cancel")}
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="danger"
+                onClick={() => void forceStop(confirmPackage)}
+              >
+                {t("devices.controls.forceStop")}
+              </Button>
+            </div>
           </div>
         </div>
       )}

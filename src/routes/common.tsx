@@ -277,20 +277,31 @@ export function TransportTrustNotice({
   );
 }
 
+/** Static by default. Set `live` only when the panel is inserted or updated in
+ * response to an operation that assistive technology should announce. */
 export function StatePanel({
   title,
   children,
   actions,
   tone = "neutral",
+  live,
 }: {
   title: string;
   children: ReactNode;
   actions?: ReactNode;
   tone?: "neutral" | "info" | "success" | "warning" | "danger";
+  live?: "polite" | "assertive";
 }) {
   return (
     <Card
-      role={tone === "danger" ? "alert" : "status"}
+      role={
+        live === "assertive"
+          ? "alert"
+          : live === "polite"
+            ? "status"
+            : undefined
+      }
+      aria-atomic={live ? true : undefined}
       className={cn(
         "rounded-md border-s-2 p-4 shadow-none",
         tone === "neutral" && "border-s-white/20 bg-white/[0.025]",

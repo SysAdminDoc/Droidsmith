@@ -41,6 +41,11 @@ each milestone tag.
 
 ### Fixed
 
+- **IMP-82 — Accessible status and locale contracts.** Static state panels no
+  longer announce themselves as live updates, while operation results opt into
+  polite or assertive announcements. Process force-stop review is now a
+  focus-trapped, Escape-dismissible modal, and APK/Wireless numbers and dates
+  follow the selected locale across mobile and 200% reflow coverage.
 - **IMP-81 — Public README contract.** Removed links to local-only documentation,
   embedded the supported source-build and unsigned-distribution guidance, and
   now distinguish the `0.9.6` source tree from the older published `v0.5.3`

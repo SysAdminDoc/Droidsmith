@@ -19,6 +19,19 @@ const uiSmokePort =
 const baseUrl = `http://127.0.0.1:${uiSmokePort}`;
 const screenshotDir = path.join(repoRoot, "test-results", "rendered-routes");
 const docsScreenshotDir = path.join(repoRoot, "docs", "screenshots");
+const languageContract = JSON.parse(
+  fs.readFileSync(path.join(repoRoot, "language-contract.json"), "utf8"),
+);
+const localeContracts = languageContract.languages.map(({ code, locale }) => ({
+  code,
+  locale,
+  messages: JSON.parse(
+    fs.readFileSync(
+      path.join(repoRoot, "src", "locales", `${code}.json`),
+      "utf8",
+    ),
+  ),
+}));
 // When set, refresh the committed README screenshots from the mocked-native
 // state instead of only asserting they are free of desktop-required placeholders.
 const captureDocs = argv.includes("--capture-docs");
@@ -35,6 +48,7 @@ try {
     await runDesktopFlow(browser);
     await runMobileFlow(browser);
     await runLocaleZoomFlow(browser);
+    await runApkAccessibilityFlow(browser);
     await runResilienceFlow(browser);
     await runWatcherFallbackFlow(browser);
     await runRendererErrorFlow(browser);
@@ -126,6 +140,34 @@ async function runDesktopFlow(browser) {
   await displayPanel.screenshot({
     path: path.join(screenshotDir, "desktop-display-restore.png"),
   });
+
+  // IMP-82: destructive process control is a real modal contract, not an
+  // inline region mislabeled as an alertdialog. Focus starts on Cancel, stays
+  // trapped, Escape dismisses, and the trigger regains focus.
+  const processPanel = page
+    .getByRole("heading", { name: "Process manager", exact: true })
+    .locator("../../..");
+  await processPanel.getByRole("button", { name: "Load", exact: true }).click();
+  const appProcessRow = processPanel
+    .getByRole("row")
+    .filter({ hasText: "com.example.qa" });
+  const forceStopButton = appProcessRow.getByRole("button", {
+    name: "Force-stop",
+    exact: true,
+  });
+  await forceStopButton.click();
+  const forceStopDialog = page.getByRole("alertdialog", {
+    name: "Force-stop app?",
+  });
+  await forceStopDialog.waitFor();
+  if ((await forceStopDialog.getAttribute("aria-modal")) !== "true") {
+    throw new Error("Force-stop review must be modal");
+  }
+  await assertFocusedButton(page, "Cancel");
+  await assertTabMovesFocus(page, "Process force-stop review");
+  await page.keyboard.press("Escape");
+  await forceStopDialog.waitFor({ state: "hidden" });
+  await assertFocusedButton(page, "Force-stop");
 
   // Persist gnirehtet across navigation: the Share Internet panel re-attaches to
   // an already-running session on mount (shows Active + Stop, not Start).
@@ -983,6 +1025,92 @@ async function runLocaleZoomFlow(browser) {
   await page.close();
 }
 
+// IMP-82: exercise the offline analyzer's keyboard, semantic, selected-locale,
+// mobile, and 200%-zoom contracts in every shipped language. This also proves
+// static StatePanels stay silent while a newly-rendered failure is announced.
+async function runApkAccessibilityFlow(browser) {
+  for (const { code, locale, messages } of localeContracts) {
+    const context = await browser.newContext({
+      viewport: { width: 640, height: 900 },
+    });
+    const page = await context.newPage();
+    const errors = collectConsoleErrors(page);
+    await installTauriMock(page, { initialSettingsLanguage: code });
+    await page.goto(baseUrl, { waitUntil: "networkidle" });
+    await page.waitForFunction(
+      (language) => document.documentElement.lang === language,
+      code,
+    );
+
+    const analyzerNav = page
+      .getByRole("button", {
+        name: new RegExp(escapeRegex(messages.nav.apkAnalyzer), "u"),
+      })
+      .first();
+    await analyzerNav.focus();
+    await page.keyboard.press("Enter");
+    await page
+      .getByRole("heading", { name: messages.apk.title, exact: true })
+      .waitFor();
+    await assertMainFocused(page, messages.nav.apkAnalyzer);
+
+    const emptyHeading = page.getByRole("heading", {
+      name: messages.apk.emptyTitle,
+      exact: true,
+    });
+    await emptyHeading.waitFor();
+    if (
+      (await page
+        .locator('[role="status"], [role="alert"]')
+        .filter({ has: emptyHeading })
+        .count()) !== 0
+    ) {
+      throw new Error(`${code} APK empty state must not be a live region`);
+    }
+
+    await page.keyboard.press("Tab");
+    await assertFocusedButton(page, messages.apk.choose);
+    await page.evaluate(() =>
+      window.__DROIDSMITH_MOCK_FAIL_NEXT__("analyze_apk"),
+    );
+    await page.keyboard.press("Enter");
+    const failureHeading = page.getByRole("heading", {
+      name: messages.apk.failed,
+      exact: true,
+    });
+    await page.getByRole("alert").filter({ has: failureHeading }).waitFor();
+
+    await page
+      .getByRole("button", { name: messages.apk.choose, exact: true })
+      .click();
+    await page.getByText("com.example.qa", { exact: true }).waitFor();
+    await page.getByRole("table").waitFor();
+    await page
+      .getByText(new Intl.NumberFormat(locale).format(8123), { exact: true })
+      .waitFor();
+    await assertNoDocumentOverflow(page, `${code} APK Analyzer at 200% zoom`);
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    await assertNoDocumentOverflow(page, `${code} APK Analyzer mobile`);
+    await assertNoHorizontalOverflow(page, `${code} APK Analyzer mobile`);
+
+    const wirelessNav = page
+      .getByRole("button", {
+        name: new RegExp(escapeRegex(messages.nav.wireless), "u"),
+      })
+      .first();
+    await wirelessNav.click();
+    const expectedTimestamp = new Intl.DateTimeFormat(locale, {
+      dateStyle: "short",
+      timeStyle: "short",
+    }).format(new Date(1_752_000_000_000));
+    await page.getByText(expectedTimestamp, { exact: true }).waitFor();
+
+    assertNoConsoleErrors(errors, `${code} APK accessibility route`);
+    await context.close();
+  }
+}
+
 // IMP-51: exercise the loading, error, and empty rendered states plus a
 // stale-completion race and a detached-workspace guard that the golden-path
 // desktop flow never reaches.
@@ -1219,6 +1347,10 @@ function assertNoConsoleErrors(errors, label) {
   if (errors.length > 0) {
     throw new Error(`${label} console errors:\n${errors.join("\n")}`);
   }
+}
+
+function escapeRegex(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
 }
 
 async function assertFocusedLabel(page, label) {
@@ -2613,6 +2745,28 @@ async function installTauriMock(
           original.undone_by = undo.id;
           runtimeJournal.push(undo);
           return undo;
+        }
+        if (cmd === "list_processes") {
+          return [
+            {
+              pid: 4242,
+              user: "u0_a123",
+              vsz_kb: 2_048_000,
+              rss_kb: 128_512,
+              cpu_percent: 3.5,
+              name: "com.example.qa",
+              parse_error: null,
+            },
+            {
+              pid: 1,
+              user: "root",
+              vsz_kb: 64_000,
+              rss_kb: 8_192,
+              cpu_percent: null,
+              name: "init",
+              parse_error: null,
+            },
+          ];
         }
         if (cmd === "plan_action") {
           return planFor(args.request);

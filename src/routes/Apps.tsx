@@ -1603,6 +1603,7 @@ function ActionOverlay({
       <StatePanel
         title={t("apps.actionCompleted")}
         tone="success"
+        live="polite"
         actions={
           <Button type="button" size="sm" onClick={onDismiss}>
             {t("common.dismiss")}
@@ -1627,6 +1628,7 @@ function ActionOverlay({
     <StatePanel
       title={t("apps.actionFailed")}
       tone="danger"
+      live="assertive"
       actions={
         <Button type="button" size="sm" variant="danger" onClick={onDismiss}>
           {t("common.dismiss")}

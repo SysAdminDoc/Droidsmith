@@ -1,6 +1,7 @@
 import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { formatNumber } from "../lib/i18n";
 import {
   callAnalyzeApk,
   callSelectHostPath,
@@ -71,7 +72,7 @@ export default function ApkAnalyzerRoute() {
         )}
 
         {state.kind === "error" && (
-          <StatePanel title={t("apk.failed")} tone="danger">
+          <StatePanel title={t("apk.failed")} tone="danger" live="assertive">
             <p className="break-all">{state.message}</p>
           </StatePanel>
         )}
@@ -83,8 +84,9 @@ export default function ApkAnalyzerRoute() {
 }
 
 function AnalysisReport({ analysis }: { analysis: ApkAnalysis }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { components, dex, signing } = analysis;
+  const language = i18n.resolvedLanguage ?? i18n.language;
   const schemes = [
     signing.v1 && "v1",
     signing.v2 && "v2",
@@ -101,7 +103,7 @@ function AnalysisReport({ analysis }: { analysis: ApkAnalysis }) {
               {analysis.package ?? analysis.file_name}
             </h3>
             <p className="mt-0.5 break-all font-mono text-xs text-anvil-400">
-              {analysis.file_name} · {formatBytes(analysis.file_size)}
+              {analysis.file_name} · {formatBytes(analysis.file_size, language)}
             </p>
           </div>
           <div className="flex flex-wrap gap-1.5">
@@ -121,20 +123,23 @@ function AnalysisReport({ analysis }: { analysis: ApkAnalysis }) {
           <Fact label={t("apk.versionName")} value={analysis.version_name} />
           <Fact
             label={t("apk.versionCode")}
-            value={analysis.version_code?.toString()}
+            value={formatOptionalNumber(analysis.version_code, language)}
           />
-          <Fact label={t("apk.minSdk")} value={analysis.min_sdk?.toString()} />
+          <Fact
+            label={t("apk.minSdk")}
+            value={formatOptionalNumber(analysis.min_sdk, language)}
+          />
           <Fact
             label={t("apk.targetSdk")}
-            value={analysis.target_sdk?.toString()}
+            value={formatOptionalNumber(analysis.target_sdk, language)}
           />
           <Fact
             label={t("apk.compileSdk")}
-            value={analysis.compile_sdk?.toString()}
+            value={formatOptionalNumber(analysis.compile_sdk, language)}
           />
           <Fact
             label={t("apk.entries")}
-            value={analysis.total_entries.toString()}
+            value={formatNumber(analysis.total_entries, language)}
           />
         </dl>
         <p className="mt-3 break-all font-mono text-[11px] text-anvil-500">
@@ -150,19 +155,19 @@ function AnalysisReport({ analysis }: { analysis: ApkAnalysis }) {
           <dl className="mt-3 grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
             <Fact
               label={t("apk.activities")}
-              value={components.activities.toString()}
+              value={formatNumber(components.activities, language)}
             />
             <Fact
               label={t("apk.services")}
-              value={components.services.toString()}
+              value={formatNumber(components.services, language)}
             />
             <Fact
               label={t("apk.receivers")}
-              value={components.receivers.toString()}
+              value={formatNumber(components.receivers, language)}
             />
             <Fact
               label={t("apk.providers")}
-              value={components.providers.toString()}
+              value={formatNumber(components.providers, language)}
             />
           </dl>
         </Card>
@@ -172,14 +177,17 @@ function AnalysisReport({ analysis }: { analysis: ApkAnalysis }) {
             {t("apk.dex")}
           </h4>
           <dl className="mt-3 grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
-            <Fact label={t("apk.dexFiles")} value={dex.files.toString()} />
+            <Fact
+              label={t("apk.dexFiles")}
+              value={formatNumber(dex.files, language)}
+            />
             <Fact
               label={t("apk.classes")}
-              value={dex.defined_classes.toLocaleString()}
+              value={formatNumber(dex.defined_classes, language)}
             />
             <Fact
               label={t("apk.methodRefs")}
-              value={dex.method_refs.toLocaleString()}
+              value={formatNumber(dex.method_refs, language)}
             />
           </dl>
         </Card>
@@ -230,10 +238,10 @@ function AnalysisReport({ analysis }: { analysis: ApkAnalysis }) {
                     {entry.name}
                   </TableCell>
                   <TableCell className="text-end tabular-nums">
-                    {formatBytes(entry.uncompressed)}
+                    {formatBytes(entry.uncompressed, language)}
                   </TableCell>
                   <TableCell className="text-end tabular-nums">
-                    {formatBytes(entry.compressed)}
+                    {formatBytes(entry.compressed, language)}
                   </TableCell>
                 </tr>
               ))}
@@ -257,8 +265,23 @@ function Fact({ label, value }: { label: string; value?: string | null }) {
   );
 }
 
-function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+function formatOptionalNumber(
+  value: number | null | undefined,
+  language: string,
+): string | undefined {
+  return value == null ? undefined : formatNumber(value, language);
+}
+
+function formatBytes(bytes: number, language: string): string {
+  if (bytes < 1024) return `${formatNumber(bytes, language)} B`;
+  if (bytes < 1024 * 1024) {
+    return `${formatNumber(bytes / 1024, language, {
+      minimumFractionDigits: 1,
+      maximumFractionDigits: 1,
+    })} KB`;
+  }
+  return `${formatNumber(bytes / (1024 * 1024), language, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })} MB`;
 }

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import qrcode from "qrcode-generator";
 import { useTranslation } from "react-i18next";
 
+import { formatDateTime } from "../lib/i18n";
 import {
   errorMessage,
   callConnectWireless,
@@ -521,7 +522,7 @@ function HistoryPanel({
   onForget: (endpoint: WirelessEndpoint) => void;
   onToggleAuto: (enabled: boolean) => void;
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
 
   return (
     <Card className="overflow-hidden p-0">
@@ -583,7 +584,10 @@ function HistoryPanel({
                   </TableCell>
                   <TableCell>
                     <span className="text-xs text-anvil-300">
-                      {formatTimestamp(endpoint.lastConnectedMs)}
+                      {formatTimestamp(
+                        endpoint.lastConnectedMs,
+                        i18n.resolvedLanguage ?? i18n.language,
+                      )}
                     </span>
                   </TableCell>
                   <TableCell>
@@ -650,6 +654,7 @@ function ServicesPanel({
       <StatePanel
         title={t("wireless.serviceScanFailed")}
         tone="danger"
+        live="assertive"
         actions={
           <Button type="button" onClick={onRefresh} variant="danger" size="sm">
             {t("common.retryScan")}
@@ -674,6 +679,7 @@ function ServicesPanel({
       <StatePanel
         title={t("wireless.noServicesTitle")}
         tone="info"
+        live="polite"
         actions={
           <Button
             type="button"
@@ -789,6 +795,7 @@ function ActionStatus({ state }: { state: ActionState }) {
       <StatePanel
         title={t("wireless.actionInProgress", { action: state.label })}
         tone="info"
+        live="polite"
       >
         <p>{t("wireless.waitingForPlatformTools")}</p>
       </StatePanel>
@@ -811,6 +818,7 @@ function ActionStatus({ state }: { state: ActionState }) {
       <StatePanel
         title={t("wireless.actionFailed", { action: state.label })}
         tone="danger"
+        live="assertive"
       >
         <div className="grid gap-4">
           <p>{state.failure.message}</p>
@@ -845,6 +853,7 @@ function ActionStatus({ state }: { state: ActionState }) {
     <StatePanel
       title={t("wireless.actionComplete", { action: state.label })}
       tone="success"
+      live="polite"
     >
       <dl className="grid gap-2 text-sm sm:grid-cols-[auto_minmax(0,1fr)]">
         <dt className="text-anvil-500">{t("wireless.endpoint")}</dt>
@@ -985,12 +994,12 @@ function QrMetric({
   );
 }
 
-function formatTimestamp(ms: number): string {
+function formatTimestamp(ms: number, language: string): string {
   if (!Number.isFinite(ms) || ms <= 0) {
     return "—";
   }
   try {
-    return new Date(ms).toLocaleString();
+    return formatDateTime(new Date(ms).toISOString(), language);
   } catch {
     return "—";
   }

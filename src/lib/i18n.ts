@@ -96,8 +96,12 @@ export function languageMetadata(value: string | null | undefined) {
 export function formatNumber(
   value: number,
   language: string | null | undefined,
+  options?: Intl.NumberFormatOptions,
 ): string {
-  return new Intl.NumberFormat(languageMetadata(language).locale).format(value);
+  return new Intl.NumberFormat(
+    languageMetadata(language).locale,
+    options,
+  ).format(value);
 }
 
 export function formatDateTime(
