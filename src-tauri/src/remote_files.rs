@@ -52,24 +52,26 @@ pub enum RemoteFileError {
 }
 
 pub fn validate_path(value: &str) -> Result<String, RemoteFileError> {
-    let trimmed = value.trim();
-    if trimmed.is_empty() {
+    if value.is_empty() {
         return Err(RemoteFileError::EmptyPath);
     }
-    if !trimmed.starts_with('/') || trimmed.starts_with('-') {
-        return Err(RemoteFileError::RelativePath(trimmed.to_string()));
+    if !value.starts_with('/') || value.starts_with('-') {
+        return Err(RemoteFileError::RelativePath(value.to_string()));
     }
-    if trimmed.len() > MAX_REMOTE_PATH_BYTES {
+    if value.len() > MAX_REMOTE_PATH_BYTES {
         return Err(RemoteFileError::PathTooLong);
     }
-    if trimmed.chars().any(char::is_control)
-        || trimmed.split('/').any(|part| matches!(part, "." | ".."))
-        || (trimmed.len() > 1 && trimmed.ends_with('/'))
-        || trimmed.contains("//")
+    if value.chars().any(char::is_control)
+        || value.split('/').any(|part| matches!(part, "." | ".."))
+        || (value.len() > 1 && value.ends_with('/'))
+        || value.contains("//")
     {
         return Err(RemoteFileError::UnsafePath);
     }
-    Ok(trimmed.to_string())
+    // Spaces are legal Android/Linux filename bytes, including at either end
+    // of a path component. Never trim them: doing so can redirect a rename or
+    // delete to a different sibling path than the one the user selected.
+    Ok(value.to_string())
 }
 
 fn validate_mutation_path(value: &str) -> Result<String, RemoteFileError> {
@@ -306,6 +308,22 @@ mod tests {
                 "/sdcard/My files/новое имя.txt"
             ]
         );
+    }
+
+    #[test]
+    fn validation_preserves_significant_path_whitespace() {
+        assert_eq!(
+            validate_path("/sdcard/Download/report ").unwrap(),
+            "/sdcard/Download/report "
+        );
+        assert_eq!(
+            validate_path("/sdcard/Download/ report").unwrap(),
+            "/sdcard/Download/ report"
+        );
+        assert!(matches!(
+            validate_path(" /sdcard/Download/report"),
+            Err(RemoteFileError::RelativePath(_))
+        ));
     }
 
     #[test]

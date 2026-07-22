@@ -14,6 +14,19 @@ completion.
 Working batches live here. Sections collapse into a versioned release on
 each milestone tag.
 
+### Security
+
+- Diagnostic-looking Console commands that can clear Logcat buffers, write
+  device-side logs, resize buffers, or invoke mutating `dumpsys` service verbs
+  now require the same reviewed and journaled execution path as other device
+  mutations.
+
+### Fixed
+
+- File Manager mutations now preserve legal leading and trailing spaces in
+  Android path components instead of silently redirecting the operation to a
+  different sibling path.
+
 ## [0.9.7] - 2026-07-21
 
 Roadmap drain: trusted APK signature verification, bounded local Perfetto

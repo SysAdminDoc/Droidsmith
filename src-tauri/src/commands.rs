@@ -2538,6 +2538,34 @@ fn argv_has_shell_control_metacharacter(argv: &[String]) -> bool {
     })
 }
 
+fn logcat_is_read_only(argv: &[String]) -> bool {
+    // `logcat` is usually diagnostic, but several options mutate the device or
+    // write a persistent device-side file. Keep those behind the reviewed
+    // action path instead of letting a diagnostic-looking command bypass it.
+    !argv.iter().skip(1).any(|argument| {
+        matches!(
+            argument.as_str(),
+            "-c" | "--clear"
+                | "-G"
+                | "--buffer-size"
+                | "-f"
+                | "--file"
+                | "-r"
+                | "--rotate-kbytes"
+                | "-n"
+                | "--rotate-count"
+        )
+    })
+}
+
+fn dumpsys_is_read_only(argv: &[String]) -> bool {
+    // Service-specific arguments are an open-ended command surface. Some
+    // services expose mutations such as `battery set` and `deviceidle
+    // force-idle`, so only the top-level listing and a single service/query
+    // selector can skip review.
+    argv.len() <= 2
+}
+
 fn classify_shell(argv: &[String]) -> ShellClassification {
     // A token carrying a shell control metacharacter can smuggle a mutation past
     // the head-token classifier, so refuse to treat it as anything but dangerous
@@ -2549,8 +2577,11 @@ fn classify_shell(argv: &[String]) -> ShellClassification {
     let head = argv.first().map(String::as_str).unwrap_or_default();
     let subcommand = argv.get(1).map(String::as_str).unwrap_or_default();
     match head {
-        "logcat" | "getprop" | "dumpsys" | "ps" | "ss" | "netstat" | "ls" | "df" | "stat"
-        | "cat" | "id" | "uname" => ShellClassification::ReadOnly,
+        "logcat" if logcat_is_read_only(argv) => ShellClassification::ReadOnly,
+        "dumpsys" if dumpsys_is_read_only(argv) => ShellClassification::ReadOnly,
+        "getprop" | "ps" | "ss" | "netstat" | "ls" | "df" | "stat" | "cat" | "id" | "uname" => {
+            ShellClassification::ReadOnly
+        }
         "wm" if argv.len() <= 2 && matches!(subcommand, "size" | "density") => {
             ShellClassification::ReadOnly
         }
@@ -4821,6 +4852,27 @@ mod tests {
         // Plain read-only commands with dotted/underscored operands still pass.
         assert_eq!(
             classify_shell(&args(&["settings", "get", "global", "adb_enabled"])),
+            ShellClassification::ReadOnly
+        );
+        assert_eq!(
+            classify_shell(&args(&["logcat", "-d", "ActivityManager:I", "*:S"])),
+            ShellClassification::ReadOnly
+        );
+        for values in [
+            &["logcat", "-c"][..],
+            &["logcat", "--file", "/sdcard/log.txt"][..],
+            &["logcat", "-G", "16M"][..],
+            &["dumpsys", "battery", "set", "level", "1"][..],
+            &["dumpsys", "deviceidle", "force-idle"][..],
+        ] {
+            assert_ne!(
+                classify_shell(&args(values)),
+                ShellClassification::ReadOnly,
+                "{values:?} must go through reviewed execution"
+            );
+        }
+        assert_eq!(
+            classify_shell(&args(&["dumpsys", "battery"])),
             ShellClassification::ReadOnly
         );
     }
