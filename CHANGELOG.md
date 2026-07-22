@@ -54,6 +54,16 @@ each milestone tag.
   mutation results from a superseded device target. Command Palette empty
   results retain correct combobox state, and Tuning/APK Analyzer now have
   visible navigation icons.
+- Mirror capability and launch responses can no longer overwrite a newer
+  device selection; a late scrcpy session is stopped rather than left detached.
+  Paused and stopped Logcat views now continue expiring age-filtered rows.
+
+### Performance
+
+- Non-English locale resources now load on demand with an embedded-English
+  startup fallback and actionable load failures. This reduced the measured
+  initial renderer JavaScript from about 693 KB to 358 KB, and the release gate
+  now enforces a 450,000-byte ceiling.
 
 ## [0.9.7] - 2026-07-21
 

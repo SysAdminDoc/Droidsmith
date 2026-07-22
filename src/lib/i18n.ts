@@ -2,11 +2,7 @@ import i18n from "i18next";
 import { initReactI18next } from "react-i18next";
 
 import languageContract from "../../language-contract.json";
-import de from "../locales/de.json";
 import en from "../locales/en.json";
-import es from "../locales/es.json";
-import ru from "../locales/ru.json";
-import zh from "../locales/zh.json";
 import type { SettingsLanguage } from "./bindings";
 
 export const LANGUAGE_STORAGE_KEY = "droidsmith.language";
@@ -26,18 +22,27 @@ export const SUPPORTED_LANGUAGES =
 type LanguageStorage = Pick<Storage, "getItem">;
 
 const resources = {
-  de: { translation: de },
   en: { translation: en },
-  es: { translation: es },
-  ru: { translation: ru },
-  zh: { translation: zh },
 };
 
-const initialLanguage = detectInitialLanguage();
+type LocaleResource = typeof en;
 
-i18n.use(initReactI18next).init({
+export const LANGUAGE_LOADERS: Record<
+  SupportedLanguage,
+  () => Promise<LocaleResource>
+> = {
+  de: () => import("../locales/de.json").then((module) => module.default),
+  en: () => Promise.resolve(en),
+  es: () => import("../locales/es.json").then((module) => module.default),
+  ru: () => import("../locales/ru.json").then((module) => module.default),
+  zh: () => import("../locales/zh.json").then((module) => module.default),
+};
+
+export const INITIAL_LANGUAGE = detectInitialLanguage();
+
+export const i18nReady = i18n.use(initReactI18next).init({
   resources,
-  lng: initialLanguage,
+  lng: INITIAL_LANGUAGE,
   fallbackLng: "en",
   supportedLngs: SUPPORTED_LANGUAGES.map((language) => language.code),
   interpolation: {
@@ -51,8 +56,28 @@ i18n.use(initReactI18next).init({
   },
 });
 
-applyDocumentLanguage(initialLanguage);
+applyDocumentLanguage(INITIAL_LANGUAGE);
 i18n.on("languageChanged", applyDocumentLanguage);
+
+export async function loadDroidsmithLanguage(
+  value: string | null | undefined,
+): Promise<SupportedLanguage> {
+  const language = normalizeLanguage(value) ?? "en";
+  await i18nReady;
+  if (!i18n.hasResourceBundle(language, "translation")) {
+    const translation = await LANGUAGE_LOADERS[language]();
+    i18n.addResourceBundle(language, "translation", translation, true, true);
+  }
+  return language;
+}
+
+export async function changeDroidsmithLanguage(
+  value: string | null | undefined,
+): Promise<SupportedLanguage> {
+  const language = await loadDroidsmithLanguage(value);
+  await i18n.changeLanguage(language);
+  return language;
+}
 
 export function normalizeLanguage(
   value: string | null | undefined,

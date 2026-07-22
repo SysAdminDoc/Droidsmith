@@ -24,6 +24,7 @@
   "language": {
     "label": "Language",
     "saveFailed": "Could not save the language preference: {{message}}",
+    "loadFailed": "Could not load the selected language: {{message}}",
     "chinese": "中文",
     "english": "English",
     "german": "Deutsch",
@@ -1153,6 +1154,7 @@
     "negotiatedCapabilities_other": "scrcpy {{version}} · {{count}} negotiated video codecs",
     "launchFailed": "Mirror launch failed",
     "recordingSavedTo": "Recording saved to {{path}}",
+    "staleSessionCleanupFailed": "The device changed after scrcpy launched. Close the detached scrcpy window manually: {{message}}",
     "sessionRunning": "Mirror session running",
     "sessionRunningBody": "scrcpy is running as PID {{pid}}. Close the scrcpy window or stop it here to end the session.",
     "sessionEndedTitle": "Mirror session ended",

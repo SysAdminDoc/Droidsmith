@@ -6,13 +6,15 @@ import { describe, expect, it } from "vitest";
 
 import { NAV_ITEMS } from "../App";
 import languageContract from "../../language-contract.json";
-import {
+import i18n, {
   applyDocumentLanguage,
+  changeDroidsmithLanguage,
   detectInitialLanguage,
   formatDateTime,
   formatNumber,
   LANGUAGE_STORAGE_KEY,
   languageMetadata,
+  LANGUAGE_LOADERS,
   resources,
   SUPPORTED_LANGUAGES,
 } from "./i18n";
@@ -29,9 +31,17 @@ const locales: Record<string, LocaleTree> = { de, es, ru, zh };
 describe("i18n resources", () => {
   it("uses the release-checked language contract for every resource", () => {
     expect(SUPPORTED_LANGUAGES).toEqual(languageContract.languages);
-    expect(Object.keys(resources).sort()).toEqual(
+    expect(Object.keys(LANGUAGE_LOADERS).sort()).toEqual(
       languageContract.languages.map((language) => language.code).sort(),
     );
+    expect(Object.keys(resources)).toEqual(["en"]);
+  });
+
+  it("loads non-English resources on demand and retains English fallback", async () => {
+    await expect(changeDroidsmithLanguage("de")).resolves.toBe("de");
+    expect(i18n.hasResourceBundle("de", "translation")).toBe(true);
+    expect(i18n.t("language.label")).toBe("Sprache");
+    await changeDroidsmithLanguage("en");
   });
 
   it.each(Object.keys(locales))(

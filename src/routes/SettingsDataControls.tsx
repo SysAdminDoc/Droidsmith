@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import { normalizeLanguage } from "../lib/i18n";
+import { changeDroidsmithLanguage, normalizeLanguage } from "../lib/i18n";
 import {
   applyStoredSettingsImport,
   exportStoredSettings,
@@ -27,7 +27,7 @@ export default function SettingsDataControls({
 }: {
   embedded?: boolean;
 }) {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const [scope, setScope] = useState<SettingsScope>("all");
   const [busy, setBusy] = useState<
     "export" | "preview" | "apply" | "restore" | "reset" | null
@@ -52,7 +52,7 @@ export default function SettingsDataControls({
   }, []);
 
   const applySnapshotLanguage = async (snapshot: SettingsSnapshot) => {
-    await i18n.changeLanguage(
+    await changeDroidsmithLanguage(
       snapshot.language ?? normalizeLanguage(navigator.language) ?? "en",
     );
   };

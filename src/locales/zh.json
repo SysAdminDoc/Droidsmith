@@ -24,6 +24,7 @@
   "language": {
     "label": "语言",
     "saveFailed": "无法保存语言偏好：{{message}}",
+    "loadFailed": "无法加载所选语言：{{message}}",
     "english": "English",
     "russian": "Русский",
     "spanish": "Español",
@@ -1153,6 +1154,7 @@
     "negotiatedCapabilities_other": "scrcpy {{version}} · {{count}} 个协商的视频编解码器",
     "launchFailed": "镜像启动失败",
     "recordingSavedTo": "录制已保存至 {{path}}",
+    "staleSessionCleanupFailed": "scrcpy 启动后设备已更改。请手动关闭已分离的 scrcpy 窗口：{{message}}",
     "sessionRunning": "镜像会话运行中",
     "sessionRunningBody": "scrcpy 正以 PID {{pid}} 运行。关闭 scrcpy 窗口或在此停止以结束会话。",
     "sessionEndedTitle": "镜像会话已结束",

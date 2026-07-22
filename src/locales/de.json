@@ -24,6 +24,7 @@
   "language": {
     "label": "Sprache",
     "saveFailed": "Die Spracheinstellung konnte nicht gespeichert werden: {{message}}",
+    "loadFailed": "Die ausgewählte Sprache konnte nicht geladen werden: {{message}}",
     "english": "English",
     "russian": "Русский",
     "german": "Deutsch",
@@ -1153,6 +1154,7 @@
     "negotiatedCapabilities_other": "scrcpy {{version}} · {{count}} ausgehandelte Video-Codecs",
     "launchFailed": "Spiegelungsstart fehlgeschlagen",
     "recordingSavedTo": "Aufnahme gespeichert unter {{path}}",
+    "staleSessionCleanupFailed": "Das Gerät wechselte nach dem Start von scrcpy. Schließen Sie das getrennte scrcpy-Fenster manuell: {{message}}",
     "sessionRunning": "Spiegelungssitzung läuft",
     "sessionRunningBody": "scrcpy läuft als PID {{pid}}. Schließen Sie das scrcpy-Fenster oder beenden Sie es hier, um die Sitzung zu beenden.",
     "sessionEndedTitle": "Spiegelungssitzung beendet",

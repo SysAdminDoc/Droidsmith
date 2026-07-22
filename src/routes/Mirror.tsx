@@ -17,6 +17,7 @@ import {
 } from "../lib/tauri";
 import {
   resolveAuthorizedTarget,
+  sameDeviceTarget,
   useAuthorizedDevices,
   useTransportAuthorization,
 } from "../lib/useAuthorizedDevices";
@@ -91,6 +92,7 @@ export default function MirrorRoute() {
   const [capabilityState, setCapabilityState] = useState<CapabilityState>({
     kind: "idle",
   });
+  const [capabilityProbeRevision, setCapabilityProbeRevision] = useState(0);
   const [preset, setPreset] = useState<MirrorPreset>(DEFAULT_MIRROR_PRESET);
   const [presetMessage, setPresetMessage] = useState<string | null>(null);
   // Tracks the live selection so a launch that awaited the recording save
@@ -156,26 +158,29 @@ export default function MirrorRoute() {
     };
   }, [selectedTarget, t]);
 
-  const probeCapabilities = useCallback(async (target: DeviceTarget) => {
-    setCapabilityState({ kind: "checking" });
-    try {
-      const value = await callScrcpyCapabilities(target);
-      setCapabilityState({ kind: "ready", value });
-    } catch (error) {
-      setCapabilityState({
-        kind: "error",
-        message: errorMessage(error),
-      });
-    }
-  }, []);
-
   useEffect(() => {
     if (scrcpyState.kind !== "found" || !selectedTarget) {
       setCapabilityState({ kind: "idle" });
       return;
     }
-    void probeCapabilities(selectedTarget);
-  }, [probeCapabilities, scrcpyState.kind, selectedTarget]);
+    let cancelled = false;
+    setCapabilityState({ kind: "checking" });
+    void callScrcpyCapabilities(selectedTarget)
+      .then((value) => {
+        if (!cancelled) setCapabilityState({ kind: "ready", value });
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          setCapabilityState({
+            kind: "error",
+            message: errorMessage(error),
+          });
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [capabilityProbeRevision, scrcpyState.kind, selectedTarget]);
 
   useEffect(() => {
     if (capabilityState.kind !== "ready") return;
@@ -287,7 +292,7 @@ export default function MirrorRoute() {
       }
       // If the selection changed while the save dialog was open, abandon this
       // launch so we don't start (and record) a session against a stale device.
-      if (selectedTargetRef.current?.serial !== selectedTarget.serial) {
+      if (!sameDeviceTarget(selectedTargetRef.current, selectedTarget)) {
         setSession((current) =>
           current.kind === "launching" ? { kind: "idle" } : current,
         );
@@ -333,6 +338,23 @@ export default function MirrorRoute() {
         },
         recordingGrant?.id,
       );
+      if (!sameDeviceTarget(selectedTargetRef.current, selectedTarget)) {
+        // The backend validated and launched the original immutable target,
+        // but that session no longer belongs to the visible selection. Stop it
+        // immediately so a late response cannot leave an untracked window or
+        // recording running for the previous device.
+        try {
+          await callStopScrcpy(next.id);
+        } catch (error) {
+          setSession({
+            kind: "error",
+            message: t("mirror.staleSessionCleanupFailed", {
+              message: errorMessage(error),
+            }),
+          });
+        }
+        return;
+      }
       setSession({ kind: "running", session: next });
     } catch (e) {
       setSession({
@@ -346,6 +368,7 @@ export default function MirrorRoute() {
     selectedTarget,
     scrcpyState,
     preset,
+    t,
   ]);
 
   const stopMirror = useCallback(async () => {
@@ -477,7 +500,9 @@ export default function MirrorRoute() {
                   <Button
                     type="button"
                     size="sm"
-                    onClick={() => void probeCapabilities(selectedTarget)}
+                    onClick={() =>
+                      setCapabilityProbeRevision((revision) => revision + 1)
+                    }
                   >
                     {t("common.checkAgain")}
                   </Button>

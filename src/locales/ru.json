@@ -24,6 +24,7 @@
   "language": {
     "label": "Язык",
     "saveFailed": "Не удалось сохранить язык: {{message}}",
+    "loadFailed": "Не удалось загрузить выбранный язык: {{message}}",
     "chinese": "中文",
     "english": "English",
     "german": "Deutsch",
@@ -1153,6 +1154,7 @@
     "negotiatedCapabilities_other": "scrcpy {{version}} · согласовано видеокодеков: {{count}}",
     "launchFailed": "Запуск зеркала не удался",
     "recordingSavedTo": "Запись сохранена в {{path}}",
+    "staleSessionCleanupFailed": "После запуска scrcpy устройство изменилось. Закройте отдельное окно scrcpy вручную: {{message}}",
     "sessionRunning": "Mirror-сессия запущена",
     "sessionRunningBody": "scrcpy работает как PID {{pid}}. Закройте окно scrcpy или остановите его здесь, чтобы завершить сессию.",
     "sessionEndedTitle": "Mirror-сессия завершена",

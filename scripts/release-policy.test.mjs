@@ -92,7 +92,7 @@ test("release versions must all exist and match", () => {
 
 test("renderer manifest keeps every route dynamic and the entry under budget", () => {
   const policy = {
-    initialJavaScriptBudgetBytes: 700_000,
+    initialJavaScriptBudgetBytes: 450_000,
     dynamicRouteEntries: rendererRoutes,
   };
   const manifest = {
@@ -109,7 +109,7 @@ test("renderer manifest keeps every route dynamic and the entry under budget", (
     ),
   };
   const assetSizes = {
-    "assets/index.js": 699_999,
+    "assets/index.js": 449_999,
     ...Object.fromEntries(
       rendererRoutes.map((_, index) => [`assets/route-${index}.js`, 1_024]),
     ),
@@ -117,15 +117,15 @@ test("renderer manifest keeps every route dynamic and the entry under budget", (
 
   assert.deepEqual(
     validateRendererBundleManifest(policy, manifest, assetSizes),
-    { entryFile: "assets/index.js", initialBytes: 699_999 },
+    { entryFile: "assets/index.js", initialBytes: 449_999 },
   );
   assert.throws(
     () =>
       validateRendererBundleManifest(policy, manifest, {
         ...assetSizes,
-        "assets/index.js": 700_001,
+        "assets/index.js": 450_001,
       }),
-    /budget is 700000/u,
+    /budget is 450000/u,
   );
   assert.throws(
     () =>

@@ -90,6 +90,7 @@ export default function LogcatRoute() {
   const [exportMessage, setExportMessage] = useState<string | null>(null);
   const [announcement, setAnnouncement] = useState("");
   const [announcementRevision, setAnnouncementRevision] = useState(0);
+  const [ageFilterTimeBucket, setAgeFilterTimeBucket] = useState(0);
   const partialLineRef = useRef("");
   const outputRef = useRef<HTMLDivElement>(null);
   const liveSelectedTarget = resolveAuthorizedTarget(
@@ -232,17 +233,26 @@ export default function LogcatRoute() {
     }
   }, [lines, paused]);
 
-  // Only anchor the memo to wall-clock time when an age filter is active;
-  // otherwise Date.now() would invalidate it on every render and refilter the
-  // whole buffer needlessly. When aging is on, a 1s bucket bounds recomputes.
+  // Advance wall-clock filtering once per second only while an age filter is
+  // active. A stopped or paused stream otherwise has no render trigger, which
+  // used to leave expired lines visible indefinitely.
   const ageActive = query.maxAgeSeconds !== null;
-  const timeBucket = ageActive ? Math.floor(Date.now() / 1000) : 0;
+  useEffect(() => {
+    if (!ageActive) {
+      setAgeFilterTimeBucket(0);
+      return;
+    }
+    const update = () => setAgeFilterTimeBucket(Math.floor(Date.now() / 1000));
+    update();
+    const timer = window.setInterval(update, 1000);
+    return () => window.clearInterval(timer);
+  }, [ageActive]);
   const filteredLines = useMemo(
     () =>
       lines.filter((line) =>
-        matchesLine(line, query, timeBucket * 1000, processNames),
+        matchesLine(line, query, ageFilterTimeBucket * 1000, processNames),
       ),
-    [lines, query, processNames, timeBucket],
+    [ageFilterTimeBucket, lines, query, processNames],
   );
 
   useEffect(() => {

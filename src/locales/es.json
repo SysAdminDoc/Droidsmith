@@ -1008,6 +1008,7 @@
     "german": "Deutsch",
     "label": "Idioma",
     "saveFailed": "No se pudo guardar la preferencia de idioma: {{message}}",
+    "loadFailed": "No se pudo cargar el idioma seleccionado: {{message}}",
     "russian": "Русский",
     "spanish": "Español"
   },
@@ -1212,6 +1213,7 @@
     "recordDestinationHint": "Al iniciar, un diálogo de guardado nativo elegirá el destino de grabación .mp4 o .mkv. Los ajustes preestablecidos nunca retienen rutas del host.",
     "recordSession": "Grabar sesión",
     "recordingSavedTo": "Grabación guardada en {{path}}",
+    "staleSessionCleanupFailed": "El dispositivo cambió después de iniciar scrcpy. Cierra manualmente la ventana separada de scrcpy: {{message}}",
     "resetPreset": "Restablecer",
     "savePreset": "Guardar ajuste preestablecido",
     "scrcpyAt": "scrcpy en",

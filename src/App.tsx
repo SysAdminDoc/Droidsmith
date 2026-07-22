@@ -19,7 +19,11 @@ import {
 } from "./lib/tauri";
 import { startDeviceLifecycle, stopDeviceLifecycle } from "./lib/deviceStore";
 import { cn } from "./lib/cn";
-import { normalizeLanguage, SUPPORTED_LANGUAGES } from "./lib/i18n";
+import {
+  loadDroidsmithLanguage,
+  normalizeLanguage,
+  SUPPORTED_LANGUAGES,
+} from "./lib/i18n";
 import { setStoredLanguage } from "./lib/settings";
 import { CommandPalette, type PaletteItem } from "./routes/CommandPalette";
 import { useCommandPalette } from "./routes/useCommandPalette";
@@ -680,7 +684,10 @@ function ShellActions({
 
 function LanguageSelector({ className }: { className?: string }) {
   const { t, i18n } = useTranslation();
-  const [persistenceError, setPersistenceError] = useState<string | null>(null);
+  const [languageError, setLanguageError] = useState<{
+    kind: "load" | "save";
+    message: string;
+  } | null>(null);
   const persistenceRevision = useRef(0);
   const persistenceQueue = useRef<Promise<void>>(Promise.resolve());
   const currentLanguage =
@@ -691,8 +698,17 @@ function LanguageSelector({ className }: { className?: string }) {
       const nextLanguage = normalizeLanguage(event.target.value);
       if (!nextLanguage) return;
       const revision = ++persistenceRevision.current;
-      setPersistenceError(null);
-      await i18n.changeLanguage(nextLanguage);
+      setLanguageError(null);
+      try {
+        await loadDroidsmithLanguage(nextLanguage);
+        if (revision !== persistenceRevision.current) return;
+        await i18n.changeLanguage(nextLanguage);
+      } catch (error) {
+        if (revision === persistenceRevision.current) {
+          setLanguageError({ kind: "load", message: errorMessage(error) });
+        }
+        return;
+      }
 
       const save = persistenceQueue.current.then(async () => {
         await setStoredLanguage(nextLanguage);
@@ -702,7 +718,7 @@ function LanguageSelector({ className }: { className?: string }) {
         await save;
       } catch (error) {
         if (revision === persistenceRevision.current) {
-          setPersistenceError(errorMessage(error));
+          setLanguageError({ kind: "save", message: errorMessage(error) });
         }
       }
     },
@@ -717,7 +733,7 @@ function LanguageSelector({ className }: { className?: string }) {
         onChange={(event) => void handleChange(event)}
         aria-label={t("language.label")}
         aria-describedby={
-          persistenceError ? "language-persistence-error" : undefined
+          languageError ? "language-persistence-error" : undefined
         }
         className="h-9 w-full rounded-md border border-transparent bg-white/[0.035] px-3 text-xs text-anvil-300 outline-none transition hover:bg-white/[0.06] focus:border-circuit-300/60 focus:ring-2 focus:ring-circuit-300/20"
       >
@@ -727,13 +743,18 @@ function LanguageSelector({ className }: { className?: string }) {
           </option>
         ))}
       </select>
-      {persistenceError && (
+      {languageError && (
         <span
           id="language-persistence-error"
           role="alert"
           className="mt-1 block text-xs text-red-300"
         >
-          {t("language.saveFailed", { message: persistenceError })}
+          {t(
+            languageError.kind === "load"
+              ? "language.loadFailed"
+              : "language.saveFailed",
+            { message: languageError.message },
+          )}
         </span>
       )}
     </label>
