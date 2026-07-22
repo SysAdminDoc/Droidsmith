@@ -14,6 +14,74 @@ completion.
 Working batches live here. Sections collapse into a versioned release on
 each milestone tag.
 
+## [0.9.10] - 2026-07-22
+
+Deep engineering / UX audit pass: ~40 verified fixes across backend process
+supervision, renderer async flows, localization, accessibility, and theming.
+
+### Fixed
+
+- Closing the app now terminates tracked scrcpy and gnirehtet sessions;
+  previously the detached gnirehtet relay outlived the app, kept the device
+  reverse-tethered, and made every relaunch fail with `RelayFailed` (address
+  in use) with no in-app recovery.
+- The per-device action journal takes an OS advisory file lock for each
+  journal cycle, closing the GUI-vs-CLI race that could mint duplicate action
+  ids, rewrite a live `Pending` intent as `Interrupted`, or truncate the file
+  mid-append.
+- Finished scrcpy recordings evicted by a concurrent status/stop/launch reap
+  are retained in a bounded unclaimed-recording map, so the reveal/open grant
+  can no longer be lost to a poll race.
+- Post-exit pipe-reader joins in process capture and operation stages are
+  bounded; a child that leaked its pipe write-ends to a detached descendant
+  can no longer hang a completed operation forever and defeat cancellation.
+  Stage stdin is capped at 64 KiB to prevent a pipe deadlock, and pack
+  dependency expansion is depth-capped so a crafted imported pack cannot
+  overflow the stack.
+- `launch_scrcpy` and `start_gnirehtet` no longer freeze IPC dispatch for up
+  to ~23 s on a capability-cache miss; their blocking work runs through
+  `spawn_blocking_operation` like the sibling commands.
+- Wrapped `df -k` rows no longer parse with transposed storage figures, and
+  `getprop` values legitimately ending in `]` keep their closing bracket.
+- Apps and Debloat key their effects on the scalar device fingerprint, so
+  unrelated device plug/unplug events no longer refire user discovery, wipe
+  package/metadata caches, resubscribe the drag-drop listener per keystroke,
+  or reset the Debloat wizard mid-selection. Loaders carry request
+  generations so slow responses cannot land under the wrong filter; batch
+  applies, recovery baselines, and APK exports bail on mid-flight device
+  switches; dropping an APK during a running install no longer starts a
+  second concurrent install; and a superseded Debloat queue stops instead of
+  resurrecting a stale done screen (retry failures are surfaced too).
+- Device detail clicks are generation-guarded (last click wins), a null
+  transport id no longer marks every null-transport row selected, a failed
+  gnirehtet stop reports its error instead of losing it to the status poll,
+  and a failed settings initialization retries instead of caching the
+  rejection for the whole session.
+- The command palette stops Escape from cascading into the underlying modal,
+  scrolls the active option into view during arrow-key navigation, and gets
+  a visible focus ring (as does the console prompt). Error/progress panels in
+  Mirror and Bugreport announce via live regions, Wireless drops its
+  double-announcing nested live wrapper, logcat reorder buttons name the
+  query they move, and the Profiles workspace switcher replaces its partial
+  ARIA tabs pattern with `aria-pressed` buttons.
+- The non-embedded data-controls section regains its vertical padding in the
+  Diagnostics Center.
+
+### Changed
+
+- Host Doctor finding summaries, remediation steps, and privacy notes are
+  localized for all 17 finding codes in all five locales (previously titles
+  only). Raw backend enums (wireless service kind, fastboot mode, host
+  platform, profile package states), tuning choice labels, built-in logcat
+  query names, and renderer fallback strings now render through locale keys
+  with raw-value fallback. Russian gains ~35 missing translations with
+  correct CLDR plurals, progress ellipses are normalized across locales, and
+  byte/count formatting is locale-aware everywhere via one shared helper.
+- Dialog and menu surfaces share a `surface-dialog` token at a uniform
+  `rounded-lg`, Console/Logcat terminals share `surface-terminal`,
+  divider-role borders are normalized to `border-white/10`, and the dead
+  `darkMode: "class"` Tailwind config is removed.
+
 ## [0.9.9] - 2026-07-22
 
 ### Changed
