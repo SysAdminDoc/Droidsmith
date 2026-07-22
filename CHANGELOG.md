@@ -14,6 +14,12 @@ completion.
 Working batches live here. Sections collapse into a versioned release on
 each milestone tag.
 
+## [0.9.8] - 2026-07-22
+
+Production audit: command and host-file trust boundaries, durable recovery,
+bounded process/APK handling, async UI correctness, accessibility, and startup
+performance.
+
 ### Security
 
 - Diagnostic-looking Console commands that can clear Logcat buffers, write
