@@ -41,6 +41,12 @@ each milestone tag.
 
 ### Fixed
 
+- **IMP-80 — Target-bound async lifecycle.** Centralized immutable device
+  fingerprints, operation generations, stale-result guards, and cancellation
+  registration in one renderer primitive. Apps permissions, File Manager,
+  gnirehtet, Logcat, bugreport capture, and the device watcher now cancel or
+  ignore work from superseded targets; the backend also closes the
+  cancel-before-registration race without spawning an orphan process.
 - **IMP-76 — Locale persistence contract.** Unified the renderer, Rust settings,
   and isolation allowlists behind a release-checked five-locale contract. Every
   shipped locale now survives restart, while a failed save remains visible

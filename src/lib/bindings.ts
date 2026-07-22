@@ -536,8 +536,9 @@ export const commands = {
     });
   },
   /**
-   * Cancel a registered background operation. The runner observes this flag,
-   * kills and reaps its child, and then emits a terminal cancellation event.
+   * Cancel a background operation. A bounded pending marker closes the race
+   * where renderer invalidation arrives just before backend registration; the
+   * runner observes the flag before spawn or kills and reaps an active child.
    */
   async cancelOperation(operationId: string): Promise<boolean> {
     return await TAURI_INVOKE("cancel_operation", {

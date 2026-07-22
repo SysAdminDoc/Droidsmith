@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import {
@@ -8,6 +8,7 @@ import {
   type DeviceTarget,
   type PermissionInfo,
 } from "../../lib/tauri";
+import { useTargetOperation } from "../../lib/targetOperation";
 import { Button, Card, EmptyState, SkeletonLine } from "../common";
 
 /** Runtime-permission inspector/toggler for a single package (IMP-67:
@@ -28,27 +29,27 @@ export function PermissionsPanel({
   const [loading, setLoading] = useState(true);
   const [toggling, setToggling] = useState<string | null>(null);
   const [permError, setPermError] = useState<string | null>(null);
-  // The panel is not remounted when the inspected package changes, so a slow
-  // list/set request for the previous package could resolve and overwrite the
-  // current one. Each load bumps the generation; stale resolutions are dropped.
-  const requestRef = useRef(0);
+  const requestOperation = useTargetOperation(target, `${pkg}:${userId}`);
 
   const load = useCallback(async () => {
-    const generation = ++requestRef.current;
+    const lease = requestOperation.begin();
     setLoading(true);
     setPermError(null);
     try {
       const result = await callListPermissions(target, pkg);
-      if (requestRef.current !== generation) return;
-      setPerms(result);
+      lease.commit(() => setPerms(result));
     } catch (e) {
-      if (requestRef.current !== generation) return;
-      setPerms([]);
-      setPermError(errorMessage(e));
+      lease.commit(() => {
+        setPerms([]);
+        setPermError(errorMessage(e));
+      });
     } finally {
-      if (requestRef.current === generation) setLoading(false);
+      if (lease.isCurrent()) {
+        setLoading(false);
+        lease.finish();
+      }
     }
-  }, [target, pkg]);
+  }, [requestOperation, target, pkg]);
 
   useEffect(() => {
     void load();
@@ -56,19 +57,21 @@ export function PermissionsPanel({
 
   const togglePerm = useCallback(
     async (permission: string, grant: boolean) => {
-      const generation = requestRef.current;
+      const lease = requestOperation.begin();
+      let refreshAfterFailure = false;
       setToggling(permission);
       setPermError(null);
       try {
         await callSetPermission(target, pkg, permission, grant, userId);
-        if (requestRef.current !== generation) return;
-        setPerms((prev) =>
-          prev.map((p) =>
-            p.permission === permission ? { ...p, granted: grant } : p,
-          ),
-        );
+        lease.commit(() => {
+          setPerms((prev) =>
+            prev.map((p) =>
+              p.permission === permission ? { ...p, granted: grant } : p,
+            ),
+          );
+        });
       } catch (e) {
-        if (requestRef.current !== generation) return;
+        if (!lease.isCurrent()) return;
         // Many permissions (signature/system, or fixed by policy) can't be
         // changed via `pm grant`. Surface why instead of silently snapping
         // the toggle back, then reload to show the real state.
@@ -77,12 +80,16 @@ export function PermissionsPanel({
             message: errorMessage(e),
           }),
         );
-        void load();
+        refreshAfterFailure = true;
       } finally {
-        if (requestRef.current === generation) setToggling(null);
+        if (lease.isCurrent()) {
+          setToggling(null);
+          lease.finish();
+          if (refreshAfterFailure) void load();
+        }
       }
     },
-    [target, pkg, userId, load, t],
+    [requestOperation, target, pkg, userId, load, t],
   );
 
   return (

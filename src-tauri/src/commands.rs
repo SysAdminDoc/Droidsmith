@@ -2392,8 +2392,9 @@ pub async fn shell_run(
     .await
 }
 
-/// Cancel a registered background operation. The runner observes this flag,
-/// kills and reaps its child, and then emits a terminal cancellation event.
+/// Cancel a background operation. A bounded pending marker closes the race
+/// where renderer invalidation arrives just before backend registration; the
+/// runner observes the flag before spawn or kills and reaps an active child.
 #[tauri::command]
 #[specta::specta]
 pub fn cancel_operation(operation_id: String) -> bool {

@@ -1,10 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import {
   errorMessage,
   callApplyRemoteFileMutation,
-  callCancelOperation,
   callListRemoteFiles,
   callPullFile,
   callPushFile,
@@ -19,6 +18,7 @@ import {
   type RemoteFileMutationRequest,
   type RemoteListing,
 } from "../../lib/tauri";
+import { useTargetOperation } from "../../lib/targetOperation";
 import { useFocusTrap } from "../../lib/useFocusTrap";
 import {
   Badge,
@@ -63,22 +63,25 @@ export function FileManager({ target }: { target: DeviceTarget }) {
   const [pullMsg, setPullMsg] = useState<StatusMessage>(null);
   const [pullPath, setPullPath] = useState<string | null>(null);
   const [pullOperationId, setPullOperationId] = useState<string | null>(null);
-  const pullOperationRef = useRef<string | null>(null);
-  const pullGenerationRef = useRef(0);
-  const fileOperationRef = useRef<string | null>(null);
+  const browseOperation = useTargetOperation(target);
+  const pullOperation = useTargetOperation(target);
+  const fileOperation = useTargetOperation(target);
   const draftTrapRef = useFocusTrap<HTMLDivElement>(draft !== null);
   const reviewTrapRef = useFocusTrap<HTMLDivElement>(review !== null);
 
   useEffect(() => {
-    return () => {
-      pullGenerationRef.current += 1;
-      const operationId = pullOperationRef.current;
-      pullOperationRef.current = null;
-      if (operationId) void callCancelOperation(operationId);
-      const fileOperationId = fileOperationRef.current;
-      fileOperationRef.current = null;
-      if (fileOperationId) void callCancelOperation(fileOperationId);
-    };
+    setListing(null);
+    setCurrentPath("/sdcard");
+    setLoading(false);
+    setError(null);
+    setDraft(null);
+    setReview(null);
+    setReviewBusy(false);
+    setOperationMessage(null);
+    setFileOperationId(null);
+    setPullMsg(null);
+    setPullPath(null);
+    setPullOperationId(null);
   }, [target.serial, target.transport_id, target.connection_generation]);
 
   useEffect(() => {
@@ -99,6 +102,7 @@ export function FileManager({ target }: { target: DeviceTarget }) {
 
   const browse = useCallback(
     async (path: string) => {
+      const lease = browseOperation.begin();
       setLoading(true);
       setPullMsg(null);
       // Clear any prior file-operation status so a "complete" line does not
@@ -109,16 +113,23 @@ export function FileManager({ target }: { target: DeviceTarget }) {
       setError(null);
       try {
         const result = await callListRemoteFiles(target, path);
-        setListing(result);
-        setCurrentPath(path);
+        lease.commit(() => {
+          setListing(result);
+          setCurrentPath(path);
+        });
       } catch (e) {
-        setListing(null);
-        setError(errorMessage(e));
+        lease.commit(() => {
+          setListing(null);
+          setError(errorMessage(e));
+        });
       } finally {
-        setLoading(false);
+        if (lease.isCurrent()) {
+          setLoading(false);
+          lease.finish();
+        }
       }
     },
-    [target],
+    [browseOperation, target],
   );
 
   const navigateUp = useCallback(() => {
@@ -128,17 +139,18 @@ export function FileManager({ target }: { target: DeviceTarget }) {
 
   const pullRemote = useCallback(
     async (entry: RemoteFileEntry) => {
-      let operationId: string | null = null;
-      let generation: number | null = null;
+      const lease = pullOperation.begin();
       try {
         const pathGrant = await callSelectHostPath(
           "pull_save",
           entry.name.replace(/[<>:"/\\|?*]/gu, "_"),
         );
         if (!pathGrant) {
-          setPullMsg(null);
+          lease.commit(() => setPullMsg(null));
+          lease.finish();
           return;
         }
+        if (!lease.isCurrent()) return;
         setPullPath(null);
         setPullMsg({
           text: t("devices.controls.pulling", { name: entry.name }),
@@ -148,19 +160,13 @@ export function FileManager({ target }: { target: DeviceTarget }) {
           currentPath === "/"
             ? `/${entry.name}`
             : `${currentPath}/${entry.name}`;
-        operationId = newOperationId("pull");
-        generation = pullGenerationRef.current + 1;
-        pullGenerationRef.current = generation;
-        pullOperationRef.current = operationId;
+        const operationId = newOperationId("pull");
+        if (!lease.registerCancellation(operationId)) return;
         setPullOperationId(operationId);
         const artifact = await callPullFile(target, remoteFull, pathGrant.id, {
           operationId,
           onEvent: (event: OperationEvent) => {
-            if (
-              pullOperationRef.current !== operationId ||
-              pullGenerationRef.current !== generation
-            )
-              return;
+            if (!lease.isCurrent()) return;
             if (event.kind === "progress") {
               setPullMsg({
                 tone: "neutral",
@@ -175,8 +181,7 @@ export function FileManager({ target }: { target: DeviceTarget }) {
             }
           },
         });
-        if (pullGenerationRef.current !== generation) return;
-        pullOperationRef.current = null;
+        if (!lease.isCurrent()) return;
         setPullOperationId(null);
         setPullMsg({
           tone: "success",
@@ -186,52 +191,54 @@ export function FileManager({ target }: { target: DeviceTarget }) {
           }),
         });
         setPullPath(artifact.local_path);
+        lease.finish();
       } catch (e) {
-        if (
-          operationId &&
-          (pullGenerationRef.current !== generation ||
-            pullOperationRef.current !== operationId)
-        )
-          return;
-        pullOperationRef.current = null;
-        setPullOperationId(null);
-        setPullPath(null);
-        setPullMsg({
-          tone: "danger",
-          text: t("devices.controls.failed", {
-            message: errorMessage(e),
-          }),
+        if (!lease.isCurrent()) return;
+        lease.commit(() => {
+          setPullOperationId(null);
+          setPullPath(null);
+          setPullMsg({
+            tone: "danger",
+            text: t("devices.controls.failed", {
+              message: errorMessage(e),
+            }),
+          });
         });
+        lease.finish();
       }
     },
-    [target, currentPath, t],
+    [pullOperation, target, currentPath, t],
   );
 
   const cancelPull = useCallback(async () => {
-    const operationId = pullOperationRef.current;
-    if (!operationId) return;
+    if (!pullOperationId) return;
     setPullMsg({
       text: t("devices.controls.pullCancelling"),
       tone: "neutral",
     });
-    await callCancelOperation(operationId);
-  }, [t]);
+    await pullOperation.requestActiveCancellation();
+  }, [pullOperation, pullOperationId, t]);
 
   const stageMutation = useCallback(
     async (request: RemoteFileMutationRequest) => {
+      const lease = fileOperation.begin();
       setOperationMessage(null);
       try {
         const plan = await callPlanRemoteFileMutation(request);
-        setReview({ kind: "mutation", request, plan });
+        lease.commit(() => setReview({ kind: "mutation", request, plan }));
       } catch (e) {
-        setOperationMessage(
-          t("devices.controls.fileOperationFailed", {
-            message: errorMessage(e),
-          }),
+        lease.commit(() =>
+          setOperationMessage(
+            t("devices.controls.fileOperationFailed", {
+              message: errorMessage(e),
+            }),
+          ),
         );
+      } finally {
+        lease.finish();
       }
     },
-    [t],
+    [fileOperation, t],
   );
 
   const submitDraft = useCallback(async () => {
@@ -264,45 +271,54 @@ export function FileManager({ target }: { target: DeviceTarget }) {
   }, [draft, remotePathFor, stageMutation, t]);
 
   const stagePush = useCallback(async () => {
+    const lease = fileOperation.begin();
     setOperationMessage(null);
     try {
       const grant = await callSelectHostPath("push_open");
-      if (!grant) return;
+      if (!grant || !lease.isCurrent()) return;
       const fileName = grant.local_path.split(/[\\/]/u).pop()?.trim();
       if (!fileName) {
-        setOperationMessage(t("devices.controls.invalidFileName"));
+        lease.commit(() =>
+          setOperationMessage(t("devices.controls.invalidFileName")),
+        );
         return;
       }
-      setReview({
-        kind: "push",
-        grant,
-        remotePath: remotePathFor(fileName),
+      lease.commit(() => {
+        setReview({
+          kind: "push",
+          grant,
+          remotePath: remotePathFor(fileName),
+        });
       });
     } catch (e) {
-      setOperationMessage(
-        t("devices.controls.fileOperationFailed", {
-          message: errorMessage(e),
-        }),
+      lease.commit(() =>
+        setOperationMessage(
+          t("devices.controls.fileOperationFailed", {
+            message: errorMessage(e),
+          }),
+        ),
       );
+    } finally {
+      lease.finish();
     }
-  }, [remotePathFor, t]);
+  }, [fileOperation, remotePathFor, t]);
 
   const confirmReview = useCallback(async () => {
     if (!review) return;
+    const lease = fileOperation.begin();
     setReviewBusy(true);
     setOperationMessage(t("devices.controls.applyingFileOperation"));
-    let operationId: string | null = null;
     try {
       if (review.kind === "mutation") {
         await callApplyRemoteFileMutation(target, review.request, true);
       } else {
-        operationId = newOperationId("push");
-        fileOperationRef.current = operationId;
+        const operationId = newOperationId("push");
+        if (!lease.registerCancellation(operationId)) return;
         setFileOperationId(operationId);
         await callPushFile(target, review.grant.id, review.remotePath, true, {
           operationId,
           onEvent: (event: OperationEvent) => {
-            if (fileOperationRef.current !== operationId) return;
+            if (!lease.isCurrent()) return;
             if (event.kind === "progress") {
               setOperationMessage(
                 t("devices.controls.pushProgress", {
@@ -316,14 +332,14 @@ export function FileManager({ target }: { target: DeviceTarget }) {
           },
         });
       }
-      fileOperationRef.current = null;
+      if (!lease.isCurrent()) return;
       setFileOperationId(null);
       setReview(null);
       await browse(currentPath);
+      if (!lease.isCurrent()) return;
       setOperationMessage(t("devices.controls.fileOperationComplete"));
     } catch (e) {
-      if (operationId && fileOperationRef.current !== operationId) return;
-      fileOperationRef.current = null;
+      if (!lease.isCurrent()) return;
       setFileOperationId(null);
       setOperationMessage(
         t("devices.controls.fileOperationFailed", {
@@ -331,16 +347,18 @@ export function FileManager({ target }: { target: DeviceTarget }) {
         }),
       );
     } finally {
-      setReviewBusy(false);
+      if (lease.isCurrent()) {
+        setReviewBusy(false);
+        lease.finish();
+      }
     }
-  }, [browse, currentPath, review, t, target]);
+  }, [browse, currentPath, fileOperation, review, t, target]);
 
   const cancelFileOperation = useCallback(async () => {
-    const operationId = fileOperationRef.current;
-    if (!operationId) return;
+    if (!fileOperationId) return;
     setOperationMessage(t("devices.controls.pushCancelling"));
-    await callCancelOperation(operationId);
-  }, [t]);
+    await fileOperation.requestActiveCancellation();
+  }, [fileOperation, fileOperationId, t]);
 
   return (
     <>

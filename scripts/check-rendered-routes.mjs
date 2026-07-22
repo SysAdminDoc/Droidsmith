@@ -395,6 +395,18 @@ async function runDesktopFlow(browser) {
   await page.evaluate(() => window.__DROIDSMITH_MOCK_HOTPLUG__(true));
   await page.getByText("com.example.app").waitFor();
 
+  // Target-bound permission loading uses the shared operation generation; its
+  // normal empty result remains usable after the disconnect/reconnect above.
+  const reattachedExampleRow = page
+    .getByRole("row")
+    .filter({ hasText: "com.example.app" });
+  await reattachedExampleRow.getByRole("button", { name: "Perms" }).click();
+  const permissionsPanel = page
+    .getByRole("heading", { name: "Permissions", exact: true })
+    .locator("xpath=../../..");
+  await permissionsPanel.getByText("No permissions found").waitFor();
+  await permissionsPanel.getByRole("button", { name: "Close" }).click();
+
   // IMP-62: the package table is an ARIA grid with roving-tabindex cell
   // navigation. Drive it from the keyboard and assert the tab stop moves.
   const packageGrid = page.getByRole("grid", { name: "Installed packages" });

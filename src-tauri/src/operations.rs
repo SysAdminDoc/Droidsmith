@@ -4,7 +4,7 @@
 //! thread responsive. Every operation is registered before its child starts;
 //! `cancel` flips the shared flag and the runner kills and reaps the child.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::io::Read;
 use std::path::Path;
 use std::process::{Command, Stdio};
@@ -18,6 +18,7 @@ use tauri::ipc::Channel;
 const CAPTURE_LIMIT_BYTES: usize = 1024 * 1024;
 const POLL_INTERVAL: Duration = Duration::from_millis(40);
 const PROGRESS_INTERVAL: Duration = Duration::from_millis(500);
+const CANCELLATION_HISTORY_LIMIT: usize = 256;
 
 #[derive(specta::Type, Debug, Clone, Copy, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -105,9 +106,16 @@ pub enum OperationError {
     OutputTooLarge(u64),
 }
 
-fn registry() -> &'static Mutex<HashMap<String, Arc<AtomicBool>>> {
-    static REGISTRY: OnceLock<Mutex<HashMap<String, Arc<AtomicBool>>>> = OnceLock::new();
-    REGISTRY.get_or_init(|| Mutex::new(HashMap::new()))
+#[derive(Default)]
+struct OperationRegistry {
+    active: HashMap<String, Arc<AtomicBool>>,
+    pending_cancellations: VecDeque<String>,
+    completed: VecDeque<String>,
+}
+
+fn registry() -> &'static Mutex<OperationRegistry> {
+    static REGISTRY: OnceLock<Mutex<OperationRegistry>> = OnceLock::new();
+    REGISTRY.get_or_init(|| Mutex::new(OperationRegistry::default()))
 }
 
 struct Registration {
@@ -220,12 +228,23 @@ impl Registration {
         if !valid_operation_id(operation_id) {
             return Err(OperationError::InvalidId(operation_id.to_string()));
         }
-        let cancelled = Arc::new(AtomicBool::new(false));
         let mut operations = registry().lock().unwrap_or_else(|e| e.into_inner());
-        if operations.contains_key(operation_id) {
+        if operations.active.contains_key(operation_id) {
             return Err(OperationError::DuplicateId(operation_id.to_string()));
         }
-        operations.insert(operation_id.to_string(), Arc::clone(&cancelled));
+        let cancelled_before_registration = operations
+            .pending_cancellations
+            .iter()
+            .position(|candidate| candidate == operation_id)
+            .and_then(|index| operations.pending_cancellations.remove(index))
+            .is_some();
+        operations
+            .completed
+            .retain(|candidate| candidate != operation_id);
+        let cancelled = Arc::new(AtomicBool::new(cancelled_before_registration));
+        operations
+            .active
+            .insert(operation_id.to_string(), Arc::clone(&cancelled));
         Ok(Self {
             operation_id: operation_id.to_string(),
             cancelled,
@@ -235,10 +254,12 @@ impl Registration {
 
 impl Drop for Registration {
     fn drop(&mut self) {
-        registry()
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .remove(&self.operation_id);
+        let mut operations = registry().lock().unwrap_or_else(|e| e.into_inner());
+        operations.active.remove(&self.operation_id);
+        operations.completed.push_back(self.operation_id.clone());
+        while operations.completed.len() > CANCELLATION_HISTORY_LIMIT {
+            operations.completed.pop_front();
+        }
     }
 }
 
@@ -250,11 +271,33 @@ fn valid_operation_id(value: &str) -> bool {
 }
 
 pub fn cancel(operation_id: &str) -> bool {
-    let operations = registry().lock().unwrap_or_else(|e| e.into_inner());
-    let Some(flag) = operations.get(operation_id) else {
+    if !valid_operation_id(operation_id) {
         return false;
-    };
-    flag.store(true, Ordering::Release);
+    }
+    let mut operations = registry().lock().unwrap_or_else(|e| e.into_inner());
+    if let Some(flag) = operations.active.get(operation_id) {
+        flag.store(true, Ordering::Release);
+        return true;
+    }
+    if operations
+        .completed
+        .iter()
+        .any(|candidate| candidate == operation_id)
+    {
+        return false;
+    }
+    if !operations
+        .pending_cancellations
+        .iter()
+        .any(|candidate| candidate == operation_id)
+    {
+        operations
+            .pending_cancellations
+            .push_back(operation_id.to_string());
+        while operations.pending_cancellations.len() > CANCELLATION_HISTORY_LIMIT {
+            operations.pending_cancellations.pop_front();
+        }
+    }
     true
 }
 
@@ -528,6 +571,9 @@ fn execute_child(
     sink: &EventSink,
     options: ChildOptions<'_>,
 ) -> Result<ProcessOutput, OperationError> {
+    if cancelled.load(Ordering::Acquire) {
+        return Err(OperationError::Cancelled);
+    }
     let mut command = Command::new(program);
     command
         .args(args)
@@ -785,15 +831,38 @@ mod tests {
             )
         });
         let deadline = Instant::now() + Duration::from_secs(2);
-        while !cancel(id) && Instant::now() < deadline {
+        while !registry()
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .active
+            .contains_key(id)
+            && Instant::now() < deadline
+        {
             std::thread::sleep(Duration::from_millis(10));
         }
+        assert!(cancel(id));
         let started = Instant::now();
         assert!(matches!(
             thread.join().unwrap(),
             Err(OperationError::Cancelled)
         ));
         assert!(started.elapsed() < Duration::from_secs(2));
+        assert!(!cancel(id));
+    }
+
+    #[test]
+    fn cancel_before_registration_prevents_process_spawn() {
+        let id = "cancel-before-register-test";
+        assert!(cancel(id));
+        let result = run_process(
+            Path::new("definitely-missing-droidsmith-test-program"),
+            &[],
+            Duration::from_secs(2),
+            id,
+            "test",
+            no_events(),
+        );
+        assert!(matches!(result, Err(OperationError::Cancelled)));
         assert!(!cancel(id));
     }
 

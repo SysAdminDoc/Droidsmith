@@ -2,7 +2,6 @@ import { useSyncExternalStore } from "react";
 
 import {
   errorMessage,
-  callCancelOperation,
   callListDevices,
   callWatchDevices,
   inTauri,
@@ -11,6 +10,10 @@ import {
   type DeviceLifecycleEvent,
   type ListDevicesResult,
 } from "./tauri";
+import {
+  TargetOperationCoordinator,
+  type TargetOperationLease,
+} from "./targetOperation";
 
 export type SharedDevicesState =
   | { kind: "loading" }
@@ -49,11 +52,13 @@ export function useDeviceStore<T>(selector: (state: DeviceStore) => T): T {
   );
 }
 
-let activeOperationId: string | null = null;
-let lifecycleGeneration = 0;
+const lifecycleOperation = new TargetOperationCoordinator(
+  () => "device-lifecycle",
+);
+let lifecycleLease: TargetOperationLease | null = null;
 
 export function startDeviceLifecycle() {
-  if (activeOperationId) return;
+  if (lifecycleLease?.isCurrent()) return;
   if (!inTauri()) {
     setDeviceStoreState({
       devicesState: { kind: "no_tauri" },
@@ -65,9 +70,9 @@ export function startDeviceLifecycle() {
   }
 
   const operationId = newOperationId("device-watch");
-  const generation = lifecycleGeneration + 1;
-  lifecycleGeneration = generation;
-  activeOperationId = operationId;
+  const lease = lifecycleOperation.begin();
+  lease.registerCancellation(operationId);
+  lifecycleLease = lease;
   let fallbackInFlight = false;
   setDeviceStoreState({
     devicesState: { kind: "loading" },
@@ -79,22 +84,14 @@ export function startDeviceLifecycle() {
     fallbackInFlight = true;
     try {
       const value = await callListDevices();
-      if (
-        activeOperationId !== operationId ||
-        lifecycleGeneration !== generation
-      )
-        return;
+      if (!lease.isCurrent()) return;
       setDeviceStoreState({
         devicesState: { kind: "ok", value },
         observedAt: new Date().toISOString(),
         watching: watcherStillActive,
       });
     } catch (fallbackError) {
-      if (
-        activeOperationId !== operationId ||
-        lifecycleGeneration !== generation
-      )
-        return;
+      if (!lease.isCurrent()) return;
       const fallbackMessage =
         fallbackError instanceof Error
           ? fallbackError.message
@@ -112,8 +109,7 @@ export function startDeviceLifecycle() {
   };
 
   const onEvent = (event: DeviceLifecycleEvent) => {
-    if (activeOperationId !== operationId || lifecycleGeneration !== generation)
-      return;
+    if (!lease.isCurrent()) return;
     if (event.kind === "snapshot") {
       setDeviceStoreState({
         devicesState: { kind: "ok", value: event.result },
@@ -133,30 +129,22 @@ export function startDeviceLifecycle() {
 
   void callWatchDevices({ operationId, onEvent })
     .catch(async (error) => {
-      if (
-        activeOperationId === operationId &&
-        lifecycleGeneration === generation
-      ) {
+      if (lease.isCurrent()) {
         await scanOnce(errorMessage(error), false);
       }
     })
     .finally(() => {
-      if (
-        activeOperationId === operationId &&
-        lifecycleGeneration === generation
-      ) {
-        activeOperationId = null;
+      if (lease.finish()) {
+        lifecycleLease = null;
         setDeviceStoreState({ watching: false });
       }
     });
 }
 
 export async function stopDeviceLifecycle() {
-  const operationId = activeOperationId;
-  activeOperationId = null;
-  lifecycleGeneration += 1;
+  lifecycleLease = null;
   setDeviceStoreState({ watching: false });
-  if (operationId) await callCancelOperation(operationId);
+  await lifecycleOperation.invalidate();
 }
 
 export async function restartDeviceLifecycle() {
@@ -171,8 +159,8 @@ export function __getDeviceStoreForTests(): DeviceStore {
 
 /** Test-only reset so each test starts from a clean lifecycle. */
 export function __resetDeviceStoreForTests() {
-  activeOperationId = null;
-  lifecycleGeneration += 1;
+  lifecycleLease = null;
+  lifecycleOperation.invalidate();
   store = {
     devicesState: { kind: "loading" },
     health: null,

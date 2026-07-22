@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import {
@@ -11,6 +11,7 @@ import {
   type DeviceTarget,
   type GnirehtetSession,
 } from "../../lib/tauri";
+import { useTargetOperation } from "../../lib/targetOperation";
 import { Badge, Button, Card } from "../common";
 
 type SharingState =
@@ -31,7 +32,7 @@ export function InternetSharing({ target }: { target: DeviceTarget }) {
   const { t } = useTranslation();
   const [located, setLocated] = useState<boolean | null>(null);
   const [state, setState] = useState<SharingState>({ kind: "idle" });
-  const sessionRef = useRef<number | null>(null);
+  const sessionOperation = useTargetOperation(target);
 
   useEffect(() => {
     let cancelled = false;
@@ -55,35 +56,41 @@ export function InternetSharing({ target }: { target: DeviceTarget }) {
   // null and shows "start". A running session is only torn down when the user
   // explicitly clicks Stop (or the app exits).
   useEffect(() => {
-    let cancelled = false;
+    const lease = sessionOperation.begin();
     setState({ kind: "idle" });
-    sessionRef.current = null;
     void callFindGnirehtetSession(target)
       .then((existing) => {
-        if (cancelled) return;
-        if (existing && existing.state === "running") {
-          sessionRef.current = existing.id;
-          setState({ kind: "running", session: existing });
-        }
+        lease.commit(() => {
+          if (existing && existing.state === "running") {
+            setState({ kind: "running", session: existing });
+          }
+        });
       })
       .catch(() => {
         // Lookup is best-effort; on failure the panel simply offers "start".
+      })
+      .finally(() => {
+        lease.finish();
       });
-    return () => {
-      cancelled = true;
-    };
     // Re-attach only when the device identity changes, not on every render
     // (target is a fresh object each render).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [target.serial, target.transport_id, target.connection_generation]);
+  }, [
+    sessionOperation,
+    target.serial,
+    target.transport_id,
+    target.connection_generation,
+  ]);
 
   const runningSessionId = state.kind === "running" ? state.session.id : null;
 
   useEffect(() => {
     if (runningSessionId === null) return;
     const timer = window.setInterval(() => {
+      const lease = sessionOperation.begin();
       void callGnirehtetSessionStatus(runningSessionId)
         .then((next) => {
+          if (!lease.isCurrent()) return;
           setState((current) => {
             if (
               current.kind !== "running" ||
@@ -97,6 +104,7 @@ export function InternetSharing({ target }: { target: DeviceTarget }) {
           });
         })
         .catch((e) => {
+          if (!lease.isCurrent()) return;
           setState((current) => {
             if (
               current.kind !== "running" ||
@@ -106,33 +114,39 @@ export function InternetSharing({ target }: { target: DeviceTarget }) {
             }
             return { kind: "error", message: errorMessage(e) };
           });
+        })
+        .finally(() => {
+          lease.finish();
         });
     }, 2000);
     return () => window.clearInterval(timer);
-  }, [runningSessionId]);
+  }, [runningSessionId, sessionOperation]);
 
   const start = useCallback(async () => {
+    const lease = sessionOperation.begin();
     setState({ kind: "starting" });
     try {
       const session = await callStartGnirehtet(target);
-      sessionRef.current = session.id;
-      setState({ kind: "running", session });
+      lease.commit(() => setState({ kind: "running", session }));
     } catch (e) {
-      setState({ kind: "error", message: errorMessage(e) });
+      lease.commit(() => setState({ kind: "error", message: errorMessage(e) }));
+    } finally {
+      lease.finish();
     }
-  }, [target]);
+  }, [sessionOperation, target]);
 
   const stop = useCallback(async () => {
-    const id = sessionRef.current;
-    if (id === null) return;
+    if (state.kind !== "running") return;
+    const lease = sessionOperation.begin();
     try {
-      const session = await callStopGnirehtet(id);
-      sessionRef.current = null;
-      setState({ kind: "ended", session });
+      const session = await callStopGnirehtet(state.session.id);
+      lease.commit(() => setState({ kind: "ended", session }));
     } catch (e) {
-      setState({ kind: "error", message: errorMessage(e) });
+      lease.commit(() => setState({ kind: "error", message: errorMessage(e) }));
+    } finally {
+      lease.finish();
     }
-  }, []);
+  }, [sessionOperation, state]);
 
   // Still probing PATH — render nothing to avoid a flash of the hint.
   if (located === null) return null;

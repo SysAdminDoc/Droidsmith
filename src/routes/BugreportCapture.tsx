@@ -1,9 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import {
   errorMessage,
-  callCancelOperation,
   callCaptureBugreport,
   callSelectHostPath,
   deviceTarget,
@@ -13,6 +12,7 @@ import {
   type DeviceTarget,
   type OperationEvent,
 } from "../lib/tauri";
+import { useTargetOperation } from "../lib/targetOperation";
 import {
   resolveAuthorizedTarget,
   sameDeviceTarget,
@@ -49,26 +49,25 @@ export default function BugreportCapture() {
   const [reviewing, setReviewing] = useState(false);
   const [privacyAccepted, setPrivacyAccepted] = useState(false);
   const [state, setState] = useState<CaptureState>({ kind: "idle" });
-  const operationRef = useRef<string | null>(null);
+  const liveSelectedTarget = resolveAuthorizedTarget(
+    selectedTarget,
+    authorizedDevices,
+  );
+  const captureOperation = useTargetOperation(liveSelectedTarget);
 
   const busy = ["selecting", "running", "cancelling"].includes(state.kind);
 
   useEffect(() => {
-    if (busy) return;
     const next = resolveAuthorizedTarget(selectedTarget, authorizedDevices);
-    if (!sameDeviceTarget(selectedTarget, next)) setSelectedTarget(next);
-  }, [authorizedDevices, busy, selectedTarget]);
-
-  useEffect(() => {
-    return () => {
-      const operationId = operationRef.current;
-      operationRef.current = null;
-      if (operationId) void callCancelOperation(operationId);
-    };
-  }, []);
+    if (sameDeviceTarget(selectedTarget, next)) return;
+    captureOperation.invalidate();
+    setSelectedTarget(next);
+    if (busy) setState({ kind: "idle" });
+  }, [authorizedDevices, busy, captureOperation, selectedTarget]);
 
   const startCapture = useCallback(async () => {
-    if (!authorizedTarget || !privacyAccepted || busy) return;
+    if (!authorizedTarget || !liveSelectedTarget || !privacyAccepted || busy)
+      return;
     if (
       requiresTransportOverride(authorizedTarget) &&
       !transportOverrideAccepted
@@ -78,6 +77,7 @@ export default function BugreportCapture() {
     // Freeze the exact transport generation before opening the native save
     // dialog. A reconnect cannot silently retarget the eventual capture.
     const targetSnapshot = { ...authorizedTarget };
+    const lease = captureOperation.begin();
     setState({ kind: "selecting" });
     try {
       const date = new Date().toISOString().slice(0, 10);
@@ -86,12 +86,14 @@ export default function BugreportCapture() {
         `droidsmith-bugreport-${date}.zip`,
       );
       if (!grant) {
-        setState({ kind: "idle" });
+        lease.commit(() => setState({ kind: "idle" }));
+        lease.finish();
         return;
       }
+      if (!lease.isCurrent()) return;
 
       const operationId = newOperationId("bugreport");
-      operationRef.current = operationId;
+      if (!lease.registerCancellation(operationId)) return;
       setState({ kind: "running", progress: t("bugreport.starting") });
       const result = await callCaptureBugreport(
         targetSnapshot,
@@ -100,7 +102,7 @@ export default function BugreportCapture() {
         {
           operationId,
           onEvent: (event: OperationEvent) => {
-            if (operationRef.current !== operationId) return;
+            if (!lease.isCurrent()) return;
             if (event.kind === "progress" || event.kind === "started") {
               setState({
                 kind: "running",
@@ -110,26 +112,31 @@ export default function BugreportCapture() {
           },
         },
       );
-      if (operationRef.current !== operationId) return;
-      operationRef.current = null;
+      if (!lease.isCurrent()) return;
       setReviewing(false);
       setPrivacyAccepted(false);
       setState({ kind: "success", result });
+      lease.finish();
     } catch (error) {
-      operationRef.current = null;
-      setState({
-        kind: "error",
-        message: errorMessage(error),
-      });
+      if (!lease.isCurrent()) return;
+      setState({ kind: "error", message: errorMessage(error) });
+      lease.finish();
     }
-  }, [authorizedTarget, busy, privacyAccepted, t, transportOverrideAccepted]);
+  }, [
+    authorizedTarget,
+    busy,
+    captureOperation,
+    liveSelectedTarget,
+    privacyAccepted,
+    t,
+    transportOverrideAccepted,
+  ]);
 
   const cancelCapture = useCallback(async () => {
-    const operationId = operationRef.current;
-    if (!operationId) return;
+    if (!captureOperation.hasActiveLease()) return;
     setState({ kind: "cancelling", progress: t("bugreport.cancelling") });
-    await callCancelOperation(operationId);
-  }, [t]);
+    await captureOperation.requestActiveCancellation();
+  }, [captureOperation, t]);
 
   return (
     <Card className="p-5">

@@ -3,7 +3,6 @@ import { useTranslation } from "react-i18next";
 
 import {
   errorMessage,
-  callCancelOperation,
   callListProcesses,
   callSaveLogcatExport,
   callSelectHostPath,
@@ -14,6 +13,7 @@ import {
   type LogcatQueryScope,
   type OperationEvent,
 } from "../lib/tauri";
+import { useTargetOperation } from "../lib/targetOperation";
 import {
   loadLogcatLibrary,
   saveLogcatQueries,
@@ -90,10 +90,13 @@ export default function LogcatRoute() {
   const [exportMessage, setExportMessage] = useState<string | null>(null);
   const [announcement, setAnnouncement] = useState("");
   const [announcementRevision, setAnnouncementRevision] = useState(0);
-  const operationRef = useRef<string | null>(null);
   const partialLineRef = useRef("");
-  const generationRef = useRef(0);
   const outputRef = useRef<HTMLDivElement>(null);
+  const liveSelectedTarget = resolveAuthorizedTarget(
+    selectedTarget,
+    authorizedDevices,
+  );
+  const streamOperation = useTargetOperation(liveSelectedTarget);
 
   const deviceIdentity = selectedTarget?.serial ?? null;
 
@@ -149,11 +152,15 @@ export default function LogcatRoute() {
   }, [authorizedTarget, needsProcessNames]);
 
   const startTailing = useCallback(() => {
-    if (!authorizedTarget || operationRef.current) return;
+    if (
+      !authorizedTarget ||
+      !liveSelectedTarget ||
+      streamOperation.hasActiveLease()
+    )
+      return;
+    const lease = streamOperation.begin();
     const operationId = newOperationId("logcat");
-    const generation = generationRef.current + 1;
-    generationRef.current = generation;
-    operationRef.current = operationId;
+    if (!lease.registerCancellation(operationId)) return;
     partialLineRef.current = "";
     setTailing(true);
     setPaused(false);
@@ -162,11 +169,7 @@ export default function LogcatRoute() {
     setExportMessage(null);
 
     const onEvent = (event: OperationEvent) => {
-      if (
-        generationRef.current !== generation ||
-        operationRef.current !== operationId
-      )
-        return;
+      if (!lease.isCurrent()) return;
       if (event.kind === "output" && event.stream === "stdout") {
         appendLogcatChunk(event.chunk ?? "", partialLineRef, setLines);
         queueLogAnnouncement();
@@ -190,35 +193,29 @@ export default function LogcatRoute() {
       onEvent,
     })
       .catch((error) => {
-        if (
-          generationRef.current === generation &&
-          operationRef.current === operationId
-        ) {
-          setStreamError(errorMessage(error));
-        }
+        lease.commit(() => setStreamError(errorMessage(error)));
       })
       .finally(() => {
-        if (
-          generationRef.current === generation &&
-          operationRef.current === operationId
-        ) {
+        if (lease.isCurrent()) {
           flushPartialLogcatLine(partialLineRef, setLines);
-          operationRef.current = null;
           setTailing(false);
           setReconnecting(false);
+          lease.finish();
         }
       });
-  }, [authorizedTarget, queueLogAnnouncement]);
+  }, [
+    authorizedTarget,
+    liveSelectedTarget,
+    queueLogAnnouncement,
+    streamOperation,
+  ]);
 
   const stopTailing = useCallback(() => {
-    const operationId = operationRef.current;
-    operationRef.current = null;
-    generationRef.current += 1;
+    streamOperation.invalidate();
     flushPartialLogcatLine(partialLineRef, setLines);
     setTailing(false);
     setReconnecting(false);
-    if (operationId) void callCancelOperation(operationId);
-  }, []);
+  }, [streamOperation]);
 
   useEffect(() => {
     const next = resolveAuthorizedTarget(selectedTarget, authorizedDevices);
@@ -228,15 +225,6 @@ export default function LogcatRoute() {
     setLines([]);
     setStreamError(null);
   }, [authorizedDevices, selectedTarget, stopTailing]);
-
-  useEffect(() => {
-    return () => {
-      const operationId = operationRef.current;
-      operationRef.current = null;
-      generationRef.current += 1;
-      if (operationId) void callCancelOperation(operationId);
-    };
-  }, []);
 
   useEffect(() => {
     if (outputRef.current && !paused) {
