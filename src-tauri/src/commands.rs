@@ -634,6 +634,18 @@ fn recovery_operation_failure(error: &operations::OperationError) -> String {
         operations::OperationError::Input(source) => {
             format!("failed while writing adb input: {source}")
         }
+        operations::OperationError::Terminate(source) => {
+            format!("failed to terminate the adb process tree: {source}")
+        }
+        operations::OperationError::OutputRead { stream, source } => {
+            format!("failed while reading adb {stream}: {source}")
+        }
+        operations::OperationError::ReaderPanicked(stream) => {
+            format!("the adb {stream} reader stopped unexpectedly")
+        }
+        operations::OperationError::UnexpectedExit(code) => {
+            format!("the adb stream exited unexpectedly with code {code:?}")
+        }
         operations::OperationError::Cancelled => "operation was cancelled".to_string(),
         operations::OperationError::Timeout(duration) => {
             format!("adb recovery step timed out after {duration:?}")
@@ -1181,6 +1193,10 @@ impl From<operations::OperationError> for CommandError {
             operations::OperationError::Spawn { .. } => "spawn_failed",
             operations::OperationError::Wait(_) => "process_wait_failed",
             operations::OperationError::Input(_) => "process_input_failed",
+            operations::OperationError::Terminate(_) => "process_terminate_failed",
+            operations::OperationError::OutputRead { .. } => "process_output_read_failed",
+            operations::OperationError::ReaderPanicked(_) => "process_output_reader_failed",
+            operations::OperationError::UnexpectedExit(_) => "process_exited_unexpectedly",
             operations::OperationError::Cancelled => "operation_cancelled",
             operations::OperationError::Timeout(_) => "operation_timeout",
             operations::OperationError::OutputTooLarge(_) => "operation_output_too_large",

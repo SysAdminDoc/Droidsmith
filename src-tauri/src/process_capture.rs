@@ -81,6 +81,12 @@ pub(crate) enum CaptureError {
     Wait(std::io::Error),
     #[error("failed to terminate child process tree: {0}")]
     Terminate(std::io::Error),
+    #[error("failed while reading child {stream}: {source}")]
+    Read {
+        stream: &'static str,
+        #[source]
+        source: std::io::Error,
+    },
     #[error("{0} capture worker panicked")]
     ReaderPanicked(&'static str),
 }
@@ -118,12 +124,14 @@ pub(crate) fn run(
     let exceeded = Arc::new(AtomicU8::new(0));
     let stdout_reader = spawn_reader(
         stdout,
+        "stdout",
         limits.stdout_bytes,
         STDOUT_LIMIT_BIT,
         Arc::clone(&exceeded),
     );
     let stderr_reader = spawn_reader(
         stderr,
+        "stderr",
         limits.stderr_bytes,
         STDERR_LIMIT_BIT,
         Arc::clone(&exceeded),
@@ -155,10 +163,10 @@ pub(crate) fn run(
 
     let stdout = stdout_reader
         .join()
-        .map_err(|_| CaptureError::ReaderPanicked("stdout"))?;
+        .map_err(|_| CaptureError::ReaderPanicked("stdout"))??;
     let stderr = stderr_reader
         .join()
-        .map_err(|_| CaptureError::ReaderPanicked("stderr"))?;
+        .map_err(|_| CaptureError::ReaderPanicked("stderr"))??;
     if let StopReason::WaitFailed(error) = reason {
         return Err(CaptureError::Wait(error));
     }
@@ -197,16 +205,18 @@ pub(crate) fn run(
 
 fn spawn_reader<R: Read + Send + 'static>(
     mut reader: R,
+    stream: &'static str,
     limit: usize,
     limit_bit: u8,
     exceeded: Arc<AtomicU8>,
-) -> thread::JoinHandle<Vec<u8>> {
+) -> thread::JoinHandle<Result<Vec<u8>, CaptureError>> {
     thread::spawn(move || {
         let mut captured = Vec::with_capacity(limit.min(4096));
         let mut buffer = [0_u8; 16 * 1024];
         loop {
             match reader.read(&mut buffer) {
-                Ok(0) | Err(_) => break,
+                Ok(0) => break,
+                Err(source) => return Err(CaptureError::Read { stream, source }),
                 Ok(count) => {
                     let available = limit.saturating_sub(captured.len());
                     captured.extend_from_slice(&buffer[..count.min(available)]);
@@ -216,7 +226,7 @@ fn spawn_reader<R: Read + Send + 'static>(
                 }
             }
         }
-        captured
+        Ok(captured)
     })
 }
 
@@ -237,4 +247,39 @@ pub(crate) fn append_tail(target: &mut Vec<u8>, bytes: &[u8], limit: usize) {
         target.drain(..overflow);
     }
     target.extend_from_slice(bytes);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    struct FailingReader {
+        emitted: bool,
+    }
+
+    impl Read for FailingReader {
+        fn read(&mut self, buffer: &mut [u8]) -> std::io::Result<usize> {
+            if !self.emitted {
+                self.emitted = true;
+                buffer[..4].copy_from_slice(b"data");
+                return Ok(4);
+            }
+            Err(std::io::Error::other("injected read failure"))
+        }
+    }
+
+    #[test]
+    fn reader_errors_are_not_reported_as_clean_eof() {
+        let exceeded = Arc::new(AtomicU8::new(0));
+        let result = spawn_reader(FailingReader { emitted: false }, "stdout", 32, 1, exceeded)
+            .join()
+            .unwrap();
+        assert!(matches!(
+            result,
+            Err(CaptureError::Read {
+                stream: "stdout",
+                ..
+            })
+        ));
+    }
 }

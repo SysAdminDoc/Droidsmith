@@ -39,6 +39,10 @@ each milestone tag.
   staging files instead of truncating their destination in place; failed writes
   leave the prior artifact intact. Suggested save names also reject Windows
   device names and invalid filename characters before opening the native dialog.
+- Subprocess supervisors now surface pipe-read, worker-panic, and process-tree
+  termination failures instead of returning partial output as success. Captured
+  operations cap live IPC output with an omission notice, and rapidly exiting
+  Logcat children stop after five reconnect attempts instead of retrying forever.
 
 ## [0.9.7] - 2026-07-21
 

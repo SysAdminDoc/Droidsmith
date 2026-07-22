@@ -100,6 +100,18 @@ pub enum OperationError {
     Wait(#[source] std::io::Error),
     #[error("failed while writing subprocess input: {0}")]
     Input(#[source] std::io::Error),
+    #[error("failed to terminate child process tree: {0}")]
+    Terminate(#[source] std::io::Error),
+    #[error("failed while reading child {stream}: {source}")]
+    OutputRead {
+        stream: &'static str,
+        #[source]
+        source: std::io::Error,
+    },
+    #[error("{0} output worker panicked")]
+    ReaderPanicked(&'static str),
+    #[error("long-lived process exited unexpectedly with code {0:?}")]
+    UnexpectedExit(Option<i32>),
     #[error("operation was cancelled")]
     Cancelled,
     #[error("operation timed out after {0:?}")]
@@ -581,10 +593,9 @@ pub fn stream_logcat(
         if started.elapsed() >= Duration::from_secs(30) {
             attempt = 1;
         }
-        if let Err(error @ (OperationError::Spawn { .. } | OperationError::Wait(_))) = result {
-            if attempt >= 5 {
-                return Err(error);
-            }
+        let failure = stream_failure(result);
+        if rapid_stream_failures_exhausted(attempt, started.elapsed()) {
+            return Err(failure);
         }
 
         attempt = attempt.saturating_add(1);
@@ -604,6 +615,17 @@ pub fn stream_logcat(
             std::thread::sleep(Duration::from_millis(50));
         }
     }
+}
+
+fn stream_failure(result: Result<ProcessOutput, OperationError>) -> OperationError {
+    match result {
+        Ok(output) => OperationError::UnexpectedExit(output.code),
+        Err(error) => error,
+    }
+}
+
+fn rapid_stream_failures_exhausted(attempt: u32, elapsed: Duration) -> bool {
+    elapsed < Duration::from_secs(30) && attempt >= 5
 }
 
 #[derive(Clone, Copy)]
@@ -672,7 +694,7 @@ fn execute_child(
             .expect("piped stdin must exist")
             .write_all(input);
         if let Err(error) = write_result {
-            let _ = crate::process_tree::terminate(&mut child);
+            crate::process_tree::terminate(&mut child).map_err(OperationError::Terminate)?;
             return Err(OperationError::Input(error));
         }
     }
@@ -700,18 +722,18 @@ fn execute_child(
     let mut output_too_large = None;
     while termination.is_none() {
         if cancelled.load(Ordering::Acquire) {
-            let _ = crate::process_tree::terminate(&mut child);
+            crate::process_tree::terminate(&mut child).map_err(OperationError::Terminate)?;
             termination = Some((None, false, true));
             continue;
         }
         if started.elapsed() >= timeout {
-            let _ = crate::process_tree::terminate(&mut child);
+            crate::process_tree::terminate(&mut child).map_err(OperationError::Terminate)?;
             termination = Some((None, true, false));
             continue;
         }
         if let Some((path, max_bytes)) = options.file_budget {
             if std::fs::metadata(path).is_ok_and(|metadata| metadata.len() > max_bytes) {
-                let _ = crate::process_tree::terminate(&mut child);
+                crate::process_tree::terminate(&mut child).map_err(OperationError::Terminate)?;
                 output_too_large = Some(max_bytes);
                 termination = Some((None, false, false));
                 continue;
@@ -735,7 +757,7 @@ fn execute_child(
                 std::thread::sleep(POLL_INTERVAL);
             }
             Err(error) => {
-                let _ = crate::process_tree::terminate(&mut child);
+                crate::process_tree::terminate(&mut child).map_err(OperationError::Terminate)?;
                 let _ = stdout_reader.join();
                 let _ = stderr_reader.join();
                 return Err(OperationError::Wait(error));
@@ -743,8 +765,8 @@ fn execute_child(
         }
     }
 
-    let stdout = String::from_utf8_lossy(&stdout_reader.join().unwrap_or_default()).into_owned();
-    let stderr = String::from_utf8_lossy(&stderr_reader.join().unwrap_or_default()).into_owned();
+    let stdout_result = join_reader(stdout_reader, "stdout");
+    let stderr_result = join_reader(stderr_reader, "stderr");
     let (code, timed_out, was_cancelled) = termination.expect("termination is assigned");
     if was_cancelled {
         return Err(OperationError::Cancelled);
@@ -755,6 +777,8 @@ fn execute_child(
     if let Some(max_bytes) = output_too_large {
         return Err(OperationError::OutputTooLarge(max_bytes));
     }
+    let stdout = String::from_utf8_lossy(&stdout_result?).into_owned();
+    let stderr = String::from_utf8_lossy(&stderr_result?).into_owned();
     Ok(ProcessOutput {
         stdout,
         stderr,
@@ -770,28 +794,29 @@ fn read_stream<R: Read + Send + 'static>(
     stream: &'static str,
     sink: EventSink,
     capture_output: bool,
-) -> std::thread::JoinHandle<Vec<u8>> {
+) -> std::thread::JoinHandle<std::io::Result<Vec<u8>>> {
     std::thread::spawn(move || {
         let mut captured = Vec::with_capacity(4096);
         let mut utf8_pending = Vec::with_capacity(4);
+        let mut emitted_bytes = 0usize;
+        let mut emitted_omission_notice = false;
         let mut buffer = [0_u8; 4096];
         loop {
             match reader.read(&mut buffer) {
-                Ok(0) | Err(_) => {
+                Ok(0) => {
                     let final_text = decode_utf8_incremental(&mut utf8_pending, &[], true);
-                    if !final_text.is_empty() {
-                        sink(OperationEvent {
-                            operation_id: operation_id.clone(),
-                            kind: OperationEventKind::Output,
-                            stream: Some(stream),
-                            chunk: Some(final_text),
-                            message: None,
-                            elapsed_ms: None,
-                            attempt: None,
-                        });
-                    }
+                    emit_output(
+                        &sink,
+                        &operation_id,
+                        stream,
+                        &final_text,
+                        capture_output,
+                        &mut emitted_bytes,
+                        &mut emitted_omission_notice,
+                    );
                     break;
                 }
+                Err(error) => return Err(error),
                 Ok(count) => {
                     if capture_output {
                         crate::process_capture::append_tail(
@@ -801,22 +826,80 @@ fn read_stream<R: Read + Send + 'static>(
                         );
                     }
                     let text = decode_utf8_incremental(&mut utf8_pending, &buffer[..count], false);
-                    if !text.is_empty() {
-                        sink(OperationEvent {
-                            operation_id: operation_id.clone(),
-                            kind: OperationEventKind::Output,
-                            stream: Some(stream),
-                            chunk: Some(text),
-                            message: None,
-                            elapsed_ms: None,
-                            attempt: None,
-                        });
-                    }
+                    emit_output(
+                        &sink,
+                        &operation_id,
+                        stream,
+                        &text,
+                        capture_output,
+                        &mut emitted_bytes,
+                        &mut emitted_omission_notice,
+                    );
                 }
             }
         }
-        captured
+        Ok(captured)
     })
+}
+
+fn join_reader(
+    reader: std::thread::JoinHandle<std::io::Result<Vec<u8>>>,
+    stream: &'static str,
+) -> Result<Vec<u8>, OperationError> {
+    reader
+        .join()
+        .map_err(|_| OperationError::ReaderPanicked(stream))?
+        .map_err(|source| OperationError::OutputRead { stream, source })
+}
+
+fn emit_output(
+    sink: &EventSink,
+    operation_id: &str,
+    stream: &'static str,
+    text: &str,
+    capture_output: bool,
+    emitted_bytes: &mut usize,
+    emitted_omission_notice: &mut bool,
+) {
+    if text.is_empty() {
+        return;
+    }
+    let visible = if capture_output {
+        let remaining = CAPTURE_LIMIT_BYTES.saturating_sub(*emitted_bytes);
+        let mut end = remaining.min(text.len());
+        while !text.is_char_boundary(end) {
+            end -= 1;
+        }
+        &text[..end]
+    } else {
+        text
+    };
+    if !visible.is_empty() {
+        *emitted_bytes = (*emitted_bytes).saturating_add(visible.len());
+        sink(OperationEvent {
+            operation_id: operation_id.to_string(),
+            kind: OperationEventKind::Output,
+            stream: Some(stream),
+            chunk: Some(visible.to_string()),
+            message: None,
+            elapsed_ms: None,
+            attempt: None,
+        });
+    }
+    if capture_output && visible.len() < text.len() && !*emitted_omission_notice {
+        *emitted_omission_notice = true;
+        sink(OperationEvent {
+            operation_id: operation_id.to_string(),
+            kind: OperationEventKind::Output,
+            stream: Some(stream),
+            chunk: Some(format!(
+                "\n[additional {stream} output omitted from the live view]\n"
+            )),
+            message: None,
+            elapsed_ms: None,
+            attempt: None,
+        });
+    }
 }
 
 fn decode_utf8_incremental(pending: &mut Vec<u8>, chunk: &[u8], eof: bool) -> String {
@@ -894,6 +977,70 @@ mod tests {
         let second = decode_utf8_incremental(&mut pending, &bytes[split..], false);
         assert_eq!(format!("{first}{second}"), text);
         assert!(pending.is_empty());
+    }
+
+    #[test]
+    fn captured_live_output_is_capped_and_reports_omission_once() {
+        let events = Arc::new(Mutex::new(Vec::new()));
+        let captured_events = Arc::clone(&events);
+        let sink: EventSink = Arc::new(move |event| captured_events.lock().unwrap().push(event));
+        let mut emitted = 0;
+        let mut notice = false;
+        let oversized = "x".repeat(CAPTURE_LIMIT_BYTES + 128);
+        emit_output(
+            &sink,
+            "bounded-output-test",
+            "stdout",
+            &oversized,
+            true,
+            &mut emitted,
+            &mut notice,
+        );
+        emit_output(
+            &sink,
+            "bounded-output-test",
+            "stdout",
+            "more output",
+            true,
+            &mut emitted,
+            &mut notice,
+        );
+
+        assert_eq!(emitted, CAPTURE_LIMIT_BYTES);
+        let chunks = events
+            .lock()
+            .unwrap()
+            .iter()
+            .filter_map(|event| event.chunk.as_deref())
+            .map(str::to_string)
+            .collect::<Vec<_>>();
+        assert_eq!(
+            chunks
+                .iter()
+                .filter(|chunk| chunk.contains("output omitted"))
+                .count(),
+            1
+        );
+        assert_eq!(chunks[0].len(), CAPTURE_LIMIT_BYTES);
+    }
+
+    #[test]
+    fn rapid_normal_or_nonzero_stream_exit_exhausts_reconnect_budget() {
+        for code in [Some(0), Some(7), None] {
+            assert!(matches!(
+                stream_failure(Ok(ProcessOutput {
+                    stdout: String::new(),
+                    stderr: String::new(),
+                    code,
+                    timed_out: false,
+                    cancelled: false,
+                })),
+                OperationError::UnexpectedExit(actual) if actual == code
+            ));
+        }
+        assert!(!rapid_stream_failures_exhausted(4, Duration::from_secs(1)));
+        assert!(rapid_stream_failures_exhausted(5, Duration::from_secs(1)));
+        assert!(!rapid_stream_failures_exhausted(5, Duration::from_secs(31)));
     }
 
     #[test]
