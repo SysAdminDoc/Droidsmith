@@ -542,6 +542,53 @@
       "rawAttributes": "Rohattribute",
       "truncated": "Zeige 500 von {{count}} Knoten"
     },
+    "perfetto": {
+      "title": "Perfetto-Systemtrace",
+      "sensitive": "Vertrauliches lokales Artefakt",
+      "body": "Einen begrenzten Android-Systemtrace zur Offline-Analyse in Perfetto oder einem kompatiblen Betrachter aufzeichnen.",
+      "available": "Verfügbar",
+      "unavailable": "Nicht verfügbar",
+      "checking": "Perfetto-Unterstützung wird geprüft",
+      "checkFailed": "Perfetto-Unterstützung konnte nicht geprüft werden",
+      "unsupportedTitle": "Perfetto-Aufzeichnung wird nicht unterstützt",
+      "unsupportedAndroid": "Dieses Gerät meldet Android SDK {{sdk}}. Die integrierte Perfetto-Aufzeichnung erfordert SDK 29 oder neuer.",
+      "toolUnavailable": "Dieser Android-Build stellt den Perfetto-Befehlsdienst nicht bereit.",
+      "choosePreset": "Aufzeichnungsvorlage",
+      "privacyTitle": "Systemtraces können vertrauliche Geräteaktivitäten enthalten",
+      "privacyBody": "Paketnamen, Prozessaktivitäten, Zeitdaten und Gerätekennungen können enthalten sein. Droidsmith speichert den Trace nur am gewählten lokalen Ort und lädt oder öffnet ihn nie automatisch.",
+      "acknowledge": "Ich habe Trace-Quellen, Grenzen und Datenschutzhinweis geprüft.",
+      "chooseDestination": "Ziel wählen und aufzeichnen",
+      "starting": "Begrenzte Perfetto-Aufzeichnung wird vorbereitet",
+      "running": "Perfetto-Aufzeichnung läuft",
+      "cancelling": "Abbruch und Bereinigung der Gerätedatei…",
+      "captureInProgress": "Perfetto-Aufzeichnung läuft",
+      "selecting": "Warten auf ein lokales Ziel",
+      "cancel": "Aufzeichnung abbrechen",
+      "failed": "Perfetto-Aufzeichnung fehlgeschlagen",
+      "saved": "Perfetto-Trace gespeichert",
+      "artifactSummary": "{{size}} · SHA-256 {{sha256}}",
+      "openWith": "Öffnen mit…",
+      "localOnly": "Der Trace bleibt lokal. Droidsmith lädt ihn nicht hoch und bettet keinen Trace-Betrachter ein.",
+      "duration": "Dauer",
+      "seconds": "{{count}} Sekunden",
+      "buffer": "Ringpuffer",
+      "maximum": "Maximale Datei",
+      "sources": "Quellen",
+      "presets": {
+        "ui_rendering": {
+          "title": "UI-Darstellung",
+          "body": "Kurze Aufzeichnung von Planung, Grafik, Ansichten, Fenstern, Eingaben und Binder zur Ruckelanalyse."
+        },
+        "app_startup": {
+          "title": "App-Start",
+          "body": "Prozess-, Paket-, Laufzeit-, Aktivitäts-, Fenster- und Grafikdaten rund um einen App-Start."
+        },
+        "system_health": {
+          "title": "Systemzustand",
+          "body": "Längere CPU-, Scheduler-, Prozess-, Speicher-, Energie- und Binder-Messung für systemweite Hänger."
+        }
+      }
+    },
     "tethering": {
       "notInstalled": "Nicht installiert",
       "notFoundBody": "Installiere gnirehtet und füge es zum PATH hinzu, um „Internet teilen“ zu aktivieren – Reverse-Tethering leitet das Gerät über die Verbindung dieses Computers.",

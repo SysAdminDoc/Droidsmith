@@ -542,6 +542,53 @@
       "rawAttributes": "原始属性",
       "truncated": "显示 {{count}} 个节点中的 500 个"
     },
+    "perfetto": {
+      "title": "Perfetto 系统跟踪",
+      "sensitive": "敏感的本地文件",
+      "body": "录制有界的 Android 系统跟踪，以便在 Perfetto 或其他兼容查看器中离线分析。",
+      "available": "可用",
+      "unavailable": "不可用",
+      "checking": "正在检查 Perfetto 支持",
+      "checkFailed": "无法检查 Perfetto 支持",
+      "unsupportedTitle": "不支持 Perfetto 捕获",
+      "unsupportedAndroid": "此设备报告 Android SDK {{sdk}}。内置 Perfetto 捕获需要 SDK 29 或更高版本。",
+      "toolUnavailable": "此 Android 版本未提供 Perfetto 命令行服务。",
+      "choosePreset": "捕获预设",
+      "privacyTitle": "系统跟踪可能包含敏感的设备活动",
+      "privacyBody": "其中可能包含软件包名称、进程活动、时间信息和设备标识符。Droidsmith 只会将跟踪保存到所选本地路径，绝不会自动上传或打开。",
+      "acknowledge": "我已查看跟踪来源、限制和隐私警告。",
+      "chooseDestination": "选择目标并捕获",
+      "starting": "正在准备有界的 Perfetto 捕获",
+      "running": "Perfetto 捕获正在进行",
+      "cancelling": "正在取消并清理设备临时文件…",
+      "captureInProgress": "Perfetto 捕获正在进行",
+      "selecting": "正在等待本地保存位置",
+      "cancel": "取消捕获",
+      "failed": "Perfetto 捕获失败",
+      "saved": "Perfetto 跟踪已保存",
+      "artifactSummary": "{{size}} · SHA-256 {{sha256}}",
+      "openWith": "打开方式…",
+      "localOnly": "跟踪仅保存在本地。Droidsmith 不会上传跟踪，也不内置跟踪查看器。",
+      "duration": "时长",
+      "seconds": "{{count}} 秒",
+      "buffer": "环形缓冲区",
+      "maximum": "最大文件",
+      "sources": "来源",
+      "presets": {
+        "ui_rendering": {
+          "title": "界面渲染",
+          "body": "短时捕获调度、图形、视图、窗口、输入和 Binder，用于分析卡顿。"
+        },
+        "app_startup": {
+          "title": "应用启动",
+          "body": "记录应用启动期间的进程、软件包、运行时、活动、窗口和图形活动。"
+        },
+        "system_health": {
+          "title": "系统运行状况",
+          "body": "较长时间采样 CPU、调度器、进程、内存、电源和 Binder，用于分析系统级停顿。"
+        }
+      }
+    },
     "tethering": {
       "notInstalled": "未安装",
       "notFoundBody": "安装 gnirehtet 并将其加入 PATH 以启用共享网络——反向网络共享会将设备通过此计算机的连接联网。",

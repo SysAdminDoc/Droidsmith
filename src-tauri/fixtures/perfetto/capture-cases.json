@@ -1,0 +1,30 @@
+[
+  {
+    "name": "success",
+    "outcome": "success",
+    "remote_size": 4096,
+    "expect_cleanup": true
+  },
+  {
+    "name": "unsupported",
+    "outcome": "unsupported",
+    "remote_size": 0,
+    "expect_cleanup": true
+  },
+  {
+    "name": "disconnect",
+    "outcome": "disconnect",
+    "expect_cleanup": true
+  },
+  {
+    "name": "cancel",
+    "outcome": "cancel",
+    "expect_cleanup": true
+  },
+  {
+    "name": "oversize",
+    "outcome": "oversize",
+    "remote_size": 67108865,
+    "expect_cleanup": true
+  }
+]

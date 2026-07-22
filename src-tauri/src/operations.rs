@@ -5,7 +5,7 @@
 //! `cancel` flips the shared flag and the runner kills and reaps the child.
 
 use std::collections::{HashMap, VecDeque};
-use std::io::Read;
+use std::io::{Read, Write};
 use std::path::Path;
 use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -98,6 +98,8 @@ pub enum OperationError {
     },
     #[error("failed while waiting for child process: {0}")]
     Wait(#[source] std::io::Error),
+    #[error("failed while writing subprocess input: {0}")]
+    Input(#[source] std::io::Error),
     #[error("operation was cancelled")]
     Cancelled,
     #[error("operation timed out after {0:?}")]
@@ -201,6 +203,69 @@ impl RegisteredOperation {
             timeout,
             &self.operation_id,
             &self.cancellation.registration.cancelled,
+            &self.sink,
+            ChildOptions::captured(),
+        )
+    }
+
+    /// Run a stage with bounded caller-owned stdin. Used for text configs that
+    /// should not be persisted as host or device temporary files.
+    pub(crate) fn run_stage_with_input(
+        &mut self,
+        program: &Path,
+        args: &[String],
+        input: &[u8],
+        timeout: Duration,
+        label: &str,
+    ) -> Result<ProcessOutput, OperationError> {
+        if self.is_cancelled() {
+            return Err(OperationError::Cancelled);
+        }
+        (self.sink)(OperationEvent {
+            operation_id: self.operation_id.clone(),
+            kind: OperationEventKind::Progress,
+            stream: None,
+            chunk: None,
+            message: Some(label.to_string()),
+            elapsed_ms: Some(saturating_millis(self.started.elapsed())),
+            attempt: None,
+        });
+        execute_child(
+            program,
+            args,
+            timeout,
+            &self.operation_id,
+            &self.cancellation.registration.cancelled,
+            &self.sink,
+            ChildOptions::captured_with_input(input),
+        )
+    }
+
+    /// Cleanup must still be attempted after the user cancels the producing
+    /// stage. It is independently timeout-bounded and backend-controlled.
+    pub(crate) fn run_cleanup_stage(
+        &self,
+        program: &Path,
+        args: &[String],
+        timeout: Duration,
+        label: &str,
+    ) -> Result<ProcessOutput, OperationError> {
+        (self.sink)(OperationEvent {
+            operation_id: self.operation_id.clone(),
+            kind: OperationEventKind::Progress,
+            stream: None,
+            chunk: None,
+            message: Some(label.to_string()),
+            elapsed_ms: Some(saturating_millis(self.started.elapsed())),
+            attempt: None,
+        });
+        let cleanup_cancelled = Arc::new(AtomicBool::new(false));
+        execute_child(
+            program,
+            args,
+            timeout,
+            &self.operation_id,
+            &cleanup_cancelled,
             &self.sink,
             ChildOptions::captured(),
         )
@@ -361,6 +426,7 @@ fn run_process_inner(
         ChildOptions {
             capture_output: true,
             file_budget,
+            stdin_data: None,
         },
     );
     match &result {
@@ -544,6 +610,7 @@ pub fn stream_logcat(
 struct ChildOptions<'a> {
     capture_output: bool,
     file_budget: Option<(&'a Path, u64)>,
+    stdin_data: Option<&'a [u8]>,
 }
 
 impl ChildOptions<'_> {
@@ -551,6 +618,15 @@ impl ChildOptions<'_> {
         Self {
             capture_output: true,
             file_budget: None,
+            stdin_data: None,
+        }
+    }
+
+    const fn captured_with_input(input: &[u8]) -> ChildOptions<'_> {
+        ChildOptions {
+            capture_output: true,
+            file_budget: None,
+            stdin_data: Some(input),
         }
     }
 
@@ -558,6 +634,7 @@ impl ChildOptions<'_> {
         Self {
             capture_output: false,
             file_budget: None,
+            stdin_data: None,
         }
     }
 }
@@ -575,16 +652,30 @@ fn execute_child(
         return Err(OperationError::Cancelled);
     }
     let mut command = Command::new(program);
-    command
-        .args(args)
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
+    command.args(args);
+    if options.stdin_data.is_some() {
+        command.stdin(Stdio::piped());
+    } else {
+        command.stdin(Stdio::null());
+    }
+    command.stdout(Stdio::piped()).stderr(Stdio::piped());
     crate::process_tree::configure(&mut command);
     let mut child = command.spawn().map_err(|source| OperationError::Spawn {
         program: program.display().to_string(),
         source,
     })?;
+
+    if let Some(input) = options.stdin_data {
+        let write_result = child
+            .stdin
+            .take()
+            .expect("piped stdin must exist")
+            .write_all(input);
+        if let Err(error) = write_result {
+            let _ = crate::process_tree::terminate(&mut child);
+            return Err(OperationError::Input(error));
+        }
+    }
 
     let stdout = child.stdout.take().expect("piped stdout must exist");
     let stderr = child.stderr.take().expect("piped stderr must exist");

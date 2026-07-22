@@ -33,12 +33,13 @@ use crate::backup;
 use crate::bugreport;
 use crate::fs_util::{ArtifactError, ArtifactKind, HostArtifact, StagedArtifact};
 use crate::host_path::{
-    open_directory_command, reveal_command, validate_suggested_file_name, HostPathGrant,
-    HostPathPurpose, PathGrantError, PathGrantStore,
+    open_directory_command, open_with_command, reveal_command, validate_suggested_file_name,
+    HostPathGrant, HostPathPurpose, PathGrantError, PathGrantStore,
 };
 use crate::install;
 use crate::journal::{self, Journal, JournalEntry};
 use crate::operations::{self, OperationEvent};
+use crate::perfetto;
 use crate::profile;
 use crate::quirks::{self, DeviceContext, Quirk};
 use crate::recovery_baseline::{self, BaselineActionInput, BaselinePack, RecoveryBaselineDiff};
@@ -629,6 +630,9 @@ fn recovery_operation_failure(error: &operations::OperationError) -> String {
         operations::OperationError::Wait(source) => {
             format!("failed while waiting for adb: {source}")
         }
+        operations::OperationError::Input(source) => {
+            format!("failed while writing adb input: {source}")
+        }
         operations::OperationError::Cancelled => "operation was cancelled".to_string(),
         operations::OperationError::Timeout(duration) => {
             format!("adb recovery step timed out after {duration:?}")
@@ -1173,6 +1177,7 @@ impl From<operations::OperationError> for CommandError {
             operations::OperationError::DuplicateId(_) => "operation_already_running",
             operations::OperationError::Spawn { .. } => "spawn_failed",
             operations::OperationError::Wait(_) => "process_wait_failed",
+            operations::OperationError::Input(_) => "process_input_failed",
             operations::OperationError::Cancelled => "operation_cancelled",
             operations::OperationError::Timeout(_) => "operation_timeout",
             operations::OperationError::OutputTooLarge(_) => "operation_output_too_large",
@@ -1212,6 +1217,15 @@ impl From<backup::BackupError> for CommandError {
 
 impl From<bugreport::BugreportError> for CommandError {
     fn from(error: bugreport::BugreportError) -> Self {
+        Self {
+            code: error.code(),
+            message: error.to_string(),
+        }
+    }
+}
+
+impl From<perfetto::PerfettoError> for CommandError {
+    fn from(error: perfetto::PerfettoError) -> Self {
         Self {
             code: error.code(),
             message: error.to_string(),
@@ -1661,6 +1675,38 @@ pub fn reveal_in_folder(
         .map_err(|error| CommandError {
             code: "reveal_failed",
             message: format!("could not open the file manager: {error}"),
+        })?;
+    Ok(())
+}
+
+/// Open a Droidsmith-produced artifact with the platform chooser/association.
+/// The renderer cannot use this command for an arbitrary host path.
+#[tauri::command]
+#[specta::specta]
+pub fn open_artifact_with(
+    grants: tauri::State<'_, PathGrantStore>,
+    path: String,
+) -> Result<(), CommandError> {
+    if !grants.is_revealable(&path) {
+        return Err(CommandError {
+            code: "open_path_not_produced",
+            message: "only artifacts Droidsmith produced this session can be opened".to_string(),
+        });
+    }
+    let target = Path::new(&path);
+    if !target.is_file() {
+        return Err(CommandError {
+            code: "open_path_missing",
+            message: "the artifact is no longer at that location".to_string(),
+        });
+    }
+    let (program, args) = open_with_command(target);
+    std::process::Command::new(&program)
+        .args(&args)
+        .spawn()
+        .map_err(|error| CommandError {
+            code: "open_with_failed",
+            message: format!("could not open the platform file chooser: {error}"),
         })?;
     Ok(())
 }
@@ -3209,6 +3255,58 @@ pub async fn capture_bugreport(
             &target,
             &destination,
             platform_tools_version,
+            &operation_id,
+            sink,
+        )?)
+    })
+    .await
+}
+
+/// Probe the selected device for the platform Perfetto service and return only
+/// fixed backend-owned capture presets.
+#[tauri::command]
+#[specta::specta]
+pub fn perfetto_capabilities(
+    target: adb::DeviceTarget,
+) -> Result<perfetto::PerfettoCapabilities, CommandError> {
+    let transport = validated_transport(&target)?;
+    Ok(perfetto::capabilities(&transport, &target)?)
+}
+
+/// Capture a bounded local system trace after explicit privacy review. The
+/// one-shot destination grant is consumed only after device support is
+/// revalidated, and no trace content is uploaded or parsed by Droidsmith.
+#[tauri::command]
+#[specta::specta]
+pub async fn capture_perfetto_trace(
+    target: adb::DeviceTarget,
+    grants: tauri::State<'_, PathGrantStore>,
+    path_grant: String,
+    #[allow(non_snake_case)] presetId: String,
+    privacy_confirmed: bool,
+    operation_id: String,
+    on_event: tauri::ipc::Channel<OperationEvent>,
+) -> Result<perfetto::PerfettoCaptureResult, CommandError> {
+    if !privacy_confirmed {
+        return Err(CommandError {
+            code: "perfetto_privacy_confirmation_required",
+            message: "review and acknowledge the Perfetto privacy warning before capture"
+                .to_string(),
+        });
+    }
+    let (transport, _) = privileged_transport(&target)?;
+    if !perfetto::capabilities(&transport, &target)?.supported {
+        return Err(perfetto::PerfettoError::Unsupported.into());
+    }
+    let destination = grants.consume(&path_grant, HostPathPurpose::PerfettoTraceSave)?;
+    let adb_path = transport.adb_path;
+    let sink = operations::channel_sink(on_event);
+    spawn_blocking_operation(move || {
+        Ok(perfetto::capture(
+            &adb_path,
+            &target,
+            &destination,
+            &presetId,
             &operation_id,
             sink,
         )?)

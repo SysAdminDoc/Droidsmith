@@ -139,6 +139,44 @@ async function runDesktopFlow(browser) {
   await page.getByRole("button", { name: "Export audit text" }).click();
   await page.getByText(/Layout saved to .*\.txt/).waitFor();
 
+  // R-106: capability-gated Perfetto capture exposes its exact bounded
+  // sources before consent, preserves the path grant/target, and returns only
+  // a local artifact with reveal/open-with actions.
+  const perfettoPanel = page
+    .getByRole("heading", { name: "Perfetto system trace" })
+    .locator("../../../..");
+  await perfettoPanel.getByText("Available", { exact: true }).waitFor();
+  await perfettoPanel.getByText("10 seconds", { exact: true }).waitFor();
+  await perfettoPanel.getByText("32 MB", { exact: true }).first().waitFor();
+  await perfettoPanel.getByText("64.0 MB", { exact: true }).first().waitFor();
+  await perfettoPanel
+    .getByText(/linux\.ftrace/)
+    .first()
+    .waitFor();
+  const perfettoCapture = perfettoPanel.getByRole("button", {
+    name: "Choose destination and capture",
+  });
+  if (!(await perfettoCapture.isDisabled())) {
+    throw new Error("Perfetto capture must require privacy acknowledgement");
+  }
+  await perfettoPanel
+    .getByRole("checkbox", {
+      name: "I reviewed the trace sources, limits, and privacy warning.",
+    })
+    .check();
+  await perfettoCapture.click();
+  await perfettoPanel
+    .getByText("Perfetto trace saved", { exact: true })
+    .waitFor();
+  await perfettoPanel
+    .getByText(/droidsmith-ui_rendering-Pixel-QA\.perfetto-trace/)
+    .waitFor();
+  await perfettoPanel.getByRole("button", { name: "Show in folder" }).waitFor();
+  await perfettoPanel.getByRole("button", { name: "Open with…" }).waitFor();
+  await perfettoPanel.screenshot({
+    path: path.join(screenshotDir, "desktop-perfetto-trace.png"),
+  });
+
   // Persistent display controls capture their exact prior value, expose an
   // immediate Restore action, and route that inverse through the durable
   // journal instead of resetting to a guessed universal default.
@@ -1892,6 +1930,11 @@ async function installTauriMock(
               local_path:
                 "C:/Users/QA/Desktop/droidsmith-bugreport-2026-07-15.zip",
             },
+            perfetto_trace_save: {
+              id: "123e4567-e89b-42d3-a456-426614174013",
+              local_path:
+                "C:/Users/QA/Desktop/droidsmith-ui_rendering-Pixel-QA.perfetto-trace",
+            },
             scrcpy_record_save: {
               id: "123e4567-e89b-42d3-a456-426614174009",
               local_path:
@@ -2253,6 +2296,88 @@ async function installTauriMock(
               sha256: "b".repeat(64),
             },
             captured_at: "2026-07-15T10:15:00Z",
+          };
+        }
+        if (cmd === "perfetto_capabilities") {
+          return {
+            supported: true,
+            sdk_level: 35,
+            unavailable_reason: null,
+            presets: [
+              {
+                id: "ui_rendering",
+                duration_secs: 10,
+                buffer_size_mb: 32,
+                max_output_bytes: 67_108_864,
+                data_sources: [
+                  "linux.ftrace",
+                  "linux.process_stats",
+                  "android.packages_list",
+                ],
+                atrace_categories: [
+                  "gfx",
+                  "view",
+                  "wm",
+                  "am",
+                  "input",
+                  "binder_driver",
+                ],
+              },
+              {
+                id: "app_startup",
+                duration_secs: 15,
+                buffer_size_mb: 32,
+                max_output_bytes: 67_108_864,
+                data_sources: [
+                  "linux.ftrace",
+                  "linux.process_stats",
+                  "android.packages_list",
+                ],
+                atrace_categories: ["am", "wm", "gfx", "view", "dalvik"],
+              },
+              {
+                id: "system_health",
+                duration_secs: 30,
+                buffer_size_mb: 48,
+                max_output_bytes: 67_108_864,
+                data_sources: [
+                  "linux.ftrace",
+                  "linux.process_stats",
+                  "linux.sys_stats",
+                ],
+                atrace_categories: ["am", "wm", "power", "memory"],
+              },
+            ],
+          };
+        }
+        if (cmd === "capture_perfetto_trace") {
+          if (
+            args.path_grant !== "123e4567-e89b-42d3-a456-426614174013" ||
+            args.presetId !== "ui_rendering" ||
+            args.privacy_confirmed !== true ||
+            args.target.transport_id !== 7
+          ) {
+            throw new Error(
+              "Perfetto capture did not preserve its grant, preset, consent, and immutable target",
+            );
+          }
+          emitChannel(args.on_event, {
+            operation_id: args.operation_id,
+            kind: "progress",
+            message: "Pulling the bounded trace to its atomic host stage",
+          });
+          return {
+            artifact: {
+              local_path:
+                "C:/Users/QA/Desktop/droidsmith-ui_rendering-Pixel-QA.perfetto-trace",
+              size_bytes: 4_194_304,
+              sha256: "c".repeat(64),
+            },
+            preset_id: "ui_rendering",
+            duration_secs: 10,
+            buffer_size_mb: 32,
+            max_output_bytes: 67_108_864,
+            captured_at: "2026-07-21T18:00:00Z",
           };
         }
         if (cmd === "wipe_diagnostics") {

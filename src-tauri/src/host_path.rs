@@ -31,6 +31,7 @@ pub enum HostPathPurpose {
     SettingsExport,
     SettingsImport,
     LayoutExportSave,
+    PerfettoTraceSave,
     PushOpen,
     InstallOpen,
     RecoveryBaselineOpen,
@@ -57,6 +58,7 @@ impl HostPathPurpose {
                 | Self::ProfileSave
                 | Self::SettingsExport
                 | Self::LayoutExportSave
+                | Self::PerfettoTraceSave
                 | Self::PackExportSave
         )
     }
@@ -77,6 +79,7 @@ impl HostPathPurpose {
             Self::SettingsExport => "Export Droidsmith settings",
             Self::SettingsImport => "Import Droidsmith settings",
             Self::LayoutExportSave => "Export UI layout or accessibility audit",
+            Self::PerfettoTraceSave => "Save sensitive Perfetto system trace",
             Self::PushOpen => "Choose file to push",
             Self::InstallOpen => "Choose Android package",
             Self::RecoveryBaselineOpen => "Inspect recovery baseline",
@@ -106,6 +109,7 @@ impl HostPathPurpose {
             Self::LayoutExportSave => {
                 Some(("UI layout or accessibility audit", &["xml", "json", "txt"]))
             }
+            Self::PerfettoTraceSave => Some(("Perfetto system trace", &["perfetto-trace"])),
             Self::InstallOpen => Some(("Android package", &["apk", "apks", "xapk", "apkm"])),
             Self::PackImportOpen | Self::PackExportSave => {
                 Some(("Droidsmith debloat pack", &["yaml", "yml"]))
@@ -303,6 +307,25 @@ pub fn reveal_command(path: &Path) -> (String, Vec<String>) {
     } else {
         let target = path.parent().unwrap_or(path);
         ("xdg-open".to_string(), vec![target.display().to_string()])
+    }
+}
+
+/// Launch the platform's explicit "open with" chooser (Windows), or the
+/// normal local file association on macOS/Linux. Callers must separately
+/// authorize `path` against the produced-artifact registry.
+pub fn open_with_command(path: &Path) -> (String, Vec<String>) {
+    if cfg!(target_os = "windows") {
+        (
+            "rundll32.exe".to_string(),
+            vec![
+                "shell32.dll,OpenAs_RunDLL".to_string(),
+                path.display().to_string(),
+            ],
+        )
+    } else if cfg!(target_os = "macos") {
+        ("open".to_string(), vec![path.display().to_string()])
+    } else {
+        ("xdg-open".to_string(), vec![path.display().to_string()])
     }
 }
 
@@ -605,6 +628,27 @@ mod tests {
                 "UI layout or accessibility audit",
                 &["xml", "json", "txt"][..]
             ))
+        );
+    }
+
+    #[test]
+    fn open_with_command_passes_the_artifact_as_one_argument() {
+        let path = if cfg!(target_os = "windows") {
+            PathBuf::from(r"C:\Users\tester\trace with spaces.perfetto-trace")
+        } else {
+            PathBuf::from("/home/tester/trace with spaces.perfetto-trace")
+        };
+        let (program, args) = open_with_command(&path);
+        assert_eq!(args.last(), Some(&path.display().to_string()));
+        assert_eq!(
+            program,
+            if cfg!(target_os = "windows") {
+                "rundll32.exe"
+            } else if cfg!(target_os = "macos") {
+                "open"
+            } else {
+                "xdg-open"
+            }
         );
     }
 }

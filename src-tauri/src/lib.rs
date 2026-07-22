@@ -21,6 +21,7 @@ pub mod operations;
 /// against this crate as `droidsmith_lib`) can reach the loader + lint
 /// types. Tauri-internal callers go through `crate::packs` as usual.
 pub mod packs;
+mod perfetto;
 mod process_capture;
 mod process_tree;
 pub mod profile;
@@ -37,20 +38,21 @@ pub mod time;
 use commands::{
     analyze_apk, apply_action, apply_action_batch, apply_device_control,
     apply_remote_file_mutation, apply_settings_import, backup_package, cancel_operation,
-    capture_bugreport, capture_layout, connect_wireless, disconnect_device, explain_failure,
-    export_device_pack, export_package_apks, export_recovery_baseline, export_settings,
-    extract_apk, fastboot_getvar, find_gnirehtet_session, forget_wireless_endpoint,
-    get_device_info, get_package_metadata, get_settings_mirror_preset, gnirehtet_session_status,
-    grant_dropped_path, has_settings_import_backup, heartbeat, import_pack, initialize_settings,
-    inspect_profile, inspect_recovery_baseline, install_apk, journal_list, journal_undo,
-    journal_undo_batch, launch_scrcpy, list_device_settings, list_devices, list_fastboot_devices,
-    list_logcat_queries, list_network_connections, list_packages, list_packs, list_permissions,
-    list_processes, list_remote_files, list_running_services, list_users, list_wireless_history,
-    list_wireless_services, locate_fastboot, locate_gnirehtet, locate_scrcpy,
-    observe_device_fingerprint, pair_wireless, plan_action, plan_action_batch, plan_pack,
-    plan_remote_file_mutation, plan_shell_action, preflight_package_backup, preview_diagnostics,
-    preview_settings_import, pull_file, push_file, put_device_setting, recover_adb,
-    remove_imported_pack, reset_settings, reset_settings_mirror_preset,
+    capture_bugreport, capture_layout, capture_perfetto_trace, connect_wireless, disconnect_device,
+    explain_failure, export_device_pack, export_package_apks, export_recovery_baseline,
+    export_settings, extract_apk, fastboot_getvar, find_gnirehtet_session,
+    forget_wireless_endpoint, get_device_info, get_package_metadata, get_settings_mirror_preset,
+    gnirehtet_session_status, grant_dropped_path, has_settings_import_backup, heartbeat,
+    import_pack, initialize_settings, inspect_profile, inspect_recovery_baseline, install_apk,
+    journal_list, journal_undo, journal_undo_batch, launch_scrcpy, list_device_settings,
+    list_devices, list_fastboot_devices, list_logcat_queries, list_network_connections,
+    list_packages, list_packs, list_permissions, list_processes, list_remote_files,
+    list_running_services, list_users, list_wireless_history, list_wireless_services,
+    locate_fastboot, locate_gnirehtet, locate_scrcpy, observe_device_fingerprint,
+    open_artifact_with, pair_wireless, perfetto_capabilities, plan_action, plan_action_batch,
+    plan_pack, plan_remote_file_mutation, plan_shell_action, preflight_package_backup,
+    preview_diagnostics, preview_settings_import, pull_file, push_file, put_device_setting,
+    recover_adb, remove_imported_pack, reset_settings, reset_settings_mirror_preset,
     restore_settings_import_backup, reveal_diagnostics_directory, reveal_in_folder,
     run_host_doctor, save_diagnostics, save_layout_export, save_logcat_export, save_logcat_queries,
     save_profile, scrcpy_capabilities, scrcpy_session_status, select_host_path, set_permission,
@@ -79,6 +81,8 @@ fn ipc_builder() -> tauri_specta::Builder<tauri::Wry> {
             save_logcat_queries,
             capture_layout,
             save_layout_export,
+            perfetto_capabilities,
+            capture_perfetto_trace,
             run_host_doctor,
             list_devices,
             watch_devices,
@@ -87,6 +91,7 @@ fn ipc_builder() -> tauri_specta::Builder<tauri::Wry> {
             grant_dropped_path,
             disconnect_device,
             reveal_in_folder,
+            open_artifact_with,
             reveal_diagnostics_directory,
             preview_diagnostics,
             save_diagnostics,

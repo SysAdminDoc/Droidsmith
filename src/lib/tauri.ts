@@ -59,6 +59,8 @@ import {
   type PackListing as GeneratedPackListing,
   type PackTargets as GeneratedPackTargets,
   type PermissionInfo,
+  type PerfettoCapabilities,
+  type PerfettoCaptureResult,
   type PlanPackRequest as GeneratedPlanPackRequest,
   type PlannedAction as GeneratedPlannedAction,
   type PlannedPack as GeneratedPlannedPack,
@@ -473,6 +475,10 @@ export async function callRevealInFolder(path: string): Promise<void> {
   await commands.revealInFolder(path);
 }
 
+export async function callOpenArtifactWith(path: string): Promise<void> {
+  await commands.openArtifactWith(path);
+}
+
 export async function callRevealDiagnosticsDirectory(): Promise<void> {
   await commands.revealDiagnosticsDirectory();
 }
@@ -829,6 +835,30 @@ export async function callCaptureBugreport(
   return commands.captureBugreport(
     target,
     pathGrant,
+    privacyConfirmed,
+    operationId,
+    channel,
+  );
+}
+
+export async function callPerfettoCapabilities(
+  target: DeviceTarget,
+): Promise<PerfettoCapabilities> {
+  return commands.perfettoCapabilities(target);
+}
+
+export async function callCapturePerfettoTrace(
+  target: DeviceTarget,
+  pathGrant: string,
+  presetId: string,
+  privacyConfirmed: boolean,
+  options?: OperationOptions,
+): Promise<PerfettoCaptureResult> {
+  const { operationId, channel } = operationChannel("perfetto", options);
+  return commands.capturePerfettoTrace(
+    target,
+    pathGrant,
+    presetId,
     privacyConfirmed,
     operationId,
     channel,

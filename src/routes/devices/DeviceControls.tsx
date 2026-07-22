@@ -23,6 +23,7 @@ import { InternetSharing } from "./InternetSharing";
 import { NetworkInspector } from "./NetworkInspector";
 import { LayoutInspector } from "./LayoutInspector";
 import { ProcessManager } from "./ProcessManager";
+import { PerfettoTraceCapture } from "./PerfettoTraceCapture";
 
 // Inline device-control results confirm real mutations, so a success and a
 // failure must not read as the same faint line.
@@ -356,6 +357,7 @@ export function DeviceControls({ target }: { target: DeviceTarget }) {
       <FileManager target={operationTarget} />
       <NetworkInspector target={operationTarget} />
       <LayoutInspector target={operationTarget} />
+      <PerfettoTraceCapture target={operationTarget} />
     </div>
   );
 }

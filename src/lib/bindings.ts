@@ -127,6 +127,37 @@ export const commands = {
     });
   },
   /**
+   * Probe the selected device for the platform Perfetto service and return only
+   * fixed backend-owned capture presets.
+   */
+  async perfettoCapabilities(
+    target: DeviceTarget,
+  ): Promise<PerfettoCapabilities> {
+    return await TAURI_INVOKE("perfetto_capabilities", { target });
+  },
+  /**
+   * Capture a bounded local system trace after explicit privacy review. The
+   * one-shot destination grant is consumed only after device support is
+   * revalidated, and no trace content is uploaded or parsed by Droidsmith.
+   */
+  async capturePerfettoTrace(
+    target: DeviceTarget,
+    pathGrant: string,
+    presetId: string,
+    privacyConfirmed: boolean,
+    operationId: string,
+    onEvent: TAURI_CHANNEL<OperationEvent>,
+  ): Promise<PerfettoCaptureResult> {
+    return await TAURI_INVOKE("capture_perfetto_trace", {
+      target,
+      path_grant: pathGrant,
+      presetId,
+      privacy_confirmed: privacyConfirmed,
+      operation_id: operationId,
+      on_event: onEvent,
+    });
+  },
+  /**
    * Run a bounded, non-elevated, read-only host connection scan. The report
    * contains state counts and redacted configuration presence only; it never
    * persists device identifiers, USB instance IDs, environment values, or keys.
@@ -206,6 +237,13 @@ export const commands = {
    */
   async revealInFolder(path: string): Promise<null> {
     return await TAURI_INVOKE("reveal_in_folder", { path });
+  },
+  /**
+   * Open a Droidsmith-produced artifact with the platform chooser/association.
+   * The renderer cannot use this command for an arbitrary host path.
+   */
+  async openArtifactWith(path: string): Promise<null> {
+    return await TAURI_INVOKE("open_artifact_with", { path });
   },
   /**
    * Open Droidsmith's backend-resolved crash-log directory. The command accepts
@@ -1680,6 +1718,7 @@ export type HostPathPurpose =
   | "settings_export"
   | "settings_import"
   | "layout_export_save"
+  | "perfetto_trace_save"
   | "push_open"
   | "install_open"
   | "recovery_baseline_open"
@@ -2206,6 +2245,29 @@ export type PackageListing = {
   packages: AppPackage[];
   archive: PackageArchiveCapability;
 };
+export type PerfettoCapabilities = {
+  supported: boolean;
+  sdk_level: number | null;
+  unavailable_reason: PerfettoUnavailableReason | null;
+  presets: PerfettoPreset[];
+};
+export type PerfettoCaptureResult = {
+  artifact: HostArtifact;
+  preset_id: string;
+  duration_secs: number;
+  buffer_size_mb: number;
+  max_output_bytes: number;
+  captured_at: string;
+};
+export type PerfettoPreset = {
+  id: string;
+  duration_secs: number;
+  buffer_size_mb: number;
+  max_output_bytes: number;
+  data_sources: string[];
+  atrace_categories: string[];
+};
+export type PerfettoUnavailableReason = "android_version" | "tool_unavailable";
 export type PermissionInfo = { permission: string; granted: boolean };
 export type PlanPackRequest = {
   target: DeviceTarget;

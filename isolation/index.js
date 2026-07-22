@@ -41,6 +41,7 @@
     "fastboot_getvar",
     "explain_failure",
     "has_settings_import_backup",
+    "perfetto_capabilities",
   ]);
 
   const SENSITIVE_COMMANDS = Object.freeze({
@@ -48,6 +49,7 @@
     recover_adb: [["confirmed", "operation_id", "on_event"], []],
     select_host_path: [["purpose", "suggested_name"], []],
     reveal_in_folder: [["path"], []],
+    open_artifact_with: [["path"], []],
     reveal_diagnostics_directory: [[], []],
     initialize_settings: [["legacy"], []],
     set_settings_language: [["language"], []],
@@ -90,6 +92,17 @@
     ],
     capture_bugreport: [
       ["target", "path_grant", "privacy_confirmed", "operation_id", "on_event"],
+      [],
+    ],
+    capture_perfetto_trace: [
+      [
+        "target",
+        "path_grant",
+        "presetId",
+        "privacy_confirmed",
+        "operation_id",
+        "on_event",
+      ],
       [],
     ],
     apply_remote_file_mutation: [["target", "request", "confirmed"], []],
@@ -172,6 +185,7 @@
     "settings_export",
     "settings_import",
     "layout_export_save",
+    "perfetto_trace_save",
     "push_open",
     "install_open",
     "recovery_baseline_open",
@@ -690,7 +704,7 @@
   }
 
   function validateSpecific(command, payload) {
-    if (command === "reveal_in_folder") {
+    if (["reveal_in_folder", "open_artifact_with"].includes(command)) {
       validateLocalPath(payload.path);
     }
     if (command === "grant_dropped_path") {
@@ -813,6 +827,18 @@
     }
     if (command === "capture_bugreport" && payload.privacy_confirmed !== true) {
       reject("bugreport_privacy_confirmation");
+    }
+    if (command === "capture_perfetto_trace") {
+      if (payload.privacy_confirmed !== true) {
+        reject("perfetto_privacy_confirmation");
+      }
+      if (
+        !["ui_rendering", "app_startup", "system_health"].includes(
+          payload.presetId,
+        )
+      ) {
+        reject("perfetto_preset");
+      }
     }
     if (
       ["apply_remote_file_mutation", "push_file"].includes(command) &&

@@ -59,7 +59,18 @@ text. The device dashboard also includes a read-only layout inspector: one click
 captures the on-screen UI hierarchy with `uiautomator dump`, renders it as a
 searchable, depth-indented node tree (class, resource-id, text, content-desc,
 bounds), and exports the raw XML through a one-shot save grant. Malformed dumps
-surface visible parse errors instead of being dropped.
+surface visible parse errors instead of being dropped. The same capture now
+audits missing accessible labels, duplicate resource IDs, and density-aware
+touch targets smaller than 48dp; JSON/text reports remain local and explicitly
+exclude color-contrast claims.
+
+On Android 10 (SDK 29) and newer builds that expose Perfetto, Devices also
+offers three fixed system-trace presets. Each shows its sources, duration, ring
+buffer, and 64 MB output ceiling before capture. A privacy acknowledgement and
+one-shot native destination are required; cancellation, timeout, disconnect,
+and size-limit paths attempt remote-temporary cleanup, while success atomically
+installs a local `.perfetto-trace` for Reveal or Open With. Droidsmith does not
+upload traces or embed a trace viewer.
 
 Per-user removal now records package provenance and post-state immediately
 around the mutation. A preinstalled system app is undoable from Activity only

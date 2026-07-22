@@ -740,6 +740,53 @@
       "title": "Inspector de diseño",
       "truncated": "Mostrando 500 de {{count}} nodos"
     },
+    "perfetto": {
+      "title": "Traza del sistema Perfetto",
+      "sensitive": "Artefacto local sensible",
+      "body": "Graba una traza limitada del sistema Android para analizarla sin conexión en Perfetto u otro visor compatible.",
+      "available": "Disponible",
+      "unavailable": "No disponible",
+      "checking": "Comprobando la compatibilidad con Perfetto",
+      "checkFailed": "No se pudo comprobar la compatibilidad con Perfetto",
+      "unsupportedTitle": "La captura de Perfetto no es compatible",
+      "unsupportedAndroid": "Este dispositivo informa de Android SDK {{sdk}}. La captura integrada de Perfetto requiere SDK 29 o posterior.",
+      "toolUnavailable": "Esta compilación de Android no expone el servicio de línea de comandos de Perfetto.",
+      "choosePreset": "Preajuste de captura",
+      "privacyTitle": "Las trazas del sistema pueden contener actividad sensible del dispositivo",
+      "privacyBody": "Pueden aparecer nombres de paquetes, actividad de procesos, tiempos e identificadores del dispositivo. Droidsmith guarda la traza solo en la ruta local elegida y nunca la sube ni la abre automáticamente.",
+      "acknowledge": "He revisado las fuentes, los límites y el aviso de privacidad de la traza.",
+      "chooseDestination": "Elegir destino y capturar",
+      "starting": "Preparando la captura limitada de Perfetto",
+      "running": "La captura de Perfetto está en curso",
+      "cancelling": "Cancelando y limpiando el archivo temporal del dispositivo…",
+      "captureInProgress": "Captura de Perfetto en curso",
+      "selecting": "Esperando un destino local",
+      "cancel": "Cancelar captura",
+      "failed": "La captura de Perfetto falló",
+      "saved": "Traza de Perfetto guardada",
+      "artifactSummary": "{{size}} · SHA-256 {{sha256}}",
+      "openWith": "Abrir con…",
+      "localOnly": "La traza permanece en local. Droidsmith no la sube ni incorpora un visor de trazas.",
+      "duration": "Duración",
+      "seconds": "{{count}} segundos",
+      "buffer": "Búfer circular",
+      "maximum": "Archivo máximo",
+      "sources": "Fuentes",
+      "presets": {
+        "ui_rendering": {
+          "title": "Renderizado de interfaz",
+          "body": "Captura breve de planificación, gráficos, vistas, ventanas, entrada y Binder para analizar tirones."
+        },
+        "app_startup": {
+          "title": "Inicio de aplicación",
+          "body": "Actividad de procesos, paquetes, entorno, actividades, ventanas y gráficos durante el inicio de una app."
+        },
+        "system_health": {
+          "title": "Estado del sistema",
+          "body": "Muestreo más largo de CPU, planificador, procesos, memoria, energía y Binder para bloqueos generales."
+        }
+      }
+    },
     "linuxPerms": "Problema de permisos en Linux",
     "linuxPermsBody": "Uno o más dispositivos reportan sin permisos. Evita reglas 0666 con permisos mundiales; usa el grupo de acceso a dispositivos de la distribución y las reglas udev mantenidas para Android.",
     "linuxPermsDoctor": "Ejecuta el doctor de conexión a continuación para verificar la membresía al grupo y la cobertura de reglas udev, luego sigue su enlace de configuración oficial.",

@@ -16,6 +16,12 @@ each milestone tag.
 
 ### Added
 
+- **R-106 — Bounded Perfetto system traces.** Supported Android 10+ devices now
+  expose fixed UI-rendering, app-startup, and system-health presets with their
+  sources, duration, ring buffer, and 64 MB file ceiling shown before capture.
+  Privacy-gated traces use cancellable config-stdin capture, atomic local
+  commit, one-shot destinations, remote cleanup on every exit path, and local
+  Reveal/Open With actions without upload or an embedded viewer.
 - **R-105 — Deterministic Layout Inspector accessibility audit.** UIAutomator
   captures now flag clickable nodes without labels, duplicate non-empty
   resource IDs, and density-aware touch targets smaller than 48dp. Findings

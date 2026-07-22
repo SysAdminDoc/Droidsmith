@@ -542,6 +542,53 @@
       "rawAttributes": "Raw attributes",
       "truncated": "Showing 500 of {{count}} nodes"
     },
+    "perfetto": {
+      "title": "Perfetto system trace",
+      "sensitive": "Sensitive local artifact",
+      "body": "Record a bounded Android system trace for offline analysis in Perfetto or another compatible viewer.",
+      "available": "Available",
+      "unavailable": "Unavailable",
+      "checking": "Checking Perfetto support",
+      "checkFailed": "Could not check Perfetto support",
+      "unsupportedTitle": "Perfetto capture is not supported",
+      "unsupportedAndroid": "This device reports Android SDK {{sdk}}. Built-in Perfetto capture requires SDK 29 or newer.",
+      "toolUnavailable": "This Android build does not expose the Perfetto command-line service.",
+      "choosePreset": "Capture preset",
+      "privacyTitle": "System traces can contain sensitive device activity",
+      "privacyBody": "Package names, process activity, timing, and device identifiers may be present. Droidsmith saves the trace only to your chosen local path and never uploads or opens it automatically.",
+      "acknowledge": "I reviewed the trace sources, limits, and privacy warning.",
+      "chooseDestination": "Choose destination and capture",
+      "starting": "Preparing bounded Perfetto capture",
+      "running": "Perfetto capture is running",
+      "cancelling": "Cancelling and cleaning device temporary…",
+      "captureInProgress": "Perfetto capture in progress",
+      "selecting": "Waiting for a local destination",
+      "cancel": "Cancel capture",
+      "failed": "Perfetto capture failed",
+      "saved": "Perfetto trace saved",
+      "artifactSummary": "{{size}} · SHA-256 {{sha256}}",
+      "openWith": "Open with…",
+      "localOnly": "The trace remains local. Droidsmith does not upload it or embed a trace viewer.",
+      "duration": "Duration",
+      "seconds": "{{count}} seconds",
+      "buffer": "Ring buffer",
+      "maximum": "Maximum file",
+      "sources": "Sources",
+      "presets": {
+        "ui_rendering": {
+          "title": "UI rendering",
+          "body": "Short scheduling, graphics, view, window, input, and Binder capture for jank analysis."
+        },
+        "app_startup": {
+          "title": "App startup",
+          "body": "Process, package, runtime, activity, window, and graphics activity around an app launch."
+        },
+        "system_health": {
+          "title": "System health",
+          "body": "Longer CPU, scheduler, process, memory, power, and Binder sampling for system-wide stalls."
+        }
+      }
+    },
     "tethering": {
       "notInstalled": "Not installed",
       "notFoundBody": "Install gnirehtet and add it to your PATH to enable Share Internet — reverse-tethering routes the device through this computer's connection.",

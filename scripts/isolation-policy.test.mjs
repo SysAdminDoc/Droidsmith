@@ -522,6 +522,39 @@ test("requires explicit privacy confirmation for bugreport capture", () => {
   );
 });
 
+test("gates Perfetto capture to fixed presets and explicit local privacy review", () => {
+  const capabilities = message("perfetto_capabilities", { target });
+  assert.equal(hook(capabilities), capabilities);
+  const valid = message("capture_perfetto_trace", {
+    target,
+    path_grant: pathGrant,
+    presetId: "ui_rendering",
+    privacy_confirmed: true,
+    operation_id: "perfetto-123",
+    on_event: 99,
+  });
+  assert.equal(hook(valid), valid);
+  for (const invalid of [
+    { ...valid.payload, privacy_confirmed: false },
+    { ...valid.payload, presetId: "../../custom" },
+    { ...valid.payload, path_grant: "not-a-grant" },
+  ]) {
+    assert.equal(
+      hook(message("capture_perfetto_trace", invalid)).cmd,
+      blockedCommand,
+    );
+  }
+
+  const open = message("open_artifact_with", {
+    path: "C:/Users/QA/Desktop/trace.perfetto-trace",
+  });
+  assert.equal(hook(open), open);
+  assert.equal(
+    hook(message("open_artifact_with", { path: "../escape" })).cmd,
+    blockedCommand,
+  );
+});
+
 test("persists bounded Logcat query presets and rejects catastrophic regex", () => {
   const query = {
     id: "crash-watch",
