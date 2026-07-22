@@ -114,6 +114,8 @@ export type ActionContext = RequiredFields<
   | "confirmation_source"
   | "permission"
   | "shell_argv"
+  | "device_control_restore_argv"
+  | "device_control_expected_before"
   | "transport_override"
   | "restore_enabled_state"
   | "batch_id"

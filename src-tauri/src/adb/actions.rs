@@ -82,6 +82,14 @@ pub struct ActionContext {
     pub permission: Option<String>,
     #[serde(default)]
     pub shell_argv: Vec<String>,
+    /// Backend-captured inverse for persistent display controls. Empty for
+    /// ordinary shell actions and one-shot remote key events.
+    #[serde(default)]
+    pub device_control_restore_argv: Vec<String>,
+    /// On journal undo, the device must still match this post-mutation state
+    /// before the captured inverse may run.
+    #[serde(default)]
+    pub device_control_expected_before: Option<String>,
     /// Set by the trusted backend only after it revalidates and accepts an
     /// explicit renderer acknowledgement for an unauthenticated transport.
     #[serde(default)]
@@ -489,7 +497,32 @@ pub fn apply(
             plan.request.user_id
         )));
     }
-    let before_state = if plan.before_state.is_empty() {
+    let reversible_device_control = plan.request.kind == ActionKind::Shell
+        && is_reversible_device_control_argv(&plan.request.context.shell_argv);
+    let before_state = if reversible_device_control {
+        let captured = capture_device_control_state(
+            transport,
+            &plan.request.target,
+            plan.request.user_id,
+            &plan.request.context.shell_argv,
+        )?;
+        let expected = match plan.request.context.confirmation_source {
+            ConfirmationSource::DeviceControl => plan.before_state.as_str(),
+            ConfirmationSource::JournalUndo => plan
+                .request
+                .context
+                .device_control_expected_before
+                .as_deref()
+                .unwrap_or_default(),
+            _ => "",
+        };
+        if expected.is_empty() || captured != expected {
+            return Err(TransportError::Parse(format!(
+                "display control state changed before mutation: expected {expected}, got {captured}"
+            )));
+        }
+        captured
+    } else if plan.before_state.is_empty() {
         capture_state(transport, &plan.request)
     } else {
         plan.before_state.clone()
@@ -534,6 +567,13 @@ pub fn apply(
     } else {
         capture_state(transport, &plan.request)
     };
+    if reversible_device_control
+        && !device_control_state_matches_argv(&plan.request.context.shell_argv, &after_state)
+    {
+        return Err(TransportError::Parse(format!(
+            "display control readback did not match the requested state: {after_state}"
+        )));
+    }
     if plan.request.context.batch_id.is_some()
         && !verified_batch_transition(plan.request.kind, &before_state, &after_state)
     {
@@ -619,19 +659,283 @@ pub fn capture_state(transport: &dyn AdbTransport, request: &ActionRequest) -> S
                 &request.context.shell_argv,
             )
         }
-        ActionKind::Shell
-            if request
-                .context
-                .shell_argv
-                .starts_with(&["wm".into(), "density".into()]) =>
-        {
-            transport
-                .shell_target(&request.target, &["wm", "density"])
-                .map(|output| output.trim().to_string())
-                .unwrap_or_else(|_| "unknown".to_string())
+        ActionKind::Shell if is_reversible_device_control_argv(&request.context.shell_argv) => {
+            capture_device_control_state(
+                transport,
+                &request.target,
+                request.user_id,
+                &request.context.shell_argv,
+            )
+            .unwrap_or_else(|_| "unknown".to_string())
         }
         ActionKind::Shell => "not_captured".to_string(),
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PreparedDeviceControl {
+    pub argv: Vec<String>,
+    pub restore_argv: Vec<String>,
+    pub before_state: String,
+}
+
+/// Capture the exact persistent state before a display-control mutation and
+/// synthesize its backend-owned inverse. Readback failure aborts before the
+/// journal intent or mutation.
+pub fn prepare_device_control(
+    transport: &dyn AdbTransport,
+    target: &DeviceTarget,
+    user_id: u32,
+    renderer_argv: &[String],
+) -> Result<PreparedDeviceControl, TransportError> {
+    if matches!(renderer_argv, [input, keyevent, code] if input == "input" && keyevent == "keyevent" && code.parse::<u32>().is_ok())
+    {
+        return Ok(PreparedDeviceControl {
+            argv: renderer_argv.to_vec(),
+            restore_argv: Vec::new(),
+            before_state: "not_captured".to_string(),
+        });
+    }
+    if matches!(renderer_argv, [wm, density, _] if wm == "wm" && density == "density") {
+        let argv = renderer_argv.to_vec();
+        let before_state = capture_device_control_state(transport, target, user_id, &argv)?;
+        let restore_argv = density_restore_argv(&before_state).ok_or_else(|| {
+            TransportError::Parse("could not derive the prior display density override".into())
+        })?;
+        return Ok(PreparedDeviceControl {
+            argv,
+            restore_argv,
+            before_state,
+        });
+    }
+    if matches!(renderer_argv, [settings, put, secure, key, _] if settings == "settings" && put == "put" && secure == "secure" && key == "ui_night_mode")
+    {
+        let user = user_id.to_string();
+        let value = renderer_argv[4].clone();
+        let argv = vec![
+            "settings".into(),
+            "--user".into(),
+            user,
+            "put".into(),
+            "secure".into(),
+            "ui_night_mode".into(),
+            value,
+        ];
+        let before_state = capture_device_control_state(transport, target, user_id, &argv)?;
+        let restore_argv = night_restore_argv(&before_state, user_id).ok_or_else(|| {
+            TransportError::Parse("could not derive the prior night-mode value".into())
+        })?;
+        return Ok(PreparedDeviceControl {
+            argv,
+            restore_argv,
+            before_state,
+        });
+    }
+    Err(TransportError::Parse(
+        "device control is not eligible for state capture".into(),
+    ))
+}
+
+fn capture_device_control_state(
+    transport: &dyn AdbTransport,
+    target: &DeviceTarget,
+    user_id: u32,
+    argv: &[String],
+) -> Result<String, TransportError> {
+    if is_density_argv(argv) {
+        let output = transport.shell_target(target, &["wm", "density"])?;
+        return normalize_density_state(&output).ok_or_else(|| {
+            TransportError::Parse("wm density returned an unrecognized state".into())
+        });
+    }
+    if night_argv_user(argv) == Some(user_id) {
+        let user = user_id.to_string();
+        let output = transport.shell_target(
+            target,
+            &[
+                "settings",
+                "--user",
+                &user,
+                "get",
+                "secure",
+                "ui_night_mode",
+            ],
+        )?;
+        return normalize_night_state(&output).ok_or_else(|| {
+            TransportError::Parse("ui_night_mode returned an unrecognized state".into())
+        });
+    }
+    Err(TransportError::Parse(
+        "device control state capture is not supported".into(),
+    ))
+}
+
+pub fn is_reversible_device_control_argv(argv: &[String]) -> bool {
+    is_density_argv(argv) || night_argv_user(argv).is_some()
+}
+
+pub fn reversible_device_control_pair(
+    argv: &[String],
+    restore_argv: &[String],
+    user_id: u32,
+) -> bool {
+    (is_density_argv(argv) && is_density_argv(restore_argv))
+        || (night_argv_user(argv) == Some(user_id)
+            && night_argv_user(restore_argv) == Some(user_id))
+}
+
+pub fn device_control_state_matches_argv(argv: &[String], state: &str) -> bool {
+    if is_density_argv(argv) {
+        let Some((_, override_density)) = parse_density_state(state) else {
+            return false;
+        };
+        return match argv.get(2).map(String::as_str) {
+            Some("reset") => override_density.is_none(),
+            Some(value) => value.parse::<u16>().ok() == override_density,
+            None => false,
+        };
+    }
+    let Some(target) = night_argv_target(argv) else {
+        return false;
+    };
+    parse_night_state(state).is_some_and(|raw| raw == target)
+}
+
+pub fn device_control_restore_matches_state(
+    restore_argv: &[String],
+    state: &str,
+    user_id: u32,
+) -> bool {
+    if is_density_argv(restore_argv) {
+        return density_restore_argv(state).as_deref() == Some(restore_argv);
+    }
+    night_restore_argv(state, user_id).as_deref() == Some(restore_argv)
+}
+
+fn is_density_argv(argv: &[String]) -> bool {
+    matches!(argv, [wm, density, value] if wm == "wm" && density == "density" && (value == "reset" || value.parse::<u16>().is_ok_and(|dpi| (72..=1000).contains(&dpi))))
+}
+
+fn night_argv_user(argv: &[String]) -> Option<u32> {
+    match argv {
+        [settings, user_flag, user, operation, secure, key, value]
+            if settings == "settings"
+                && user_flag == "--user"
+                && operation == "put"
+                && secure == "secure"
+                && key == "ui_night_mode"
+                && value.parse::<u8>().is_ok_and(|mode| mode <= 3) =>
+        {
+            user.parse().ok()
+        }
+        [settings, user_flag, user, operation, secure, key]
+            if settings == "settings"
+                && user_flag == "--user"
+                && operation == "delete"
+                && secure == "secure"
+                && key == "ui_night_mode" =>
+        {
+            user.parse().ok()
+        }
+        _ => None,
+    }
+}
+
+fn night_argv_target(argv: &[String]) -> Option<Option<u8>> {
+    match argv {
+        [_, _, _, operation, _, _, value] if operation == "put" => {
+            value.parse::<u8>().ok().map(Some)
+        }
+        [_, _, _, operation, _, _] if operation == "delete" => Some(None),
+        _ => None,
+    }
+}
+
+fn normalize_density_state(output: &str) -> Option<String> {
+    let mut physical = None;
+    let mut override_density = None;
+    for line in output.lines().map(str::trim) {
+        if let Some(value) = line.strip_prefix("Physical density:") {
+            physical = value.trim().parse::<u16>().ok();
+        } else if let Some(value) = line.strip_prefix("Override density:") {
+            override_density = value.trim().parse::<u16>().ok();
+        }
+    }
+    let physical = physical?;
+    Some(format!(
+        "density:physical={physical};override={}",
+        override_density.map_or_else(|| "unset".to_string(), |value| value.to_string())
+    ))
+}
+
+fn parse_density_state(state: &str) -> Option<(u16, Option<u16>)> {
+    let tail = state.strip_prefix("density:physical=")?;
+    let (physical, override_value) = tail.split_once(";override=")?;
+    let physical = physical.parse().ok()?;
+    let override_density = if override_value == "unset" {
+        None
+    } else {
+        Some(override_value.parse().ok()?)
+    };
+    Some((physical, override_density))
+}
+
+fn density_restore_argv(state: &str) -> Option<Vec<String>> {
+    let (_, override_density) = parse_density_state(state)?;
+    Some(vec![
+        "wm".into(),
+        "density".into(),
+        override_density.map_or_else(|| "reset".to_string(), |value| value.to_string()),
+    ])
+}
+
+fn normalize_night_state(output: &str) -> Option<String> {
+    let raw = output.trim();
+    let (raw, effective) = if raw.is_empty() || raw == "null" {
+        ("unset".to_string(), "system_default")
+    } else {
+        let value = raw.parse::<u8>().ok().filter(|value| *value <= 3)?;
+        let effective = match value {
+            0 => "auto",
+            1 => "no",
+            2 => "yes",
+            3 => "custom",
+            _ => unreachable!(),
+        };
+        (value.to_string(), effective)
+    };
+    Some(format!("night:raw={raw};effective={effective}"))
+}
+
+fn parse_night_state(state: &str) -> Option<Option<u8>> {
+    let tail = state.strip_prefix("night:raw=")?;
+    let (raw, effective) = tail.split_once(";effective=")?;
+    if raw == "unset" && effective == "system_default" {
+        return Some(None);
+    }
+    let value = raw.parse::<u8>().ok().filter(|value| *value <= 3)?;
+    let expected = match value {
+        0 => "auto",
+        1 => "no",
+        2 => "yes",
+        3 => "custom",
+        _ => unreachable!(),
+    };
+    (effective == expected).then_some(Some(value))
+}
+
+fn night_restore_argv(state: &str, user_id: u32) -> Option<Vec<String>> {
+    let mut argv = vec!["settings".into(), "--user".into(), user_id.to_string()];
+    match parse_night_state(state)? {
+        Some(value) => argv.extend([
+            "put".into(),
+            "secure".into(),
+            "ui_night_mode".into(),
+            value.to_string(),
+        ]),
+        None => argv.extend(["delete".into(), "secure".into(), "ui_night_mode".into()]),
+    }
+    Some(argv)
 }
 
 fn removal_state(
@@ -887,6 +1191,65 @@ pub fn validate_plan(plan: &PlannedAction) -> Result<(), TransportError> {
                     "shell action has invalid canonical context".to_string(),
                 ));
             }
+            let restore = &plan.request.context.device_control_restore_argv;
+            let expected_before = plan
+                .request
+                .context
+                .device_control_expected_before
+                .as_deref();
+            match plan.request.context.confirmation_source {
+                ConfirmationSource::DeviceControl
+                    if is_reversible_device_control_argv(&plan.request.context.shell_argv) =>
+                {
+                    if expected_before.is_some()
+                        || !reversible_device_control_pair(
+                            &plan.request.context.shell_argv,
+                            restore,
+                            plan.request.user_id,
+                        )
+                        || plan.before_state.is_empty()
+                        || !device_control_restore_matches_state(
+                            restore,
+                            &plan.before_state,
+                            plan.request.user_id,
+                        )
+                    {
+                        return Err(TransportError::Parse(
+                            "display control is missing its captured inverse".to_string(),
+                        ));
+                    }
+                }
+                ConfirmationSource::DeviceControl => {
+                    if !restore.is_empty() || expected_before.is_some() {
+                        return Err(TransportError::Parse(
+                            "one-shot device control has unexpected recovery state".to_string(),
+                        ));
+                    }
+                }
+                ConfirmationSource::JournalUndo => {
+                    let Some(expected_before) = expected_before else {
+                        return Err(TransportError::Parse(
+                            "display control undo is missing its expected state".to_string(),
+                        ));
+                    };
+                    if !reversible_device_control_pair(
+                        &plan.request.context.shell_argv,
+                        restore,
+                        plan.request.user_id,
+                    ) || !device_control_state_matches_argv(restore, expected_before)
+                    {
+                        return Err(TransportError::Parse(
+                            "display control undo is not a verified inverse".to_string(),
+                        ));
+                    }
+                }
+                _ if !restore.is_empty() || expected_before.is_some() => {
+                    return Err(TransportError::Parse(
+                        "shell action has unexpected device-control recovery state".to_string(),
+                    ));
+                }
+                _ => {}
+            }
         }
         ActionKind::RestoreExistingForUser => {
             if plan.request.context.confirmation_source != ConfirmationSource::JournalUndo
@@ -901,6 +1264,12 @@ pub fn validate_plan(plan: &PlannedAction) -> Result<(), TransportError> {
         }
         _ if plan.request.context.permission.is_some()
             || !plan.request.context.shell_argv.is_empty()
+            || !plan.request.context.device_control_restore_argv.is_empty()
+            || plan
+                .request
+                .context
+                .device_control_expected_before
+                .is_some()
             || plan.request.context.restore_enabled_state.is_some() =>
         {
             return Err(TransportError::Parse(
@@ -1227,6 +1596,8 @@ mod tests {
                 confirmation_source: ConfirmationSource::PermissionToggle,
                 permission: Some("android.permission.CAMERA".into()),
                 shell_argv: Vec::new(),
+                device_control_restore_argv: Vec::new(),
+                device_control_expected_before: None,
                 transport_override: None,
                 restore_enabled_state: None,
                 batch_id: None,
@@ -1262,6 +1633,8 @@ mod tests {
                     "x".into(),
                     "1".into(),
                 ],
+                device_control_restore_argv: Vec::new(),
+                device_control_expected_before: None,
                 transport_override: None,
                 restore_enabled_state: None,
                 batch_id: None,
@@ -1270,6 +1643,162 @@ mod tests {
         assert_eq!(shell.args, shell.request.context.shell_argv);
         assert!(validate_plan(&shell).is_ok());
         assert!(redact_journal_text(&shell.request, "secret device output").contains("redacted"));
+    }
+
+    #[test]
+    fn prepares_density_and_user_bound_night_mode_inverses() {
+        let density = MockTransport::new();
+        density.expect_shell(
+            "abc",
+            &["wm", "density"],
+            Ok("Physical density: 420\nOverride density: 480\n".into()),
+        );
+        let prepared = prepare_device_control(
+            &density,
+            &target("abc"),
+            0,
+            &["wm".into(), "density".into(), "500".into()],
+        )
+        .unwrap();
+        assert_eq!(prepared.before_state, "density:physical=420;override=480");
+        assert_eq!(prepared.restore_argv, ["wm", "density", "480"]);
+
+        let night = MockTransport::new();
+        night.expect_shell(
+            "abc",
+            &["settings", "--user", "10", "get", "secure", "ui_night_mode"],
+            Ok("null\n".into()),
+        );
+        let prepared = prepare_device_control(
+            &night,
+            &target("abc"),
+            10,
+            &[
+                "settings".into(),
+                "put".into(),
+                "secure".into(),
+                "ui_night_mode".into(),
+                "2".into(),
+            ],
+        )
+        .unwrap();
+        assert_eq!(
+            prepared.before_state,
+            "night:raw=unset;effective=system_default"
+        );
+        assert_eq!(
+            prepared.argv,
+            [
+                "settings",
+                "--user",
+                "10",
+                "put",
+                "secure",
+                "ui_night_mode",
+                "2"
+            ]
+        );
+        assert_eq!(
+            prepared.restore_argv,
+            [
+                "settings",
+                "--user",
+                "10",
+                "delete",
+                "secure",
+                "ui_night_mode"
+            ]
+        );
+    }
+
+    #[test]
+    fn reversible_display_control_requires_matching_prestate_and_readback() {
+        let request = ActionRequest {
+            serial: "abc".into(),
+            target: target("abc"),
+            package: String::new(),
+            kind: ActionKind::Shell,
+            user_id: 0,
+            pack_context: None,
+            context: ActionContext {
+                confirmation_source: ConfirmationSource::DeviceControl,
+                permission: None,
+                shell_argv: vec!["wm".into(), "density".into(), "500".into()],
+                device_control_restore_argv: vec!["wm".into(), "density".into(), "480".into()],
+                device_control_expected_before: None,
+                transport_override: None,
+                restore_enabled_state: None,
+                batch_id: None,
+            },
+        };
+        let mut planned = plan(request.clone());
+        planned.before_state = "density:physical=420;override=480".into();
+
+        let mock = MockTransport::new().with_devices(vec![device("abc")]);
+        expect_owner(&mock);
+        mock.expect_shell(
+            "abc",
+            &["wm", "density"],
+            Ok("Physical density: 420\nOverride density: 480\n".into()),
+        );
+        mock.expect_shell("abc", &["wm", "density", "500"], Ok(String::new()));
+        mock.expect_shell(
+            "abc",
+            &["wm", "density"],
+            Ok("Physical density: 420\nOverride density: 500\n".into()),
+        );
+        let applied = apply(&mock, planned, "2026-07-21T12:00:00Z").unwrap();
+        assert_eq!(applied.before_state, "density:physical=420;override=480");
+        assert_eq!(applied.after_state, "density:physical=420;override=500");
+
+        let mut mismatched = plan(request);
+        mismatched.before_state = "density:physical=420;override=480".into();
+        let mock = MockTransport::new().with_devices(vec![device("abc")]);
+        expect_owner(&mock);
+        mock.expect_shell(
+            "abc",
+            &["wm", "density"],
+            Ok("Physical density: 420\nOverride density: 470\n".into()),
+        );
+        assert!(apply(&mock, mismatched, "2026-07-21T12:00:00Z").is_err());
+    }
+
+    #[test]
+    fn display_control_undo_restores_the_captured_override() {
+        let undo = plan(ActionRequest {
+            serial: "abc".into(),
+            target: target("abc"),
+            package: String::new(),
+            kind: ActionKind::Shell,
+            user_id: 0,
+            pack_context: None,
+            context: ActionContext {
+                confirmation_source: ConfirmationSource::JournalUndo,
+                permission: None,
+                shell_argv: vec!["wm".into(), "density".into(), "480".into()],
+                device_control_restore_argv: vec!["wm".into(), "density".into(), "500".into()],
+                device_control_expected_before: Some("density:physical=420;override=500".into()),
+                transport_override: None,
+                restore_enabled_state: None,
+                batch_id: None,
+            },
+        });
+        let mock = MockTransport::new().with_devices(vec![device("abc")]);
+        expect_owner(&mock);
+        mock.expect_shell(
+            "abc",
+            &["wm", "density"],
+            Ok("Physical density: 420\nOverride density: 500\n".into()),
+        );
+        mock.expect_shell("abc", &["wm", "density", "480"], Ok(String::new()));
+        mock.expect_shell(
+            "abc",
+            &["wm", "density"],
+            Ok("Physical density: 420\nOverride density: 480\n".into()),
+        );
+        let restored = apply(&mock, undo, "2026-07-21T12:01:00Z").unwrap();
+        assert_eq!(restored.before_state, "density:physical=420;override=500");
+        assert_eq!(restored.after_state, "density:physical=420;override=480");
     }
 
     #[test]
@@ -1311,6 +1840,8 @@ mod tests {
                     confirmation_source: ConfirmationSource::PermissionToggle,
                     permission: Some("android.permission.CAMERA".into()),
                     shell_argv: Vec::new(),
+                    device_control_restore_argv: Vec::new(),
+                    device_control_expected_before: None,
                     transport_override: None,
                     restore_enabled_state: None,
                     batch_id: None,
@@ -1502,6 +2033,8 @@ mod tests {
                         "qa".into(),
                         "secret".into(),
                     ],
+                    device_control_restore_argv: Vec::new(),
+                    device_control_expected_before: None,
                     transport_override: None,
                     restore_enabled_state: None,
                     batch_id: None,

@@ -181,6 +181,8 @@ pub fn action_plan(
             confirmation_source: actions::ConfirmationSource::FileManagerReview,
             permission: None,
             shell_argv: plan.argv.clone(),
+            device_control_restore_argv: Vec::new(),
+            device_control_expected_before: None,
             transport_override,
             restore_enabled_state: None,
             batch_id: None,

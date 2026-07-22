@@ -2570,6 +2570,8 @@ pub fn plan_shell_action(request: PlanShellActionRequest) -> Result<ShellActionP
             confirmation_source: actions::ConfirmationSource::ConsoleReview,
             permission: None,
             shell_argv: request.argv,
+            device_control_restore_argv: Vec::new(),
+            device_control_expected_before: None,
             transport_override,
             restore_enabled_state: None,
             batch_id: None,
@@ -2627,8 +2629,9 @@ pub fn apply_device_control(
             code: "current_user_missing",
             message: "could not bind the device control to the current Android user".to_string(),
         })?;
+    let prepared = actions::prepare_device_control(&transport, &target, user_id, &argv)?;
     let serial = target.serial.clone();
-    let plan = actions::plan(actions::ActionRequest {
+    let mut plan = actions::plan(actions::ActionRequest {
         serial: serial.clone(),
         target,
         package: String::new(),
@@ -2638,12 +2641,15 @@ pub fn apply_device_control(
         context: actions::ActionContext {
             confirmation_source: actions::ConfirmationSource::DeviceControl,
             permission: None,
-            shell_argv: argv,
+            shell_argv: prepared.argv,
+            device_control_restore_argv: prepared.restore_argv,
+            device_control_expected_before: None,
             transport_override,
             restore_enabled_state: None,
             batch_id: None,
         },
     });
+    plan.before_state = prepared.before_state;
     let dir = journal_dir(&app)?;
     journal::with_journal(&dir, &serial, |journal| {
         execute_journaled(journal, &transport, plan, None)
@@ -2753,6 +2759,8 @@ pub async fn push_file(
             confirmation_source: actions::ConfirmationSource::FileManagerReview,
             permission: None,
             shell_argv: vec!["droidsmith-file-push".to_string(), remote.clone()],
+            device_control_restore_argv: Vec::new(),
+            device_control_expected_before: None,
             transport_override,
             restore_enabled_state: None,
             batch_id: None,
@@ -3295,6 +3303,8 @@ pub fn set_permission(
             confirmation_source: actions::ConfirmationSource::PermissionToggle,
             permission: Some(permission),
             shell_argv: Vec::new(),
+            device_control_restore_argv: Vec::new(),
+            device_control_expected_before: None,
             transport_override,
             restore_enabled_state: None,
             batch_id: None,

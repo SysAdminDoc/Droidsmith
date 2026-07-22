@@ -56,5 +56,19 @@ export function journalEntryStatus(
       ? "undoable"
       : "irreversible";
   }
+  if (kind === "shell") {
+    const context = entry.applied.plan.request.context;
+    const sameDisplayStateFamily =
+      (entry.applied.before_state.startsWith("density:") &&
+        entry.applied.after_state.startsWith("density:")) ||
+      (entry.applied.before_state.startsWith("night:") &&
+        entry.applied.after_state.startsWith("night:"));
+    return context?.confirmation_source === "device_control" &&
+      (context.device_control_restore_argv?.length ?? 0) > 0 &&
+      sameDisplayStateFamily &&
+      entry.applied.before_state !== entry.applied.after_state
+      ? "undoable"
+      : "irreversible";
+  }
   return kind === "disable" || kind === "enable" ? "undoable" : "irreversible";
 }

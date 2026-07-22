@@ -16,6 +16,11 @@ each milestone tag.
 
 ### Added
 
+- **IMP-79 — Reversible display controls.** Density and night-mode changes now
+  capture the current user-bound raw/effective state before mutation, verify
+  the resulting state, and persist the exact inverse in the action journal.
+  Device Controls exposes an immediate Restore action, while Activity can
+  safely undo the change after restart without guessing a default value.
 - **IMP-78 — Renderer crash recovery.** Added a localized top-level error
   boundary with reload, backend-owned diagnostics-folder reveal, and a bounded
   redacted summary that remains manually selectable if clipboard access fails.

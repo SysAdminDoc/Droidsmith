@@ -950,6 +950,16 @@ export type ActionContext = {
   permission?: string | null;
   shell_argv?: string[];
   /**
+   * Backend-captured inverse for persistent display controls. Empty for
+   * ordinary shell actions and one-shot remote key events.
+   */
+  device_control_restore_argv?: string[];
+  /**
+   * On journal undo, the device must still match this post-mutation state
+   * before the captured inverse may run.
+   */
+  device_control_expected_before?: string | null;
+  /**
    * Set by the trusted backend only after it revalidates and accepts an
    * explicit renderer acknowledgement for an unauthenticated transport.
    */

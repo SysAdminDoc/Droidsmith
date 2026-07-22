@@ -91,6 +91,27 @@ describe("journalEntryStatus", () => {
     expect(journalEntryStatus(entry("force_stop"))).toBe("irreversible");
   });
 
+  it("restores only verified persistent display-control shell entries", () => {
+    const display = entry("shell");
+    display.applied.before_state = "density:physical=420;override=480";
+    display.applied.after_state = "density:physical=420;override=500";
+    display.applied.plan.request.context = {
+      confirmation_source: "device_control",
+      permission: null,
+      shell_argv: ["wm", "density", "500"],
+      device_control_restore_argv: ["wm", "density", "480"],
+      device_control_expected_before: null,
+      transport_override: null,
+      restore_enabled_state: null,
+      batch_id: null,
+    };
+    expect(journalEntryStatus(display)).toBe("undoable");
+
+    display.applied.after_state = "unknown";
+    expect(journalEntryStatus(display)).toBe("irreversible");
+    expect(journalEntryStatus(entry("shell"))).toBe("irreversible");
+  });
+
   it("offers undo only for a verified retained preinstalled package", () => {
     const eligible = entry("uninstall_for_user");
     eligible.applied.before_state = "preinstalled_enabled";

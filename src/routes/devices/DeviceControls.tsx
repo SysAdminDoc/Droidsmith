@@ -1,9 +1,10 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import {
   errorMessage,
   callApplyDeviceControl,
+  callJournalUndo,
   callSelectHostPath,
   callTakeScreenshot,
   type DeviceTarget,
@@ -57,6 +58,14 @@ export function DeviceControls({ target }: { target: DeviceTarget }) {
   const [screenshotPath, setScreenshotPath] = useState<string | null>(null);
   const [density, setDensity] = useState("");
   const [displayMsg, setDisplayMsg] = useState<StatusMessage>(null);
+  const [displayRestoreEntryId, setDisplayRestoreEntryId] = useState<
+    number | null
+  >(null);
+
+  useEffect(() => {
+    setDisplayMsg(null);
+    setDisplayRestoreEntryId(null);
+  }, [target.connection_generation, target.serial, target.transport_id]);
 
   const sendKey = useCallback(
     async (keycode: number, label: string) => {
@@ -109,11 +118,12 @@ export function DeviceControls({ target }: { target: DeviceTarget }) {
   const applyDensity = useCallback(async () => {
     if (!density.trim()) return;
     try {
-      await callApplyDeviceControl(operationTarget, [
+      const result = await callApplyDeviceControl(operationTarget, [
         "wm",
         "density",
         density.trim(),
       ]);
+      setDisplayRestoreEntryId(result.entry.id);
       setDisplayMsg({
         text: t("devices.controls.densitySet", { value: density.trim() }),
         tone: "success",
@@ -130,7 +140,12 @@ export function DeviceControls({ target }: { target: DeviceTarget }) {
 
   const resetDensity = useCallback(async () => {
     try {
-      await callApplyDeviceControl(operationTarget, ["wm", "density", "reset"]);
+      const result = await callApplyDeviceControl(operationTarget, [
+        "wm",
+        "density",
+        "reset",
+      ]);
+      setDisplayRestoreEntryId(result.entry.id);
       setDisplayMsg({
         text: t("devices.controls.densityReset"),
         tone: "success",
@@ -148,13 +163,14 @@ export function DeviceControls({ target }: { target: DeviceTarget }) {
   const toggleForceDark = useCallback(
     async (enable: boolean) => {
       try {
-        await callApplyDeviceControl(operationTarget, [
+        const result = await callApplyDeviceControl(operationTarget, [
           "settings",
           "put",
           "secure",
           "ui_night_mode",
           enable ? "2" : "1",
         ]);
+        setDisplayRestoreEntryId(result.entry.id);
         setDisplayMsg({
           text: enable
             ? t("devices.controls.forceDarkEnabled")
@@ -172,6 +188,25 @@ export function DeviceControls({ target }: { target: DeviceTarget }) {
     },
     [operationTarget, t],
   );
+
+  const restoreDisplayState = useCallback(async () => {
+    if (displayRestoreEntryId === null) return;
+    try {
+      await callJournalUndo(operationTarget, displayRestoreEntryId);
+      setDisplayRestoreEntryId(null);
+      setDisplayMsg({
+        text: t("devices.controls.displayRestored"),
+        tone: "success",
+      });
+    } catch (error) {
+      setDisplayMsg({
+        tone: "danger",
+        text: t("devices.controls.restoreFailed", {
+          message: errorMessage(error),
+        }),
+      });
+    }
+  }, [displayRestoreEntryId, operationTarget, t]);
 
   return (
     <div className="space-y-4">
@@ -245,9 +280,9 @@ export function DeviceControls({ target }: { target: DeviceTarget }) {
             <h3 className="text-sm font-semibold text-anvil-50">
               {t("devices.controls.displayTuning")}
             </h3>
-            <div className="mt-3 grid gap-3 sm:grid-cols-2">
-              <div className="flex items-end gap-2">
-                <label className="grid flex-1 gap-1.5">
+            <div className="mt-3 space-y-3">
+              <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-end">
+                <label className="grid min-w-0 gap-1.5">
                   <span className="text-xs font-medium text-anvil-400">
                     {t("devices.controls.densityLabel")}
                   </span>
@@ -276,7 +311,7 @@ export function DeviceControls({ target }: { target: DeviceTarget }) {
                   {t("devices.controls.reset")}
                 </Button>
               </div>
-              <div className="flex items-end gap-2">
+              <div className="flex flex-wrap items-end gap-2">
                 <Button
                   type="button"
                   size="sm"
@@ -301,6 +336,17 @@ export function DeviceControls({ target }: { target: DeviceTarget }) {
               >
                 {displayMsg.text}
               </p>
+            )}
+            {displayRestoreEntryId !== null && (
+              <Button
+                type="button"
+                size="sm"
+                variant="primary"
+                className="mt-3"
+                onClick={() => void restoreDisplayState()}
+              >
+                {t("devices.controls.restoreDisplay")}
+              </Button>
             )}
           </Card>
         </div>

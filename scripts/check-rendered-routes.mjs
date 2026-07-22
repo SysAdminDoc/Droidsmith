@@ -100,6 +100,33 @@ async function runDesktopFlow(browser) {
   await page.getByRole("button", { name: "Export XML" }).click();
   await page.getByText(/Layout saved to .*layout-QA123\.xml/).waitFor();
 
+  // Persistent display controls capture their exact prior value, expose an
+  // immediate Restore action, and route that inverse through the durable
+  // journal instead of resetting to a guessed universal default.
+  const displayPanel = page
+    .getByRole("heading", { name: "Display tuning", exact: true })
+    .locator("..");
+  await displayPanel.getByLabel("Density (DPI)").fill("500");
+  await displayPanel.getByRole("button", { name: "Set", exact: true }).click();
+  await displayPanel.getByText("Density set to 500", { exact: true }).waitFor();
+  await displayPanel
+    .getByRole("button", { name: "Restore previous display state" })
+    .click();
+  await displayPanel
+    .getByText("Previous display state restored and verified.", { exact: true })
+    .waitFor();
+  await displayPanel.getByRole("button", { name: "Force dark on" }).click();
+  await displayPanel.getByText("Force dark enabled", { exact: true }).waitFor();
+  await displayPanel
+    .getByRole("button", { name: "Restore previous display state" })
+    .click();
+  await displayPanel
+    .getByText("Previous display state restored and verified.", { exact: true })
+    .waitFor();
+  await displayPanel.screenshot({
+    path: path.join(screenshotDir, "desktop-display-restore.png"),
+  });
+
   // Persist gnirehtet across navigation: the Share Internet panel re-attaches to
   // an already-running session on mount (shows Active + Stop, not Start).
   const tetherPanel = page
@@ -1465,6 +1492,8 @@ async function installTauriMock(
     ];
     let journalId = 20;
     const runtimeJournal = [];
+    let densityOverride = 480;
+    let nightMode = null;
     let installAttempts = 0;
     let scrcpyLaunches = 0;
     let fingerprintObserved = false;
@@ -2496,6 +2525,52 @@ async function installTauriMock(
           const original = runtimeJournal.find(
             (entry) => entry.id === args.entry_id,
           );
+          if (
+            original?.applied.plan.request.kind === "shell" &&
+            original.applied.plan.request.context?.confirmation_source ===
+              "device_control"
+          ) {
+            const request = original.applied.plan.request;
+            const restoreArgv = request.context.device_control_restore_argv;
+            if (restoreArgv[0] === "wm") {
+              densityOverride =
+                restoreArgv[2] === "reset" ? null : Number(restoreArgv[2]);
+            } else if (restoreArgv[3] === "delete") {
+              nightMode = null;
+            } else {
+              nightMode = Number(restoreArgv[6]);
+            }
+            const undo = {
+              id: ++journalId,
+              applied: {
+                plan: {
+                  ...original.applied.plan,
+                  request: {
+                    ...request,
+                    context: {
+                      ...request.context,
+                      confirmation_source: "journal_undo",
+                      shell_argv: restoreArgv,
+                      device_control_restore_argv: request.context.shell_argv,
+                      device_control_expected_before:
+                        original.applied.after_state,
+                    },
+                  },
+                },
+                stdout: "",
+                before_state: original.applied.after_state,
+                after_state: original.applied.before_state,
+                applied_at: "2026-07-15T12:30:00Z",
+              },
+              undone_by: null,
+              undoes: original.id,
+              outcome: "succeeded",
+              failure: null,
+            };
+            original.undone_by = undo.id;
+            runtimeJournal.push(undo);
+            return undo;
+          }
           if (!original || original.applied.plan.request.kind !== "archive") {
             throw new Error("journal entry is not safely undoable");
           }
@@ -2699,6 +2774,107 @@ async function installTauriMock(
           };
           runtimeJournal.push(entry);
           return { entry, stdout };
+        }
+        if (cmd === "apply_device_control") {
+          const requestedArgv = args.argv;
+          const isDensity = requestedArgv[0] === "wm";
+          const beforeState = isDensity
+            ? `density:physical=420;override=${densityOverride ?? "unset"}`
+            : `night:raw=${nightMode ?? "unset"};effective=${
+                nightMode === null
+                  ? "system_default"
+                  : nightMode === 2
+                    ? "yes"
+                    : "no"
+              }`;
+          let shellArgv;
+          let restoreArgv;
+          let afterState;
+          if (isDensity) {
+            restoreArgv = [
+              "wm",
+              "density",
+              densityOverride === null ? "reset" : String(densityOverride),
+            ];
+            densityOverride =
+              requestedArgv[2] === "reset" ? null : Number(requestedArgv[2]);
+            shellArgv = requestedArgv;
+            afterState = `density:physical=420;override=${densityOverride ?? "unset"}`;
+          } else {
+            restoreArgv =
+              nightMode === null
+                ? [
+                    "settings",
+                    "--user",
+                    "0",
+                    "delete",
+                    "secure",
+                    "ui_night_mode",
+                  ]
+                : [
+                    "settings",
+                    "--user",
+                    "0",
+                    "put",
+                    "secure",
+                    "ui_night_mode",
+                    String(nightMode),
+                  ];
+            nightMode = Number(requestedArgv[4]);
+            shellArgv = [
+              "settings",
+              "--user",
+              "0",
+              "put",
+              "secure",
+              "ui_night_mode",
+              String(nightMode),
+            ];
+            afterState = `night:raw=${nightMode};effective=${
+              nightMode === 2 ? "yes" : "no"
+            }`;
+          }
+          const plan = {
+            request: {
+              serial: "QA123",
+              target: args.target,
+              package: "",
+              kind: "shell",
+              user_id: 0,
+              pack_context: null,
+              context: {
+                confirmation_source: "device_control",
+                permission: null,
+                shell_argv: shellArgv,
+                device_control_restore_argv: restoreArgv,
+                device_control_expected_before: null,
+                transport_override: null,
+                restore_enabled_state: null,
+                batch_id: null,
+              },
+            },
+            args: shellArgv,
+            description: `Run reviewed shell mutation: ${shellArgv.join(" ")}`,
+            incident_id: `op-display-${journalId + 1}`,
+            before_state: beforeState,
+          };
+          const entry = {
+            id: ++journalId,
+            applied: {
+              plan,
+              stdout: "",
+              display_stdout: "",
+              before_state: beforeState,
+              after_state: afterState,
+              applied_at: "2026-07-15T12:30:00Z",
+            },
+            undone_by: null,
+            undoes: null,
+            outcome: "succeeded",
+            failure: null,
+          };
+          runtimeJournal.push(entry);
+          return { entry, stdout: "" };
         }
         if (cmd === "list_packs") {
           return {

@@ -343,7 +343,11 @@
     seen.add(value);
     if (Array.isArray(value)) {
       if (value.length > 4096) reject("payload_array");
-      if (key === "argv" || key === "shell_argv") validateArgv(value);
+      if (key === "argv" || key === "shell_argv") {
+        validateArgv(value);
+      } else if (key === "device_control_restore_argv" && value.length > 0) {
+        validateArgv(value);
+      }
       for (const entry of value) validateNested(entry, seen, depth + 1, "");
       return;
     }

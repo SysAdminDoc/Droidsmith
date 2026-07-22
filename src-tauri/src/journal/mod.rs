@@ -560,10 +560,51 @@ fn safe_serial(serial: &str) -> String {
 /// kind isn't losslessly reversible.
 pub fn undo_request_for(journal: &Journal, entry_id: u64) -> Option<ActionRequest> {
     let entry = journal.entries.iter().find(|e| e.id == entry_id)?;
-    if entry.undone_by.is_some() {
+    if entry.outcome != JournalOutcome::Succeeded
+        || entry.undoes.is_some()
+        || entry.undone_by.is_some()
+    {
         return None; // already undone
     }
     let original_kind = entry.applied.plan.request.kind;
+    if original_kind == crate::adb::actions::ActionKind::Shell {
+        let original = &entry.applied.plan.request;
+        let restore = &original.context.device_control_restore_argv;
+        if original.context.confirmation_source
+            != crate::adb::actions::ConfirmationSource::DeviceControl
+            || !crate::adb::actions::reversible_device_control_pair(
+                &original.context.shell_argv,
+                restore,
+                original.user_id,
+            )
+            || !crate::adb::actions::device_control_state_matches_argv(
+                &original.context.shell_argv,
+                &entry.applied.after_state,
+            )
+            || !crate::adb::actions::device_control_restore_matches_state(
+                restore,
+                &entry.applied.before_state,
+                original.user_id,
+            )
+        {
+            return None;
+        }
+        let mut context = original.context.clone();
+        context.confirmation_source = crate::adb::actions::ConfirmationSource::JournalUndo;
+        context.shell_argv = restore.clone();
+        context.device_control_restore_argv = original.context.shell_argv.clone();
+        context.device_control_expected_before = Some(entry.applied.after_state.clone());
+        context.batch_id = None;
+        return Some(ActionRequest {
+            serial: original.serial.clone(),
+            target: original.target.clone(),
+            package: String::new(),
+            kind: crate::adb::actions::ActionKind::Shell,
+            user_id: original.user_id,
+            pack_context: None,
+            context,
+        });
+    }
     let restore_enabled_state =
         if original_kind == crate::adb::actions::ActionKind::UninstallForUser {
             match (
@@ -803,6 +844,55 @@ mod tests {
     }
 
     #[test]
+    fn display_control_inverse_survives_journal_reload() {
+        let dir = fresh_tmp_dir("display-control-inverse");
+        let mut journal = Journal::open(&dir, "abc").unwrap();
+        let mut planned = plan(ActionRequest {
+            serial: "abc".into(),
+            target: target("abc"),
+            package: String::new(),
+            kind: ActionKind::Shell,
+            user_id: 0,
+            pack_context: None,
+            context: crate::adb::actions::ActionContext {
+                confirmation_source: crate::adb::actions::ConfirmationSource::DeviceControl,
+                permission: None,
+                shell_argv: vec!["wm".into(), "density".into(), "500".into()],
+                device_control_restore_argv: vec!["wm".into(), "density".into(), "480".into()],
+                device_control_expected_before: None,
+                transport_override: None,
+                restore_enabled_state: None,
+                batch_id: None,
+            },
+        });
+        planned.before_state = "density:physical=420;override=480".into();
+        journal
+            .record(AppliedAction {
+                plan: planned,
+                stdout: "[shell output redacted; 0 byte(s)]".into(),
+                display_stdout: String::new(),
+                before_state: "density:physical=420;override=480".into(),
+                after_state: "density:physical=420;override=500".into(),
+                applied_at: "2026-07-21T12:00:00Z".into(),
+            })
+            .unwrap();
+        drop(journal);
+
+        let reloaded = Journal::open(&dir, "abc").unwrap();
+        let undo = undo_request_for(&reloaded, 1).unwrap();
+        assert_eq!(undo.kind, ActionKind::Shell);
+        assert_eq!(undo.context.shell_argv, ["wm", "density", "480"]);
+        assert_eq!(
+            undo.context.device_control_expected_before.as_deref(),
+            Some("density:physical=420;override=500")
+        );
+        assert_eq!(
+            undo.context.confirmation_source,
+            crate::adb::actions::ConfirmationSource::JournalUndo
+        );
+    }
+
+    #[test]
     fn archive_undo_requires_a_verified_round_trip_state() {
         let dir = fresh_tmp_dir("archive-inverse");
         let mut journal = Journal::open(&dir, "abc").unwrap();
@@ -855,6 +945,8 @@ mod tests {
                     confirmation_source: crate::adb::actions::ConfirmationSource::PermissionToggle,
                     permission: Some("android.permission.CAMERA".into()),
                     shell_argv: Vec::new(),
+                    device_control_restore_argv: Vec::new(),
+                    device_control_expected_before: None,
                     transport_override: None,
                     restore_enabled_state: None,
                     batch_id: None,
@@ -1085,6 +1177,8 @@ mod tests {
                 confirmation_source: crate::adb::actions::ConfirmationSource::ConsoleReview,
                 permission: None,
                 shell_argv: vec!["rm".into(), "/sdcard/private.txt".into()],
+                device_control_restore_argv: Vec::new(),
+                device_control_expected_before: None,
                 transport_override: None,
                 restore_enabled_state: None,
                 batch_id: None,

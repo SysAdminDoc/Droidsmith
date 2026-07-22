@@ -105,6 +105,30 @@ test("passes a schema-valid sensitive command", () => {
   assert.equal(hook(valid), valid);
 });
 
+test("validates captured display-control recovery argv", () => {
+  const valid = message("apply_action", {
+    plan: {
+      request: {
+        context: {
+          device_control_restore_argv: ["wm", "density", "480"],
+        },
+      },
+    },
+  });
+  assert.equal(hook(valid), valid);
+
+  const injected = message("apply_action", {
+    plan: {
+      request: {
+        context: {
+          device_control_restore_argv: ["wm", "density", "480\nreboot"],
+        },
+      },
+    },
+  });
+  assert.equal(hook(injected).cmd, blockedCommand);
+});
+
 test("opens only the backend-resolved diagnostics directory", () => {
   const valid = message("reveal_diagnostics_directory", {});
   assert.equal(hook(valid), valid);
