@@ -800,8 +800,11 @@ async function runDesktopFlow(browser) {
   await debloatReview
     .getByText("com.android.settings", { exact: true })
     .waitFor();
-  await debloatReview.getByText("3", { exact: true }).waitFor();
-  await debloatReview.getByText("1", { exact: true }).waitFor();
+  await debloatReview.locator("dd").getByText("3", { exact: true }).waitFor();
+  await debloatReview.locator("dd").getByText("1", { exact: true }).waitFor();
+  // R-112: the review surfaces packages that are running services right now.
+  await debloatReview.getByText("Some selected apps are running now").waitFor();
+  await debloatReview.getByText("com.example.app", { exact: true }).waitFor();
   await assertTabMovesFocus(page, "Debloat final safety review");
   await page.screenshot({
     path: path.join(screenshotDir, "desktop-debloat-final-review.png"),
@@ -3611,6 +3614,14 @@ async function installTauriMock(
             ),
             skipped: [],
           };
+        }
+        if (cmd === "list_running_services") {
+          // R-112: com.example.app reports a live service so the debloat review
+          // renders the populated running-services warning; the other selected
+          // packages report none.
+          return args.package === "com.example.app"
+            ? [{ component: "com.example.app/.SyncService" }]
+            : [];
         }
         if (cmd === "locate_scrcpy") return "C:/Tools/scrcpy.exe";
         if (cmd === "locate_gnirehtet") return "C:/Tools/gnirehtet.exe";

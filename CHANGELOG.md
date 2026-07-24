@@ -16,6 +16,11 @@ each milestone tag.
 
 ### Added
 
+- **R-112 — Running services in the Debloat review.** The debloat safety review
+  now probes each selected package (bounded to the first 16) for live services
+  via `dumpsys` and surfaces which apps are running right now, so the reviewer
+  knows a disable won't stop already-running services until reboot or
+  force-stop. Handles loading, populated, none, truncated, and error states.
 - **R-109 — Archive reversibility warning.** The package-action review now
   checks each package's installer-of-record before archiving. Android 15 can
   only restore an archived app through an installer that handles the unarchive

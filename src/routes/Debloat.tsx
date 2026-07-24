@@ -781,6 +781,7 @@ export default function DebloatRoute() {
               <DebloatApplyReview
                 pack={wizard.pack}
                 selected={wizard.selected}
+                target={authorizedTarget}
                 onCancel={() => setApplyReviewOpen(false)}
                 onConfirm={() => void applyPack()}
               />
