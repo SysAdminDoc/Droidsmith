@@ -147,6 +147,7 @@ export default function AppsRoute() {
   const metadataGenerationRef = useRef(0);
   const metadataRequestedRef = useRef(new Set<string>());
   const packagesRequestRef = useRef(0);
+  const usersRequestRef = useRef(0);
   const journalRequestRef = useRef(0);
   // Tracks the live selection so an in-flight journal undo can detect a
   // mid-operation device switch before refreshing shared package/journal state.
@@ -241,19 +242,23 @@ export default function AppsRoute() {
       setUserError(null);
       return;
     }
+    // Rapid target switches can interleave callListUsers responses; only the
+    // most recent request may write the user selection (last-write guard).
+    const request = usersRequestRef.current + 1;
+    usersRequestRef.current = request;
     setUsersReady(false);
     setUserError(null);
     try {
       const found = await callListUsers(selectedTarget);
+      if (usersRequestRef.current !== request) return;
       setUsers(found);
-      // Never silently keep a stale selection from device A. The backend
-      // rejects empty or ambiguous discovery instead of fabricating user 0.
+      // The backend rejects empty or ambiguous discovery instead of
+      // fabricating user 0, so a resolved list always has a foreground user.
       const foreground = found.find((u) => u.current) ?? found[0];
-      if (!foreground)
-        throw new Error("Android user discovery returned no users");
       setSelectedUser(foreground.id);
       setUsersReady(true);
     } catch (e) {
+      if (usersRequestRef.current !== request) return;
       setUsers([]);
       setUserError(errorMessage(e));
     }

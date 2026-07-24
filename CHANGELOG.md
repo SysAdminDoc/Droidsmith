@@ -47,6 +47,15 @@ each milestone tag.
   `baseline-export --all-devices --output <dir>` writes one `<serial>.json`
   baseline per device.
 
+### Fixed
+
+- **IMP-85 / audit — user-discovery races and dead code.** `loadUsers` in Apps
+  and Debloat now carries a last-write request guard so interleaved
+  `callListUsers` responses from rapid target switches can no longer clobber the
+  current device's user selection, and the unreachable "Android user discovery
+  returned no users" throw (a hardcoded English literal the backend contract
+  already prevents) was removed.
+
 ## [0.9.10] - 2026-07-22
 
 Deep engineering / UX audit pass: ~40 verified fixes across backend process

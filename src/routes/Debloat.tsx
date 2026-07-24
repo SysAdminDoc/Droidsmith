@@ -122,6 +122,7 @@ export default function DebloatRoute() {
   // "done" screen (mirrors Apps' installGenerationRef).
   const queueGenerationRef = useRef(0);
   const packsRequestRef = useRef(0);
+  const usersRequestRef = useRef(0);
 
   const selectedDevice =
     authorizedDevices.find((device) =>
@@ -182,6 +183,10 @@ export default function DebloatRoute() {
       setDeviceContext({ manufacturer: null, rom: null });
       return;
     }
+    // Rapid target switches can interleave callListUsers responses; only the
+    // most recent request may write the user selection (last-write guard).
+    const request = usersRequestRef.current + 1;
+    usersRequestRef.current = request;
     setUsersReady(false);
     setUserError(null);
     // Best-effort device context for quirk matching; a failure here must not
@@ -189,6 +194,7 @@ export default function DebloatRoute() {
     void (async () => {
       try {
         const info = await callGetDeviceInfo(selectedTarget);
+        if (usersRequestRef.current !== request) return;
         setDeviceContext({
           manufacturer: info.manufacturer,
           rom: info.build_fingerprint,
@@ -199,13 +205,15 @@ export default function DebloatRoute() {
     })();
     try {
       const found = await callListUsers(selectedTarget);
+      if (usersRequestRef.current !== request) return;
       setUsers(found);
+      // The backend rejects empty or ambiguous discovery instead of
+      // fabricating user 0, so a resolved list always has a foreground user.
       const foreground = found.find((u) => u.current) ?? found[0];
-      if (!foreground)
-        throw new Error("Android user discovery returned no users");
       setSelectedUser(foreground.id);
       setUsersReady(true);
     } catch (e) {
+      if (usersRequestRef.current !== request) return;
       setUsers([]);
       setUserError(errorMessage(e));
     }
