@@ -40,6 +40,8 @@ export type MirrorPreset = {
   cameraSize: string;
   displayImePolicy: string;
   noVdDestroyContent: boolean;
+  /** Package to launch on connect via scrcpy `--start-app` (empty = none). */
+  startApp: string;
 };
 
 export type DisplayImePolicy = "" | "local" | "hide" | "fallback";
@@ -81,7 +83,23 @@ export const DEFAULT_MIRROR_PRESET: MirrorPreset = {
   cameraSize: "",
   displayImePolicy: "",
   noVdDestroyContent: false,
+  startApp: "",
 };
+
+/**
+ * Mirror of the Rust `valid_package_name` rule: non-empty, no leading/trailing
+ * dot, and only `[A-Za-z0-9._-]`. Used to keep persisted presets clean and to
+ * gate the launch-app control.
+ */
+export function isValidPackageName(value: string): boolean {
+  return (
+    value.length > 0 &&
+    value.length <= 255 &&
+    !value.startsWith(".") &&
+    !value.endsWith(".") &&
+    /^[A-Za-z0-9._-]+$/u.test(value)
+  );
+}
 
 export const LEGACY_MIRROR_PRESET_PREFIX = "droidsmith.mirror.preset.";
 
@@ -196,6 +214,11 @@ export function normalizePreset(value: Partial<MirrorPreset>): MirrorPreset {
       typeof value.noVdDestroyContent === "boolean"
         ? value.noVdDestroyContent
         : DEFAULT_MIRROR_PRESET.noVdDestroyContent,
+    startApp:
+      typeof value.startApp === "string" &&
+      (value.startApp === "" || isValidPackageName(value.startApp))
+        ? value.startApp
+        : DEFAULT_MIRROR_PRESET.startApp,
   };
 }
 

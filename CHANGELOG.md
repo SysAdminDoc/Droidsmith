@@ -14,6 +14,16 @@ completion.
 Working batches live here. Sections collapse into a versioned release on
 each milestone tag.
 
+### Added
+
+- **R-111 — scrcpy app launcher.** When the detected scrcpy supports it
+  (3.0+), Mirror offers an optional "Launch app on connect" control that starts
+  a chosen app via `--start-app`, optionally into a `--new-display` virtual
+  display. The picker autocompletes from the device's package inventory
+  (loaded on demand) and the selection persists in the per-device mirror
+  preset. The flag is validated as a package name and the control is hidden on
+  older scrcpy.
+
 ## [0.9.11] - 2026-07-24
 
 Fleet CLI, archive/debloat trust signals, packaging manifests, and async

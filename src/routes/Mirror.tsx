@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import {
   errorMessage,
   callLaunchScrcpy,
+  callListPackages,
   callLocateScrcpy,
   callScrcpyCapabilities,
   callScrcpySessionStatus,
@@ -30,6 +31,7 @@ import {
 
 import {
   DEFAULT_MIRROR_PRESET,
+  isValidPackageName,
   type KeyboardMode,
   type MirrorPreset,
 } from "./mirrorPresets";
@@ -95,9 +97,30 @@ export default function MirrorRoute() {
   const [capabilityProbeRevision, setCapabilityProbeRevision] = useState(0);
   const [preset, setPreset] = useState<MirrorPreset>(DEFAULT_MIRROR_PRESET);
   const [presetMessage, setPresetMessage] = useState<string | null>(null);
+  // On-demand package inventory for the launch-app (--start-app) picker.
+  const [appInventory, setAppInventory] = useState<
+    | { kind: "idle" }
+    | { kind: "loading" }
+    | { kind: "ready"; packages: string[] }
+    | { kind: "error"; message: string }
+  >({ kind: "idle" });
   // Tracks the live selection so a launch that awaited the recording save
   // dialog can detect a mid-dialog device change (e.g. an automatic reconnect).
   const selectedTargetRef = useRef<DeviceTarget | null>(null);
+
+  const loadAppInventory = useCallback(async () => {
+    if (!authorizedTarget) return;
+    setAppInventory({ kind: "loading" });
+    try {
+      const packages = await callListPackages(authorizedTarget, "all");
+      setAppInventory({
+        kind: "ready",
+        packages: packages.map((entry) => entry.package).sort(),
+      });
+    } catch (error) {
+      setAppInventory({ kind: "error", message: errorMessage(error) });
+    }
+  }, [authorizedTarget]);
 
   const checkScrcpy = useCallback(async () => {
     if (!inTauri()) return;
@@ -335,6 +358,7 @@ export default function MirrorRoute() {
               : null,
           display_ime_policy: preset.displayImePolicy || null,
           no_vd_destroy_content: preset.noVdDestroyContent,
+          start_app: preset.startApp.trim() || null,
         },
         recordingGrant?.id,
       );
@@ -763,6 +787,82 @@ export default function MirrorRoute() {
                           inputMode="text"
                           className="font-mono"
                         />
+                      </label>
+                    )}
+                  {capabilityState.kind === "ready" &&
+                    capabilityState.value.supports_start_app && (
+                      <label className="grid gap-1.5">
+                        <span className="text-xs font-medium text-anvil-400">
+                          {t("mirror.startApp")}
+                        </span>
+                        <div className="flex gap-2">
+                          <FieldInput
+                            type="text"
+                            value={preset.startApp}
+                            onChange={(e) =>
+                              setPreset((prev) => ({
+                                ...prev,
+                                startApp: e.target.value
+                                  .replace(/[^A-Za-z0-9._-]/g, "")
+                                  .slice(0, 255),
+                              }))
+                            }
+                            placeholder="com.example.app"
+                            inputMode="text"
+                            className="min-w-0 flex-1 font-mono"
+                            list="mirror-start-app-list"
+                            autoComplete="off"
+                          />
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => void loadAppInventory()}
+                            disabled={
+                              !authorizedTarget ||
+                              appInventory.kind === "loading"
+                            }
+                          >
+                            {appInventory.kind === "loading"
+                              ? t("mirror.startAppLoading")
+                              : t("mirror.startAppLoad")}
+                          </Button>
+                        </div>
+                        <datalist id="mirror-start-app-list">
+                          {appInventory.kind === "ready" &&
+                            appInventory.packages.map((pkg) => (
+                              <option key={pkg} value={pkg} />
+                            ))}
+                        </datalist>
+                        {appInventory.kind === "ready" && (
+                          <span className="text-xs text-anvil-500">
+                            {t("mirror.startAppLoaded", {
+                              count: appInventory.packages.length,
+                            })}
+                          </span>
+                        )}
+                        {appInventory.kind === "error" && (
+                          <span
+                            className="text-xs text-amber-200"
+                            role="status"
+                          >
+                            {t("mirror.startAppError", {
+                              message: appInventory.message,
+                            })}
+                          </span>
+                        )}
+                        {preset.startApp.trim() !== "" &&
+                          !isValidPackageName(preset.startApp.trim()) && (
+                            <span
+                              className="text-xs text-amber-200"
+                              role="status"
+                            >
+                              {t("mirror.startAppInvalid")}
+                            </span>
+                          )}
+                        <span className="text-xs text-anvil-500">
+                          {t("mirror.startAppHint")}
+                        </span>
                       </label>
                     )}
                   {capabilityState.kind === "ready" &&

@@ -64,6 +64,10 @@ pub struct LaunchScrcpyRequest {
     /// the scrcpy window closes (scrcpy 3.1+).
     #[serde(default)]
     pub no_vd_destroy_content: bool,
+    /// `--start-app=<package>` — launch a chosen app on connect, optionally into
+    /// a `--new-display` virtual display (scrcpy 3.0+).
+    #[serde(default)]
+    pub start_app: Option<String>,
 }
 
 #[derive(specta::Type, Debug, Clone, Serialize, PartialEq, Eq)]
@@ -96,6 +100,8 @@ pub struct ScrcpyCapabilities {
     /// `--no-vd-destroy-content` (keep virtual-display apps alive on close)
     /// landed in scrcpy 3.1.
     pub supports_no_vd_destroy_content: bool,
+    /// `--start-app` (launch an app on connect) landed in scrcpy 3.0.
+    pub supports_start_app: bool,
 }
 
 #[derive(specta::Type, Debug, Clone, Serialize, PartialEq, Eq)]
@@ -278,6 +284,7 @@ pub fn capabilities(
         supports_camera: version_gte(&version, 2, 7),
         supports_display_ime_policy: version_gte(&version, 3, 2),
         supports_no_vd_destroy_content: version_gte(&version, 3, 1),
+        supports_start_app: version_gte(&version, 3, 0),
         version,
         available_video_codecs,
         video_encoders,
@@ -802,6 +809,22 @@ pub fn build_args(
         }
         args.push(format!("--new-display={new_display}"));
     }
+    if let Some(package) = request
+        .start_app
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        if !capabilities.supports_start_app {
+            return Err("launching an app (--start-app) requires scrcpy 3.0 or later".to_string());
+        }
+        if !crate::adb::valid_package_name(package) {
+            return Err(format!(
+                "scrcpy start-app is not a valid package name: {package}"
+            ));
+        }
+        args.push(format!("--start-app={package}"));
+    }
     if !camera_mode && request.flex_display {
         if !version_gte(&capabilities.version, 4, 0) {
             return Err("flex display requires scrcpy 4.0 or later".to_string());
@@ -1065,6 +1088,7 @@ mod tests {
             camera_size: None,
             display_ime_policy: None,
             no_vd_destroy_content: false,
+            start_app: None,
         }
     }
 
@@ -1087,6 +1111,7 @@ mod tests {
             supports_camera: true,
             supports_display_ime_policy: true,
             supports_no_vd_destroy_content: true,
+            supports_start_app: true,
         }
     }
 
@@ -1207,6 +1232,34 @@ mod tests {
         assert!(!args.contains(&"--fullscreen".to_string()));
         assert!(!args.contains(&"--always-on-top".to_string()));
         assert!(!args.contains(&"--no-control".to_string()));
+    }
+
+    #[test]
+    fn emits_gates_and_validates_start_app() {
+        // A valid package launches on connect.
+        let mut req = request();
+        req.start_app = Some("com.example.app".to_string());
+        let args = build_args(&req, None, &capabilities()).unwrap();
+        assert!(args.contains(&"--start-app=com.example.app".to_string()));
+
+        // Blank/whitespace is ignored (no flag emitted).
+        let mut blank = request();
+        blank.start_app = Some("   ".to_string());
+        let blank_args = build_args(&blank, None, &capabilities()).unwrap();
+        assert!(!blank_args.iter().any(|arg| arg.starts_with("--start-app")));
+
+        // A malformed package name is rejected.
+        let mut bad = request();
+        bad.start_app = Some("not a package".to_string());
+        assert!(build_args(&bad, None, &capabilities())
+            .unwrap_err()
+            .contains("valid package name"));
+
+        // Gated on scrcpy 3.0.
+        let mut old = capabilities();
+        old.version = "2.7".to_string();
+        old.supports_start_app = false;
+        assert!(build_args(&req, None, &old).unwrap_err().contains("3.0"));
     }
 
     #[test]

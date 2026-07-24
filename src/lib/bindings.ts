@@ -1931,6 +1931,11 @@ export type LaunchScrcpyRequest = {
    * the scrcpy window closes (scrcpy 3.1+).
    */
   no_vd_destroy_content?: boolean;
+  /**
+   * `--start-app=<package>` — launch a chosen app on connect, optionally into
+   * a `--new-display` virtual display (scrcpy 3.0+).
+   */
+  start_app?: string | null;
 };
 export type LayoutAuditFinding = {
   id: string;
@@ -2600,6 +2605,10 @@ export type ScrcpyCapabilities = {
    * landed in scrcpy 3.1.
    */
   supports_no_vd_destroy_content: boolean;
+  /**
+   * `--start-app` (launch an app on connect) landed in scrcpy 3.0.
+   */
+  supports_start_app: boolean;
 };
 export type ScrcpyExitReason =
   | "user_stopped"

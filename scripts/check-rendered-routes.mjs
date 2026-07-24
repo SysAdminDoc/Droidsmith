@@ -945,6 +945,10 @@ async function runDesktopFlow(browser) {
   // R-089: version-gated virtual display + audio-source picker.
   await page.getByLabel("Audio source").selectOption("mic-unprocessed");
   await page.getByLabel("Virtual display (WxH/dpi)").fill("1920x1080/240");
+  // R-111: the launch-app control loads the package inventory for autocomplete.
+  await page.getByLabel("Launch app on connect").fill("com.example.app");
+  await page.getByRole("button", { name: "Load installed apps" }).click();
+  await page.getByText(/Autocomplete: \d+ apps/).waitFor();
   // R-089: camera mirroring reveals facing/size controls, then back to screen.
   await page.getByLabel("Video source").selectOption("camera");
   await page.getByLabel("Camera facing").selectOption("front");
@@ -3692,6 +3696,7 @@ async function installTauriMock(
             supports_new_display: true,
             supports_audio_source_expansion: true,
             supports_camera: true,
+            supports_start_app: true,
           };
         }
         if (cmd === "launch_scrcpy") {

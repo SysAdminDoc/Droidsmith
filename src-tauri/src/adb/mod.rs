@@ -49,8 +49,8 @@ pub use device_settings::{
     DeviceSetting, DeviceSettingChange,
 };
 pub use packages::{
-    list_packages, list_packages_with_capability, AppPackage, PackageArchiveCapability,
-    PackageFilter, PackageListing,
+    list_packages, list_packages_with_capability, valid_package_name, AppPackage,
+    PackageArchiveCapability, PackageFilter, PackageListing,
 };
 pub use resolver::{locate_adb, AdbResolution};
 pub use transport::{
