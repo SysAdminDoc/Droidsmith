@@ -874,12 +874,8 @@ async function runDesktopFlow(browser) {
   });
   // R-114: compare the analyzed APK against another (here, the same file) and
   // render the offline version-diff summary.
-  await page
-    .getByRole("button", { name: "Compare with another APK" })
-    .click();
-  await page
-    .getByText("No tracked differences between these APKs.")
-    .waitFor();
+  await page.getByRole("button", { name: "Compare with another APK" }).click();
+  await page.getByText("No tracked differences between these APKs.").waitFor();
   await page.evaluate(() => {
     window.__DROIDSMITH_MOCK_APK_VERIFICATION__ = "not_verified";
   });
@@ -965,6 +961,10 @@ async function runDesktopFlow(browser) {
   await page.getByLabel("Video codec").selectOption("h265");
   await page.getByLabel("Video encoder").selectOption("c2.vendor.hevc.encoder");
   await page.getByRole("checkbox", { name: "Record session" }).check();
+  // R-117: control/record-only mode (no mirror window), version-gated.
+  await page
+    .getByRole("checkbox", { name: "No window (control/record only)" })
+    .check();
   await page
     .getByText(/native save dialog will choose the .mp4 or .mkv/)
     .waitFor();
@@ -3705,6 +3705,7 @@ async function installTauriMock(
             supports_audio_source_expansion: true,
             supports_camera: true,
             supports_start_app: true,
+            supports_no_window: true,
           };
         }
         if (cmd === "launch_scrcpy") {

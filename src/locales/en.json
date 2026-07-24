@@ -1133,6 +1133,7 @@
     "fullscreen": "Fullscreen",
     "alwaysOnTop": "Always on top",
     "noControl": "View only (no control)",
+    "noWindow": "No window (control/record only)",
     "maxFps": "Max FPS",
     "maxFpsPlaceholder": "Unlimited",
     "title": "Mirror",

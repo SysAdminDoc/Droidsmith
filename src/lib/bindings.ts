@@ -1936,6 +1936,11 @@ export type LaunchScrcpyRequest = {
    * a `--new-display` virtual display (scrcpy 3.0+).
    */
   start_app?: string | null;
+  /**
+   * `--no-window` — control/record without opening a mirror window
+   * (scrcpy 3.2+).
+   */
+  no_window?: boolean;
 };
 export type LayoutAuditFinding = {
   id: string;
@@ -2609,6 +2614,11 @@ export type ScrcpyCapabilities = {
    * `--start-app` (launch an app on connect) landed in scrcpy 3.0.
    */
   supports_start_app: boolean;
+  /**
+   * `--no-window` (control/record without a mirror window) landed in
+   * scrcpy 3.2.
+   */
+  supports_no_window: boolean;
 };
 export type ScrcpyExitReason =
   | "user_stopped"

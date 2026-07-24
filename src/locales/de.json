@@ -1133,6 +1133,7 @@
     "fullscreen": "Vollbild",
     "alwaysOnTop": "Immer im Vordergrund",
     "noControl": "Nur ansehen (keine Steuerung)",
+    "noWindow": "Kein Fenster (nur Steuerung/Aufnahme)",
     "maxFps": "Max. FPS",
     "maxFpsPlaceholder": "Unbegrenzt",
     "title": "Spiegeln",

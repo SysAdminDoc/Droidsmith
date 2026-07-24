@@ -68,6 +68,10 @@ pub struct LaunchScrcpyRequest {
     /// a `--new-display` virtual display (scrcpy 3.0+).
     #[serde(default)]
     pub start_app: Option<String>,
+    /// `--no-window` — control/record without opening a mirror window
+    /// (scrcpy 3.2+).
+    #[serde(default)]
+    pub no_window: bool,
 }
 
 #[derive(specta::Type, Debug, Clone, Serialize, PartialEq, Eq)]
@@ -102,6 +106,9 @@ pub struct ScrcpyCapabilities {
     pub supports_no_vd_destroy_content: bool,
     /// `--start-app` (launch an app on connect) landed in scrcpy 3.0.
     pub supports_start_app: bool,
+    /// `--no-window` (control/record without a mirror window) landed in
+    /// scrcpy 3.2.
+    pub supports_no_window: bool,
 }
 
 #[derive(specta::Type, Debug, Clone, Serialize, PartialEq, Eq)]
@@ -285,6 +292,7 @@ pub fn capabilities(
         supports_display_ime_policy: version_gte(&version, 3, 2),
         supports_no_vd_destroy_content: version_gte(&version, 3, 1),
         supports_start_app: version_gte(&version, 3, 0),
+        supports_no_window: version_gte(&version, 3, 2),
         version,
         available_video_codecs,
         video_encoders,
@@ -825,6 +833,12 @@ pub fn build_args(
         }
         args.push(format!("--start-app={package}"));
     }
+    if request.no_window {
+        if !capabilities.supports_no_window {
+            return Err("control-only mode (--no-window) requires scrcpy 3.2 or later".to_string());
+        }
+        args.push("--no-window".to_string());
+    }
     if !camera_mode && request.flex_display {
         if !version_gte(&capabilities.version, 4, 0) {
             return Err("flex display requires scrcpy 4.0 or later".to_string());
@@ -1089,6 +1103,7 @@ mod tests {
             display_ime_policy: None,
             no_vd_destroy_content: false,
             start_app: None,
+            no_window: false,
         }
     }
 
@@ -1112,6 +1127,7 @@ mod tests {
             supports_display_ime_policy: true,
             supports_no_vd_destroy_content: true,
             supports_start_app: true,
+            supports_no_window: true,
         }
     }
 
@@ -1260,6 +1276,20 @@ mod tests {
         old.version = "2.7".to_string();
         old.supports_start_app = false;
         assert!(build_args(&req, None, &old).unwrap_err().contains("3.0"));
+    }
+
+    #[test]
+    fn emits_and_gates_no_window() {
+        let mut req = request();
+        req.no_window = true;
+        let args = build_args(&req, None, &capabilities()).unwrap();
+        assert!(args.contains(&"--no-window".to_string()));
+
+        // Gated on scrcpy 3.2.
+        let mut old = capabilities();
+        old.version = "3.1".to_string();
+        old.supports_no_window = false;
+        assert!(build_args(&req, None, &old).unwrap_err().contains("3.2"));
     }
 
     #[test]

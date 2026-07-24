@@ -16,6 +16,10 @@ each milestone tag.
 
 ### Added
 
+- **R-117 — scrcpy control-only mode.** Mirror now offers a version-gated
+  (scrcpy 3.2+) "No window" toggle that launches scrcpy with `--no-window` to
+  control and/or record a device without opening a mirror window. The flag is
+  hidden on older scrcpy and the setting persists in the per-device preset.
 - **R-114 — Offline APK version diff.** The APK Analyzer can now compare the
   analyzed APK against a second local APK (chosen via a one-shot grant) and
   reports the deltas that matter for an update review: added/removed

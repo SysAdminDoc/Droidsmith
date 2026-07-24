@@ -42,6 +42,8 @@ export type MirrorPreset = {
   noVdDestroyContent: boolean;
   /** Package to launch on connect via scrcpy `--start-app` (empty = none). */
   startApp: string;
+  /** scrcpy `--no-window`: control/record without a mirror window. */
+  noWindow: boolean;
 };
 
 export type DisplayImePolicy = "" | "local" | "hide" | "fallback";
@@ -84,6 +86,7 @@ export const DEFAULT_MIRROR_PRESET: MirrorPreset = {
   displayImePolicy: "",
   noVdDestroyContent: false,
   startApp: "",
+  noWindow: false,
 };
 
 /**
@@ -219,6 +222,10 @@ export function normalizePreset(value: Partial<MirrorPreset>): MirrorPreset {
       (value.startApp === "" || isValidPackageName(value.startApp))
         ? value.startApp
         : DEFAULT_MIRROR_PRESET.startApp,
+    noWindow:
+      typeof value.noWindow === "boolean"
+        ? value.noWindow
+        : DEFAULT_MIRROR_PRESET.noWindow,
   };
 }
 

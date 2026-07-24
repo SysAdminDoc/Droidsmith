@@ -1133,6 +1133,7 @@
     "fullscreen": "全屏",
     "alwaysOnTop": "始终置顶",
     "noControl": "仅查看（无控制）",
+    "noWindow": "无窗口（仅控制/录制）",
     "maxFps": "最大帧率",
     "maxFpsPlaceholder": "不限制",
     "title": "镜像",

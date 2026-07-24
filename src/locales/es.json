@@ -1264,6 +1264,7 @@
     "fullscreen": "Pantalla completa",
     "alwaysOnTop": "Siempre visible",
     "noControl": "Solo ver (sin control)",
+    "noWindow": "Sin ventana (solo control/grabación)",
     "maxFps": "FPS máx.",
     "maxFpsPlaceholder": "Sin límite",
     "bitRate": "Tasa de bits de video",

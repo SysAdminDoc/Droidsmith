@@ -359,6 +359,7 @@ export default function MirrorRoute() {
           display_ime_policy: preset.displayImePolicy || null,
           no_vd_destroy_content: preset.noVdDestroyContent,
           start_app: preset.startApp.trim() || null,
+          no_window: preset.noWindow,
         },
         recordingGrant?.id,
       );
@@ -1132,6 +1133,19 @@ export default function MirrorRoute() {
                           }))
                         }
                         label={t("mirror.noVdDestroyContent")}
+                      />
+                    )}
+                  {capabilityState.kind === "ready" &&
+                    capabilityState.value.supports_no_window && (
+                      <Toggle
+                        checked={preset.noWindow}
+                        onChange={(checked) =>
+                          setPreset((prev) => ({
+                            ...prev,
+                            noWindow: checked,
+                          }))
+                        }
+                        label={t("mirror.noWindow")}
                       />
                     )}
                 </div>
