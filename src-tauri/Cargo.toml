@@ -7,6 +7,9 @@ license = "MIT"
 repository = "https://github.com/SysAdminDoc/Droidsmith"
 edition = "2021"
 rust-version = "1.81"
+# The crate ships several helper binaries (CLI, linters, bindings generator).
+# Pin the GUI binary as the default so `cargo run` / `tauri dev` launch the app.
+default-run = "droidsmith"
 
 [lib]
 name = "droidsmith_lib"
