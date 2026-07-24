@@ -7,6 +7,7 @@
 
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import path from "node:path";
+import { argv, exit, stderr, stdout } from "node:process";
 import { fileURLToPath } from "node:url";
 
 const repoRoot = path.resolve(
@@ -184,10 +185,8 @@ function main() {
   const scoop = buildScoopManifest(meta);
   const problems = validateManifests(winget, scoop, meta.version);
   if (problems.length > 0) {
-    process.stderr.write(
-      `Manifest validation failed:\n- ${problems.join("\n- ")}\n`,
-    );
-    process.exit(1);
+    stderr.write(`Manifest validation failed:\n- ${problems.join("\n- ")}\n`);
+    exit(1);
   }
   const wingetDir = path.join(repoRoot, "packaging", "winget");
   const scoopDir = path.join(repoRoot, "packaging", "scoop");
@@ -201,14 +200,14 @@ function main() {
     path.join(scoopDir, "droidsmith.json"),
     `${JSON.stringify(scoop, null, 2)}\n`,
   );
-  process.stdout.write(
+  stdout.write(
     `Wrote winget + Scoop manifests for v${meta.version} (placeholder installer hashes)\n`,
   );
 }
 
 if (
-  import.meta.url === `file://${process.argv[1]}` ||
-  process.argv[1]?.endsWith("generate-packaging-manifests.mjs")
+  import.meta.url === `file://${argv[1]}` ||
+  argv[1]?.endsWith("generate-packaging-manifests.mjs")
 ) {
   main();
 }
