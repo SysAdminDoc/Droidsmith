@@ -732,6 +732,13 @@
     "installedPackages": "Installierte Pakete",
     "installedPackagesBody": "Aktionen werden vor der Anwendung in der Vorschau angezeigt. Deaktivieren, Aktivieren, Archivieren und Dearchivieren sind über das Journal umkehrbar.",
     "archiveUnavailable": "App-Archivierung nicht verfügbar",
+    "archiveNotReversibleTitle": "Archivierung ist möglicherweise nicht umkehrbar",
+    "archiveNotReversibleBody": "Android kann eine archivierte App nur über den Installationsdienst wiederherstellen, der sie installiert hat. Diese Pakete haben keinen Store-Installer, der die Wiederherstellung unterstützt – das Archivieren kann daher endgültig sein. Exportieren Sie zuerst eine Wiederherstellungs-Baseline oder behalten Sie die APK.",
+    "unarchiveOutlook": {
+      "sideloaded": "seitlich geladen – kein Installer kann sie wiederherstellen",
+      "installer_missing": "der zugehörige Installer ist nicht mehr vorhanden",
+      "unverified": "Installer unterstützt die Wiederherstellung möglicherweise nicht"
+    },
     "disable": "Deaktivieren",
     "enable": "Aktivieren",
     "uninstall": "Deinstallieren",

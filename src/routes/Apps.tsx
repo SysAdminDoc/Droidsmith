@@ -62,6 +62,11 @@ import { PermissionsPanel } from "./apps/PermissionsPanel";
 import { RecoveryBaselinePanel } from "./apps/RecoveryBaselinePanel";
 import { BatchActionBar, FilterChips } from "./apps/FilterControls";
 import {
+  archiveIsRisky,
+  classifyUnarchive,
+  type UnarchiveOutlook,
+} from "./apps/unarchive";
+import {
   BackupStatePanel,
   InstallOverrideDialog,
   InstallStatePanel,
@@ -1140,6 +1145,44 @@ export default function AppsRoute() {
   const canBatchUnarchive =
     batchReady && selectedRows.every((pkg) => pkg.archived);
 
+  // R-109: archive is only reversible via `request-unarchive` when the
+  // installer-of-record can handle the unarchive intent. Flag packages in the
+  // pending archive review whose installer is a sideload source, is missing, or
+  // is an unverified third-party store, so the review can downgrade the
+  // "reversible" promise instead of stranding the package.
+  const archiveWarnings = useMemo<
+    { package: string; outlook: UnarchiveOutlook }[]
+  >(() => {
+    if (pkgState.kind !== "ok") return [];
+    const plans =
+      actionState.kind === "confirming"
+        ? [actionState.plan]
+        : actionState.kind === "confirming_batch"
+          ? actionState.plan.plans
+          : [];
+    const archivePlans = plans.filter(
+      (plan) => plan.request.kind === "archive",
+    );
+    if (archivePlans.length === 0) return [];
+    const installedIds = new Set(
+      pkgState.packages
+        .filter((pkg) => !pkg.archived && !pkg.retained)
+        .map((pkg) => pkg.package),
+    );
+    const installerByPackage = new Map(
+      pkgState.packages.map((pkg) => [pkg.package, pkg.installer ?? null]),
+    );
+    return archivePlans
+      .map((plan) => ({
+        package: plan.request.package,
+        outlook: classifyUnarchive(
+          installerByPackage.get(plan.request.package),
+          installedIds,
+        ),
+      }))
+      .filter((entry) => archiveIsRisky(entry.outlook));
+  }, [actionState, pkgState]);
+
   return (
     <>
       <PaneHeader
@@ -1490,6 +1533,7 @@ export default function AppsRoute() {
 
         <ActionOverlay
           state={actionState}
+          archiveWarnings={archiveWarnings}
           onConfirm={() => void confirmAction()}
           onExportBaseline={() => void exportActionBaseline()}
           exportingBaseline={recoveryState.kind === "busy"}
@@ -1512,6 +1556,7 @@ export default function AppsRoute() {
 
 function ActionOverlay({
   state,
+  archiveWarnings,
   onConfirm,
   onExportBaseline,
   exportingBaseline,
@@ -1520,6 +1565,7 @@ function ActionOverlay({
   onDismiss,
 }: {
   state: ActionState;
+  archiveWarnings: { package: string; outlook: UnarchiveOutlook }[];
   onConfirm: () => void;
   onExportBaseline: () => void;
   exportingBaseline: boolean;
@@ -1593,6 +1639,32 @@ function ActionOverlay({
               </code>
             ))}
           </div>
+          {archiveWarnings.length > 0 && (
+            <div
+              className="mt-3 rounded-md border border-amber-300/30 bg-amber-950/20 p-3"
+              role="alert"
+            >
+              <p className="text-xs font-semibold text-amber-200">
+                {t("apps.archiveNotReversibleTitle")}
+              </p>
+              <p className="mt-1 text-xs leading-5 text-amber-100/90">
+                {t("apps.archiveNotReversibleBody")}
+              </p>
+              <ul className="mt-2 space-y-1">
+                {archiveWarnings.map((entry) => (
+                  <li
+                    key={entry.package}
+                    className="break-all font-mono text-xs text-amber-100"
+                  >
+                    {entry.package} —{" "}
+                    <span className="font-sans">
+                      {t(`apps.unarchiveOutlook.${entry.outlook}`)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
           {baselineFeedback && (
             <p
               className="mt-3 text-xs leading-5 text-circuit-100"

@@ -51,6 +51,13 @@
     "applyingChange": "Aplicando cambio",
     "archive": "Archivar",
     "archiveUnavailable": "Archivado de aplicaciones no disponible",
+    "archiveNotReversibleTitle": "Archivar puede no ser reversible",
+    "archiveNotReversibleBody": "Android solo puede restaurar una app archivada mediante el instalador que la instaló. Estos paquetes no tienen un instalador de tienda compatible con la restauración, por lo que archivarlos podría ser permanente: exporta primero una línea base de recuperación o conserva el APK.",
+    "unarchiveOutlook": {
+      "sideloaded": "instalada manualmente: ningún instalador puede restaurarla",
+      "installer_missing": "su instalador ya no está presente",
+      "unverified": "el instalador podría no admitir la restauración"
+    },
     "authorizedDeviceCount_few": "{{count}} dispositivos autorizados",
     "authorizedDeviceCount_many": "{{count}} dispositivos autorizados",
     "authorizedDeviceCount_one": "{{count}} dispositivo autorizado",

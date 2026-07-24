@@ -732,6 +732,13 @@
     "installedPackages": "Installed packages",
     "installedPackagesBody": "Actions preview before applying. Disable, enable, archive, and unarchive are reversible via the journal.",
     "archiveUnavailable": "App archiving unavailable",
+    "archiveNotReversibleTitle": "Archiving may not be reversible",
+    "archiveNotReversibleBody": "Android can only restore an archived app through the installer that placed it. These packages have no store installer that supports unarchive, so archiving them may be permanent — export a recovery baseline or keep the APK first.",
+    "unarchiveOutlook": {
+      "sideloaded": "sideloaded — no installer can unarchive it",
+      "installer_missing": "its installer is no longer present",
+      "unverified": "installer may not support unarchive"
+    },
     "disable": "Disable",
     "enable": "Enable",
     "uninstall": "Uninstall",

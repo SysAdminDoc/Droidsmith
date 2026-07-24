@@ -732,6 +732,13 @@
     "installedPackages": "已安装的包",
     "installedPackagesBody": "操作会在应用前预览。禁用、启用、归档和取消归档可通过日志撤销。",
     "archiveUnavailable": "应用归档不可用",
+    "archiveNotReversibleTitle": "归档可能无法撤销",
+    "archiveNotReversibleBody": "Android 只能通过安装该应用的安装程序来恢复已归档的应用。这些软件包没有支持恢复的商店安装程序，因此归档后可能无法恢复——请先导出恢复基线或保留 APK。",
+    "unarchiveOutlook": {
+      "sideloaded": "旁加载安装——没有可恢复它的安装程序",
+      "installer_missing": "其安装程序已不存在",
+      "unverified": "安装程序可能不支持恢复"
+    },
     "disable": "禁用",
     "enable": "启用",
     "uninstall": "卸载",

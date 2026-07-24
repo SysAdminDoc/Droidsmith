@@ -16,6 +16,14 @@ each milestone tag.
 
 ### Added
 
+- **R-109 — Archive reversibility warning.** The package-action review now
+  checks each package's installer-of-record before archiving. Android 15 can
+  only restore an archived app through an installer that handles the unarchive
+  intent, so packages that were sideloaded (no/`shell`/package-installer
+  installer), whose installer has since been removed, or that carry an
+  unverified third-party installer are flagged with a distinct warning instead
+  of being presented as cleanly reversible. Only a Play Store installer is
+  treated as reversible.
 - **R-108 — CLI fleet mode.** `droidsmith-cli run`, `baseline-export`, and
   `baseline-inspect` now accept `--all-devices` to fan the operation over every
   connected, authorized device instead of a single `--device SERIAL`. Each
