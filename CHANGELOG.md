@@ -14,6 +14,11 @@ completion.
 Working batches live here. Sections collapse into a versioned release on
 each milestone tag.
 
+## [0.9.12] - 2026-07-24
+
+scrcpy app launcher + control-only mode, offline APK version diff, and localized
+platform-tools diagnostics.
+
 ### Fixed
 
 - **Audit — localized platform-tools version-policy summaries.** The Host Doctor
