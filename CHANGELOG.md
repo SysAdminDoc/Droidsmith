@@ -14,6 +14,23 @@ completion.
 Working batches live here. Sections collapse into a versioned release on
 each milestone tag.
 
+### Fixed
+
+- **Debloat and package actions were blocked by the IPC isolation policy on
+  real devices.** The isolation layer validated `context.shell_argv`
+  unconditionally and rejected the empty array that every non-shell action
+  (disable/enable/uninstall/archive/unarchive) legitimately carries, so every
+  apply was rewritten to the rejection sentinel and failed with "Command
+  `__droidsmith_isolation_rejected__` not found" before reaching the backend.
+  The empty-`shell_argv` case is now allowed (mirroring the existing
+  `device_control_restore_argv` guard) while non-empty shell argv is still held
+  to the argv-injection contract. Regression-tested in
+  `scripts/isolation-policy.test.mjs`.
+- **`tauri dev` could not launch the app.** The crate ships several helper
+  binaries with no `default-run`, so `cargo run` (used by `tauri dev`) errored
+  with "could not determine which binary to run." Pinned `default-run` to the
+  `droidsmith` GUI binary.
+
 ## [0.9.12] - 2026-07-24
 
 scrcpy app launcher + control-only mode, offline APK version diff, and localized

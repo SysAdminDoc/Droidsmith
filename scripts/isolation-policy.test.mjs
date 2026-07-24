@@ -129,6 +129,56 @@ test("validates captured display-control recovery argv", () => {
   assert.equal(hook(injected).cmd, blockedCommand);
 });
 
+test("passes a package action whose shell_argv is empty (debloat/disable)", () => {
+  // Non-shell package mutations (disable/enable/uninstall/archive) always carry
+  // an empty context.shell_argv; the policy must not reject that empty array.
+  const disable = message("apply_action", {
+    plan: {
+      request: {
+        serial: target.serial,
+        target,
+        package: "com.samsung.android.app.tips",
+        kind: "disable",
+        user_id: 0,
+        pack_context: {
+          pack_id: "qa-pack",
+          revision: 1,
+          provenance_source: "bundled",
+          provenance_license: "MIT",
+          compatibility_status: "compatible",
+          override_accepted: false,
+        },
+        context: {
+          confirmation_source: "debloat_preview",
+          shell_argv: [],
+          device_control_restore_argv: [],
+        },
+      },
+      args: [
+        "pm",
+        "disable-user",
+        "--user",
+        "0",
+        "com.samsung.android.app.tips",
+      ],
+      incident_id: "op-abc123",
+      description: "Disable com.samsung.android.app.tips for user 0",
+      before_state: "installed_enabled",
+    },
+  });
+  assert.equal(hook(disable), disable);
+
+  // A real (non-empty) shell_argv is still held to the argv-injection contract.
+  const injected = message("apply_action", {
+    plan: {
+      request: {
+        context: { shell_argv: ["settings", "put", "x\nreboot"] },
+      },
+    },
+  });
+  assert.equal(hook(injected).cmd, blockedCommand);
+});
+
 test("opens only the backend-resolved diagnostics directory", () => {
   const valid = message("reveal_diagnostics_directory", {});
   assert.equal(hook(valid), valid);

@@ -357,9 +357,15 @@
     seen.add(value);
     if (Array.isArray(value)) {
       if (value.length > 4096) reject("payload_array");
-      if (key === "argv" || key === "shell_argv") {
+      if (key === "argv") {
         validateArgv(value);
-      } else if (key === "device_control_restore_argv" && value.length > 0) {
+      } else if (
+        (key === "shell_argv" || key === "device_control_restore_argv") &&
+        value.length > 0
+      ) {
+        // These context argv fields are legitimately empty for non-shell
+        // actions (disable/enable/uninstall/archive/unarchive); only run the
+        // non-empty argv contract when a real shell command is present.
         validateArgv(value);
       }
       for (const entry of value) validateNested(entry, seen, depth + 1, "");
