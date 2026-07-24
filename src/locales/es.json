@@ -951,6 +951,11 @@
     }
   },
   "hostDoctor": {
+    "dynamicSummary": {
+      "no_version": "Platform Tools no informó una versión, por lo que la compatibilidad no está verificada. Se recomienda la versión {{recommended}}.",
+      "below_floor": "Platform Tools {{version}} es anterior al umbral de fiabilidad {{floor}}; actualiza a {{recommended}}. Las operaciones existentes siguen disponibles salvo que se detecte una versión defectuosa conocida.",
+      "unrecognized": "Platform Tools informó una versión no reconocida ({{version}}); no se bloqueó. Se recomienda la versión {{recommended}}."
+    },
     "adbUnverified": "ADB no verificado",
     "adbVersion": "ADB {{version}}",
     "compatibility": {

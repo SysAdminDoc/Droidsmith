@@ -17,7 +17,9 @@ use serde::Serialize;
 
 use crate::adb::device::DeviceState;
 use crate::adb::health::AdbHealth;
-use crate::adb::version_policy::{PlatformToolsAssessment, PlatformToolsStatus};
+use crate::adb::version_policy::{
+    PlatformToolsAssessment, PlatformToolsReason, PlatformToolsStatus,
+};
 use crate::adb::{self, AdbTransport, ShellTransport};
 
 const DEVICE_SETUP_URL: &str = "https://developer.android.com/studio/run/device";
@@ -38,6 +40,12 @@ pub enum FindingSeverity {
 }
 
 #[derive(specta::Type, Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct HostFindingParam {
+    pub key: String,
+    pub value: String,
+}
+
+#[derive(specta::Type, Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct HostFinding {
     pub code: &'static str,
     pub severity: FindingSeverity,
@@ -46,6 +54,12 @@ pub struct HostFinding {
     pub evidence: Vec<String>,
     pub remediation: Vec<&'static str>,
     pub official_url: &'static str,
+    /// When set, the renderer localizes the summary from
+    /// `hostDoctor.dynamicSummary.<summary_key>` with `summary_params` and only
+    /// falls back to `summary` (English) if the locale lacks the key. Used for
+    /// version-templated messages whose text is composed from policy data.
+    pub summary_key: Option<&'static str>,
+    pub summary_params: Vec<HostFindingParam>,
 }
 
 #[derive(specta::Type, Debug, Clone, PartialEq, Eq, Serialize)]
@@ -187,30 +201,43 @@ fn analyze(snapshot: DoctorSnapshot) -> HostDoctorReport {
     }
 
     match compatibility.status {
-        PlatformToolsStatus::Blocked if resolved => findings.push(finding(
-            "platform_tools_blocked",
-            FindingSeverity::Error,
-            "This Platform Tools release is known-bad",
-            compatibility.rationale.clone(),
-            vec![format!(
-                "Policy reviewed: {}",
-                compatibility.policy_reviewed_on
-            )],
-            vec!["Replace this release with the policy's recommended official Platform Tools version before continuing."],
-            PLATFORM_TOOLS_URL,
-        )),
-        PlatformToolsStatus::Warn if resolved => findings.push(finding(
-            "platform_tools_warning",
-            FindingSeverity::Warning,
-            "Platform Tools compatibility needs attention",
-            compatibility.rationale.clone(),
-            vec![format!(
-                "Policy reviewed: {}",
-                compatibility.policy_reviewed_on
-            )],
-            vec!["Install the recommended official Platform Tools release, then rescan."],
-            PLATFORM_TOOLS_URL,
-        )),
+        PlatformToolsStatus::Blocked if resolved => {
+            let mut item = finding(
+                "platform_tools_blocked",
+                FindingSeverity::Error,
+                "This Platform Tools release is known-bad",
+                compatibility.rationale.clone(),
+                vec![format!("Policy reviewed: {}", compatibility.policy_reviewed_on)],
+                vec!["Replace this release with the policy's recommended official Platform Tools version before continuing."],
+                PLATFORM_TOOLS_URL,
+            );
+            apply_platform_tools_summary(
+                &mut item,
+                &compatibility,
+                snapshot.resolution.version.as_deref(),
+            );
+            findings.push(item);
+        }
+        PlatformToolsStatus::Warn if resolved => {
+            let mut item = finding(
+                "platform_tools_warning",
+                FindingSeverity::Warning,
+                "Platform Tools compatibility needs attention",
+                compatibility.rationale.clone(),
+                vec![format!(
+                    "Policy reviewed: {}",
+                    compatibility.policy_reviewed_on
+                )],
+                vec!["Install the recommended official Platform Tools release, then rescan."],
+                PLATFORM_TOOLS_URL,
+            );
+            apply_platform_tools_summary(
+                &mut item,
+                &compatibility,
+                snapshot.resolution.version.as_deref(),
+            );
+            findings.push(item);
+        }
         _ => {}
     }
 
@@ -477,7 +504,43 @@ fn finding(
         evidence,
         remediation,
         official_url,
+        summary_key: None,
+        summary_params: Vec::new(),
     }
+}
+
+/// Attach a localizable summary key + version params to a platform-tools
+/// finding. The known-bad rationale is free-form policy text (data, not UI
+/// copy) and stays as the English `summary`; the version-templated reasons get
+/// a key the renderer localizes.
+fn apply_platform_tools_summary(
+    item: &mut HostFinding,
+    compatibility: &PlatformToolsAssessment,
+    version: Option<&str>,
+) {
+    let param = |key: &str, value: String| HostFindingParam {
+        key: key.to_string(),
+        value,
+    };
+    let version_param = || param("version", version.unwrap_or_default().to_string());
+    let recommended = || param("recommended", compatibility.recommended_version.clone());
+    let (key, params) = match compatibility.reason {
+        PlatformToolsReason::NoVersion => (Some("no_version"), vec![recommended()]),
+        PlatformToolsReason::BelowFloor => (
+            Some("below_floor"),
+            vec![
+                version_param(),
+                param("floor", compatibility.warning_below_version.clone()),
+                recommended(),
+            ],
+        ),
+        PlatformToolsReason::Unrecognized => {
+            (Some("unrecognized"), vec![version_param(), recommended()])
+        }
+        PlatformToolsReason::KnownBad | PlatformToolsReason::Recommended => (None, Vec::new()),
+    };
+    item.summary_key = key;
+    item.summary_params = params;
 }
 
 fn state_key(state: &DeviceState) -> String {

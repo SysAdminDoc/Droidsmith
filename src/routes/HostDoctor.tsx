@@ -149,9 +149,20 @@ function Finding({ finding }: { finding: HostFinding }) {
   const title = t(`hostDoctor.findings.${finding.code}.title`, {
     defaultValue: finding.title,
   });
-  const summary = t(`hostDoctor.findings.${finding.code}.summary`, {
-    defaultValue: finding.summary,
-  });
+  // A dynamic summary (e.g. the platform-tools version policy) carries a locale
+  // key plus version params so the sentence is localized from structured data;
+  // only the free-form policy `summary` stays English when no key is provided.
+  const summaryParams = Object.fromEntries(
+    finding.summary_params.map((param) => [param.key, param.value]),
+  );
+  const summary = finding.summary_key
+    ? t(`hostDoctor.dynamicSummary.${finding.summary_key}`, {
+        defaultValue: finding.summary,
+        ...summaryParams,
+      })
+    : t(`hostDoctor.findings.${finding.code}.summary`, {
+        defaultValue: finding.summary,
+      });
 
   return (
     <StatePanel title={title} tone={tone}>

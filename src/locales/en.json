@@ -1509,6 +1509,11 @@
     }
   },
   "hostDoctor": {
+    "dynamicSummary": {
+      "no_version": "Platform Tools did not report a version, so compatibility is unverified. Version {{recommended}} is recommended.",
+      "below_floor": "Platform Tools {{version}} predates the {{floor}} reliability floor; upgrade to {{recommended}}. Existing operations remain available unless a known-bad release is detected.",
+      "unrecognized": "Platform Tools reported an unrecognized version ({{version}}); it was not blocked. Version {{recommended}} is recommended."
+    },
     "title": "Host connection doctor",
     "readOnly": "Read-only",
     "description": "Check ADB, USB, drivers, and host prerequisites without changing anything.",

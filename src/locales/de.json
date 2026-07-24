@@ -1509,6 +1509,11 @@
     }
   },
   "hostDoctor": {
+    "dynamicSummary": {
+      "no_version": "Platform Tools meldete keine Version, daher ist die Kompatibilität unbestätigt. Version {{recommended}} wird empfohlen.",
+      "below_floor": "Platform Tools {{version}} liegt unter der Zuverlässigkeitsgrenze {{floor}}; aktualisiere auf {{recommended}}. Bestehende Vorgänge bleiben verfügbar, sofern keine bekannt fehlerhafte Version erkannt wird.",
+      "unrecognized": "Platform Tools meldete eine unbekannte Version ({{version}}); sie wurde nicht blockiert. Version {{recommended}} wird empfohlen."
+    },
     "title": "Host-Verbindungsarzt",
     "readOnly": "Schreibgeschützt",
     "description": "ADB, USB, Treiber und Host-Voraussetzungen prüfen, ohne etwas zu ändern.",

@@ -14,6 +14,17 @@ completion.
 Working batches live here. Sections collapse into a versioned release on
 each milestone tag.
 
+### Fixed
+
+- **Audit — localized platform-tools version-policy summaries.** The Host Doctor
+  "compatibility needs attention" / "known-bad release" findings previously
+  showed the version-policy rationale in English regardless of locale. The
+  assessment now carries a machine-readable reason, and the renderer composes a
+  localized summary from the version numbers for the no-version, below-floor,
+  and unrecognized-version cases (all five locales). The known-bad rule text
+  remains policy data (not localizable), but its finding title and remediation
+  are localized as before.
+
 ### Added
 
 - **R-117 — scrcpy control-only mode.** Mirror now offers a version-gated

@@ -1509,6 +1509,11 @@
     }
   },
   "hostDoctor": {
+    "dynamicSummary": {
+      "no_version": "Platform Tools 未报告版本，因此兼容性未经验证。建议使用版本 {{recommended}}。",
+      "below_floor": "Platform Tools {{version}} 早于可靠性下限 {{floor}}；请升级到 {{recommended}}。除非检测到已知有问题的版本，否则现有操作仍可使用。",
+      "unrecognized": "Platform Tools 报告了无法识别的版本（{{version}}）；未被阻止。建议使用版本 {{recommended}}。"
+    },
     "title": "主机连接医生",
     "readOnly": "只读",
     "description": "在不更改任何内容的情况下检查 ADB、USB、驱动程序和主机先决条件。",

@@ -22,9 +22,24 @@ pub enum PlatformToolsStatus {
     Blocked,
 }
 
+/// Machine-readable reason behind a `rationale`, so a localized summary can be
+/// composed from the version numbers instead of the English `rationale` text.
+/// `KnownBad` carries free-form policy text that is data, not UI copy, and is
+/// therefore not localizable.
+#[derive(specta::Type, Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PlatformToolsReason {
+    NoVersion,
+    KnownBad,
+    BelowFloor,
+    Recommended,
+    Unrecognized,
+}
+
 #[derive(specta::Type, Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct PlatformToolsAssessment {
     pub status: PlatformToolsStatus,
+    pub reason: PlatformToolsReason,
     pub rationale: String,
     pub recommended_version: String,
     pub warning_below_version: String,
@@ -78,6 +93,7 @@ pub fn assess(version: Option<&str>) -> PlatformToolsAssessment {
         return assessment(
             policy,
             PlatformToolsStatus::Warn,
+            PlatformToolsReason::NoVersion,
             format!(
                 "Platform Tools did not report a release version; compatibility is unverified. Version {} is recommended.",
                 policy.recommended_version
@@ -94,6 +110,7 @@ pub fn assess(version: Option<&str>) -> PlatformToolsAssessment {
         return assessment(
             policy,
             rule.status,
+            PlatformToolsReason::KnownBad,
             rule.rationale.clone(),
             Some(rule.source_url.clone()),
         );
@@ -103,6 +120,7 @@ pub fn assess(version: Option<&str>) -> PlatformToolsAssessment {
         Some(Ordering::Less) => assessment(
             policy,
             PlatformToolsStatus::Warn,
+            PlatformToolsReason::BelowFloor,
             format!(
                 "Platform Tools {version} predates the {} reliability floor; upgrade to {}. Existing operations remain available unless a known-bad rule applies.",
                 policy.warning_below_version, policy.recommended_version
@@ -112,6 +130,7 @@ pub fn assess(version: Option<&str>) -> PlatformToolsAssessment {
         Some(_) => assessment(
             policy,
             PlatformToolsStatus::Supported,
+            PlatformToolsReason::Recommended,
             if compare_versions(version, &policy.recommended_version)
                 .is_some_and(|ordering| ordering != Ordering::Less)
             {
@@ -127,6 +146,7 @@ pub fn assess(version: Option<&str>) -> PlatformToolsAssessment {
         None => assessment(
             policy,
             PlatformToolsStatus::Warn,
+            PlatformToolsReason::Unrecognized,
             format!(
                 "Platform Tools reported an unrecognized version ({version}); compatibility was not blocked. Version {} is recommended.",
                 policy.recommended_version
@@ -144,11 +164,13 @@ pub fn is_recommended(version: &str) -> bool {
 fn assessment(
     policy: &PlatformToolsPolicy,
     status: PlatformToolsStatus,
+    reason: PlatformToolsReason,
     rationale: String,
     source_url: Option<String>,
 ) -> PlatformToolsAssessment {
     PlatformToolsAssessment {
         status,
+        reason,
         rationale,
         recommended_version: policy.recommended_version.clone(),
         warning_below_version: policy.warning_below_version.clone(),
@@ -214,6 +236,27 @@ mod tests {
         assert!(assessment
             .rationale
             .contains("never advanced beyond Canary"));
+    }
+
+    #[test]
+    fn assessment_exposes_a_machine_reason_for_localization() {
+        assert_eq!(assess(None).reason, PlatformToolsReason::NoVersion);
+        assert_eq!(
+            assess(Some("35.0.2")).reason,
+            PlatformToolsReason::BelowFloor
+        );
+        assert_eq!(
+            assess(Some("36.0.1-123456")).reason,
+            PlatformToolsReason::KnownBad
+        );
+        assert_eq!(
+            assess(Some("37.0.0")).reason,
+            PlatformToolsReason::Recommended
+        );
+        assert_eq!(
+            assess(Some("future-channel")).reason,
+            PlatformToolsReason::Unrecognized
+        );
     }
 
     #[test]

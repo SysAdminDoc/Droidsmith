@@ -380,6 +380,16 @@ async function runDesktopFlow(browser) {
     fullPage: false,
   });
 
+  // Localize platform-tools rationale: run Host Doctor and confirm the dynamic
+  // platform-tools summary renders from the localized template. The trailing
+  // sentence exists only in the locale string, not the Rust `summary` fallback.
+  await page.getByRole("button", { name: "Run connection doctor" }).click();
+  await page
+    .getByText(
+      /Existing operations remain available unless a known-bad release is detected/,
+    )
+    .waitFor();
+
   for (const route of ["Devices", "Apps", "Debloat", "Profiles", "Console"]) {
     await page.getByRole("button", { name: new RegExp(route) }).click();
     await page.getByRole("heading", { name: route, exact: true }).waitFor();
@@ -2156,6 +2166,27 @@ async function installTauriMock(
                 remediation: ["Keep Platform Tools current."],
                 official_url:
                   "https://developer.android.com/tools/releases/platform-tools",
+                summary_key: null,
+                summary_params: [],
+              },
+              {
+                code: "platform_tools_warning",
+                severity: "warning",
+                title: "Platform Tools compatibility needs attention",
+                summary:
+                  "Platform Tools 35.0.2 predates the 36.0.2 reliability floor; upgrade to 37.0.0.",
+                evidence: ["Policy reviewed: 2026-07-15"],
+                remediation: [
+                  "Install the recommended official Platform Tools release, then rescan.",
+                ],
+                official_url:
+                  "https://developer.android.com/tools/releases/platform-tools",
+                summary_key: "below_floor",
+                summary_params: [
+                  { key: "version", value: "35.0.2" },
+                  { key: "floor", value: "36.0.2" },
+                  { key: "recommended", value: "37.0.0" },
+                ],
               },
               {
                 code: "server_config_override",
@@ -2166,6 +2197,8 @@ async function installTauriMock(
                 evidence: ["ADB_SERVER_SOCKET is set (value redacted)"],
                 remediation: ["Review the named environment variable."],
                 official_url: "https://developer.android.com/tools/adb",
+                summary_key: null,
+                summary_params: [],
               },
             ],
             privacy: [

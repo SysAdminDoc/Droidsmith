@@ -19,6 +19,7 @@ const health: AdbHealth = {
   warning: null,
   platform_tools: {
     status: "supported",
+    reason: "recommended",
     rationale: "Current supported release.",
     recommended_version: "37.0.0",
     warning_below_version: "36.0.2",

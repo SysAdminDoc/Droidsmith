@@ -1760,7 +1760,16 @@ export type HostFinding = {
   evidence: string[];
   remediation: string[];
   official_url: string;
+  /**
+   * When set, the renderer localizes the summary from
+   * `hostDoctor.dynamicSummary.<summary_key>` with `summary_params` and only
+   * falls back to `summary` (English) if the locale lacks the key. Used for
+   * version-templated messages whose text is composed from policy data.
+   */
+  summary_key: string | null;
+  summary_params: HostFindingParam[];
 };
+export type HostFindingParam = { key: string; value: string };
 export type HostPathGrant = {
   id: string;
   purpose: HostPathPurpose;
@@ -2383,12 +2392,25 @@ export type PlannedPack = {
 };
 export type PlatformToolsAssessment = {
   status: PlatformToolsStatus;
+  reason: PlatformToolsReason;
   rationale: string;
   recommended_version: string;
   warning_below_version: string;
   policy_reviewed_on: string;
   source_url: string;
 };
+/**
+ * Machine-readable reason behind a `rationale`, so a localized summary can be
+ * composed from the version numbers instead of the English `rationale` text.
+ * `KnownBad` carries free-form policy text that is data, not UI copy, and is
+ * therefore not localizable.
+ */
+export type PlatformToolsReason =
+  | "no_version"
+  | "known_bad"
+  | "below_floor"
+  | "recommended"
+  | "unrecognized";
 export type PlatformToolsStatus = "supported" | "warn" | "blocked";
 export type ProcessInfo = {
   pid: number;
