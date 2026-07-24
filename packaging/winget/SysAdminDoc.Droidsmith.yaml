@@ -1,6 +1,6 @@
 # yaml-language-server: $schema=https://aka.ms/winget-manifest.singleton.1.6.0.schema.json
 PackageIdentifier: SysAdminDoc.Droidsmith
-PackageVersion: 0.9.10
+PackageVersion: 0.9.11
 PackageName: Droidsmith
 Publisher: Droidsmith contributors
 License: MIT
@@ -9,7 +9,7 @@ PackageUrl: https://github.com/SysAdminDoc/Droidsmith
 Installers:
   - Architecture: x64
     InstallerType: nullsoft
-    InstallerUrl: https://github.com/SysAdminDoc/Droidsmith/releases/download/v0.9.10/Droidsmith_0.9.10_x64-setup.exe
+    InstallerUrl: https://github.com/SysAdminDoc/Droidsmith/releases/download/v0.9.11/Droidsmith_0.9.11_x64-setup.exe
     InstallerSha256: 0000000000000000000000000000000000000000000000000000000000000000
 ManifestType: singleton
 ManifestVersion: 1.6.0

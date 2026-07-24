@@ -14,6 +14,11 @@ completion.
 Working batches live here. Sections collapse into a versioned release on
 each milestone tag.
 
+## [0.9.11] - 2026-07-24
+
+Fleet CLI, archive/debloat trust signals, packaging manifests, and async
+hardening.
+
 ### Added
 
 - **R-115 — winget + Scoop manifest generator.** `npm run packaging:generate`
