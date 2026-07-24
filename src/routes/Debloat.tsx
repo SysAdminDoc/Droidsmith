@@ -124,6 +124,18 @@ export default function DebloatRoute() {
   const packsRequestRef = useRef(0);
   const usersRequestRef = useRef(0);
 
+  // Leaving the route stops an in-flight apply queue: bump the queue generation
+  // so runQueue returns after the current (already-journaled) action without
+  // issuing further disables, and flag cancellation so the loop breaks at its
+  // next boundary. Without this, navigating away leaves the queue applying the
+  // remaining packages invisibly in the background.
+  useEffect(() => {
+    return () => {
+      queueGenerationRef.current += 1;
+      cancelRequestedRef.current = true;
+    };
+  }, []);
+
   const selectedDevice =
     authorizedDevices.find((device) =>
       selectedTransportId != null

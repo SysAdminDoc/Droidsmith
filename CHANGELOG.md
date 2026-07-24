@@ -49,6 +49,11 @@ each milestone tag.
 
 ### Fixed
 
+- **Audit — Debloat apply queue keeps running after leaving the route.**
+  Navigating away mid-apply now stops the queue: unmounting bumps the queue
+  generation and flags cancellation, so `runQueue` returns after the current
+  already-journaled action instead of silently applying the remaining packages
+  in the background with no visible progress or cancel control.
 - **IMP-85 / audit — user-discovery races and dead code.** `loadUsers` in Apps
   and Debloat now carries a last-write request guard so interleaved
   `callListUsers` responses from rapid target switches can no longer clobber the
