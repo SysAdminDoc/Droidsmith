@@ -182,6 +182,17 @@ droidsmith-cli run profile-v2.yaml --device SERIAL --dry-run --json
 droidsmith-cli run profile-v2.yaml --device SERIAL --apply --json
 ```
 
+Pass `--all-devices` instead of `--device SERIAL` to fan a run over every
+connected, authorized device ("fleet mode"). Each device is planned and applied
+independently, and `--json` emits a `devices[]` array with one entry per device
+(`outcome: ran | error | skipped`). Unauthorized/offline devices and
+unauthenticated TCP transports (without `--allow-unsafe-transport`) are skipped,
+not aborted; the exit code is `1` if any device was skipped or failed.
+
+```bash
+droidsmith-cli run profile-v2.yaml --all-devices --apply --json
+```
+
 Legacy or unknown TCP transports additionally require
 `--allow-unsafe-transport`; USB and paired TLS Wi-Fi do not.
 
@@ -207,6 +218,17 @@ The headless CLI exposes the same schema and diff engine:
 droidsmith-cli baseline-export profile.yaml --device SERIAL --output baseline.json
 droidsmith-cli baseline-inspect baseline.json --device SERIAL
 droidsmith-cli baseline-inspect baseline.json --device SERIAL --json
+```
+
+Both baseline commands also accept `--all-devices`. `baseline-inspect
+--all-devices` diffs one baseline against every connected device (read-only),
+and `baseline-export --all-devices --output <dir>` writes one
+`<serial>.json` baseline per device into a directory. Skip/error semantics and
+exit codes match fleet `run`.
+
+```bash
+droidsmith-cli baseline-export profile.yaml --all-devices --output baselines/
+droidsmith-cli baseline-inspect baseline.json --all-devices --json
 ```
 
 Legacy or unknown TCP transports require the explicit

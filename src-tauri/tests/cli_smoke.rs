@@ -81,3 +81,26 @@ fn migrate_v1_rejects_missing_output() {
     assert_eq!(code, 2);
     assert!(stderr.contains("--output"));
 }
+
+#[test]
+fn run_rejects_combining_device_and_all_devices() {
+    let input = fixtures().join("profiles").join("v1-valid.yaml");
+    let (code, _, stderr) = run(&[
+        "run",
+        input.to_str().unwrap(),
+        "--all-devices",
+        "--device",
+        "QA1",
+        "--dry-run",
+    ]);
+    assert_eq!(code, 2, "stderr: {stderr}");
+    assert!(stderr.contains("not both"), "stderr: {stderr}");
+}
+
+#[test]
+fn baseline_export_all_devices_requires_output_directory() {
+    let input = fixtures().join("profiles").join("v1-valid.yaml");
+    let (code, _, stderr) = run(&["baseline-export", input.to_str().unwrap(), "--all-devices"]);
+    assert_eq!(code, 2, "stderr: {stderr}");
+    assert!(stderr.contains("directory"), "stderr: {stderr}");
+}

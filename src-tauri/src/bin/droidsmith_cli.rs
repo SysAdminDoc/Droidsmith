@@ -25,7 +25,9 @@ use std::process::ExitCode;
 use serde::Serialize;
 
 use droidsmith_lib::adb::{
-    self, actions, device::valid_serial, AdbTransport, DeviceTarget, ShellTransport,
+    self, actions,
+    device::{valid_serial, Device},
+    AdbTransport, DeviceTarget, ShellTransport,
 };
 use droidsmith_lib::journal;
 use droidsmith_lib::profile;
@@ -61,12 +63,16 @@ fn print_help() {
         "droidsmith-cli — headless ADB action runner\n\n\
          USAGE\n  \
          droidsmith-cli devices [--json]\n  \
-         droidsmith-cli run <profile.yaml> --device <serial> [--dry-run|--apply] [--json] [--allow-unsafe-transport]\n  \
+         droidsmith-cli run <profile.yaml> (--device <serial> | --all-devices) [--dry-run|--apply] [--json] [--allow-unsafe-transport]\n  \
          droidsmith-cli migrate-v1 <profile-v1.yaml> --output <profile-v2.yaml> [--json]\n  \
-         droidsmith-cli baseline-export <profile.yaml> --device <serial> --output <file.json> [--allow-unsafe-transport]\n  \
-         droidsmith-cli baseline-inspect <file.json> --device <serial> [--json] [--allow-unsafe-transport]\n\n\
+         droidsmith-cli baseline-export <profile.yaml> (--device <serial> --output <file.json> | --all-devices --output <dir>) [--allow-unsafe-transport]\n  \
+         droidsmith-cli baseline-inspect <file.json> (--device <serial> | --all-devices) [--json] [--allow-unsafe-transport]\n\n\
+         --all-devices fans the operation over every connected, authorized device.\n  \
+         Unauthorized/offline devices and unauthenticated TCP transports (without\n  \
+         --allow-unsafe-transport) are skipped, not aborted; the exit code is 1 if any\n  \
+         device was skipped or failed.\n\n\
          EXIT CODES\n  \
-         0 success, 1 apply failure, 2 usage/parse, 3 adb not found"
+         0 success, 1 apply/fleet failure, 2 usage/parse, 3 adb not found"
     );
 }
 
@@ -159,7 +165,9 @@ fn cmd_migrate_v1(argv: &[String]) -> ExitCode {
 #[derive(Debug)]
 struct BaselineArgs {
     input_path: PathBuf,
-    serial: String,
+    /// `Some(serial)` for a single target; `None` when `all_devices` is set.
+    serial: Option<String>,
+    all_devices: bool,
     output_path: Option<PathBuf>,
     json: bool,
     allow_unsafe_transport: bool,
@@ -171,6 +179,7 @@ fn parse_baseline_args(argv: &[String], export: bool) -> Result<BaselineArgs, St
     }
     let input_path = PathBuf::from(&argv[0]);
     let mut serial = None;
+    let mut all_devices = false;
     let mut output_path = None;
     let mut json = false;
     let mut allow_unsafe_transport = false;
@@ -184,6 +193,7 @@ fn parse_baseline_args(argv: &[String], export: bool) -> Result<BaselineArgs, St
                 }
                 serial = Some(argv[i].clone());
             }
+            "--all-devices" => all_devices = true,
             "--output" if export => {
                 i += 1;
                 if i >= argv.len() {
@@ -197,20 +207,96 @@ fn parse_baseline_args(argv: &[String], export: bool) -> Result<BaselineArgs, St
         }
         i += 1;
     }
-    let serial = serial.ok_or("--device <serial> is required")?;
-    if !valid_serial(&serial) {
-        return Err(format!("invalid --device serial: {serial:?}"));
-    }
+    let serial = resolve_device_selector(serial, all_devices)?;
     if export && output_path.is_none() {
-        return Err("--output <file.json> is required".to_string());
+        return Err(if all_devices {
+            "--output <directory> is required with --all-devices".to_string()
+        } else {
+            "--output <file.json> is required".to_string()
+        });
     }
     Ok(BaselineArgs {
         input_path,
         serial,
+        all_devices,
         output_path,
         json,
         allow_unsafe_transport,
     })
+}
+
+#[derive(Serialize)]
+struct BaselineExportSummary {
+    device_serial: String,
+    output_path: String,
+    packages: usize,
+    size_bytes: u64,
+    sha256: String,
+}
+
+#[derive(Serialize)]
+#[serde(tag = "outcome", rename_all = "snake_case")]
+enum BaselineExportResult {
+    Exported(BaselineExportSummary),
+    Error(DeviceErrorOutput),
+    Skipped {
+        device_serial: String,
+        reason: String,
+    },
+}
+
+#[derive(Serialize)]
+struct FleetBaselineExportOutput {
+    schema_version: u32,
+    command: &'static str,
+    mode: &'static str,
+    devices: Vec<BaselineExportResult>,
+    success: bool,
+}
+
+/// Assemble the recovery baseline for one already-authorized target. Shared by
+/// the single and `--all-devices` export paths.
+fn build_baseline_for_target(
+    transport: &ShellTransport,
+    profile: &profile::Profile,
+    target: &DeviceTarget,
+    serial: &str,
+) -> Result<recovery_baseline::RecoveryBaseline, DeviceErrorOutput> {
+    let err = |code: &'static str, message: String| DeviceErrorOutput {
+        device_serial: serial.to_string(),
+        code,
+        message,
+    };
+    let info = adb::get_device_info(transport, target)
+        .map_err(|error| err("device_probe_failed", error.to_string()))?;
+    let compatibility = profile::device_match_issues(
+        profile,
+        serial,
+        info.manufacturer.as_deref(),
+        info.model.as_deref(),
+        info.sdk_level
+            .as_deref()
+            .and_then(|value| value.parse().ok()),
+    );
+    if !compatibility.is_empty() {
+        return Err(err("profile_incompatible", compatibility.join("; ")));
+    }
+    let available_users = adb::list_users(transport, target)
+        .map_err(|error| err("user_probe_failed", error.to_string()))?;
+    let user_id = profile::resolve_user(profile, &available_users)
+        .map_err(|issues| err("profile_user_unavailable", issues.join("; ")))?;
+    let packages = adb::list_packages(transport, target, adb::PackageFilter::All, user_id)
+        .map_err(|error| err("package_probe_failed", error.to_string()))?;
+    let requested = profile
+        .actions
+        .iter()
+        .map(|action| BaselineActionInput {
+            package: action.package.clone(),
+            kind: action.kind,
+        })
+        .collect();
+    recovery_baseline::build(target, user_id, None, &packages, requested, iso_now())
+        .map_err(|error| err("baseline_invalid", error.to_string()))
 }
 
 fn cmd_baseline_export(argv: &[String]) -> ExitCode {
@@ -232,7 +318,23 @@ fn cmd_baseline_export(argv: &[String]) -> ExitCode {
     let Some(transport) = resolve_or_fail() else {
         return ExitCode::from(3);
     };
-    let mut target = match target_for_serial(&transport, &args.serial) {
+    if args.all_devices {
+        baseline_export_fleet(&transport, &profile, &args)
+    } else {
+        baseline_export_single(&transport, &profile, &args)
+    }
+}
+
+fn baseline_export_single(
+    transport: &ShellTransport,
+    profile: &profile::Profile,
+    args: &BaselineArgs,
+) -> ExitCode {
+    let serial = args
+        .serial
+        .as_deref()
+        .expect("single-device mode always carries a serial");
+    let mut target = match target_for_serial(transport, serial) {
         Ok(target) => target,
         Err(error) => {
             eprintln!("[droidsmith-cli] {error}");
@@ -243,67 +345,13 @@ fn cmd_baseline_export(argv: &[String]) -> ExitCode {
         eprintln!("[droidsmith-cli] {error}");
         return ExitCode::from(2);
     }
-    let info = match adb::get_device_info(&transport, &target) {
-        Ok(info) => info,
+    let baseline = match build_baseline_for_target(transport, profile, &target, serial) {
+        Ok(baseline) => baseline,
         Err(error) => {
-            eprintln!("[droidsmith-cli] device constraint probe failed: {error}");
+            eprintln!("[droidsmith-cli] {}", error.message);
             return ExitCode::from(1);
         }
     };
-    let compatibility = profile::device_match_issues(
-        &profile,
-        &args.serial,
-        info.manufacturer.as_deref(),
-        info.model.as_deref(),
-        info.sdk_level
-            .as_deref()
-            .and_then(|value| value.parse().ok()),
-    );
-    if !compatibility.is_empty() {
-        for issue in compatibility {
-            eprintln!("[droidsmith-cli] {issue}");
-        }
-        return ExitCode::from(1);
-    }
-    let available_users = match adb::list_users(&transport, &target) {
-        Ok(users) => users,
-        Err(error) => {
-            eprintln!("[droidsmith-cli] Android user discovery failed: {error}");
-            return ExitCode::from(1);
-        }
-    };
-    let user_id = match profile::resolve_user(&profile, &available_users) {
-        Ok(user_id) => user_id,
-        Err(issues) => {
-            for issue in issues {
-                eprintln!("[droidsmith-cli] {issue}");
-            }
-            return ExitCode::from(1);
-        }
-    };
-    let packages = match adb::list_packages(&transport, &target, adb::PackageFilter::All, user_id) {
-        Ok(packages) => packages,
-        Err(error) => {
-            eprintln!("[droidsmith-cli] package inventory failed: {error}");
-            return ExitCode::from(1);
-        }
-    };
-    let requested = profile
-        .actions
-        .iter()
-        .map(|action| BaselineActionInput {
-            package: action.package.clone(),
-            kind: action.kind,
-        })
-        .collect();
-    let baseline =
-        match recovery_baseline::build(&target, user_id, None, &packages, requested, iso_now()) {
-            Ok(baseline) => baseline,
-            Err(error) => {
-                eprintln!("[droidsmith-cli] {error}");
-                return ExitCode::from(2);
-            }
-        };
     let output = absolute_path(args.output_path.as_deref().expect("required by parser"));
     match output.and_then(|path| {
         recovery_baseline::save(&path, &baseline)
@@ -327,6 +375,211 @@ fn cmd_baseline_export(argv: &[String]) -> ExitCode {
     }
 }
 
+/// Export one recovery baseline per discovered device into an output directory
+/// (`<serial>.json`). One device's skip/error never aborts the fleet.
+fn baseline_export_fleet(
+    transport: &ShellTransport,
+    profile: &profile::Profile,
+    args: &BaselineArgs,
+) -> ExitCode {
+    let dir = match absolute_path(args.output_path.as_deref().expect("required by parser")) {
+        Ok(dir) => dir,
+        Err(error) => {
+            eprintln!("[droidsmith-cli] {error}");
+            return ExitCode::from(2);
+        }
+    };
+    if let Err(error) = std::fs::create_dir_all(&dir) {
+        eprintln!("[droidsmith-cli] could not create output directory {dir:?}: {error}");
+        return ExitCode::from(1);
+    }
+    let devices = match list_fleet(transport) {
+        Ok(devices) => devices,
+        Err(error) => {
+            eprintln!("[droidsmith-cli] {error}");
+            return ExitCode::from(1);
+        }
+    };
+    let mut results: Vec<BaselineExportResult> = Vec::new();
+    let mut success = true;
+    for screen in screen_fleet_devices(devices, args.allow_unsafe_transport) {
+        match screen {
+            FleetScreen::Skipped { serial, reason } => {
+                success = false;
+                if !args.json {
+                    eprintln!("[droidsmith-cli] skipped {serial}: {reason}");
+                }
+                results.push(BaselineExportResult::Skipped {
+                    device_serial: serial,
+                    reason,
+                });
+            }
+            FleetScreen::Eligible(device) => {
+                let serial = device.serial.clone();
+                let mut target = match finalize_target(transport, device) {
+                    Ok(target) => target,
+                    Err(message) => {
+                        success = false;
+                        results.push(BaselineExportResult::Error(DeviceErrorOutput {
+                            device_serial: serial,
+                            code: "device_unavailable",
+                            message,
+                        }));
+                        continue;
+                    }
+                };
+                if let Err(message) =
+                    authorize_cli_transport(&mut target, args.allow_unsafe_transport)
+                {
+                    success = false;
+                    results.push(BaselineExportResult::Error(DeviceErrorOutput {
+                        device_serial: serial,
+                        code: "transport_confirmation_required",
+                        message,
+                    }));
+                    continue;
+                }
+                match build_baseline_for_target(transport, profile, &target, &serial) {
+                    Ok(baseline) => {
+                        let path = dir.join(format!("{}.json", serial_file_stem(&serial)));
+                        match recovery_baseline::save(&path, &baseline) {
+                            Ok(artifact) => {
+                                if !args.json {
+                                    println!(
+                                        "  {serial} → {} ({} packages, {} bytes)",
+                                        path.display(),
+                                        baseline.packages.len(),
+                                        artifact.size_bytes
+                                    );
+                                }
+                                results.push(BaselineExportResult::Exported(
+                                    BaselineExportSummary {
+                                        device_serial: serial,
+                                        output_path: path.display().to_string(),
+                                        packages: baseline.packages.len(),
+                                        size_bytes: artifact.size_bytes,
+                                        sha256: artifact.sha256,
+                                    },
+                                ));
+                            }
+                            Err(error) => {
+                                success = false;
+                                results.push(BaselineExportResult::Error(DeviceErrorOutput {
+                                    device_serial: serial,
+                                    code: "baseline_write_failed",
+                                    message: error.to_string(),
+                                }));
+                            }
+                        }
+                    }
+                    Err(error) => {
+                        success = false;
+                        if !args.json {
+                            eprintln!("[droidsmith-cli] {serial}: {}", error.message);
+                        }
+                        results.push(BaselineExportResult::Error(error));
+                    }
+                }
+            }
+        }
+    }
+    if results.is_empty() {
+        success = false;
+        if !args.json {
+            eprintln!("[droidsmith-cli] no devices connected");
+        }
+    }
+    let output = FleetBaselineExportOutput {
+        schema_version: 1,
+        command: "baseline-export",
+        mode: "all_devices",
+        devices: results,
+        success,
+    };
+    if args.json {
+        println!(
+            "{}",
+            serde_json::to_string(&output).expect("serializable result")
+        );
+    }
+    if output.success {
+        ExitCode::SUCCESS
+    } else {
+        ExitCode::from(1)
+    }
+}
+
+#[derive(Serialize)]
+struct BaselineInspectSummary {
+    device_serial: String,
+    diff: recovery_baseline::RecoveryBaselineDiff,
+}
+
+#[derive(Serialize)]
+#[serde(tag = "outcome", rename_all = "snake_case")]
+enum BaselineInspectResult {
+    // Boxed: the diff payload dwarfs the other variants.
+    Inspected(Box<BaselineInspectSummary>),
+    Error(DeviceErrorOutput),
+    Skipped {
+        device_serial: String,
+        reason: String,
+    },
+}
+
+#[derive(Serialize)]
+struct FleetBaselineInspectOutput {
+    schema_version: u32,
+    command: &'static str,
+    mode: &'static str,
+    devices: Vec<BaselineInspectResult>,
+    success: bool,
+}
+
+/// Diff one baseline against one already-authorized target (read-only). Shared
+/// by the single and `--all-devices` inspect paths.
+fn inspect_baseline_for_target(
+    transport: &ShellTransport,
+    baseline: recovery_baseline::RecoveryBaseline,
+    target: &DeviceTarget,
+    serial: &str,
+) -> Result<recovery_baseline::RecoveryBaselineDiff, DeviceErrorOutput> {
+    let err = |code: &'static str, message: String| DeviceErrorOutput {
+        device_serial: serial.to_string(),
+        code,
+        message,
+    };
+    let users = adb::list_users(transport, target)
+        .map_err(|error| err("user_probe_failed", error.to_string()))?;
+    let packages = if users.iter().any(|user| user.id == baseline.android_user) {
+        adb::list_packages(
+            transport,
+            target,
+            adb::PackageFilter::All,
+            baseline.android_user,
+        )
+        .map_err(|error| err("package_probe_failed", error.to_string()))?
+    } else {
+        Vec::new()
+    };
+    recovery_baseline::inspect(baseline, target, &users, &packages)
+        .map_err(|error| err("baseline_invalid", error.to_string()))
+}
+
+fn print_inspect_diff(diff: &recovery_baseline::RecoveryBaselineDiff) {
+    println!(
+        "Device identity: {}\nBuild fingerprint: {}\nAndroid user {}: {}\nRecovery actions ready: {}",
+        if diff.compatibility.device_identity_matches { "match" } else { "MISMATCH" },
+        if diff.compatibility.build_fingerprint_matches { "match" } else { "changed" },
+        diff.baseline.android_user,
+        if diff.compatibility.android_user_available { "available" } else { "missing" },
+        diff.plans.len()
+    );
+    for row in &diff.rows {
+        println!("  {:?}\t{}\t{}", row.status, row.package, row.reason);
+    }
+}
+
 fn cmd_baseline_inspect(argv: &[String]) -> ExitCode {
     let args = match parse_baseline_args(argv, false) {
         Ok(args) => args,
@@ -346,7 +599,23 @@ fn cmd_baseline_inspect(argv: &[String]) -> ExitCode {
     let Some(transport) = resolve_or_fail() else {
         return ExitCode::from(3);
     };
-    let mut target = match target_for_serial(&transport, &args.serial) {
+    if args.all_devices {
+        baseline_inspect_fleet(&transport, baseline, &args)
+    } else {
+        baseline_inspect_single(&transport, baseline, &args)
+    }
+}
+
+fn baseline_inspect_single(
+    transport: &ShellTransport,
+    baseline: recovery_baseline::RecoveryBaseline,
+    args: &BaselineArgs,
+) -> ExitCode {
+    let serial = args
+        .serial
+        .as_deref()
+        .expect("single-device mode always carries a serial");
+    let mut target = match target_for_serial(transport, serial) {
         Ok(target) => target,
         Err(error) => {
             eprintln!("[droidsmith-cli] {error}");
@@ -357,34 +626,11 @@ fn cmd_baseline_inspect(argv: &[String]) -> ExitCode {
         eprintln!("[droidsmith-cli] {error}");
         return ExitCode::from(2);
     }
-    let users = match adb::list_users(&transport, &target) {
-        Ok(users) => users,
-        Err(error) => {
-            eprintln!("[droidsmith-cli] Android user discovery failed: {error}");
-            return ExitCode::from(1);
-        }
-    };
-    let packages = if users.iter().any(|user| user.id == baseline.android_user) {
-        match adb::list_packages(
-            &transport,
-            &target,
-            adb::PackageFilter::All,
-            baseline.android_user,
-        ) {
-            Ok(packages) => packages,
-            Err(error) => {
-                eprintln!("[droidsmith-cli] package inventory failed: {error}");
-                return ExitCode::from(1);
-            }
-        }
-    } else {
-        Vec::new()
-    };
-    let diff = match recovery_baseline::inspect(baseline, &target, &users, &packages) {
+    let diff = match inspect_baseline_for_target(transport, baseline, &target, serial) {
         Ok(diff) => diff,
         Err(error) => {
-            eprintln!("[droidsmith-cli] {error}");
-            return ExitCode::from(2);
+            eprintln!("[droidsmith-cli] {}", error.message);
+            return ExitCode::from(1);
         }
     };
     if args.json {
@@ -396,20 +642,119 @@ fn cmd_baseline_inspect(argv: &[String]) -> ExitCode {
             }
         }
     } else {
-        println!(
-            "Device identity: {}\nBuild fingerprint: {}\nAndroid user {}: {}\nRecovery actions ready: {}",
-            if diff.compatibility.device_identity_matches { "match" } else { "MISMATCH" },
-            if diff.compatibility.build_fingerprint_matches { "match" } else { "changed" },
-            diff.baseline.android_user,
-            if diff.compatibility.android_user_available { "available" } else { "missing" },
-            diff.plans.len()
-        );
-        for row in &diff.rows {
-            println!("  {:?}\t{}\t{}", row.status, row.package, row.reason);
-        }
+        print_inspect_diff(&diff);
         println!("\n(read-only inspection; nothing was changed)");
     }
     ExitCode::SUCCESS
+}
+
+/// Diff one baseline against every discovered device (read-only). One device's
+/// skip/error never aborts the fleet.
+fn baseline_inspect_fleet(
+    transport: &ShellTransport,
+    baseline: recovery_baseline::RecoveryBaseline,
+    args: &BaselineArgs,
+) -> ExitCode {
+    let devices = match list_fleet(transport) {
+        Ok(devices) => devices,
+        Err(error) => {
+            eprintln!("[droidsmith-cli] {error}");
+            return ExitCode::from(1);
+        }
+    };
+    let mut results: Vec<BaselineInspectResult> = Vec::new();
+    let mut success = true;
+    for screen in screen_fleet_devices(devices, args.allow_unsafe_transport) {
+        match screen {
+            FleetScreen::Skipped { serial, reason } => {
+                success = false;
+                if !args.json {
+                    eprintln!("[droidsmith-cli] skipped {serial}: {reason}");
+                }
+                results.push(BaselineInspectResult::Skipped {
+                    device_serial: serial,
+                    reason,
+                });
+            }
+            FleetScreen::Eligible(device) => {
+                let serial = device.serial.clone();
+                let mut target = match finalize_target(transport, device) {
+                    Ok(target) => target,
+                    Err(message) => {
+                        success = false;
+                        results.push(BaselineInspectResult::Error(DeviceErrorOutput {
+                            device_serial: serial,
+                            code: "device_unavailable",
+                            message,
+                        }));
+                        continue;
+                    }
+                };
+                if let Err(message) =
+                    authorize_cli_transport(&mut target, args.allow_unsafe_transport)
+                {
+                    success = false;
+                    results.push(BaselineInspectResult::Error(DeviceErrorOutput {
+                        device_serial: serial,
+                        code: "transport_confirmation_required",
+                        message,
+                    }));
+                    continue;
+                }
+                match inspect_baseline_for_target(transport, baseline.clone(), &target, &serial) {
+                    Ok(diff) => {
+                        if !args.json {
+                            println!("=== {serial} ===");
+                            print_inspect_diff(&diff);
+                            println!();
+                        }
+                        results.push(BaselineInspectResult::Inspected(Box::new(
+                            BaselineInspectSummary {
+                                device_serial: serial,
+                                diff,
+                            },
+                        )));
+                    }
+                    Err(error) => {
+                        success = false;
+                        if !args.json {
+                            eprintln!("[droidsmith-cli] {serial}: {}", error.message);
+                        }
+                        results.push(BaselineInspectResult::Error(error));
+                    }
+                }
+            }
+        }
+    }
+    if results.is_empty() {
+        success = false;
+        if !args.json {
+            eprintln!("[droidsmith-cli] no devices connected");
+        }
+    }
+    let output = FleetBaselineInspectOutput {
+        schema_version: 1,
+        command: "baseline-inspect",
+        mode: "all_devices",
+        devices: results,
+        success,
+    };
+    if args.json {
+        match serde_json::to_string_pretty(&output) {
+            Ok(json) => println!("{json}"),
+            Err(error) => {
+                eprintln!("[droidsmith-cli] could not encode diff: {error}");
+                return ExitCode::from(1);
+            }
+        }
+    } else {
+        println!("(read-only inspection; nothing was changed)");
+    }
+    if output.success {
+        ExitCode::SUCCESS
+    } else {
+        ExitCode::from(1)
+    }
 }
 
 fn authorize_cli_transport(
@@ -505,7 +850,9 @@ fn cmd_devices(argv: &[String]) -> ExitCode {
 
 struct RunArgs {
     profile_path: PathBuf,
-    serial: String,
+    /// `Some(serial)` for a single target; `None` when `all_devices` is set.
+    serial: Option<String>,
+    all_devices: bool,
     apply: bool,
     json: bool,
     allow_unsafe_transport: bool,
@@ -517,6 +864,7 @@ fn parse_run_args(argv: &[String]) -> Result<RunArgs, String> {
     }
     let profile_path = PathBuf::from(&argv[0]);
     let mut serial: Option<String> = None;
+    let mut all_devices = false;
     let mut apply: Option<bool> = None;
     let mut json = false;
     let mut allow_unsafe_transport = false;
@@ -531,6 +879,7 @@ fn parse_run_args(argv: &[String]) -> Result<RunArgs, String> {
                 }
                 serial = Some(argv[i].clone());
             }
+            "--all-devices" => all_devices = true,
             "--dry-run" => {
                 if apply.is_some() {
                     return Err("pass exactly one of --dry-run or --apply".to_string());
@@ -549,18 +898,36 @@ fn parse_run_args(argv: &[String]) -> Result<RunArgs, String> {
         }
         i += 1;
     }
-    let serial = serial.ok_or("--device <serial> is required")?;
-    if !valid_serial(&serial) {
-        return Err(format!("invalid --device serial: {serial:?}"));
-    }
+    let serial = resolve_device_selector(serial, all_devices)?;
     let apply = apply.ok_or("pass exactly one of --dry-run or --apply")?;
     Ok(RunArgs {
         profile_path,
         serial,
+        all_devices,
         apply,
         json,
         allow_unsafe_transport,
     })
+}
+
+/// Enforce that exactly one of `--device <serial>` / `--all-devices` was given
+/// and that any explicit serial is well-formed. Returns the validated serial
+/// (or `None` for the fleet case).
+fn resolve_device_selector(
+    serial: Option<String>,
+    all_devices: bool,
+) -> Result<Option<String>, String> {
+    match (all_devices, serial) {
+        (true, Some(_)) => Err("pass either --device <serial> or --all-devices, not both".into()),
+        (true, None) => Ok(None),
+        (false, Some(serial)) => {
+            if !valid_serial(&serial) {
+                return Err(format!("invalid --device serial: {serial:?}"));
+            }
+            Ok(Some(serial))
+        }
+        (false, None) => Err("pass --device <serial> or --all-devices".into()),
+    }
 }
 
 #[derive(Serialize)]
@@ -626,6 +993,37 @@ fn run_error(json: bool, exit_code: u8, code: &str, message: impl Into<String>) 
     ExitCode::from(exit_code)
 }
 
+/// Per-device error prior to or during execution, shaped for fleet JSON.
+#[derive(Serialize)]
+struct DeviceErrorOutput {
+    device_serial: String,
+    code: &'static str,
+    message: String,
+}
+
+/// One device's slot in a `--all-devices` run.
+#[derive(Serialize)]
+#[serde(tag = "outcome", rename_all = "snake_case")]
+enum DeviceRunResult {
+    // Boxed: RunOutput is far larger than the other variants.
+    Ran(Box<RunOutput>),
+    Error(DeviceErrorOutput),
+    Skipped {
+        device_serial: String,
+        reason: String,
+    },
+}
+
+#[derive(Serialize)]
+struct FleetRunOutput {
+    schema_version: u32,
+    command: &'static str,
+    mode: &'static str,
+    apply: bool,
+    devices: Vec<DeviceRunResult>,
+    success: bool,
+}
+
 fn cmd_run(argv: &[String]) -> ExitCode {
     let json_requested = argv.iter().any(|value| value == "--json");
     let args = match parse_run_args(argv) {
@@ -639,20 +1037,190 @@ fn cmd_run(argv: &[String]) -> ExitCode {
     let Some(transport) = resolve_or_fail() else {
         return run_error(args.json, 3, "adb_not_found", "adb binary not found");
     };
-    let mut target = match target_for_serial(&transport, &args.serial) {
+    if args.all_devices {
+        cmd_run_fleet(&transport, &profile, &args)
+    } else {
+        cmd_run_single(&transport, &profile, &args)
+    }
+}
+
+fn cmd_run_single(
+    transport: &ShellTransport,
+    profile: &profile::Profile,
+    args: &RunArgs,
+) -> ExitCode {
+    let serial = args
+        .serial
+        .as_deref()
+        .expect("single-device mode always carries a serial");
+    let mut target = match target_for_serial(transport, serial) {
         Ok(target) => target,
         Err(error) => return run_error(args.json, 1, "device_unavailable", error),
     };
     if let Err(error) = authorize_cli_transport(&mut target, args.allow_unsafe_transport) {
         return run_error(args.json, 2, "transport_confirmation_required", error);
     }
-    let info = match adb::get_device_info(&transport, &target) {
-        Ok(info) => info,
-        Err(error) => return run_error(args.json, 1, "device_probe_failed", error.to_string()),
+    match run_profile_on_target(transport, profile, &target, serial, args.apply, !args.json) {
+        Ok(output) => {
+            let success = output.success;
+            if args.json {
+                println!(
+                    "{}",
+                    serde_json::to_string(&output).expect("serializable result")
+                );
+            }
+            if success {
+                ExitCode::SUCCESS
+            } else {
+                ExitCode::from(1)
+            }
+        }
+        Err(error) => run_error(args.json, 1, error.code, error.message),
+    }
+}
+
+/// Fan `run` out over every discovered device. One device's skip/error never
+/// aborts the fleet, but the overall exit code is `1` unless every connected
+/// device was processed and every action succeeded.
+fn cmd_run_fleet(
+    transport: &ShellTransport,
+    profile: &profile::Profile,
+    args: &RunArgs,
+) -> ExitCode {
+    let devices = match list_fleet(transport) {
+        Ok(devices) => devices,
+        Err(error) => return run_error(args.json, 1, "device_list_failed", error),
     };
+    let screened = screen_fleet_devices(devices, args.allow_unsafe_transport);
+    let mut results: Vec<DeviceRunResult> = Vec::new();
+    let mut success = true;
+
+    for screen in screened {
+        match screen {
+            FleetScreen::Skipped { serial, reason } => {
+                success = false;
+                if !args.json {
+                    eprintln!("[droidsmith-cli] skipped {serial}: {reason}");
+                }
+                results.push(DeviceRunResult::Skipped {
+                    device_serial: serial,
+                    reason,
+                });
+            }
+            FleetScreen::Eligible(device) => {
+                let serial = device.serial.clone();
+                let mut target = match finalize_target(transport, device) {
+                    Ok(target) => target,
+                    Err(error) => {
+                        success = false;
+                        if !args.json {
+                            eprintln!("[droidsmith-cli] {serial}: {error}");
+                        }
+                        results.push(DeviceRunResult::Error(DeviceErrorOutput {
+                            device_serial: serial,
+                            code: "device_unavailable",
+                            message: error,
+                        }));
+                        continue;
+                    }
+                };
+                if let Err(error) =
+                    authorize_cli_transport(&mut target, args.allow_unsafe_transport)
+                {
+                    success = false;
+                    results.push(DeviceRunResult::Error(DeviceErrorOutput {
+                        device_serial: serial,
+                        code: "transport_confirmation_required",
+                        message: error,
+                    }));
+                    continue;
+                }
+                if !args.json {
+                    println!("\n=== {serial} ===");
+                }
+                match run_profile_on_target(
+                    transport, profile, &target, &serial, args.apply, !args.json,
+                ) {
+                    Ok(output) => {
+                        if !output.success {
+                            success = false;
+                        }
+                        results.push(DeviceRunResult::Ran(Box::new(output)));
+                    }
+                    Err(error) => {
+                        success = false;
+                        results.push(DeviceRunResult::Error(error));
+                    }
+                }
+            }
+        }
+    }
+
+    if results.is_empty() {
+        // No devices at all: an empty fleet is not a successful apply/dry-run.
+        success = false;
+        if !args.json {
+            eprintln!("[droidsmith-cli] no devices connected");
+        }
+    }
+
+    let ran = results
+        .iter()
+        .filter(|result| matches!(result, DeviceRunResult::Ran(_)))
+        .count();
+    let output = FleetRunOutput {
+        schema_version: 1,
+        command: "run",
+        mode: "all_devices",
+        apply: args.apply,
+        devices: results,
+        success,
+    };
+    if args.json {
+        println!(
+            "{}",
+            serde_json::to_string(&output).expect("serializable result")
+        );
+    } else if !output.devices.is_empty() {
+        println!(
+            "\nFleet {}: {ran} device(s) processed{}.",
+            if args.apply { "apply" } else { "dry-run" },
+            if output.success {
+                ""
+            } else {
+                " — review skips/errors above"
+            }
+        );
+    }
+    if output.success {
+        ExitCode::SUCCESS
+    } else {
+        ExitCode::from(1)
+    }
+}
+
+/// Run one profile against one already-authorized target. Shared by the single
+/// and fleet paths; `print_human` drives the inline progress output for
+/// non-JSON runs.
+fn run_profile_on_target(
+    transport: &ShellTransport,
+    profile: &profile::Profile,
+    target: &DeviceTarget,
+    serial: &str,
+    apply: bool,
+    print_human: bool,
+) -> Result<RunOutput, DeviceErrorOutput> {
+    let err = |code: &'static str, message: String| DeviceErrorOutput {
+        device_serial: serial.to_string(),
+        code,
+        message,
+    };
+
+    let info = adb::get_device_info(transport, target)
+        .map_err(|error| err("device_probe_failed", error.to_string()))?;
     let compatibility = profile::device_match_issues(
-        &profile,
-        &args.serial,
+        profile,
+        serial,
         info.manufacturer.as_deref(),
         info.model.as_deref(),
         info.sdk_level
@@ -660,32 +1228,21 @@ fn cmd_run(argv: &[String]) -> ExitCode {
             .and_then(|value| value.parse().ok()),
     );
     if !compatibility.is_empty() {
-        return run_error(
-            args.json,
-            1,
-            "profile_incompatible",
-            compatibility.join("; "),
-        );
+        return Err(err("profile_incompatible", compatibility.join("; ")));
     }
-    let users = match adb::list_users(&transport, &target) {
-        Ok(users) => users,
-        Err(error) => return run_error(args.json, 1, "user_probe_failed", error.to_string()),
-    };
-    let user_id = match profile::resolve_user(&profile, &users) {
-        Ok(user_id) => user_id,
-        Err(issues) => {
-            return run_error(args.json, 1, "profile_user_unavailable", issues.join("; "))
-        }
-    };
+    let users = adb::list_users(transport, target)
+        .map_err(|error| err("user_probe_failed", error.to_string()))?;
+    let user_id = profile::resolve_user(profile, &users)
+        .map_err(|issues| err("profile_user_unavailable", issues.join("; ")))?;
     let requests = profile::requests_for(
-        &profile,
-        &target,
+        profile,
+        target,
         user_id,
         actions::ConfirmationSource::CliApply,
     );
     let mut plans = requests.into_iter().map(actions::plan).collect::<Vec<_>>();
     for plan in &mut plans {
-        plan.before_state = actions::capture_state(&transport, &plan.request);
+        plan.before_state = actions::capture_state(transport, &plan.request);
     }
     let plan_output = plans
         .iter()
@@ -708,9 +1265,9 @@ fn cmd_run(argv: &[String]) -> ExitCode {
         })
         .collect::<Vec<_>>();
 
-    if !args.json {
+    if print_human {
         println!("Profile: {} (version {})", profile.name, profile.version);
-        println!("Target device: {} / Android user {user_id}", args.serial);
+        println!("Target device: {serial} / Android user {user_id}");
         for plan in &plan_output {
             println!(
                 "  [{:>2}] {} [{}] → adb {}",
@@ -724,22 +1281,20 @@ fn cmd_run(argv: &[String]) -> ExitCode {
 
     let mut results = Vec::new();
     let mut success = true;
-    if args.apply {
-        let journal_dir = match journal::default_journal_dir() {
-            Ok(path) => path,
-            Err(error) => return run_error(args.json, 1, "journal_unavailable", error.to_string()),
-        };
+    if apply {
+        let journal_dir = journal::default_journal_dir()
+            .map_err(|error| err("journal_unavailable", error.to_string()))?;
         for (index, plan) in plans.into_iter().enumerate() {
             let package = plan.request.package.clone();
             let now = iso_now();
             let result = journal::with_journal(&journal_dir, &target.serial, |journal| {
                 journal.execute(plan, None, &now, |plan| {
-                    actions::apply(&transport, plan, &iso_now())
+                    actions::apply(transport, plan, &iso_now())
                 })
             });
             match result {
                 Ok(_) => {
-                    if !args.json {
+                    if print_human {
                         println!("  [{:>2}] ok", index + 1);
                     }
                     results.push(RunApplyOutput {
@@ -751,7 +1306,7 @@ fn cmd_run(argv: &[String]) -> ExitCode {
                 }
                 Err(journal::ExecuteError::Operation(error)) => {
                     success = false;
-                    if !args.json {
+                    if print_human {
                         eprintln!("  [{:>2}] FAILED: {error}", index + 1);
                     }
                     results.push(RunApplyOutput {
@@ -762,61 +1317,51 @@ fn cmd_run(argv: &[String]) -> ExitCode {
                     });
                 }
                 Err(journal::ExecuteError::Journal(error)) => {
-                    return run_error(args.json, 1, "journal_failed", error.to_string())
+                    return Err(err("journal_failed", error.to_string()));
                 }
             }
         }
     }
 
-    let output = RunOutput {
+    if print_human {
+        if apply && success {
+            println!("\nAll actions applied successfully.");
+        } else if !apply {
+            println!("\n(dry-run; read-only state captured; nothing was changed)");
+        }
+    }
+
+    Ok(RunOutput {
         schema_version: 1,
         command: "run",
-        mode: if args.apply { "apply" } else { "dry_run" },
-        profile_name: profile.name,
-        profile_version: profile.version,
-        device_serial: args.serial,
+        mode: if apply { "apply" } else { "dry_run" },
+        profile_name: profile.name.clone(),
+        profile_version: profile.version.clone(),
+        device_serial: serial.to_string(),
         android_user: user_id,
         compatible: true,
         plans: plan_output,
         results,
         success,
-    };
-    if args.json {
-        println!(
-            "{}",
-            serde_json::to_string(&output).expect("serializable result")
-        );
-    } else if args.apply && success {
-        println!("\nAll actions applied successfully.");
-    } else if !args.apply {
-        println!("\n(dry-run; read-only state captured; nothing was changed)");
-    }
-    if success {
-        ExitCode::SUCCESS
-    } else {
-        ExitCode::from(1)
-    }
+    })
 }
 
-fn target_for_serial(transport: &ShellTransport, serial: &str) -> Result<DeviceTarget, String> {
+fn list_fleet(transport: &ShellTransport) -> Result<Vec<Device>, String> {
     let mut devices = transport
         .list_devices()
         .map_err(|error| format!("could not refresh devices: {error}"))?;
     adb::observe_connection_generations(&mut devices);
-    let mut matches = devices
-        .into_iter()
-        .filter(|device| device.serial == serial)
-        .collect::<Vec<_>>();
-    if matches.len() != 1 {
-        return Err(format!(
-            "device serial {serial:?} is missing or ambiguous; reconnect it and run `devices` again"
-        ));
-    }
-    let mut device = matches.remove(0);
+    Ok(devices)
+}
+
+/// Bind a discovered device to an operable, fingerprinted target. Shared by the
+/// single-serial and `--all-devices` paths so both enforce the same
+/// actionable-state and build-identity checks.
+fn finalize_target(transport: &ShellTransport, mut device: Device) -> Result<DeviceTarget, String> {
     if !device.state.is_actionable() {
         return Err(format!(
-            "device serial {serial:?} is not actionable ({:?})",
-            device.state
+            "device serial {:?} is not actionable ({:?})",
+            device.serial, device.state
         ));
     }
     let fingerprint = transport
@@ -831,6 +1376,72 @@ fn target_for_serial(transport: &ShellTransport, serial: &str) -> Result<DeviceT
     Ok(device.target())
 }
 
+fn target_for_serial(transport: &ShellTransport, serial: &str) -> Result<DeviceTarget, String> {
+    let devices = list_fleet(transport)?;
+    let mut matches = devices
+        .into_iter()
+        .filter(|device| device.serial == serial)
+        .collect::<Vec<_>>();
+    if matches.len() != 1 {
+        return Err(format!(
+            "device serial {serial:?} is missing or ambiguous; reconnect it and run `devices` again"
+        ));
+    }
+    finalize_target(transport, matches.remove(0))
+}
+
+/// Screening verdict for one discovered device in a `--all-devices` fleet run.
+enum FleetScreen {
+    /// Actionable and transport-authorized; ready for fingerprint binding.
+    Eligible(Device),
+    /// Excluded before any device I/O, with a user-facing reason.
+    Skipped { serial: String, reason: String },
+}
+
+/// Pure fleet screen: partition discovered devices into eligible vs skipped
+/// without touching the device. Unauthorized/offline devices and
+/// override-required transports (legacy/unknown TCP without
+/// `--allow-unsafe-transport`) are skipped rather than aborting the fleet.
+fn screen_fleet_devices(devices: Vec<Device>, allow_unsafe_transport: bool) -> Vec<FleetScreen> {
+    devices
+        .into_iter()
+        .map(|device| {
+            if !device.state.is_actionable() {
+                return FleetScreen::Skipped {
+                    serial: device.serial.clone(),
+                    reason: format!("device is not actionable ({:?})", device.state),
+                };
+            }
+            if device.transport_kind.requires_override() && !allow_unsafe_transport {
+                return FleetScreen::Skipped {
+                    serial: device.serial.clone(),
+                    reason: format!(
+                        "uses an unauthenticated {} transport; pass --allow-unsafe-transport to include it",
+                        device.transport_kind.label()
+                    ),
+                };
+            }
+            FleetScreen::Eligible(device)
+        })
+        .collect()
+}
+
+/// Sanitize a device serial (which may be `host:port`) into a filesystem-safe
+/// stem for per-device fleet artifacts. `valid_serial` already blocks path
+/// separators; this only neutralizes the remaining reserved characters (`:`).
+fn serial_file_stem(serial: &str) -> String {
+    serial
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || matches!(c, '_' | '-' | '.') {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect()
+}
+
 fn iso_now() -> String {
     droidsmith_lib::time::iso_utc_now()
 }
@@ -838,9 +1449,177 @@ fn iso_now() -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use droidsmith_lib::adb::device::{DeviceState, DeviceTransportKind};
 
     fn strings(values: &[&str]) -> Vec<String> {
         values.iter().map(|value| (*value).to_string()).collect()
+    }
+
+    fn device(serial: &str, state: DeviceState, kind: DeviceTransportKind) -> Device {
+        Device {
+            serial: serial.to_string(),
+            state,
+            model: None,
+            product: None,
+            device: None,
+            build_fingerprint: None,
+            transport_id: Some(1),
+            connection_generation: 1,
+            transport_kind: kind,
+            wireless: kind != DeviceTransportKind::Usb,
+        }
+    }
+
+    #[test]
+    fn device_selector_requires_exactly_one_of_device_or_all() {
+        assert_eq!(
+            resolve_device_selector(Some("QA1".to_string()), false).unwrap(),
+            Some("QA1".to_string())
+        );
+        assert_eq!(resolve_device_selector(None, true).unwrap(), None);
+        assert!(resolve_device_selector(None, false)
+            .unwrap_err()
+            .contains("--device"));
+        assert!(resolve_device_selector(Some("QA1".to_string()), true)
+            .unwrap_err()
+            .contains("not both"));
+        assert!(
+            resolve_device_selector(Some("bad serial".to_string()), false)
+                .unwrap_err()
+                .contains("invalid")
+        );
+    }
+
+    #[test]
+    fn run_parser_accepts_all_devices_and_rejects_combining_selectors() {
+        let args =
+            parse_run_args(&strings(&["profile.yaml", "--all-devices", "--dry-run"])).unwrap();
+        assert!(args.all_devices);
+        assert!(args.serial.is_none());
+        assert!(parse_run_args(&strings(&[
+            "profile.yaml",
+            "--all-devices",
+            "--device",
+            "QA1",
+            "--apply",
+        ]))
+        .is_err());
+    }
+
+    #[test]
+    fn baseline_export_all_devices_requires_output_directory() {
+        // Missing --output with --all-devices reports the directory guidance.
+        let error =
+            parse_baseline_args(&strings(&["profile.yaml", "--all-devices"]), true).unwrap_err();
+        assert!(error.contains("directory"), "got: {error}");
+        let args = parse_baseline_args(
+            &strings(&["profile.yaml", "--all-devices", "--output", "out"]),
+            true,
+        )
+        .unwrap();
+        assert!(args.all_devices);
+        assert!(args.serial.is_none());
+        assert_eq!(args.output_path, Some(PathBuf::from("out")));
+    }
+
+    #[test]
+    fn fleet_screen_partitions_by_state_and_transport() {
+        let devices = vec![
+            device("USB1", DeviceState::Device, DeviceTransportKind::Usb),
+            device(
+                "wifi:5555",
+                DeviceState::Device,
+                DeviceTransportKind::TlsWifi,
+            ),
+            device("OFFL1", DeviceState::Offline, DeviceTransportKind::Usb),
+            device(
+                "UNAUTH1",
+                DeviceState::Unauthorized,
+                DeviceTransportKind::Usb,
+            ),
+            device(
+                "tcp:5555",
+                DeviceState::Device,
+                DeviceTransportKind::UnknownTcp,
+            ),
+        ];
+
+        // Without the unsafe override, USB + paired TLS Wi-Fi are eligible;
+        // offline/unauthorized/unknown-TCP are skipped with reasons.
+        let screened = screen_fleet_devices(devices.clone(), false);
+        let eligible: Vec<&str> = screened
+            .iter()
+            .filter_map(|screen| match screen {
+                FleetScreen::Eligible(device) => Some(device.serial.as_str()),
+                FleetScreen::Skipped { .. } => None,
+            })
+            .collect();
+        assert_eq!(eligible, vec!["USB1", "wifi:5555"]);
+        let unknown_tcp_skip = screened.iter().find_map(|screen| match screen {
+            FleetScreen::Skipped { serial, reason } if serial == "tcp:5555" => Some(reason.clone()),
+            _ => None,
+        });
+        assert!(unknown_tcp_skip
+            .expect("unknown tcp skipped")
+            .contains("--allow-unsafe-transport"));
+
+        // With the override, the unknown-TCP device becomes eligible too.
+        let with_override = screen_fleet_devices(devices, true);
+        let eligible: Vec<&str> = with_override
+            .iter()
+            .filter_map(|screen| match screen {
+                FleetScreen::Eligible(device) => Some(device.serial.as_str()),
+                FleetScreen::Skipped { .. } => None,
+            })
+            .collect();
+        assert_eq!(eligible, vec!["USB1", "wifi:5555", "tcp:5555"]);
+    }
+
+    #[test]
+    fn serial_file_stem_neutralizes_reserved_characters() {
+        assert_eq!(serial_file_stem("192.168.1.5:5555"), "192.168.1.5_5555");
+        assert_eq!(serial_file_stem("R5CT60ZQR4M"), "R5CT60ZQR4M");
+    }
+
+    #[test]
+    fn fleet_run_output_serializes_all_variants() {
+        // Internally-tagged enums panic at serialize time if a newtype variant
+        // wraps a non-map; assert the fleet envelope round-trips as JSON.
+        let output = FleetRunOutput {
+            schema_version: 1,
+            command: "run",
+            mode: "all_devices",
+            apply: false,
+            devices: vec![
+                DeviceRunResult::Ran(Box::new(RunOutput {
+                    schema_version: 1,
+                    command: "run",
+                    mode: "dry_run",
+                    profile_name: "p".into(),
+                    profile_version: "2".into(),
+                    device_serial: "USB1".into(),
+                    android_user: 0,
+                    compatible: true,
+                    plans: vec![],
+                    results: vec![],
+                    success: true,
+                })),
+                DeviceRunResult::Error(DeviceErrorOutput {
+                    device_serial: "USB2".into(),
+                    code: "device_probe_failed",
+                    message: "boom".into(),
+                }),
+                DeviceRunResult::Skipped {
+                    device_serial: "tcp:5555".into(),
+                    reason: "unsafe".into(),
+                },
+            ],
+            success: false,
+        };
+        let json = serde_json::to_string(&output).expect("fleet run output serializes");
+        assert!(json.contains("\"outcome\":\"ran\""));
+        assert!(json.contains("\"outcome\":\"error\""));
+        assert!(json.contains("\"outcome\":\"skipped\""));
     }
 
     #[test]

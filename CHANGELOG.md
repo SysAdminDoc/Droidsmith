@@ -14,6 +14,19 @@ completion.
 Working batches live here. Sections collapse into a versioned release on
 each milestone tag.
 
+### Added
+
+- **R-108 — CLI fleet mode.** `droidsmith-cli run`, `baseline-export`, and
+  `baseline-inspect` now accept `--all-devices` to fan the operation over every
+  connected, authorized device instead of a single `--device SERIAL`. Each
+  device is planned/applied independently; `--json` emits a `devices[]` array
+  with one `outcome: ran | error | skipped` entry per device.
+  Unauthorized/offline devices and unauthenticated TCP transports (without
+  `--allow-unsafe-transport`) are skipped rather than aborting the fleet, and
+  the exit code is `1` if any device was skipped or failed.
+  `baseline-export --all-devices --output <dir>` writes one `<serial>.json`
+  baseline per device.
+
 ## [0.9.10] - 2026-07-22
 
 Deep engineering / UX audit pass: ~40 verified fixes across backend process
