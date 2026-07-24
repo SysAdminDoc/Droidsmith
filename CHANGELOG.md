@@ -16,6 +16,13 @@ each milestone tag.
 
 ### Added
 
+- **R-115 — winget + Scoop manifest generator.** `npm run packaging:generate`
+  renders a winget singleton manifest (`packaging/winget/`) and a Scoop manifest
+  (`packaging/scoop/`) from the repo version and Tauri bundle metadata, with
+  placeholder installer URLs/hashes until a tagged release provides real ones.
+  `npm run packaging:check` schema-validates the rendered manifests and asserts
+  they track `package.json`. Public winget/Scoop submission stays tracked in
+  Roadmap_Blocked.md pending a tagged GitHub release.
 - **R-112 — Running services in the Debloat review.** The debloat safety review
   now probes each selected package (bounded to the first 16) for live services
   via `dumpsys` and surfaces which apps are running right now, so the reviewer

@@ -1,0 +1,22 @@
+{
+  "version": "0.9.10",
+  "description": "Cross-platform open-source GUI for managing Android devices over ADB",
+  "homepage": "https://github.com/SysAdminDoc/Droidsmith",
+  "license": "MIT",
+  "architecture": {
+    "64bit": {
+      "url": "https://github.com/SysAdminDoc/Droidsmith/releases/download/v0.9.10/Droidsmith_0.9.10_x64-setup.exe",
+      "hash": "0000000000000000000000000000000000000000000000000000000000000000"
+    }
+  },
+  "innosetup": false,
+  "bin": "droidsmith.exe",
+  "checkver": "github",
+  "autoupdate": {
+    "architecture": {
+      "64bit": {
+        "url": "https://github.com/SysAdminDoc/Droidsmith/releases/download/v$version/Droidsmith_$version_x64-setup.exe"
+      }
+    }
+  }
+}

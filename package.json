@@ -21,6 +21,8 @@
     "security:audit:rust": "node scripts/audit-rust.mjs",
     "security:isolation": "node --test scripts/isolation-policy.test.mjs",
     "test:policy": "node --test scripts/release-policy.test.mjs",
+    "packaging:generate": "node scripts/generate-packaging-manifests.mjs",
+    "packaging:check": "node --test scripts/packaging-manifests.test.mjs",
     "lint": "eslint .",
     "format:check": "prettier --check \"src/**/*.{ts,tsx,css,json}\" \"scripts/**/*.mjs\" \"isolation/**/*.js\" \"*.json\" \"*.config.ts\"",
     "format:write": "prettier --write \"src/**/*.{ts,tsx,css,json}\" \"scripts/**/*.mjs\" \"isolation/**/*.js\" \"*.json\" \"*.config.ts\"",
