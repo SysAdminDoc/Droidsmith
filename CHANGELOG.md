@@ -16,6 +16,16 @@ each milestone tag.
 
 ### Fixed
 
+- **Debloat failed with "package disappeared after apply" for many entries.**
+  The pack assessment counted uninstalled-for-user "retained" remnants (surfaced
+  by the `pm list packages -u` pass) and archived apps as installed, so it
+  marked them Ready, planned a disable, and then failed verification because the
+  post-apply state query correctly reports them as not installed. The debloat
+  target set now excludes archived and retained packages, so only actually
+  installed packages are planned; the rest are skipped as not-present. (Packages
+  the OEM protects, e.g. Samsung's Themes store, still fail with the existing
+  "OEM security layer denied this package action" message — that is expected.)
+  Regression-tested via `debloat_target_ids`.
 - **Debloat and package actions were blocked by the IPC isolation policy on
   real devices.** The isolation layer validated `context.shell_argv`
   unconditionally and rejected the empty array that every non-shell action

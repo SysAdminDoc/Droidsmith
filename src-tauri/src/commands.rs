@@ -4160,6 +4160,21 @@ fn load_all_packs(
     Ok((packs, errors))
 }
 
+/// Package ids that are valid debloat targets: actually installed for the user.
+/// `PackageFilter::All` also surfaces archived apps and uninstalled-for-user
+/// "retained" remnants (via the `pm list packages -u` pass); neither can be
+/// disabled. Counting them made the pack assessment mark them Ready, plan a
+/// disable, and then fail verification with "package disappeared after apply"
+/// because the post-state query (which excludes `-u`) correctly reports them as
+/// not installed.
+fn debloat_target_ids(packages: Vec<adb::AppPackage>) -> std::collections::HashSet<String> {
+    packages
+        .into_iter()
+        .filter(|package| !package.archived && !package.retained)
+        .map(|package| package.package)
+        .collect()
+}
+
 fn pack_context(
     transport: &adb::ShellTransport,
     target: &adb::DeviceTarget,
@@ -4175,12 +4190,12 @@ fn pack_context(
             message: format!("Android user {user_id} is not available"),
         })?;
     let info = adb::get_device_info(transport, target)?;
-    let installed_packages =
-        adb::list_packages(transport, target, adb::PackageFilter::All, user_id)?
-            .into_iter()
-            .filter(|package| !package.archived)
-            .map(|package| package.package)
-            .collect();
+    let installed_packages = debloat_target_ids(adb::list_packages(
+        transport,
+        target,
+        adb::PackageFilter::All,
+        user_id,
+    )?);
     Ok(crate::packs::DevicePackContext {
         manufacturer: info.manufacturer,
         model: info.model,
@@ -4575,12 +4590,12 @@ fn iso_now() -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        accepted_transport_override, append_host_operation, classify_shell, diagnostic_text,
-        execute_batch_plans, is_allowed_device_control, load_all_packs, load_runtime_packs,
-        pack_error_to_load_error, parse_fastboot_getvar, plan_action_batch, profile_preview_rows,
-        unique_screenshot_remote, validate_action_batch_plan, validate_backup_target,
-        validate_remote_path, AdbRecoveryOutcome, AdbRecoveryRecord, ProcessOutput,
-        ProfilePreviewStatus, ShellClassification,
+        accepted_transport_override, append_host_operation, classify_shell, debloat_target_ids,
+        diagnostic_text, execute_batch_plans, is_allowed_device_control, load_all_packs,
+        load_runtime_packs, pack_error_to_load_error, parse_fastboot_getvar, plan_action_batch,
+        profile_preview_rows, unique_screenshot_remote, validate_action_batch_plan,
+        validate_backup_target, validate_remote_path, AdbRecoveryOutcome, AdbRecoveryRecord,
+        ProcessOutput, ProfilePreviewStatus, ShellClassification,
     };
     use crate::adb::device::DeviceState;
     use crate::adb::transport::MockTransport;
@@ -4795,6 +4810,31 @@ mod tests {
             .iter()
             .all(|row| row.plan.request.context.confirmation_source
                 == crate::adb::actions::ConfirmationSource::ProfilePreview));
+    }
+
+    #[test]
+    fn debloat_targets_exclude_archived_and_retained_packages() {
+        let package = |name: &str, archived: bool, retained: bool| AppPackage {
+            package: name.to_string(),
+            enabled: true,
+            system: false,
+            apk_path: None,
+            uid: None,
+            installer: None,
+            archived,
+            retained,
+        };
+        let ids = debloat_target_ids(vec![
+            package("com.keep.enabled", false, false),
+            package("com.skip.archived", true, false),
+            package("com.skip.retained", false, true),
+        ]);
+        assert!(ids.contains("com.keep.enabled"));
+        // Archived and uninstalled-for-user "retained" remnants cannot be
+        // disabled and must not be counted as installed debloat targets.
+        assert!(!ids.contains("com.skip.archived"));
+        assert!(!ids.contains("com.skip.retained"));
+        assert_eq!(ids.len(), 1);
     }
 
     #[test]
