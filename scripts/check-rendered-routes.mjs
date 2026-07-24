@@ -872,6 +872,14 @@ async function runDesktopFlow(browser) {
     path: path.join(screenshotDir, "desktop-apk-analyzer.png"),
     fullPage: false,
   });
+  // R-114: compare the analyzed APK against another (here, the same file) and
+  // render the offline version-diff summary.
+  await page
+    .getByRole("button", { name: "Compare with another APK" })
+    .click();
+  await page
+    .getByText("No tracked differences between these APKs.")
+    .waitFor();
   await page.evaluate(() => {
     window.__DROIDSMITH_MOCK_APK_VERIFICATION__ = "not_verified";
   });

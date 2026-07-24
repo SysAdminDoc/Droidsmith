@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 
 import { formatBytes } from "../lib/format";
@@ -11,6 +11,7 @@ import {
   type ApkSignerCertificate,
   type ApkSigningLineageEntry,
 } from "../lib/tauri";
+import { diffApkAnalyses, type ApkDiff } from "./apkDiff";
 import {
   Badge,
   Button,
@@ -27,15 +28,23 @@ type AnalyzerState =
   | { kind: "ok"; analysis: ApkAnalysis }
   | { kind: "error"; message: string };
 
+type CompareState =
+  | { kind: "idle" }
+  | { kind: "analyzing" }
+  | { kind: "ok"; diff: ApkDiff }
+  | { kind: "error"; message: string };
+
 /// Offline static APK inspector (R-097). Selects a local .apk/.apks via the
 /// backend-owned grant dialog and renders manifest, dex, signing, and size
 /// facts — no device required.
 export default function ApkAnalyzerRoute() {
   const { t } = useTranslation();
   const [state, setState] = useState<AnalyzerState>({ kind: "idle" });
+  const [compare, setCompare] = useState<CompareState>({ kind: "idle" });
 
   const analyze = useCallback(async () => {
     setState({ kind: "analyzing" });
+    setCompare({ kind: "idle" });
     try {
       const grant = await callSelectHostPath("apk_analyze_open");
       if (!grant) {
@@ -49,6 +58,21 @@ export default function ApkAnalyzerRoute() {
     }
   }, []);
 
+  const compareWith = useCallback(async (base: ApkAnalysis) => {
+    setCompare({ kind: "analyzing" });
+    try {
+      const grant = await callSelectHostPath("apk_analyze_open");
+      if (!grant) {
+        setCompare({ kind: "idle" });
+        return;
+      }
+      const other = await callAnalyzeApk(grant.id);
+      setCompare({ kind: "ok", diff: diffApkAnalyses(base, other) });
+    } catch (e) {
+      setCompare({ kind: "error", message: errorMessage(e) });
+    }
+  }, []);
+
   return (
     <>
       <PaneHeader
@@ -56,14 +80,30 @@ export default function ApkAnalyzerRoute() {
         milestone="R-097 · R-107"
         description={t("apk.description")}
         actions={
-          <Button
-            type="button"
-            variant="primary"
-            onClick={() => void analyze()}
-            disabled={state.kind === "analyzing"}
-          >
-            {state.kind === "analyzing" ? t("apk.analyzing") : t("apk.choose")}
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            {state.kind === "ok" && (
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => void compareWith(state.analysis)}
+                disabled={compare.kind === "analyzing"}
+              >
+                {compare.kind === "analyzing"
+                  ? t("apk.diff.comparing")
+                  : t("apk.diff.compare")}
+              </Button>
+            )}
+            <Button
+              type="button"
+              variant="primary"
+              onClick={() => void analyze()}
+              disabled={state.kind === "analyzing"}
+            >
+              {state.kind === "analyzing"
+                ? t("apk.analyzing")
+                : t("apk.choose")}
+            </Button>
+          </div>
         }
       />
 
@@ -81,8 +121,184 @@ export default function ApkAnalyzerRoute() {
         )}
 
         {state.kind === "ok" && <AnalysisReport analysis={state.analysis} />}
+
+        {state.kind === "ok" && compare.kind === "analyzing" && (
+          <StatePanel title={t("apk.diff.title")} tone="info">
+            <p>{t("apk.diff.comparing")}</p>
+          </StatePanel>
+        )}
+        {state.kind === "ok" && compare.kind === "error" && (
+          <StatePanel
+            title={t("apk.diff.title")}
+            tone="danger"
+            live="assertive"
+          >
+            <p className="break-all">{compare.message}</p>
+          </StatePanel>
+        )}
+        {state.kind === "ok" && compare.kind === "ok" && (
+          <DiffReport diff={compare.diff} />
+        )}
       </section>
     </>
+  );
+}
+
+function DiffReport({ diff }: { diff: ApkDiff }) {
+  const { t, i18n } = useTranslation();
+  const language = i18n.language;
+  return (
+    <Card className="p-5">
+      <div className="flex items-center justify-between gap-3">
+        <h3 className="text-sm font-semibold text-anvil-50">
+          {t("apk.diff.title")}
+        </h3>
+        <Badge tone={diff.samePackage ? "neutral" : "warning"}>
+          {diff.other.package ?? "—"}
+        </Badge>
+      </div>
+      <p className="mt-1 break-all font-mono text-xs text-anvil-400">
+        {diff.base.fileName} ({diff.base.versionName ?? "?"}) →{" "}
+        {diff.other.fileName} ({diff.other.versionName ?? "?"})
+      </p>
+
+      {!diff.samePackage && (
+        <p
+          className="mt-3 rounded-md border border-amber-300/30 bg-amber-950/20 p-3 text-xs text-amber-100"
+          role="status"
+        >
+          {t("apk.diff.mismatch", {
+            base: diff.base.package ?? "—",
+            other: diff.other.package ?? "—",
+          })}
+        </p>
+      )}
+
+      {diff.identical ? (
+        <p className="mt-3 text-sm text-anvil-300">{t("apk.diff.identical")}</p>
+      ) : (
+        <div className="mt-3 space-y-3">
+          <DiffList
+            title={t("apk.diff.permsAdded")}
+            items={diff.permissionsAdded}
+            tone="add"
+          />
+          <DiffList
+            title={t("apk.diff.permsRemoved")}
+            items={diff.permissionsRemoved}
+            tone="remove"
+          />
+          {diff.componentDeltas.length > 0 && (
+            <DiffSection title={t("apk.diff.components")}>
+              {diff.componentDeltas.map((delta) => (
+                <li
+                  key={delta.key}
+                  className="font-mono text-xs text-anvil-200"
+                >
+                  {delta.key}: {formatNumber(delta.base, language)} →{" "}
+                  {formatNumber(delta.other, language)}
+                </li>
+              ))}
+            </DiffSection>
+          )}
+          {diff.sdkDeltas.length > 0 && (
+            <DiffSection title={t("apk.diff.sdk")}>
+              {diff.sdkDeltas.map((delta) => (
+                <li
+                  key={delta.key}
+                  className="font-mono text-xs text-anvil-200"
+                >
+                  {delta.key}: {delta.base ?? "—"} → {delta.other ?? "—"}
+                </li>
+              ))}
+            </DiffSection>
+          )}
+          {diff.signingChanges.length > 0 && (
+            <DiffSection title={t("apk.diff.signing")}>
+              {diff.signingChanges.map((delta) => (
+                <li
+                  key={delta.scheme}
+                  className="font-mono text-xs text-anvil-200"
+                >
+                  {delta.scheme}: {delta.base ? "✓" : "✗"} →{" "}
+                  {delta.other ? "✓" : "✗"}
+                </li>
+              ))}
+            </DiffSection>
+          )}
+          {(diff.signerCertsAdded.length > 0 ||
+            diff.signerCertsRemoved.length > 0) && (
+            <DiffSection title={t("apk.diff.signerCerts")}>
+              {diff.signerCertsAdded.map((cert) => (
+                <li
+                  key={`add-${cert}`}
+                  className="break-all font-mono text-xs text-emerald-200"
+                >
+                  + {cert}
+                </li>
+              ))}
+              {diff.signerCertsRemoved.map((cert) => (
+                <li
+                  key={`rm-${cert}`}
+                  className="break-all font-mono text-xs text-amber-200"
+                >
+                  − {cert}
+                </li>
+              ))}
+            </DiffSection>
+          )}
+          {diff.fileSizeDelta !== 0 && (
+            <p className="text-xs text-anvil-300">
+              {t("apk.diff.sizeDelta")}:{" "}
+              <span className="font-mono">
+                {diff.fileSizeDelta > 0 ? "+" : "−"}
+                {formatBytes(Math.abs(diff.fileSizeDelta), language)}
+              </span>
+            </p>
+          )}
+        </div>
+      )}
+
+      <p className="mt-4 text-xs text-anvil-500">{t("apk.diff.localNote")}</p>
+    </Card>
+  );
+}
+
+function DiffSection({
+  title,
+  children,
+}: {
+  title: string;
+  children: ReactNode;
+}) {
+  return (
+    <div>
+      <p className="text-xs font-medium text-anvil-400">{title}</p>
+      <ul className="mt-1 space-y-1">{children}</ul>
+    </div>
+  );
+}
+
+function DiffList({
+  title,
+  items,
+  tone,
+}: {
+  title: string;
+  items: string[];
+  tone: "add" | "remove";
+}) {
+  if (items.length === 0) return null;
+  const colour = tone === "add" ? "text-emerald-200" : "text-amber-200";
+  const sign = tone === "add" ? "+" : "−";
+  return (
+    <DiffSection title={title}>
+      {items.map((item) => (
+        <li key={item} className={`break-all font-mono text-xs ${colour}`}>
+          {sign} {item}
+        </li>
+      ))}
+    </DiffSection>
   );
 }
 

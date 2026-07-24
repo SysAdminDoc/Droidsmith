@@ -16,6 +16,14 @@ each milestone tag.
 
 ### Added
 
+- **R-114 — Offline APK version diff.** The APK Analyzer can now compare the
+  analyzed APK against a second local APK (chosen via a one-shot grant) and
+  reports the deltas that matter for an update review: added/removed
+  permissions, component-count changes, min/target/compile SDK changes, signing
+  scheme changes, signer-certificate additions/removals, file-size change, and a
+  package-id mismatch warning. The comparison is computed entirely locally and
+  nothing is uploaded. (Diff logic lives in the frontend as a pure, fixture
+  -tested function since both parsed reports are already client-side.)
 - **R-111 — scrcpy app launcher.** When the detected scrcpy supports it
   (3.0+), Mirror offers an optional "Launch app on connect" control that starts
   a chosen app via `--start-app`, optionally into a `--new-display` virtual
