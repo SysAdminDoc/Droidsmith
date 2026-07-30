@@ -138,6 +138,38 @@ export class TargetOperationCoordinator {
   }
 }
 
+/** A keyed collection of independent coordinators for target-bound work that
+ * must run concurrently, such as per-package metadata lookups. Each key keeps
+ * its own superseding generation while target/user invalidation still rejects
+ * every lease in the group. */
+export class TargetOperationGroupCoordinator {
+  private readonly coordinators = new Map<string, TargetOperationCoordinator>();
+
+  constructor(
+    private readonly getFingerprint: () => string | null,
+    private readonly cancelOperation: CancelOperation = callCancelOperation,
+  ) {}
+
+  begin(key: string): TargetOperationLease {
+    let coordinator = this.coordinators.get(key);
+    if (!coordinator) {
+      coordinator = new TargetOperationCoordinator(
+        () => JSON.stringify([this.getFingerprint(), key]),
+        this.cancelOperation,
+      );
+      this.coordinators.set(key, coordinator);
+    }
+    return coordinator.begin();
+  }
+
+  invalidate(): void {
+    for (const coordinator of this.coordinators.values()) {
+      coordinator.invalidate();
+    }
+    this.coordinators.clear();
+  }
+}
+
 /** Bind one coordinator to an immutable device target. The ref is updated
  * during render so a completion from the previous target is stale even before
  * React runs effect cleanup; cleanup owns backend cancellation. */
@@ -166,4 +198,34 @@ export function useTargetOperation(
   );
 
   return coordinator;
+}
+
+/** Bind a concurrent keyed coordinator group to an immutable target and scope.
+ * Render-time fingerprint updates reject stale completions synchronously;
+ * effect cleanup owns backend cancellation and component-lifetime teardown. */
+export function useTargetOperationGroup(
+  target: DeviceTarget | null,
+  scopeKey: string | number | null = null,
+) {
+  const targetIdentity = targetFingerprint(target);
+  const fingerprint =
+    targetIdentity === null ? null : JSON.stringify([targetIdentity, scopeKey]);
+  const fingerprintRef = useRef(fingerprint);
+  fingerprintRef.current = fingerprint;
+  const groupRef = useRef<TargetOperationGroupCoordinator | null>(null);
+  if (!groupRef.current) {
+    groupRef.current = new TargetOperationGroupCoordinator(
+      () => fingerprintRef.current,
+    );
+  }
+  const group = groupRef.current;
+
+  useEffect(
+    () => () => {
+      group.invalidate();
+    },
+    [fingerprint, group],
+  );
+
+  return group;
 }

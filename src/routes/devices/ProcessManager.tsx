@@ -10,6 +10,7 @@ import {
   type DeviceTarget,
   type ProcessInfo,
 } from "../../lib/tauri";
+import { useTargetOperation } from "../../lib/targetOperation";
 import { Badge, Button, Card, EmptyState, FieldInput } from "../common";
 import { appProcessPackage, formatKb } from "./common";
 
@@ -18,6 +19,8 @@ import { appProcessPackage, formatKb } from "./common";
  *  confirmed force-stop on rows whose name resolves to an app package. */
 export function ProcessManager({ target }: { target: DeviceTarget }) {
   const { t } = useTranslation();
+  const refreshOperation = useTargetOperation(target, "process-list");
+  const mutationOperation = useTargetOperation(target, "process-mutation");
   const [processes, setProcesses] = useState<ProcessInfo[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -29,6 +32,15 @@ export function ProcessManager({ target }: { target: DeviceTarget }) {
   const confirmTrapRef = useFocusTrap<HTMLDivElement>(confirmPackage !== null);
 
   useEffect(() => {
+    setProcesses([]);
+    setLoading(false);
+    setError(null);
+    setConfirmPackage(null);
+    setStopping(null);
+    setStopError(null);
+  }, [target.connection_generation, target.serial, target.transport_id]);
+
+  useEffect(() => {
     if (!confirmPackage) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") setConfirmPackage(null);
@@ -38,21 +50,25 @@ export function ProcessManager({ target }: { target: DeviceTarget }) {
   }, [confirmPackage]);
 
   const refresh = useCallback(async () => {
+    const lease = refreshOperation.begin();
     setLoading(true);
     setError(null);
     try {
       const procs = await callListProcesses(target);
-      setProcesses(procs);
+      lease.commit(() => setProcesses(procs));
     } catch (e) {
-      setProcesses([]);
-      setError(errorMessage(e));
+      lease.commit(() => {
+        setProcesses([]);
+        setError(errorMessage(e));
+      });
     } finally {
-      setLoading(false);
+      lease.commit(() => setLoading(false));
     }
-  }, [target]);
+  }, [refreshOperation, target]);
 
   const forceStop = useCallback(
     async (pkg: string) => {
+      const lease = mutationOperation.begin();
       setConfirmPackage(null);
       setStopping(pkg);
       setStopError(null);
@@ -65,15 +81,18 @@ export function ProcessManager({ target }: { target: DeviceTarget }) {
           user_id: 0,
         });
         await callApplyAction(plan);
+        if (!lease.isCurrent()) return;
         await refresh();
       } catch (e) {
-        setStopError(t("devices.controls.forceStopFailed", { package: pkg }));
+        lease.commit(() =>
+          setStopError(t("devices.controls.forceStopFailed", { package: pkg })),
+        );
         void e;
       } finally {
-        setStopping(null);
+        lease.commit(() => setStopping(null));
       }
     },
-    [refresh, t, target],
+    [mutationOperation, refresh, t, target],
   );
 
   const filtered = processes

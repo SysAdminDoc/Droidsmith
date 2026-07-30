@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   TargetOperationCoordinator,
+  TargetOperationGroupCoordinator,
   targetFingerprint,
 } from "./targetOperation";
 import type { DeviceTarget } from "./tauri";
@@ -80,5 +81,50 @@ describe("TargetOperationCoordinator", () => {
     expect(current.commit(success)).toBe(true);
     expect(success).toHaveBeenCalledTimes(1);
     expect(error).not.toHaveBeenCalled();
+  });
+
+  it("invalidates user-scoped work before it can commit to another Android user", () => {
+    let userId = 0;
+    const coordinator = new TargetOperationCoordinator(() =>
+      JSON.stringify([targetFingerprint(target("A", 1)), userId]),
+    );
+    const owner = coordinator.begin();
+
+    userId = 10;
+    expect(owner.commit(vi.fn())).toBe(false);
+    expect(coordinator.begin().isCurrent()).toBe(true);
+  });
+
+  it("treats component unmount as cancellation and rejects every late completion", () => {
+    const cancel = vi.fn(async () => true);
+    const coordinator = new TargetOperationCoordinator(
+      () => targetFingerprint(target("A", 1)),
+      cancel,
+    );
+    const lease = coordinator.begin();
+    lease.registerCancellation("layout-12345678");
+    coordinator.invalidate();
+
+    const success = vi.fn();
+    const error = vi.fn();
+    expect(lease.commit(success)).toBe(false);
+    expect(lease.commit(error)).toBe(false);
+    expect(cancel).toHaveBeenCalledWith("layout-12345678");
+    expect(success).not.toHaveBeenCalled();
+    expect(error).not.toHaveBeenCalled();
+  });
+
+  it("allows keyed work to run concurrently and invalidates the whole group", () => {
+    let fingerprint = targetFingerprint(target("A", 1));
+    const group = new TargetOperationGroupCoordinator(() => fingerprint);
+    const alpha = group.begin("com.example.alpha");
+    const beta = group.begin("com.example.beta");
+
+    expect(alpha.isCurrent()).toBe(true);
+    expect(beta.isCurrent()).toBe(true);
+    fingerprint = targetFingerprint(target("B", 1));
+    expect(alpha.isCurrent()).toBe(false);
+    expect(beta.isCurrent()).toBe(false);
+    group.invalidate();
   });
 });

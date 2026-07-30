@@ -1,7 +1,7 @@
 // Selected-device detail panel + device-health cards (IMP-72: extracted
 // verbatim from the former Devices.tsx god-file).
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { cn } from "../../lib/cn";
@@ -11,6 +11,7 @@ import {
   type DeviceInfo,
   type DeviceTarget,
 } from "../../lib/tauri";
+import { useTargetOperation } from "../../lib/targetOperation";
 import { Badge, Button, Card, SkeletonLine, StatePanel } from "../common";
 import type { DetailState } from "./common";
 import { formatKb } from "./common";
@@ -23,27 +24,46 @@ export function DeviceDetail({
   onRetry: (target: DeviceTarget) => void;
 }) {
   const { t } = useTranslation();
+  const liveTarget = state.kind === "idle" ? null : state.target;
+  const disconnectOperation = useTargetOperation(
+    liveTarget,
+    "device-disconnect",
+  );
   const [disconnectMessage, setDisconnectMessage] = useState<string | null>(
     null,
   );
+
+  useEffect(() => {
+    setDisconnectMessage(null);
+  }, [
+    liveTarget?.connection_generation,
+    liveTarget?.serial,
+    liveTarget?.transport_id,
+  ]);
+
   const doDisconnect = useCallback(
     async (target: DeviceTarget) => {
+      const lease = disconnectOperation.begin();
       try {
         const result = await callDisconnectDevice(target);
-        if (result.disconnected) {
-          setDisconnectMessage(t("devices.disconnectSuccess"));
-        } else {
-          setDisconnectMessage(result.message);
-        }
+        lease.commit(() =>
+          setDisconnectMessage(
+            result.disconnected
+              ? t("devices.disconnectSuccess")
+              : result.message,
+          ),
+        );
       } catch (error) {
-        setDisconnectMessage(
-          t("devices.disconnectFailed", {
-            message: errorMessage(error),
-          }),
+        lease.commit(() =>
+          setDisconnectMessage(
+            t("devices.disconnectFailed", {
+              message: errorMessage(error),
+            }),
+          ),
         );
       }
     },
-    [t],
+    [disconnectOperation, t],
   );
 
   if (state.kind === "idle") return null;

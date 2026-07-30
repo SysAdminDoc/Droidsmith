@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import {
@@ -10,6 +10,7 @@ import {
   type PackCandidate,
   type PackLoadError,
 } from "../../lib/tauri";
+import { useTargetOperation } from "../../lib/targetOperation";
 import {
   Badge,
   Button,
@@ -150,6 +151,7 @@ function PackExportControl({
   userId: number;
 }) {
   const { t } = useTranslation();
+  const exportOperation = useTargetOperation(target, userId);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<
     | { kind: "success"; message: string; path: string }
@@ -157,8 +159,14 @@ function PackExportControl({
     | null
   >(null);
 
+  useEffect(() => {
+    setBusy(false);
+    setStatus(null);
+  }, [target, userId]);
+
   const runExport = useCallback(async () => {
     if (busy) return;
+    const lease = exportOperation.begin();
     setBusy(true);
     setStatus(null);
     try {
@@ -166,25 +174,26 @@ function PackExportControl({
         "pack_export_save",
         "device-debloat.yaml",
       );
-      if (!grant) {
-        setBusy(false);
-        return;
-      }
+      if (!grant || !lease.isCurrent()) return;
       const result = await callExportDevicePack(target, userId, grant.id);
-      setStatus({
-        kind: "success",
-        message: t("debloat.export.success", {
-          count: result.packages,
-          id: result.pack_id,
+      lease.commit(() =>
+        setStatus({
+          kind: "success",
+          message: t("debloat.export.success", {
+            count: result.packages,
+            id: result.pack_id,
+          }),
+          path: result.artifact.local_path,
         }),
-        path: result.artifact.local_path,
-      });
+      );
     } catch (e) {
-      setStatus({ kind: "error", message: errorMessage(e) });
+      lease.commit(() =>
+        setStatus({ kind: "error", message: errorMessage(e) }),
+      );
     } finally {
-      setBusy(false);
+      lease.commit(() => setBusy(false));
     }
-  }, [busy, target, userId, t]);
+  }, [busy, exportOperation, target, userId, t]);
 
   return (
     <Card className="p-5">

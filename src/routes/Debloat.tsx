@@ -25,7 +25,7 @@ import {
   useAuthorizedDevices,
   useTransportAuthorization,
 } from "../lib/useAuthorizedDevices";
-import { targetFingerprint } from "../lib/targetOperation";
+import { targetFingerprint, useTargetOperation } from "../lib/targetOperation";
 
 import {
   snapshotJournalPackageState,
@@ -121,8 +121,6 @@ export default function DebloatRoute() {
   // stops issuing actions and cannot stomp the reset wizard with a stale
   // "done" screen (mirrors Apps' installGenerationRef).
   const queueGenerationRef = useRef(0);
-  const packsRequestRef = useRef(0);
-  const usersRequestRef = useRef(0);
 
   // Leaving the route stops an in-flight apply queue: bump the queue generation
   // so runQueue returns after the current (already-journaled) action without
@@ -158,30 +156,46 @@ export default function DebloatRoute() {
     setAccepted: setTransportOverrideAccepted,
     authorizedTarget,
   } = useTransportAuthorization(selectedTarget);
+  const usersOperation = useTargetOperation(selectedTarget, "debloat-users");
+  const packsOperation = useTargetOperation(
+    selectedTarget,
+    `debloat-packs:${selectedUser}`,
+  );
+  const planningOperation = useTargetOperation(
+    authorizedTarget,
+    `debloat-plan:${selectedUser}`,
+  );
+  const baselineOperation = useTargetOperation(
+    authorizedTarget,
+    `debloat-baseline:${selectedUser}`,
+  );
+  const queueOperation = useTargetOperation(
+    authorizedTarget,
+    `debloat-queue:${selectedUser}`,
+  );
 
   const loadPacks = useCallback(async () => {
     if (!inTauri() || !selectedTarget || !usersReady) return;
-    // Rapid device/user switches can interleave responses; only the most
-    // recent request may write packsState.
-    const request = packsRequestRef.current + 1;
-    packsRequestRef.current = request;
+    const lease = packsOperation.begin();
     setPacksState({ kind: "loading" });
     try {
       const listing = await callListPacks(selectedTarget, selectedUser);
-      if (packsRequestRef.current !== request) return;
-      setPacksState({
-        kind: "ok",
-        packs: listing.packs,
-        errors: listing.errors,
-      });
+      lease.commit(() =>
+        setPacksState({
+          kind: "ok",
+          packs: listing.packs,
+          errors: listing.errors,
+        }),
+      );
     } catch (e) {
-      if (packsRequestRef.current !== request) return;
-      setPacksState({
-        kind: "error",
-        message: errorMessage(e),
-      });
+      lease.commit(() =>
+        setPacksState({
+          kind: "error",
+          message: errorMessage(e),
+        }),
+      );
     }
-  }, [selectedTarget, selectedUser, usersReady]);
+  }, [packsOperation, selectedTarget, selectedUser, usersReady]);
 
   // Keyed on the memoized scalar target identity (not device object identity):
   // plugging or unplugging an unrelated device rebuilds every device object,
@@ -195,10 +209,7 @@ export default function DebloatRoute() {
       setDeviceContext({ manufacturer: null, rom: null });
       return;
     }
-    // Rapid target switches can interleave callListUsers responses; only the
-    // most recent request may write the user selection (last-write guard).
-    const request = usersRequestRef.current + 1;
-    usersRequestRef.current = request;
+    const lease = usersOperation.begin();
     setUsersReady(false);
     setUserError(null);
     // Best-effort device context for quirk matching; a failure here must not
@@ -206,30 +217,33 @@ export default function DebloatRoute() {
     void (async () => {
       try {
         const info = await callGetDeviceInfo(selectedTarget);
-        if (usersRequestRef.current !== request) return;
-        setDeviceContext({
-          manufacturer: info.manufacturer,
-          rom: info.build_fingerprint,
-        });
+        lease.commit(() =>
+          setDeviceContext({
+            manufacturer: info.manufacturer,
+            rom: info.build_fingerprint,
+          }),
+        );
       } catch {
-        setDeviceContext({ manufacturer: null, rom: null });
+        lease.commit(() => setDeviceContext({ manufacturer: null, rom: null }));
       }
     })();
     try {
       const found = await callListUsers(selectedTarget);
-      if (usersRequestRef.current !== request) return;
-      setUsers(found);
-      // The backend rejects empty or ambiguous discovery instead of
-      // fabricating user 0, so a resolved list always has a foreground user.
-      const foreground = found.find((u) => u.current) ?? found[0];
-      setSelectedUser(foreground.id);
-      setUsersReady(true);
+      lease.commit(() => {
+        setUsers(found);
+        // The backend rejects empty or ambiguous discovery instead of
+        // fabricating user 0, so a resolved list always has a foreground user.
+        const foreground = found.find((u) => u.current) ?? found[0];
+        setSelectedUser(foreground.id);
+        setUsersReady(true);
+      });
     } catch (e) {
-      if (usersRequestRef.current !== request) return;
-      setUsers([]);
-      setUserError(errorMessage(e));
+      lease.commit(() => {
+        setUsers([]);
+        setUserError(errorMessage(e));
+      });
     }
-  }, [selectedTarget]);
+  }, [selectedTarget, usersOperation]);
 
   useEffect(() => {
     const current = authorizedDevices.find((device) =>
@@ -348,6 +362,7 @@ export default function DebloatRoute() {
       overrideAccepted: boolean,
     ) => {
       if (!selectedTarget || !authorizedTarget || !usersReady) return;
+      const lease = queueOperation.begin();
       // Claim the queue generation: a device/user change resets the wizard and
       // bumps the ref, after which this run must stop issuing actions and must
       // not commit any further wizard state.
@@ -362,7 +377,8 @@ export default function DebloatRoute() {
         "all",
         selectedUser,
       );
-      if (queueGenerationRef.current !== generation) return;
+      if (queueGenerationRef.current !== generation || !lease.isCurrent())
+        return;
       let queue = rows;
       const plansByPackage = new Map(
         plans.map((plan) => [plan.request.package, plan]),
@@ -374,24 +390,29 @@ export default function DebloatRoute() {
       const commitQueue = (
         patch: Partial<Extract<WizardStep, { step: "applying" }>> = {},
       ) => {
-        setWizard((prev) =>
-          prev.step === "applying" ? { ...prev, queue, ...patch } : prev,
+        lease.commit(() =>
+          setWizard((prev) =>
+            prev.step === "applying" ? { ...prev, queue, ...patch } : prev,
+          ),
         );
       };
 
-      setWizard({
-        step: "applying",
-        pack,
-        assessment,
-        queue,
-        currentPackage: null,
-        cancelRequested: false,
-        overrideAccepted,
-      });
+      lease.commit(() =>
+        setWizard({
+          step: "applying",
+          pack,
+          assessment,
+          queue,
+          currentPackage: null,
+          cancelRequested: false,
+          overrideAccepted,
+        }),
+      );
 
       for (const row of queue.filter((item) => item.status === "pending")) {
         if (cancelRequestedRef.current) break;
-        if (queueGenerationRef.current !== generation) return;
+        if (queueGenerationRef.current !== generation || !lease.isCurrent())
+          return;
 
         queue = patchQueueRow(queue, row.entry.id, (current) => ({
           ...current,
@@ -419,6 +440,7 @@ export default function DebloatRoute() {
             );
           }
           journal = (await callApplyAction(plan)).entry;
+          if (!lease.isCurrent()) return;
           before =
             snapshotJournalPackageState(
               journal.applied.before_state,
@@ -435,7 +457,8 @@ export default function DebloatRoute() {
 
         // Superseded mid-apply: the action itself stands (it is journaled),
         // but the wizard now belongs to a different device/user context.
-        if (queueGenerationRef.current !== generation) return;
+        if (queueGenerationRef.current !== generation || !lease.isCurrent())
+          return;
 
         queue = patchQueueRow(queue, row.entry.id, (current) => ({
           ...current,
@@ -459,7 +482,8 @@ export default function DebloatRoute() {
             "all",
             selectedUser,
           );
-          if (queueGenerationRef.current !== generation) return;
+          if (queueGenerationRef.current !== generation || !lease.isCurrent())
+            return;
           queue = queue.map((row) => {
             if (row.status !== "failed" || row.after !== null) return row;
             const recovered = snapshotPackage(recoveredPackages, row.entry.id);
@@ -496,18 +520,22 @@ export default function DebloatRoute() {
       // The final commit is not guarded by commitQueue's step check, so it
       // must bail explicitly when superseded — otherwise it stomps the reset
       // wizard with a done screen for the old pack/device.
-      if (queueGenerationRef.current !== generation) return;
-      setWizard({
-        step: "done",
-        pack,
-        assessment,
-        queue,
-        cancelled,
-        overrideAccepted,
-      });
+      if (queueGenerationRef.current !== generation || !lease.isCurrent())
+        return;
+      lease.commit(() =>
+        setWizard({
+          step: "done",
+          pack,
+          assessment,
+          queue,
+          cancelled,
+          overrideAccepted,
+        }),
+      );
     },
     [
       authorizedTarget,
+      queueOperation,
       selectedTarget,
       selectedUser,
       t,
@@ -518,6 +546,7 @@ export default function DebloatRoute() {
 
   const applyPack = useCallback(async () => {
     if (wizard.step !== "preview" || !authorizedTarget || !usersReady) return;
+    const lease = planningOperation.begin();
     setApplyReviewOpen(false);
     try {
       const planned = await callPlanPack({
@@ -528,6 +557,7 @@ export default function DebloatRoute() {
         selected: [...wizard.selected],
         override_compatibility: wizard.overrideAccepted,
       });
+      if (!lease.isCurrent()) return;
       const queue = makeQueueRows(
         wizard.pack.packages.filter((entry) =>
           planned.selected_ids.includes(entry.id),
@@ -542,16 +572,26 @@ export default function DebloatRoute() {
       );
     } catch (error) {
       const message = errorMessage(error);
-      setWizard((previous) =>
-        previous.step === "preview"
-          ? { ...previous, planError: message }
-          : previous,
+      lease.commit(() =>
+        setWizard((previous) =>
+          previous.step === "preview"
+            ? { ...previous, planError: message }
+            : previous,
+        ),
       );
     }
-  }, [authorizedTarget, runQueue, selectedUser, usersReady, wizard]);
+  }, [
+    authorizedTarget,
+    planningOperation,
+    runQueue,
+    selectedUser,
+    usersReady,
+    wizard,
+  ]);
 
   const exportPackBaseline = useCallback(async () => {
     if (wizard.step !== "preview" || !authorizedTarget || !usersReady) return;
+    const lease = baselineOperation.begin();
     setBaselineNotice({
       kind: "busy",
       message: t("debloat.recoveryExporting"),
@@ -565,10 +605,12 @@ export default function DebloatRoute() {
         selected: [...wizard.selected],
         override_compatibility: wizard.overrideAccepted,
       });
+      if (!lease.isCurrent()) return;
       const selected = await callSelectHostPath(
         "recovery_baseline_save",
         debloatRecoveryFileName(wizard.pack.id),
       );
+      if (!lease.isCurrent()) return;
       if (!selected) {
         setBaselineNotice(null);
         return;
@@ -583,20 +625,31 @@ export default function DebloatRoute() {
         { id: wizard.pack.id, revision: wizard.pack.revision },
         selected.id,
       );
-      setBaselineNotice({
-        kind: "success",
-        message: t("debloat.recoverySaved", {
-          path: artifact.local_path,
-          sha256: artifact.sha256,
+      lease.commit(() =>
+        setBaselineNotice({
+          kind: "success",
+          message: t("debloat.recoverySaved", {
+            path: artifact.local_path,
+            sha256: artifact.sha256,
+          }),
         }),
-      });
+      );
     } catch (error) {
-      setBaselineNotice({
-        kind: "error",
-        message: errorMessage(error),
-      });
+      lease.commit(() =>
+        setBaselineNotice({
+          kind: "error",
+          message: errorMessage(error),
+        }),
+      );
     }
-  }, [authorizedTarget, selectedUser, t, usersReady, wizard]);
+  }, [
+    authorizedTarget,
+    baselineOperation,
+    selectedUser,
+    t,
+    usersReady,
+    wizard,
+  ]);
 
   const cancelAfterCurrent = useCallback(() => {
     cancelRequestedRef.current = true;
@@ -607,6 +660,7 @@ export default function DebloatRoute() {
 
   const retryFailed = useCallback(async () => {
     if (wizard.step !== "done" || !authorizedTarget || !usersReady) return;
+    const lease = planningOperation.begin();
     setRetryError(null);
     try {
       const failedIds = wizard.queue
@@ -620,6 +674,7 @@ export default function DebloatRoute() {
         selected: failedIds,
         override_compatibility: wizard.overrideAccepted,
       });
+      if (!lease.isCurrent()) return;
       const previousRows = new Map(
         wizard.queue.map((row) => [row.entry.id, row]),
       );
@@ -642,9 +697,16 @@ export default function DebloatRoute() {
     } catch (error) {
       // The exact retry scenario (device unplugged after a partial queue) must
       // surface instead of freezing the wizard on a dropped rejection.
-      setRetryError(errorMessage(error));
+      lease.commit(() => setRetryError(errorMessage(error)));
     }
-  }, [authorizedTarget, runQueue, selectedUser, usersReady, wizard]);
+  }, [
+    authorizedTarget,
+    planningOperation,
+    runQueue,
+    selectedUser,
+    usersReady,
+    wizard,
+  ]);
 
   return (
     <>

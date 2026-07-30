@@ -21,6 +21,7 @@ import {
   useAuthorizedDevices,
   useTransportAuthorization,
 } from "../lib/useAuthorizedDevices";
+import { useTargetOperation } from "../lib/targetOperation";
 import {
   appendConsoleHistory,
   parseConsoleCommand,
@@ -57,6 +58,7 @@ export default function ConsoleRoute() {
     setAccepted: setTransportOverrideAccepted,
     authorizedTarget,
   } = useTransportAuthorization(selectedTarget);
+  const commandOperation = useTargetOperation(authorizedTarget, "console");
   const [command, setCommand] = useState("");
   const [running, setRunning] = useState(false);
   const [operationStatus, setOperationStatus] = useState<string | null>(null);
@@ -86,6 +88,7 @@ export default function ConsoleRoute() {
     const next = resolveAuthorizedTarget(selectedTarget, authorizedDevices);
     if (sameDeviceTarget(selectedTarget, next)) return;
     commandGenerationRef.current += 1;
+    commandOperation.invalidate();
     const operationId = activeOperationRef.current;
     activeOperationRef.current = null;
     if (operationId) void callCancelOperation(operationId);
@@ -96,7 +99,7 @@ export default function ConsoleRoute() {
     setOperationStatus(null);
     setPendingAction(null);
     setRunning(false);
-  }, [authorizedDevices, selectedTarget]);
+  }, [authorizedDevices, commandOperation, selectedTarget]);
 
   useEffect(() => {
     return () => {
@@ -141,6 +144,7 @@ export default function ConsoleRoute() {
     setHistoryIndex(-1);
     const generation = commandGenerationRef.current + 1;
     commandGenerationRef.current = generation;
+    const lease = commandOperation.begin();
     stickToOutputBottomRef.current = true;
 
     try {
@@ -148,7 +152,8 @@ export default function ConsoleRoute() {
         authorizedTarget,
         parsed.argv,
       );
-      if (commandGenerationRef.current !== generation) return;
+      if (commandGenerationRef.current !== generation || !lease.isCurrent())
+        return;
       if (assessment.mutating) {
         if (!assessment.plan) {
           throw new Error(t("console.plannerNoPlan"));
@@ -164,13 +169,15 @@ export default function ConsoleRoute() {
       }
       const operationId = newOperationId("console");
       activeOperationRef.current = operationId;
+      lease.registerCancellation(operationId);
       setOperationStatus(t("console.starting"));
       const output = await callShellRun(authorizedTarget, parsed.argv, {
         operationId,
         onEvent: (event: OperationEvent) => {
           if (
             activeOperationRef.current !== operationId ||
-            commandGenerationRef.current !== generation
+            commandGenerationRef.current !== generation ||
+            !lease.isCurrent()
           )
             return;
           if (event.kind === "output" && event.chunk) {
@@ -189,7 +196,8 @@ export default function ConsoleRoute() {
           }
         },
       });
-      if (commandGenerationRef.current !== generation) return;
+      if (commandGenerationRef.current !== generation || !lease.isCurrent())
+        return;
       setCommand("");
       setHistory((previous) =>
         appendConsoleHistory(
@@ -205,7 +213,8 @@ export default function ConsoleRoute() {
         ),
       );
     } catch (e) {
-      if (commandGenerationRef.current !== generation) return;
+      if (commandGenerationRef.current !== generation || !lease.isCurrent())
+        return;
       setHistory((previous) =>
         appendConsoleHistory(
           previous,
@@ -222,13 +231,15 @@ export default function ConsoleRoute() {
     } finally {
       if (commandGenerationRef.current === generation) {
         activeOperationRef.current = null;
-        setRunning(false);
-        setOperationStatus(null);
-        setLiveOutput("");
-        inputRef.current?.focus();
+        lease.commit(() => {
+          setRunning(false);
+          setOperationStatus(null);
+          setLiveOutput("");
+          inputRef.current?.focus();
+        });
       }
     }
-  }, [authorizedTarget, command, running, t]);
+  }, [authorizedTarget, command, commandOperation, running, t]);
 
   const cancelRunning = useCallback(async () => {
     const operationId = activeOperationRef.current;
@@ -246,12 +257,14 @@ export default function ConsoleRoute() {
     }
     const generation = commandGenerationRef.current + 1;
     commandGenerationRef.current = generation;
+    const lease = commandOperation.begin();
     setPendingAction(null);
     setRunning(true);
     stickToOutputBottomRef.current = true;
     try {
       const result = await callApplyAction(pending.plan);
-      if (commandGenerationRef.current !== generation) return;
+      if (commandGenerationRef.current !== generation || !lease.isCurrent())
+        return;
       setHistory((previous) =>
         appendConsoleHistory(
           previous,
@@ -266,7 +279,8 @@ export default function ConsoleRoute() {
         ),
       );
     } catch (error) {
-      if (commandGenerationRef.current !== generation) return;
+      if (commandGenerationRef.current !== generation || !lease.isCurrent())
+        return;
       setHistory((previous) =>
         appendConsoleHistory(
           previous,
@@ -282,11 +296,13 @@ export default function ConsoleRoute() {
       );
     } finally {
       if (commandGenerationRef.current === generation) {
-        setRunning(false);
-        inputRef.current?.focus();
+        lease.commit(() => {
+          setRunning(false);
+          inputRef.current?.focus();
+        });
       }
     }
-  }, [pendingAction, running, t]);
+  }, [commandOperation, pendingAction, running, t]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {

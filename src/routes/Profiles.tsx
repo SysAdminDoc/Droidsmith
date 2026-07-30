@@ -25,6 +25,7 @@ import {
   useAuthorizedDevices,
   useTransportAuthorization,
 } from "../lib/useAuthorizedDevices";
+import { targetFingerprint, useTargetOperation } from "../lib/targetOperation";
 import {
   Badge,
   Button,
@@ -160,15 +161,27 @@ export default function ProfilesRoute() {
         ? device.transport_id === selectedTransportId
         : device.serial === selectedSerial,
     ) ?? null;
+  const selectedTargetIdentity = targetFingerprint(
+    selectedDevice ? deviceTarget(selectedDevice) : null,
+  );
   const selectedTarget = useMemo(
     () => (selectedDevice ? deviceTarget(selectedDevice) : null),
-    [selectedDevice],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [selectedTargetIdentity],
   );
   const {
     accepted: transportOverrideAccepted,
     setAccepted: setTransportOverrideAccepted,
     authorizedTarget,
   } = useTransportAuthorization(selectedTarget);
+  const inventoryOperation = useTargetOperation(
+    authorizedTarget,
+    "profile-inventory",
+  );
+  const importOperation = useTargetOperation(
+    authorizedTarget,
+    "profile-import",
+  );
 
   useEffect(() => {
     const stillPresent = authorizedDevices.find((device) =>
@@ -183,18 +196,16 @@ export default function ProfilesRoute() {
   }, [authorizedDevices, selectedSerial, selectedTransportId]);
 
   useEffect(() => {
-    let current = true;
     setSelectedPackages(new Set());
     setActions([]);
     setPreviewState({ kind: "idle" });
     setNotice(null);
     if (!authorizedTarget) {
       setInventory({ kind: "idle" });
-      return () => {
-        current = false;
-      };
+      return;
     }
 
+    const lease = inventoryOperation.begin();
     setInventory({ kind: "loading" });
     Promise.all([
       callListUsers(authorizedTarget),
@@ -202,22 +213,22 @@ export default function ProfilesRoute() {
       callGetDeviceInfo(authorizedTarget),
     ])
       .then(([users, packages, info]) => {
-        if (!current) return;
-        setInventory({ kind: "ready", users, packages, info });
-        const foreground = users.find((user) => user.current) ?? users[0];
-        setExplicitUser(foreground?.id ?? null);
+        lease.commit(() => {
+          setInventory({ kind: "ready", users, packages, info });
+          const foreground = users.find((user) => user.current) ?? users[0];
+          setExplicitUser(foreground?.id ?? null);
+        });
       })
       .catch((error: unknown) => {
-        if (!current) return;
-        setInventory({
-          kind: "error",
-          message: errorMessage(error),
-        });
+        lease.commit(() =>
+          setInventory({
+            kind: "error",
+            message: errorMessage(error),
+          }),
+        );
       });
-    return () => {
-      current = false;
-    };
-  }, [authorizedTarget]);
+    return () => void inventoryOperation.invalidate();
+  }, [authorizedTarget, inventoryOperation]);
 
   const visiblePackages = useMemo(() => {
     if (inventory.kind !== "ready") return [];
@@ -335,22 +346,27 @@ export default function ProfilesRoute() {
 
   async function importProfile() {
     if (!authorizedTarget) return;
+    const lease = importOperation.begin();
     setNotice(null);
     setPreviewState({ kind: "choosing" });
     try {
       const grant = await callSelectHostPath("profile_open");
-      if (!grant) {
-        setPreviewState({ kind: "idle" });
+      if (!grant || !lease.isCurrent()) {
+        lease.commit(() => setPreviewState({ kind: "idle" }));
         return;
       }
       setPreviewState({ kind: "loading", path: grant.local_path });
       const preview = await callInspectProfile(authorizedTarget, grant.id);
-      setPreviewState({ kind: "ready", path: grant.local_path, preview });
+      lease.commit(() =>
+        setPreviewState({ kind: "ready", path: grant.local_path, preview }),
+      );
     } catch (error) {
-      setPreviewState({
-        kind: "error",
-        message: errorMessage(error),
-      });
+      lease.commit(() =>
+        setPreviewState({
+          kind: "error",
+          message: errorMessage(error),
+        }),
+      );
     }
   }
 

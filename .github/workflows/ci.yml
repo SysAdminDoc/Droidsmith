@@ -36,6 +36,7 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run test:policy
+      - run: npm run test:target-lifecycle
       - run: npm run security:isolation
       - run: npm run ui:smoke
 

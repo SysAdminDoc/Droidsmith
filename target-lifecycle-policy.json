@@ -1,0 +1,109 @@
+{
+  "schemaVersion": 1,
+  "indirectTargetCalls": [
+    "callApplyAction",
+    "callApplyActionBatch",
+    "callFindGnirehtetSession",
+    "callGnirehtetSessionStatus",
+    "callJournalList",
+    "callLaunchScrcpy",
+    "callPlanAction",
+    "callPlanActionBatch",
+    "callPlanPack",
+    "callPlanRemoteFileMutation",
+    "callScrcpySessionStatus",
+    "callStopGnirehtet",
+    "callStopScrcpy"
+  ],
+  "callSites": {
+    "src/routes/Apps.tsx": [
+      "callApplyAction",
+      "callApplyActionBatch",
+      "callBackupPackage",
+      "callExportPackageApks",
+      "callExportRecoveryBaseline",
+      "callGetPackageMetadata",
+      "callInspectRecoveryBaseline",
+      "callInstallApk",
+      "callJournalList",
+      "callJournalUndo",
+      "callJournalUndoBatch",
+      "callListPackagesWithCapability",
+      "callListUsers",
+      "callObserveDeviceFingerprint",
+      "callPlanAction",
+      "callPlanActionBatch",
+      "callPreflightPackageBackup"
+    ],
+    "src/routes/BugreportCapture.tsx": ["callCaptureBugreport"],
+    "src/routes/Console.tsx": [
+      "callApplyAction",
+      "callPlanShellAction",
+      "callShellRun"
+    ],
+    "src/routes/Debloat.tsx": [
+      "callApplyAction",
+      "callExportRecoveryBaseline",
+      "callGetDeviceInfo",
+      "callListPackages",
+      "callListPacks",
+      "callListUsers",
+      "callPlanPack"
+    ],
+    "src/routes/Devices.tsx": ["callGetDeviceInfo"],
+    "src/routes/DeviceSettings.tsx": [
+      "callListDeviceSettings",
+      "callPutDeviceSetting"
+    ],
+    "src/routes/Logcat.tsx": ["callListProcesses", "callStreamLogcat"],
+    "src/routes/Mirror.tsx": [
+      "callLaunchScrcpy",
+      "callListPackages",
+      "callScrcpyCapabilities",
+      "callScrcpySessionStatus",
+      "callStopScrcpy"
+    ],
+    "src/routes/Profiles.tsx": [
+      "callGetDeviceInfo",
+      "callInspectProfile",
+      "callListPackages",
+      "callListUsers"
+    ],
+    "src/routes/apps/PermissionsPanel.tsx": [
+      "callListPermissions",
+      "callSetPermission"
+    ],
+    "src/routes/debloat/ApplyReview.tsx": ["callListRunningServices"],
+    "src/routes/debloat/PackPicker.tsx": ["callExportDevicePack"],
+    "src/routes/devices/DeviceControls.tsx": [
+      "callApplyDeviceControl",
+      "callJournalUndo",
+      "callTakeScreenshot"
+    ],
+    "src/routes/devices/DeviceDetail.tsx": ["callDisconnectDevice"],
+    "src/routes/devices/FileManager.tsx": [
+      "callApplyRemoteFileMutation",
+      "callListRemoteFiles",
+      "callPlanRemoteFileMutation",
+      "callPullFile",
+      "callPushFile"
+    ],
+    "src/routes/devices/InternetSharing.tsx": [
+      "callFindGnirehtetSession",
+      "callGnirehtetSessionStatus",
+      "callStartGnirehtet",
+      "callStopGnirehtet"
+    ],
+    "src/routes/devices/LayoutInspector.tsx": ["callCaptureLayout"],
+    "src/routes/devices/NetworkInspector.tsx": ["callListNetworkConnections"],
+    "src/routes/devices/PerfettoTraceCapture.tsx": [
+      "callCapturePerfettoTrace",
+      "callPerfettoCapabilities"
+    ],
+    "src/routes/devices/ProcessManager.tsx": [
+      "callApplyAction",
+      "callListProcesses",
+      "callPlanAction"
+    ]
+  }
+}

@@ -33,6 +33,7 @@ function main() {
   runNpm("typecheck");
   runNpm("test");
   runNpm("test:policy");
+  runNpm("test:target-lifecycle");
   runNpm("ui:smoke");
   run("cargo", [
     "fmt",

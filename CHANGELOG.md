@@ -25,6 +25,14 @@ each milestone tag.
 
 ### Fixed
 
+- **Target-bound device workflow lifecycle.** Device, Android-user, transport
+  generation, cancellation, and component lifetime now share one lease contract
+  across Apps, Debloat, Mirror, Console, Profiles, settings, and secondary
+  device tools. Late native-dialog, success, error, polling, and concurrent
+  package-metadata completions cannot overwrite a newly selected target. An
+  exact IPC call-site inventory and adversarial switch, disconnect, cancel,
+  unmount, user-change, and out-of-order tests now block lifecycle regressions
+  in CI and the release gate. (IMP-90)
 - **Release validation and frontend build-tool advisories.** The npm lockfile
   now matches the v0.9.12 manifests, and the version-policy regression test
   independently rejects drift or omission in every authoritative version

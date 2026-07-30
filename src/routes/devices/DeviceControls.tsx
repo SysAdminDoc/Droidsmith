@@ -9,6 +9,7 @@ import {
   callTakeScreenshot,
   type DeviceTarget,
 } from "../../lib/tauri";
+import { useTargetOperation } from "../../lib/targetOperation";
 import { useTransportAuthorization } from "../../lib/useAuthorizedDevices";
 import {
   Button,
@@ -53,6 +54,9 @@ export function DeviceControls({ target }: { target: DeviceTarget }) {
     authorizedTarget,
   } = useTransportAuthorization(target);
   const operationTarget = authorizedTarget ?? target;
+  const keyOperation = useTargetOperation(operationTarget, "remote-key");
+  const screenshotOperation = useTargetOperation(operationTarget, "screenshot");
+  const displayOperation = useTargetOperation(operationTarget, "display");
   const serial = target.serial;
   const [lastKey, setLastKey] = useState<string | null>(null);
   const [screenshotMsg, setScreenshotMsg] = useState<StatusMessage>(null);
@@ -64,105 +68,124 @@ export function DeviceControls({ target }: { target: DeviceTarget }) {
   >(null);
 
   useEffect(() => {
+    setLastKey(null);
+    setScreenshotMsg(null);
+    setScreenshotPath(null);
     setDisplayMsg(null);
     setDisplayRestoreEntryId(null);
   }, [target.connection_generation, target.serial, target.transport_id]);
 
   const sendKey = useCallback(
     async (keycode: number, label: string) => {
+      const lease = keyOperation.begin();
       try {
         await callApplyDeviceControl(operationTarget, [
           "input",
           "keyevent",
           String(keycode),
         ]);
-        setLastKey(label);
+        lease.commit(() => setLastKey(label));
       } catch {
-        setLastKey(t("devices.controls.keyFailed", { label }));
+        lease.commit(() =>
+          setLastKey(t("devices.controls.keyFailed", { label })),
+        );
       }
     },
-    [operationTarget, t],
+    [keyOperation, operationTarget, t],
   );
 
   const takeScreenshot = useCallback(async () => {
+    const lease = screenshotOperation.begin();
     try {
       const pathGrant = await callSelectHostPath(
         "screenshot_save",
         `screenshot-${serial.replace(/[<>:"/\\|?*]/gu, "_")}-${Date.now()}.png`,
       );
-      if (!pathGrant) {
-        setScreenshotMsg(null);
-        return;
-      }
+      if (!pathGrant || !lease.isCurrent()) return;
       setScreenshotPath(null);
       setScreenshotMsg({
         text: t("devices.controls.capturing"),
         tone: "neutral",
       });
       const artifact = await callTakeScreenshot(operationTarget, pathGrant.id);
-      setScreenshotMsg({
-        text: t("devices.controls.savedTo", { path: artifact.local_path }),
-        tone: "success",
+      lease.commit(() => {
+        setScreenshotMsg({
+          text: t("devices.controls.savedTo", { path: artifact.local_path }),
+          tone: "success",
+        });
+        setScreenshotPath(artifact.local_path);
       });
-      setScreenshotPath(artifact.local_path);
     } catch (e) {
-      setScreenshotPath(null);
-      setScreenshotMsg({
-        tone: "danger",
-        text: t("devices.controls.failed", {
-          message: errorMessage(e),
-        }),
+      lease.commit(() => {
+        setScreenshotPath(null);
+        setScreenshotMsg({
+          tone: "danger",
+          text: t("devices.controls.failed", {
+            message: errorMessage(e),
+          }),
+        });
       });
     }
-  }, [operationTarget, serial, t]);
+  }, [operationTarget, screenshotOperation, serial, t]);
 
   const applyDensity = useCallback(async () => {
     if (!density.trim()) return;
+    const lease = displayOperation.begin();
     try {
       const result = await callApplyDeviceControl(operationTarget, [
         "wm",
         "density",
         density.trim(),
       ]);
-      setDisplayRestoreEntryId(result.entry.id);
-      setDisplayMsg({
-        text: t("devices.controls.densitySet", { value: density.trim() }),
-        tone: "success",
+      lease.commit(() => {
+        setDisplayRestoreEntryId(result.entry.id);
+        setDisplayMsg({
+          text: t("devices.controls.densitySet", { value: density.trim() }),
+          tone: "success",
+        });
       });
     } catch (e) {
-      setDisplayMsg({
-        tone: "danger",
-        text: t("devices.controls.failed", {
-          message: errorMessage(e),
+      lease.commit(() =>
+        setDisplayMsg({
+          tone: "danger",
+          text: t("devices.controls.failed", {
+            message: errorMessage(e),
+          }),
         }),
-      });
+      );
     }
-  }, [operationTarget, density, t]);
+  }, [density, displayOperation, operationTarget, t]);
 
   const resetDensity = useCallback(async () => {
+    const lease = displayOperation.begin();
     try {
       const result = await callApplyDeviceControl(operationTarget, [
         "wm",
         "density",
         "reset",
       ]);
-      setDisplayRestoreEntryId(result.entry.id);
-      setDisplayMsg({
-        text: t("devices.controls.densityReset"),
-        tone: "success",
+      lease.commit(() => {
+        setDisplayRestoreEntryId(result.entry.id);
+        setDisplayMsg({
+          text: t("devices.controls.densityReset"),
+          tone: "success",
+        });
       });
     } catch (e) {
-      setDisplayMsg({
-        tone: "danger",
-        text: t("devices.controls.failed", {
-          message: errorMessage(e),
+      lease.commit(() =>
+        setDisplayMsg({
+          tone: "danger",
+          text: t("devices.controls.failed", {
+            message: errorMessage(e),
+          }),
         }),
-      });
+      );
     }
-  }, [operationTarget, t]);
+  }, [displayOperation, operationTarget, t]);
 
   const toggleForceDark = useCallback(
     async (enable: boolean) => {
+      const lease = displayOperation.begin();
       try {
         const result = await callApplyDeviceControl(operationTarget, [
           "settings",
@@ -171,43 +194,52 @@ export function DeviceControls({ target }: { target: DeviceTarget }) {
           "ui_night_mode",
           enable ? "2" : "1",
         ]);
-        setDisplayRestoreEntryId(result.entry.id);
-        setDisplayMsg({
-          text: enable
-            ? t("devices.controls.forceDarkEnabled")
-            : t("devices.controls.forceDarkDisabled"),
-          tone: "success",
+        lease.commit(() => {
+          setDisplayRestoreEntryId(result.entry.id);
+          setDisplayMsg({
+            text: enable
+              ? t("devices.controls.forceDarkEnabled")
+              : t("devices.controls.forceDarkDisabled"),
+            tone: "success",
+          });
         });
       } catch (e) {
-        setDisplayMsg({
-          tone: "danger",
-          text: t("devices.controls.failed", {
-            message: errorMessage(e),
+        lease.commit(() =>
+          setDisplayMsg({
+            tone: "danger",
+            text: t("devices.controls.failed", {
+              message: errorMessage(e),
+            }),
           }),
-        });
+        );
       }
     },
-    [operationTarget, t],
+    [displayOperation, operationTarget, t],
   );
 
   const restoreDisplayState = useCallback(async () => {
     if (displayRestoreEntryId === null) return;
+    const lease = displayOperation.begin();
     try {
       await callJournalUndo(operationTarget, displayRestoreEntryId);
-      setDisplayRestoreEntryId(null);
-      setDisplayMsg({
-        text: t("devices.controls.displayRestored"),
-        tone: "success",
+      lease.commit(() => {
+        setDisplayRestoreEntryId(null);
+        setDisplayMsg({
+          text: t("devices.controls.displayRestored"),
+          tone: "success",
+        });
       });
     } catch (error) {
-      setDisplayMsg({
-        tone: "danger",
-        text: t("devices.controls.restoreFailed", {
-          message: errorMessage(error),
+      lease.commit(() =>
+        setDisplayMsg({
+          tone: "danger",
+          text: t("devices.controls.restoreFailed", {
+            message: errorMessage(error),
+          }),
         }),
-      });
+      );
     }
-  }, [displayRestoreEntryId, operationTarget, t]);
+  }, [displayOperation, displayRestoreEntryId, operationTarget, t]);
 
   return (
     <div className="space-y-4">

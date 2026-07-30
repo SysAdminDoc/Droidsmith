@@ -16,6 +16,7 @@ import {
   useAuthorizedDevices,
   useTransportAuthorization,
 } from "../lib/useAuthorizedDevices";
+import { useTargetOperation } from "../lib/targetOperation";
 
 import {
   Badge,
@@ -44,6 +45,8 @@ export default function DeviceSettingsRoute() {
     setAccepted: setTransportOverrideAccepted,
     authorizedTarget,
   } = useTransportAuthorization(selectedTarget);
+  const loadOperation = useTargetOperation(authorizedTarget, "settings-load");
+  const writeOperation = useTargetOperation(authorizedTarget, "settings-write");
 
   const [settings, setSettings] = useState<DeviceSetting[] | null>(null);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
@@ -60,27 +63,34 @@ export default function DeviceSettingsRoute() {
     setDrafts({});
     setError(null);
     setLog([]);
+    setLoading(false);
+    setBusyId(null);
   }, [authorizedDevices, selectedTarget]);
 
   const loadSettings = useCallback(async () => {
     if (!authorizedTarget) return;
+    const lease = loadOperation.begin();
     setLoading(true);
     setError(null);
     try {
       const result = await callListDeviceSettings(authorizedTarget);
-      setSettings(result);
-      setDrafts(
-        Object.fromEntries(
-          result.map((setting) => [setting.id, setting.value ?? ""]),
-        ),
-      );
+      lease.commit(() => {
+        setSettings(result);
+        setDrafts(
+          Object.fromEntries(
+            result.map((setting) => [setting.id, setting.value ?? ""]),
+          ),
+        );
+      });
     } catch (loadError) {
-      setSettings(null);
-      setError(errorMessage(loadError));
+      lease.commit(() => {
+        setSettings(null);
+        setError(errorMessage(loadError));
+      });
     } finally {
-      setLoading(false);
+      lease.commit(() => setLoading(false));
     }
-  }, [authorizedTarget]);
+  }, [authorizedTarget, loadOperation]);
 
   useEffect(() => {
     void loadSettings();
@@ -89,6 +99,7 @@ export default function DeviceSettingsRoute() {
   const applyValue = useCallback(
     async (setting: DeviceSetting, value: string) => {
       if (!authorizedTarget) return;
+      const lease = writeOperation.begin();
       setBusyId(setting.id);
       setError(null);
       try {
@@ -97,33 +108,36 @@ export default function DeviceSettingsRoute() {
           setting.id,
           value,
         );
-        setSettings((current) =>
-          current
-            ? current.map((item) =>
-                item.id === setting.id
-                  ? { ...item, value: change.new_value }
-                  : item,
-              )
-            : current,
-        );
-        setDrafts((current) => ({
-          ...current,
-          [setting.id]: change.new_value,
-        }));
-        setLog((current) => [{ ...change, logId: nextLogId++ }, ...current]);
+        lease.commit(() => {
+          setSettings((current) =>
+            current
+              ? current.map((item) =>
+                  item.id === setting.id
+                    ? { ...item, value: change.new_value }
+                    : item,
+                )
+              : current,
+          );
+          setDrafts((current) => ({
+            ...current,
+            [setting.id]: change.new_value,
+          }));
+          setLog((current) => [{ ...change, logId: nextLogId++ }, ...current]);
+        });
       } catch (applyError) {
-        setError(errorMessage(applyError));
+        lease.commit(() => setError(errorMessage(applyError)));
       } finally {
-        setBusyId(null);
+        lease.commit(() => setBusyId(null));
       }
     },
-    [authorizedTarget],
+    [authorizedTarget, writeOperation],
   );
 
   // Undo a logged change by writing its captured previous value back.
   const revert = useCallback(
     async (entry: LogEntry) => {
       if (!authorizedTarget || entry.previous_value == null) return;
+      const lease = writeOperation.begin();
       setBusyId(entry.id);
       setError(null);
       try {
@@ -132,24 +146,29 @@ export default function DeviceSettingsRoute() {
           entry.id,
           entry.previous_value,
         );
-        setSettings((current) =>
-          current
-            ? current.map((item) =>
-                item.id === entry.id
-                  ? { ...item, value: change.new_value }
-                  : item,
-              )
-            : current,
-        );
-        setDrafts((current) => ({ ...current, [entry.id]: change.new_value }));
-        setLog((current) => [{ ...change, logId: nextLogId++ }, ...current]);
+        lease.commit(() => {
+          setSettings((current) =>
+            current
+              ? current.map((item) =>
+                  item.id === entry.id
+                    ? { ...item, value: change.new_value }
+                    : item,
+                )
+              : current,
+          );
+          setDrafts((current) => ({
+            ...current,
+            [entry.id]: change.new_value,
+          }));
+          setLog((current) => [{ ...change, logId: nextLogId++ }, ...current]);
+        });
       } catch (revertError) {
-        setError(errorMessage(revertError));
+        lease.commit(() => setError(errorMessage(revertError)));
       } finally {
-        setBusyId(null);
+        lease.commit(() => setBusyId(null));
       }
     },
-    [authorizedTarget],
+    [authorizedTarget, writeOperation],
   );
 
   return (

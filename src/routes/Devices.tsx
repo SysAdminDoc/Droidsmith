@@ -12,6 +12,10 @@ import {
   type DeviceTarget,
 } from "../lib/tauri";
 import { restartDeviceLifecycle, useDeviceStore } from "../lib/deviceStore";
+import {
+  TargetOperationCoordinator,
+  targetFingerprint,
+} from "../lib/targetOperation";
 
 import { Button, PaneHeader, StatePanel } from "./common";
 import HostDoctor from "./HostDoctor";
@@ -43,32 +47,47 @@ export default function DevicesRoute() {
   const [recovery, setRecovery] = useState<RecoveryState>({ kind: "idle" });
   const recoveryOperationRef = useRef<string | null>(null);
   const recoveryGenerationRef = useRef(0);
-  // Click device A then B: whichever callGetDeviceInfo resolves last must not
-  // win the detail panel; only the latest selection may write it.
-  const selectGenerationRef = useRef(0);
+  const selectedTargetRef = useRef<DeviceTarget | null>(null);
+  const [selectOperation] = useState(
+    () =>
+      new TargetOperationCoordinator(() =>
+        targetFingerprint(selectedTargetRef.current),
+      ),
+  );
 
   const refresh = useCallback(async () => {
     await restartDeviceLifecycle();
   }, []);
 
-  const selectDevice = useCallback(async (device: Device) => {
-    const generation = selectGenerationRef.current + 1;
-    selectGenerationRef.current = generation;
-    const target = deviceTarget(device);
-    setDetail({ kind: "loading", target });
-    try {
-      const info = await callGetDeviceInfo(target);
-      if (selectGenerationRef.current !== generation) return;
-      setDetail({ kind: "ok", info, target });
-    } catch (e) {
-      if (selectGenerationRef.current !== generation) return;
-      setDetail({
-        kind: "error",
-        target,
-        message: errorMessage(e),
-      });
-    }
-  }, []);
+  const selectDevice = useCallback(
+    async (device: Device) => {
+      const target = deviceTarget(device);
+      selectedTargetRef.current = target;
+      const lease = selectOperation.begin();
+      setDetail({ kind: "loading", target });
+      try {
+        const info = await callGetDeviceInfo(target);
+        lease.commit(() => setDetail({ kind: "ok", info, target }));
+      } catch (e) {
+        lease.commit(() =>
+          setDetail({
+            kind: "error",
+            target,
+            message: errorMessage(e),
+          }),
+        );
+      }
+    },
+    [selectOperation],
+  );
+
+  useEffect(
+    () => () => {
+      selectedTargetRef.current = null;
+      selectOperation.invalidate();
+    },
+    [selectOperation],
+  );
 
   useEffect(() => {
     if (detail.kind !== "idle" || state.kind !== "ok") return;
@@ -137,8 +156,12 @@ export default function DevicesRoute() {
         device.transport_id === detail.target.transport_id &&
         device.connection_generation === detail.target.connection_generation,
     );
-    if (!stillConnected) setDetail({ kind: "idle" });
-  }, [detail, state]);
+    if (!stillConnected) {
+      selectedTargetRef.current = null;
+      selectOperation.invalidate();
+      setDetail({ kind: "idle" });
+    }
+  }, [detail, selectOperation, state]);
 
   return (
     <>

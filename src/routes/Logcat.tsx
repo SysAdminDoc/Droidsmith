@@ -113,6 +113,10 @@ export default function LogcatRoute() {
     authorizedDevices,
   );
   const streamOperation = useTargetOperation(liveSelectedTarget);
+  const processOperation = useTargetOperation(
+    liveSelectedTarget,
+    "logcat-processes",
+  );
 
   const deviceIdentity = selectedTarget?.serial ?? null;
 
@@ -145,13 +149,14 @@ export default function LogcatRoute() {
       setProcessNames(new Map());
       return;
     }
-    let cancelled = false;
     const refresh = () => {
+      const lease = processOperation.begin();
       void callListProcesses(authorizedTarget)
         .then((processes) => {
-          if (cancelled) return;
-          setProcessNames(
-            new Map(processes.map((p) => [String(p.pid), p.name])),
+          lease.commit(() =>
+            setProcessNames(
+              new Map(processes.map((p) => [String(p.pid), p.name])),
+            ),
           );
         })
         .catch(() => {
@@ -162,10 +167,10 @@ export default function LogcatRoute() {
     refresh();
     const timer = window.setInterval(refresh, 4000);
     return () => {
-      cancelled = true;
+      processOperation.invalidate();
       window.clearInterval(timer);
     };
-  }, [authorizedTarget, needsProcessNames]);
+  }, [authorizedTarget, needsProcessNames, processOperation]);
 
   const startTailing = useCallback(() => {
     if (

@@ -49,7 +49,11 @@ import {
   useAuthorizedDevices,
   useTransportAuthorization,
 } from "../lib/useAuthorizedDevices";
-import { targetFingerprint } from "../lib/targetOperation";
+import {
+  targetFingerprint,
+  useTargetOperation,
+  useTargetOperationGroup,
+} from "../lib/targetOperation";
 
 import {
   canRunLegacyExport,
@@ -144,14 +148,7 @@ export default function AppsRoute() {
   const backupGenerationRef = useRef(0);
   const activeInstallRef = useRef<string | null>(null);
   const installGenerationRef = useRef(0);
-  const metadataGenerationRef = useRef(0);
   const metadataRequestedRef = useRef(new Set<string>());
-  const packagesRequestRef = useRef(0);
-  const usersRequestRef = useRef(0);
-  const journalRequestRef = useRef(0);
-  // Tracks the live selection so an in-flight journal undo can detect a
-  // mid-operation device switch before refreshing shared package/journal state.
-  const selectedSerialRef = useRef<string | null>(null);
   // Mirrors installState for the drag-drop listener, which is intentionally
   // not re-subscribed on every state change (drops during the unlisten window
   // would be lost).
@@ -182,6 +179,37 @@ export default function AppsRoute() {
     setAccepted: setTransportOverrideAccepted,
     authorizedTarget,
   } = useTransportAuthorization(selectedTarget);
+  const usersOperation = useTargetOperation(selectedTarget, "apps-users");
+  const packagesOperation = useTargetOperation(
+    selectedTarget,
+    `apps-packages:${selectedUser}:${filter}`,
+  );
+  const journalOperation = useTargetOperation(selectedTarget, "apps-journal");
+  const fingerprintOperation = useTargetOperation(
+    selectedTarget,
+    "apps-fingerprint",
+  );
+  const metadataOperations = useTargetOperationGroup(
+    selectedTarget,
+    `apps-metadata:${selectedUser}`,
+  );
+  const actionOperation = useTargetOperation(
+    authorizedTarget,
+    `apps-action:${selectedUser}`,
+  );
+  const backupOperation = useTargetOperation(
+    authorizedTarget,
+    `apps-backup:${selectedUser}`,
+  );
+  const installOperation = useTargetOperation(authorizedTarget, "apps-install");
+  const recoveryOperation = useTargetOperation(
+    authorizedTarget,
+    `apps-recovery:${selectedUser}`,
+  );
+  const undoOperation = useTargetOperation(
+    authorizedTarget,
+    `apps-undo:${selectedUser}`,
+  );
 
   // R-087: when a device's build fingerprint has changed since Droidsmith last
   // saw it (an OTA update), flag it so the user knows disabled/removed packages
@@ -197,6 +225,7 @@ export default function AppsRoute() {
       setOtaNotice(false);
       return;
     }
+    const lease = fingerprintOperation.begin();
     setOtaNotice(false);
     // One shared observation per device+fingerprint for the whole session.
     let pending = fingerprintObservations.get(key);
@@ -208,20 +237,25 @@ export default function AppsRoute() {
       .then((observation) => {
         // Ignore a result for a device the user has since switched away from,
         // or one that was dismissed while the observation was in flight.
-        if (
-          observation.changed &&
-          currentFingerprintKeyRef.current === key &&
-          !dismissedFingerprintNotices.has(key)
-        ) {
-          setOtaNotice(true);
-        }
+        lease.commit(() => {
+          if (
+            observation.changed &&
+            currentFingerprintKeyRef.current === key &&
+            !dismissedFingerprintNotices.has(key)
+          ) {
+            setOtaNotice(true);
+          }
+        });
       })
       .catch(() => {
         // A convenience signal; a failure must not disrupt the Apps route.
       });
-    // Re-check only when the selected device or its fingerprint changes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedDevice?.serial, selectedFingerprint]);
+  }, [
+    fingerprintOperation,
+    selectedDevice?.serial,
+    selectedFingerprint,
+    selectedTarget,
+  ]);
 
   const dismissOtaNotice = useCallback(() => {
     const key = currentFingerprintKeyRef.current;
@@ -242,35 +276,31 @@ export default function AppsRoute() {
       setUserError(null);
       return;
     }
-    // Rapid target switches can interleave callListUsers responses; only the
-    // most recent request may write the user selection (last-write guard).
-    const request = usersRequestRef.current + 1;
-    usersRequestRef.current = request;
+    const lease = usersOperation.begin();
     setUsersReady(false);
     setUserError(null);
     try {
       const found = await callListUsers(selectedTarget);
-      if (usersRequestRef.current !== request) return;
-      setUsers(found);
-      // The backend rejects empty or ambiguous discovery instead of
-      // fabricating user 0, so a resolved list always has a foreground user.
-      const foreground = found.find((u) => u.current) ?? found[0];
-      setSelectedUser(foreground.id);
-      setUsersReady(true);
+      lease.commit(() => {
+        setUsers(found);
+        // The backend rejects empty or ambiguous discovery instead of
+        // fabricating user 0, so a resolved list always has a foreground user.
+        const foreground = found.find((u) => u.current) ?? found[0];
+        setSelectedUser(foreground.id);
+        setUsersReady(true);
+      });
     } catch (e) {
-      if (usersRequestRef.current !== request) return;
-      setUsers([]);
-      setUserError(errorMessage(e));
+      lease.commit(() => {
+        setUsers([]);
+        setUserError(errorMessage(e));
+      });
     }
-  }, [selectedTarget]);
+  }, [selectedTarget, usersOperation]);
 
   const loadPackages = useCallback(async () => {
     if (!selectedTarget || !usersReady) return;
-    // Rapid filter/user/device switches can interleave responses; only the
-    // most recent request may write pkgState.
-    const request = packagesRequestRef.current + 1;
-    packagesRequestRef.current = request;
-    metadataGenerationRef.current += 1;
+    const lease = packagesOperation.begin();
+    metadataOperations.invalidate();
     metadataRequestedRef.current.clear();
     setPackageMetadata({});
     setPkgState({ kind: "loading" });
@@ -280,72 +310,78 @@ export default function AppsRoute() {
         filter,
         selectedUser,
       );
-      if (packagesRequestRef.current !== request) return;
-      setPkgState({
-        kind: "ok",
-        packages: listing.packages,
-        archive: listing.archive,
-      });
+      lease.commit(() =>
+        setPkgState({
+          kind: "ok",
+          packages: listing.packages,
+          archive: listing.archive,
+        }),
+      );
     } catch (e) {
-      if (packagesRequestRef.current !== request) return;
-      setPkgState({
-        kind: "error",
-        message: errorMessage(e),
-      });
+      lease.commit(() =>
+        setPkgState({
+          kind: "error",
+          message: errorMessage(e),
+        }),
+      );
     }
-  }, [selectedTarget, filter, selectedUser, usersReady]);
+  }, [
+    filter,
+    metadataOperations,
+    packagesOperation,
+    selectedTarget,
+    selectedUser,
+    usersReady,
+  ]);
 
   const requestPackageMetadata = useCallback(
     (packageName: string) => {
       if (!selectedTarget || !usersReady) return;
       if (metadataRequestedRef.current.has(packageName)) return;
       metadataRequestedRef.current.add(packageName);
-      const generation = metadataGenerationRef.current;
+      const lease = metadataOperations.begin(packageName);
       void callGetPackageMetadata(selectedTarget, packageName, selectedUser)
         .then((metadata) => {
-          if (metadataGenerationRef.current !== generation) return;
-          setPackageMetadata((current) => ({
-            ...current,
-            [packageName]: metadata,
-          }));
+          lease.commit(() =>
+            setPackageMetadata((current) => ({
+              ...current,
+              [packageName]: metadata,
+            })),
+          );
         })
         .catch(() => {
-          if (metadataGenerationRef.current !== generation) return;
           // Unsupported vendor resource shapes degrade to the package-name
           // fallback and are not retried until the package list refreshes.
-          setPackageMetadata((current) => ({
-            ...current,
-            [packageName]: null,
-          }));
+          lease.commit(() =>
+            setPackageMetadata((current) => ({
+              ...current,
+              [packageName]: null,
+            })),
+          );
         });
     },
-    [selectedTarget, selectedUser, usersReady],
+    [metadataOperations, selectedTarget, selectedUser, usersReady],
   );
-
-  useEffect(() => {
-    selectedSerialRef.current = selectedSerial;
-  }, [selectedSerial]);
 
   const loadJournal = useCallback(async () => {
     if (!selectedSerial) {
       setJournalState({ kind: "idle" });
       return;
     }
-    const request = journalRequestRef.current + 1;
-    journalRequestRef.current = request;
+    const lease = journalOperation.begin();
     setJournalState({ kind: "loading" });
     try {
       const entries = await callJournalList(selectedSerial);
-      if (journalRequestRef.current !== request) return;
-      setJournalState({ kind: "ok", entries });
+      lease.commit(() => setJournalState({ kind: "ok", entries }));
     } catch (e) {
-      if (journalRequestRef.current !== request) return;
-      setJournalState({
-        kind: "error",
-        message: errorMessage(e),
-      });
+      lease.commit(() =>
+        setJournalState({
+          kind: "error",
+          message: errorMessage(e),
+        }),
+      );
     }
-  }, [selectedSerial]);
+  }, [journalOperation, selectedSerial]);
 
   useEffect(() => {
     const current = authorizedDevices.find((device) =>
@@ -427,6 +463,7 @@ export default function AppsRoute() {
   const startAction = useCallback(
     async (pkg: string, kind: ActionKind) => {
       if (!selectedDevice || !authorizedTarget || !usersReady) return;
+      const lease = actionOperation.begin();
       try {
         const plan = await callPlanAction({
           serial: selectedDevice.serial,
@@ -435,15 +472,23 @@ export default function AppsRoute() {
           kind,
           user_id: selectedUser,
         });
-        setActionState({ kind: "confirming", plan });
+        lease.commit(() => setActionState({ kind: "confirming", plan }));
       } catch (e) {
-        setActionState({
-          kind: "error",
-          message: errorMessage(e),
-        });
+        lease.commit(() =>
+          setActionState({
+            kind: "error",
+            message: errorMessage(e),
+          }),
+        );
       }
     },
-    [authorizedTarget, selectedDevice, selectedUser, usersReady],
+    [
+      actionOperation,
+      authorizedTarget,
+      selectedDevice,
+      selectedUser,
+      usersReady,
+    ],
   );
 
   const startBatchAction = useCallback(
@@ -455,6 +500,7 @@ export default function AppsRoute() {
         selectedPackages.length < 2
       )
         return;
+      const lease = actionOperation.begin();
       try {
         const plan = await callPlanActionBatch(
           [...selectedPackages].sort().map((pkg) => ({
@@ -465,15 +511,18 @@ export default function AppsRoute() {
             user_id: selectedUser,
           })),
         );
-        setActionState({ kind: "confirming_batch", plan });
+        lease.commit(() => setActionState({ kind: "confirming_batch", plan }));
       } catch (error) {
-        setActionState({
-          kind: "error",
-          message: errorMessage(error),
-        });
+        lease.commit(() =>
+          setActionState({
+            kind: "error",
+            message: errorMessage(error),
+          }),
+        );
       }
     },
     [
+      actionOperation,
       authorizedTarget,
       selectedDevice,
       selectedPackages,
@@ -493,6 +542,7 @@ export default function AppsRoute() {
       // runs would silently orphan its completion/failure handling and make it
       // uncancellable.
       if (activeBackupRef.current) return;
+      const lease = backupOperation.begin();
       // Claim the generation before the first await so a device switch during
       // the preflight/save dialog invalidates this export before it starts.
       const generation = backupGenerationRef.current + 1;
@@ -506,7 +556,8 @@ export default function AppsRoute() {
             pkg,
             selectedUser,
           ));
-        if (backupGenerationRef.current !== generation) return;
+        if (backupGenerationRef.current !== generation || !lease.isCurrent())
+          return;
         if (mode === "legacy_data" && !canRunLegacyExport(preflight)) {
           setBackupNotice({
             title: t("apps.legacyBlockedTitle"),
@@ -522,7 +573,8 @@ export default function AppsRoute() {
           mode === "apk_export" ? "package_export_save" : "backup_save",
           packageExportDefaultFileName(pkg, mode),
         );
-        if (backupGenerationRef.current !== generation) return;
+        if (backupGenerationRef.current !== generation || !lease.isCurrent())
+          return;
         if (!pathGrant) {
           setBackupNotice({
             title: t("apps.exportCancelledTitle"),
@@ -537,6 +589,7 @@ export default function AppsRoute() {
         );
         startedOperationId = operationId;
         activeBackupRef.current = operationId;
+        lease.registerCancellation(operationId);
         setBackupNotice({
           title:
             mode === "apk_export"
@@ -561,7 +614,8 @@ export default function AppsRoute() {
           onEvent: (event: OperationEvent) => {
             if (
               activeBackupRef.current !== operationId ||
-              backupGenerationRef.current !== generation
+              backupGenerationRef.current !== generation ||
+              !lease.isCurrent()
             )
               return;
             setBackupNotice((previous) => {
@@ -608,7 +662,8 @@ export default function AppsRoute() {
                 pathGrant.id,
                 options,
               );
-        if (backupGenerationRef.current !== generation) return;
+        if (backupGenerationRef.current !== generation || !lease.isCurrent())
+          return;
         activeBackupRef.current = null;
         const displayState = packageExportDisplayState(result);
         const titleByState: Record<typeof displayState, string> = {
@@ -638,7 +693,8 @@ export default function AppsRoute() {
           evidence: result.manifest.eligibility,
         });
       } catch (e) {
-        if (backupGenerationRef.current !== generation) return;
+        if (backupGenerationRef.current !== generation || !lease.isCurrent())
+          return;
         if (
           startedOperationId &&
           activeBackupRef.current !== startedOperationId
@@ -654,12 +710,20 @@ export default function AppsRoute() {
         });
       }
     },
-    [authorizedTarget, selectedDevice, selectedUser, t, usersReady],
+    [
+      authorizedTarget,
+      backupOperation,
+      selectedDevice,
+      selectedUser,
+      t,
+      usersReady,
+    ],
   );
 
   const inspectLegacyExport = useCallback(
     async (pkg: string) => {
       if (!authorizedTarget || !usersReady) return;
+      const lease = backupOperation.begin();
       try {
         const preflight = await callPreflightPackageBackup(
           authorizedTarget,
@@ -667,30 +731,34 @@ export default function AppsRoute() {
           selectedUser,
         );
         const runnable = canRunLegacyExport(preflight);
-        setBackupNotice({
-          title: runnable
-            ? t("apps.legacyReviewTitle")
-            : t("apps.legacyBlockedTitle"),
-          message: preflight.evidence.reason,
-          tone:
-            preflight.legacy_capability === "legacy_data_eligible"
-              ? "info"
-              : "warning",
-          evidence: preflight.evidence,
-          showLimitations: true,
-          pendingLegacy: runnable ? { package: pkg, preflight } : undefined,
-        });
-      } catch (error) {
-        setBackupNotice({
-          title: t("apps.exportFailedTitle"),
-          message: t("apps.exportFailed", {
-            message: errorMessage(error),
+        lease.commit(() =>
+          setBackupNotice({
+            title: runnable
+              ? t("apps.legacyReviewTitle")
+              : t("apps.legacyBlockedTitle"),
+            message: preflight.evidence.reason,
+            tone:
+              preflight.legacy_capability === "legacy_data_eligible"
+                ? "info"
+                : "warning",
+            evidence: preflight.evidence,
+            showLimitations: true,
+            pendingLegacy: runnable ? { package: pkg, preflight } : undefined,
           }),
-          tone: "danger",
-        });
+        );
+      } catch (error) {
+        lease.commit(() =>
+          setBackupNotice({
+            title: t("apps.exportFailedTitle"),
+            message: t("apps.exportFailed", {
+              message: errorMessage(error),
+            }),
+            tone: "danger",
+          }),
+        );
       }
     },
-    [authorizedTarget, selectedUser, t, usersReady],
+    [authorizedTarget, backupOperation, selectedUser, t, usersReady],
   );
 
   const cancelBackup = useCallback(async () => {
@@ -709,10 +777,12 @@ export default function AppsRoute() {
       installOptions: InstallOptions,
     ) => {
       if (!selectedDevice || !authorizedTarget) return;
+      const lease = installOperation.begin();
       const operationId = newOperationId("install");
       const generation = installGenerationRef.current + 1;
       installGenerationRef.current = generation;
       activeInstallRef.current = operationId;
+      lease.registerCancellation(operationId);
       setInstallState({
         kind: "running",
         operationId,
@@ -729,7 +799,8 @@ export default function AppsRoute() {
             onEvent: (event: OperationEvent) => {
               if (
                 activeInstallRef.current !== operationId ||
-                installGenerationRef.current !== generation
+                installGenerationRef.current !== generation ||
+                !lease.isCurrent()
               )
                 return;
               setInstallState((previous) => {
@@ -754,14 +825,16 @@ export default function AppsRoute() {
             },
           },
         );
-        if (installGenerationRef.current !== generation) return;
+        if (installGenerationRef.current !== generation || !lease.isCurrent())
+          return;
         activeInstallRef.current = null;
         setInstallState({ kind: "result", localPath, result });
         if (result.succeeded) await loadPackages();
       } catch (error) {
         if (
           activeInstallRef.current !== operationId ||
-          installGenerationRef.current !== generation
+          installGenerationRef.current !== generation ||
+          !lease.isCurrent()
         )
           return;
         activeInstallRef.current = null;
@@ -771,14 +844,16 @@ export default function AppsRoute() {
         });
       }
     },
-    [authorizedTarget, loadPackages, selectedDevice, t],
+    [authorizedTarget, installOperation, loadPackages, selectedDevice, t],
   );
 
   const startInstall = useCallback(async () => {
     if (!selectedDevice) return;
+    const lease = installOperation.begin();
     setInstallState({ kind: "choosing" });
     try {
       const selected = await callSelectHostPath("install_open");
+      if (!lease.isCurrent()) return;
       if (!selected) {
         setInstallState({ kind: "idle" });
         return;
@@ -787,12 +862,14 @@ export default function AppsRoute() {
         incremental: incrementalInstall,
       });
     } catch (error) {
-      setInstallState({
-        kind: "error",
-        message: errorMessage(error),
-      });
+      lease.commit(() =>
+        setInstallState({
+          kind: "error",
+          message: errorMessage(error),
+        }),
+      );
     }
-  }, [incrementalInstall, runInstall, selectedDevice]);
+  }, [incrementalInstall, installOperation, runInstall, selectedDevice]);
 
   useEffect(() => {
     if (!inTauri() || !selectedDevice) return;
@@ -818,12 +895,15 @@ export default function AppsRoute() {
           });
           if (apkPaths.length === 0) return;
           const path = apkPaths[0];
+          const lease = installOperation.begin();
           try {
             const grant = await callGrantDroppedPath(path);
+            if (cancelled || !lease.isCurrent()) return;
             await runInstall(grant.id, grant.local_path, {
               incremental: incrementalInstall,
             });
           } catch (error) {
+            if (cancelled || !lease.isCurrent()) return;
             setInstallState({
               kind: "error",
               message: errorMessage(error),
@@ -839,7 +919,7 @@ export default function AppsRoute() {
       cancelled = true;
       unlisten?.();
     };
-  }, [incrementalInstall, runInstall, selectedDevice]);
+  }, [incrementalInstall, installOperation, runInstall, selectedDevice]);
 
   const cancelInstall = useCallback(async () => {
     const operationId = activeInstallRef.current;
@@ -881,47 +961,52 @@ export default function AppsRoute() {
     // Same mid-flight device-switch guard as the journal undo paths: a switch
     // while the action applies must not re-set panels/selection for the old
     // device or race the new device's package/journal loads.
-    const serial = selectedSerialRef.current;
+    const lease = actionOperation.begin();
     try {
       if (actionState.kind === "confirming_batch") {
         const plan = actionState.plan;
         setActionState({ kind: "applying_batch", plan });
         const result = await callApplyActionBatch(plan);
-        if (selectedSerialRef.current !== serial) return;
+        if (!lease.isCurrent()) return;
         const failures = batchFailures(result);
-        setSelectedPackages(failures.map((item) => item.package));
-        setActionState({
-          kind: "success",
-          message: t("apps.batchCompleted", {
-            succeeded: result.items.length - failures.length,
-            failed: failures.length,
-          }),
-          details: failures.map(
-            (item) => `${item.package}: ${item.error ?? t("common.unknown")}`,
-          ),
+        lease.commit(() => {
+          setSelectedPackages(failures.map((item) => item.package));
+          setActionState({
+            kind: "success",
+            message: t("apps.batchCompleted", {
+              succeeded: result.items.length - failures.length,
+              failed: failures.length,
+            }),
+            details: failures.map(
+              (item) => `${item.package}: ${item.error ?? t("common.unknown")}`,
+            ),
+          });
         });
       } else if (actionState.kind === "confirming") {
         const plan = actionState.plan;
         setActionState({ kind: "applying", plan });
         await callApplyAction(plan);
-        if (selectedSerialRef.current !== serial) return;
-        setActionState({
-          kind: "success",
-          message: t("apps.planCompleted", { description: plan.description }),
-        });
+        lease.commit(() =>
+          setActionState({
+            kind: "success",
+            message: t("apps.planCompleted", { description: plan.description }),
+          }),
+        );
       } else {
         return;
       }
+      if (!lease.isCurrent()) return;
       void loadPackages();
       void loadJournal();
     } catch (e) {
-      if (selectedSerialRef.current !== serial) return;
-      setActionState({
-        kind: "error",
-        message: errorMessage(e),
-      });
+      lease.commit(() =>
+        setActionState({
+          kind: "error",
+          message: errorMessage(e),
+        }),
+      );
     }
-  }, [actionState, loadJournal, loadPackages, t]);
+  }, [actionOperation, actionState, loadJournal, loadPackages, t]);
 
   const exportActionBaseline = useCallback(async () => {
     if (
@@ -936,6 +1021,7 @@ export default function AppsRoute() {
         : actionState.plan.plans;
     const first = plans[0];
     if (!first) return;
+    const lease = recoveryOperation.begin();
     setRecoveryState({
       kind: "busy",
       message: t("apps.recoveryExporting"),
@@ -947,6 +1033,7 @@ export default function AppsRoute() {
           ? recoveryFileName(first.request.package)
           : recoveryBatchFileName(plans.length),
       );
+      if (!lease.isCurrent()) return;
       if (!selected) {
         setRecoveryState({ kind: "idle" });
         return;
@@ -966,27 +1053,33 @@ export default function AppsRoute() {
           : null,
         selected.id,
       );
-      setRecoveryState({
-        kind: "saved",
-        path: artifact.local_path,
-        sha256: artifact.sha256,
-      });
+      lease.commit(() =>
+        setRecoveryState({
+          kind: "saved",
+          path: artifact.local_path,
+          sha256: artifact.sha256,
+        }),
+      );
     } catch (error) {
-      setRecoveryState({
-        kind: "error",
-        message: errorMessage(error),
-      });
+      lease.commit(() =>
+        setRecoveryState({
+          kind: "error",
+          message: errorMessage(error),
+        }),
+      );
     }
-  }, [actionState, authorizedTarget, t]);
+  }, [actionState, authorizedTarget, recoveryOperation, t]);
 
   const inspectRecoveryBaseline = useCallback(async () => {
     if (!authorizedTarget) return;
+    const lease = recoveryOperation.begin();
     setRecoveryState({
       kind: "busy",
       message: t("apps.recoveryInspecting"),
     });
     try {
       const selected = await callSelectHostPath("recovery_baseline_open");
+      if (!lease.isCurrent()) return;
       if (!selected) {
         setRecoveryState({ kind: "idle" });
         return;
@@ -995,21 +1088,21 @@ export default function AppsRoute() {
         authorizedTarget,
         selected.id,
       );
-      setRecoveryState({ kind: "review", diff });
+      lease.commit(() => setRecoveryState({ kind: "review", diff }));
     } catch (error) {
-      setRecoveryState({
-        kind: "error",
-        message: errorMessage(error),
-      });
+      lease.commit(() =>
+        setRecoveryState({
+          kind: "error",
+          message: errorMessage(error),
+        }),
+      );
     }
-  }, [authorizedTarget, t]);
+  }, [authorizedTarget, recoveryOperation, t]);
 
   const applyRecoveryBaseline = useCallback(async () => {
     if (recoveryState.kind !== "review") return;
     const { diff } = recoveryState;
-    // Mirror undoJournalEntry: a device switch mid-apply must stop the loop
-    // and must not overwrite the new device's recovery/package/journal state.
-    const serial = selectedSerialRef.current;
+    const lease = recoveryOperation.begin();
     setRecoveryState({
       kind: "busy",
       message: t("apps.recoveryApplying", { count: diff.plans.length }),
@@ -1017,44 +1110,53 @@ export default function AppsRoute() {
     let applied = 0;
     const failures: string[] = [];
     for (const plan of diff.plans) {
-      if (selectedSerialRef.current !== serial) return;
+      if (!lease.isCurrent()) return;
       try {
         await callApplyAction(plan);
+        if (!lease.isCurrent()) return;
         applied += 1;
       } catch (error) {
+        if (!lease.isCurrent()) return;
         failures.push(`${plan.request.package}: ${errorMessage(error)}`);
       }
     }
-    if (selectedSerialRef.current !== serial) return;
-    setRecoveryState({ kind: "result", diff, applied, failures });
+    if (
+      !lease.commit(() =>
+        setRecoveryState({ kind: "result", diff, applied, failures }),
+      )
+    )
+      return;
     await Promise.all([loadPackages(), loadJournal()]);
-  }, [loadJournal, loadPackages, recoveryState, t]);
+  }, [loadJournal, loadPackages, recoveryOperation, recoveryState, t]);
 
   const undoJournalEntry = useCallback(
     async (entry: JournalEntry) => {
       if (!selectedDevice || !authorizedTarget || !usersReady) return;
-      const serial = selectedDevice.serial;
+      const lease = undoOperation.begin();
       setUndoingEntryId(entry.id);
       try {
         await callJournalUndo(authorizedTarget, entry.id);
-        // Bail if the device switched mid-undo: refreshing here would clobber
-        // the newly selected device's package/journal state.
-        if (selectedSerialRef.current !== serial) return;
-        setActionState({
-          kind: "success",
-          message: t("apps.journalUndoCompleted", {
-            package: entry.applied.plan.request.package,
-          }),
-        });
+        if (
+          !lease.commit(() =>
+            setActionState({
+              kind: "success",
+              message: t("apps.journalUndoCompleted", {
+                package: entry.applied.plan.request.package,
+              }),
+            }),
+          )
+        )
+          return;
         await Promise.all([loadPackages(), loadJournal()]);
       } catch (e) {
-        if (selectedSerialRef.current !== serial) return;
-        setActionState({
-          kind: "error",
-          message: errorMessage(e),
-        });
+        lease.commit(() =>
+          setActionState({
+            kind: "error",
+            message: errorMessage(e),
+          }),
+        );
       } finally {
-        setUndoingEntryId(null);
+        lease.commit(() => setUndoingEntryId(null));
       }
     },
     [
@@ -1063,6 +1165,7 @@ export default function AppsRoute() {
       loadPackages,
       selectedDevice,
       t,
+      undoOperation,
       usersReady,
     ],
   );
@@ -1070,31 +1173,34 @@ export default function AppsRoute() {
   const undoJournalBatch = useCallback(
     async (batchId: string) => {
       if (!selectedDevice || !authorizedTarget || !usersReady) return;
-      const serial = selectedDevice.serial;
+      const lease = undoOperation.begin();
       setUndoingBatchId(batchId);
       try {
         const result = await callJournalUndoBatch(authorizedTarget, batchId);
-        if (selectedSerialRef.current !== serial) return;
+        if (!lease.isCurrent()) return;
         const failures = batchFailures(result);
-        setActionState({
-          kind: "success",
-          message: t("apps.batchUndoCompleted", {
-            succeeded: result.items.length - failures.length,
-            failed: failures.length,
-          }),
-          details: failures.map(
-            (item) => `${item.package}: ${item.error ?? t("common.unknown")}`,
-          ),
+        lease.commit(() => {
+          setActionState({
+            kind: "success",
+            message: t("apps.batchUndoCompleted", {
+              succeeded: result.items.length - failures.length,
+              failed: failures.length,
+            }),
+            details: failures.map(
+              (item) => `${item.package}: ${item.error ?? t("common.unknown")}`,
+            ),
+          });
         });
         await Promise.all([loadPackages(), loadJournal()]);
       } catch (error) {
-        if (selectedSerialRef.current !== serial) return;
-        setActionState({
-          kind: "error",
-          message: errorMessage(error),
-        });
+        lease.commit(() =>
+          setActionState({
+            kind: "error",
+            message: errorMessage(error),
+          }),
+        );
       } finally {
-        setUndoingBatchId(null);
+        lease.commit(() => setUndoingBatchId(null));
       }
     },
     [
@@ -1103,6 +1209,7 @@ export default function AppsRoute() {
       loadPackages,
       selectedDevice,
       t,
+      undoOperation,
       usersReady,
     ],
   );

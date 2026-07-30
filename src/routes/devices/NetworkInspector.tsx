@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import {
@@ -7,12 +7,14 @@ import {
   type DeviceTarget,
   type NetworkConnection,
 } from "../../lib/tauri";
+import { useTargetOperation } from "../../lib/targetOperation";
 import { Badge, Button, Card, EmptyState, FieldInput } from "../common";
 
 /** Read-only `ss -tunp` socket inspector for the selected device (IMP-67:
  *  extracted verbatim from the former Devices.tsx god-file). */
 export function NetworkInspector({ target }: { target: DeviceTarget }) {
   const { t } = useTranslation();
+  const refreshOperation = useTargetOperation(target, "network-inspector");
   const [connections, setConnections] = useState<NetworkConnection[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -21,19 +23,30 @@ export function NetworkInspector({ target }: { target: DeviceTarget }) {
     "idle",
   );
 
+  useEffect(() => {
+    setConnections([]);
+    setLoading(false);
+    setError(null);
+    setSearch("");
+    setCopyStatus("idle");
+  }, [target.connection_generation, target.serial, target.transport_id]);
+
   const refresh = useCallback(async () => {
+    const lease = refreshOperation.begin();
     setLoading(true);
     setError(null);
     try {
       const conns = await callListNetworkConnections(target);
-      setConnections(conns);
+      lease.commit(() => setConnections(conns));
     } catch (e) {
-      setConnections([]);
-      setError(errorMessage(e));
+      lease.commit(() => {
+        setConnections([]);
+        setError(errorMessage(e));
+      });
     } finally {
-      setLoading(false);
+      lease.commit(() => setLoading(false));
     }
-  }, [target]);
+  }, [refreshOperation, target]);
 
   const filtered = connections.filter((c) =>
     search

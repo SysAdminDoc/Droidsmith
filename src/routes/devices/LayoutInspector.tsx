@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import {
@@ -10,6 +10,7 @@ import {
   type LayoutAuditFinding,
   type LayoutNode,
 } from "../../lib/tauri";
+import { useTargetOperation } from "../../lib/targetOperation";
 import { Badge, Button, Card, EmptyState, FieldInput } from "../common";
 import { statusToneClass, type StatusMessage } from "./common";
 
@@ -19,6 +20,8 @@ type ExportFormat = "xml" | "json" | "txt";
  * accessibility audit (IMP-67, R-105). */
 export function LayoutInspector({ target }: { target: DeviceTarget }) {
   const { t } = useTranslation();
+  const captureOperation = useTargetOperation(target, "layout-capture");
+  const exportOperation = useTargetOperation(target, "layout-export");
   const [nodes, setNodes] = useState<LayoutNode[]>([]);
   const [rawXml, setRawXml] = useState("");
   const [densityDpi, setDensityDpi] = useState<number | null>(null);
@@ -29,31 +32,49 @@ export function LayoutInspector({ target }: { target: DeviceTarget }) {
   const [exportMsg, setExportMsg] = useState<StatusMessage>(null);
   const [search, setSearch] = useState("");
 
+  useEffect(() => {
+    setNodes([]);
+    setRawXml("");
+    setDensityDpi(null);
+    setFindings([]);
+    setSelectedNode(null);
+    setLoading(false);
+    setError(null);
+    setExportMsg(null);
+    setSearch("");
+  }, [target.connection_generation, target.serial, target.transport_id]);
+
   const capture = useCallback(async () => {
+    const lease = captureOperation.begin();
     setLoading(true);
     setError(null);
     setExportMsg(null);
     setSelectedNode(null);
     try {
       const snapshot = await callCaptureLayout(target);
-      setNodes(snapshot.nodes);
-      setRawXml(snapshot.raw_xml);
-      setDensityDpi(snapshot.density_dpi);
-      setFindings(snapshot.audit_findings);
+      lease.commit(() => {
+        setNodes(snapshot.nodes);
+        setRawXml(snapshot.raw_xml);
+        setDensityDpi(snapshot.density_dpi);
+        setFindings(snapshot.audit_findings);
+      });
     } catch (e) {
-      setNodes([]);
-      setRawXml("");
-      setDensityDpi(null);
-      setFindings([]);
-      setError(errorMessage(e));
+      lease.commit(() => {
+        setNodes([]);
+        setRawXml("");
+        setDensityDpi(null);
+        setFindings([]);
+        setError(errorMessage(e));
+      });
     } finally {
-      setLoading(false);
+      lease.commit(() => setLoading(false));
     }
-  }, [target]);
+  }, [captureOperation, target]);
 
   const exportCapture = useCallback(
     async (format: ExportFormat) => {
       if (!rawXml) return;
+      const lease = exportOperation.begin();
       setExportMsg(null);
       try {
         const generatedAt = new Date().toISOString();
@@ -80,22 +101,26 @@ export function LayoutInspector({ target }: { target: DeviceTarget }) {
           "layout_export_save",
           `${prefix}-${safeFilePart(target.serial)}-${Date.now()}.${format}`,
         );
-        if (!grant) return;
+        if (!grant || !lease.isCurrent()) return;
         const savedPath = await callSaveLayoutExport(grant.id, contents);
-        setExportMsg({
-          text: t("devices.layout.exported", { path: savedPath }),
-          tone: "success",
-        });
-      } catch (e) {
-        setExportMsg({
-          tone: "danger",
-          text: t("devices.layout.exportFailed", {
-            message: errorMessage(e),
+        lease.commit(() =>
+          setExportMsg({
+            text: t("devices.layout.exported", { path: savedPath }),
+            tone: "success",
           }),
-        });
+        );
+      } catch (e) {
+        lease.commit(() =>
+          setExportMsg({
+            tone: "danger",
+            text: t("devices.layout.exportFailed", {
+              message: errorMessage(e),
+            }),
+          }),
+        );
       }
     },
-    [densityDpi, findings, nodes, rawXml, target.serial, t],
+    [densityDpi, exportOperation, findings, nodes, rawXml, target.serial, t],
   );
 
   const goToNode = useCallback((index: number) => {

@@ -7,6 +7,7 @@ import {
   type DeviceTarget,
   type Pack,
 } from "../../lib/tauri";
+import { useTargetOperation } from "../../lib/targetOperation";
 import { useFocusTrap } from "../../lib/useFocusTrap";
 import { summarizePackSelection } from "../debloatPack";
 import { Badge, Button } from "../common";
@@ -41,6 +42,7 @@ export function DebloatApplyReview({
 }) {
   const { t } = useTranslation();
   const trapRef = useFocusTrap<HTMLDivElement>();
+  const serviceOperation = useTargetOperation(target, "running-services");
   const summary = summarizePackSelection(pack, selected);
   const [unsafeAcknowledged, setUnsafeAcknowledged] = useState(false);
   const hasUnsafe = summary.unsafeIds.length > 0;
@@ -60,7 +62,7 @@ export function DebloatApplyReview({
       return;
     }
     const probeList = packages.slice(0, MAX_SERVICE_PROBE);
-    let cancelled = false;
+    const lease = serviceOperation.begin();
     setServices({ kind: "loading" });
     void (async () => {
       try {
@@ -70,22 +72,22 @@ export function DebloatApplyReview({
             count: (await callListRunningServices(target, pkg)).length,
           })),
         );
-        if (cancelled) return;
-        setServices({
-          kind: "ready",
-          running: results.filter((entry) => entry.count > 0),
-          probed: probeList.length,
-          total: packages.length,
-        });
+        lease.commit(() =>
+          setServices({
+            kind: "ready",
+            running: results.filter((entry) => entry.count > 0),
+            probed: probeList.length,
+            total: packages.length,
+          }),
+        );
       } catch (error) {
-        if (cancelled) return;
-        setServices({ kind: "error", message: errorMessage(error) });
+        lease.commit(() =>
+          setServices({ kind: "error", message: errorMessage(error) }),
+        );
       }
     })();
-    return () => {
-      cancelled = true;
-    };
-  }, [target, selected]);
+    return () => void serviceOperation.invalidate();
+  }, [serviceOperation, target, selected]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {

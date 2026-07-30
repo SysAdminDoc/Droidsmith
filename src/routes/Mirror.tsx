@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import {
@@ -18,11 +18,11 @@ import {
 } from "../lib/tauri";
 import {
   resolveAuthorizedTarget,
-  sameDeviceTarget,
   useAuthorizedDevices,
   useTransportAuthorization,
 } from "../lib/useAuthorizedDevices";
 import { formatDateTime } from "../lib/i18n";
+import { useTargetOperation } from "../lib/targetOperation";
 import {
   loadStoredMirrorPreset,
   resetStoredMirrorPreset,
@@ -95,6 +95,19 @@ export default function MirrorRoute() {
     kind: "idle",
   });
   const [capabilityProbeRevision, setCapabilityProbeRevision] = useState(0);
+  const inventoryOperation = useTargetOperation(
+    authorizedTarget,
+    "mirror-app-inventory",
+  );
+  const capabilityOperation = useTargetOperation(
+    selectedTarget,
+    `mirror-capabilities:${capabilityProbeRevision}`,
+  );
+  const presetOperation = useTargetOperation(selectedTarget, "mirror-preset");
+  const sessionOperation = useTargetOperation(
+    authorizedTarget,
+    "mirror-session",
+  );
   const [preset, setPreset] = useState<MirrorPreset>(DEFAULT_MIRROR_PRESET);
   const [presetMessage, setPresetMessage] = useState<string | null>(null);
   // On-demand package inventory for the launch-app (--start-app) picker.
@@ -104,23 +117,24 @@ export default function MirrorRoute() {
     | { kind: "ready"; packages: string[] }
     | { kind: "error"; message: string }
   >({ kind: "idle" });
-  // Tracks the live selection so a launch that awaited the recording save
-  // dialog can detect a mid-dialog device change (e.g. an automatic reconnect).
-  const selectedTargetRef = useRef<DeviceTarget | null>(null);
-
   const loadAppInventory = useCallback(async () => {
     if (!authorizedTarget) return;
+    const lease = inventoryOperation.begin();
     setAppInventory({ kind: "loading" });
     try {
       const packages = await callListPackages(authorizedTarget, "all");
-      setAppInventory({
-        kind: "ready",
-        packages: packages.map((entry) => entry.package).sort(),
-      });
+      lease.commit(() =>
+        setAppInventory({
+          kind: "ready",
+          packages: packages.map((entry) => entry.package).sort(),
+        }),
+      );
     } catch (error) {
-      setAppInventory({ kind: "error", message: errorMessage(error) });
+      lease.commit(() =>
+        setAppInventory({ kind: "error", message: errorMessage(error) }),
+      );
     }
-  }, [authorizedTarget]);
+  }, [authorizedTarget, inventoryOperation]);
 
   const checkScrcpy = useCallback(async () => {
     if (!inTauri()) return;
@@ -148,12 +162,11 @@ export default function MirrorRoute() {
   }, [authorizedDevices]);
 
   useEffect(() => {
-    selectedTargetRef.current = selectedTarget;
-  }, [selectedTarget]);
-
-  useEffect(() => {
-    if (!selectedTarget) return;
-    let cancelled = false;
+    if (!selectedTarget) {
+      setAppInventory({ kind: "idle" });
+      return;
+    }
+    const lease = presetOperation.begin();
     setPresetMessage(null);
     // A mirror session belongs to a specific device — reset tracking when
     // the target changes so the UI doesn't show device A's running session
@@ -161,49 +174,49 @@ export default function MirrorRoute() {
     // window keeps running independently.
     setSession({ kind: "idle" });
     setRecordingPath(null);
+    setAppInventory({ kind: "idle" });
     setPreset(DEFAULT_MIRROR_PRESET);
     void loadStoredMirrorPreset(selectedTarget.serial)
       .then((stored) => {
-        if (!cancelled) setPreset(stored);
+        lease.commit(() => setPreset(stored));
       })
       .catch((error) => {
-        if (!cancelled) {
+        lease.commit(() => {
           setPreset(DEFAULT_MIRROR_PRESET);
           setPresetMessage(
             t("mirror.presetLoadFailed", {
               message: errorMessage(error),
             }),
           );
-        }
+        });
       });
-    return () => {
-      cancelled = true;
-    };
-  }, [selectedTarget, t]);
+  }, [presetOperation, selectedTarget, t]);
 
   useEffect(() => {
     if (scrcpyState.kind !== "found" || !selectedTarget) {
       setCapabilityState({ kind: "idle" });
       return;
     }
-    let cancelled = false;
+    const lease = capabilityOperation.begin();
     setCapabilityState({ kind: "checking" });
     void callScrcpyCapabilities(selectedTarget)
       .then((value) => {
-        if (!cancelled) setCapabilityState({ kind: "ready", value });
+        lease.commit(() => setCapabilityState({ kind: "ready", value }));
       })
       .catch((error) => {
-        if (!cancelled) {
+        lease.commit(() => {
           setCapabilityState({
             kind: "error",
             message: errorMessage(error),
           });
-        }
+        });
       });
-    return () => {
-      cancelled = true;
-    };
-  }, [capabilityProbeRevision, scrcpyState.kind, selectedTarget]);
+  }, [
+    capabilityOperation,
+    capabilityProbeRevision,
+    scrcpyState.kind,
+    selectedTarget,
+  ]);
 
   useEffect(() => {
     if (capabilityState.kind !== "ready") return;
@@ -230,68 +243,81 @@ export default function MirrorRoute() {
   useEffect(() => {
     if (runningSessionId === null) return;
     const timer = window.setInterval(() => {
+      const lease = sessionOperation.begin();
       void callScrcpySessionStatus(runningSessionId)
         .then((next) => {
-          setSession((current) => {
-            if (
-              current.kind !== "running" ||
-              current.session.id !== runningSessionId
-            ) {
-              return current;
-            }
-            return next.state === "running"
-              ? { kind: "running", session: next }
-              : { kind: "ended", session: next };
-          });
+          lease.commit(() =>
+            setSession((current) => {
+              if (
+                current.kind !== "running" ||
+                current.session.id !== runningSessionId
+              ) {
+                return current;
+              }
+              return next.state === "running"
+                ? { kind: "running", session: next }
+                : { kind: "ended", session: next };
+            }),
+          );
         })
         .catch((e) => {
           // Guard like the success path: a status poll for a superseded
           // session must not clobber a freshly-launched one.
-          setSession((current) => {
-            if (
-              current.kind !== "running" ||
-              current.session.id !== runningSessionId
-            ) {
-              return current;
-            }
-            return { kind: "error", message: errorMessage(e) };
-          });
+          lease.commit(() =>
+            setSession((current) => {
+              if (
+                current.kind !== "running" ||
+                current.session.id !== runningSessionId
+              ) {
+                return current;
+              }
+              return { kind: "error", message: errorMessage(e) };
+            }),
+          );
         });
     }, 2000);
     return () => window.clearInterval(timer);
-  }, [runningSessionId]);
+  }, [runningSessionId, sessionOperation]);
 
   const savePreset = useCallback(async () => {
     if (!selectedTarget) return;
+    const lease = presetOperation.begin();
     try {
       await saveStoredMirrorPreset(selectedTarget.serial, preset);
-      setPresetMessage(
-        t("mirror.presetSaved", { serial: selectedTarget.serial }),
+      lease.commit(() =>
+        setPresetMessage(
+          t("mirror.presetSaved", { serial: selectedTarget.serial }),
+        ),
       );
     } catch (error) {
-      setPresetMessage(
-        t("mirror.presetSaveFailed", {
-          message: errorMessage(error),
-        }),
+      lease.commit(() =>
+        setPresetMessage(
+          t("mirror.presetSaveFailed", {
+            message: errorMessage(error),
+          }),
+        ),
       );
     }
-  }, [preset, selectedTarget, t]);
+  }, [preset, presetOperation, selectedTarget, t]);
 
   const resetPreset = useCallback(async () => {
+    const lease = presetOperation.begin();
     setPreset(DEFAULT_MIRROR_PRESET);
     try {
       if (selectedTarget) {
         await resetStoredMirrorPreset(selectedTarget.serial);
       }
-      setPresetMessage(t("mirror.presetReset"));
+      lease.commit(() => setPresetMessage(t("mirror.presetReset")));
     } catch (error) {
-      setPresetMessage(
-        t("mirror.presetSaveFailed", {
-          message: errorMessage(error),
-        }),
+      lease.commit(() =>
+        setPresetMessage(
+          t("mirror.presetSaveFailed", {
+            message: errorMessage(error),
+          }),
+        ),
       );
     }
-  }, [selectedTarget, t]);
+  }, [presetOperation, selectedTarget, t]);
 
   const launchMirror = useCallback(async () => {
     if (
@@ -301,6 +327,7 @@ export default function MirrorRoute() {
       capabilityState.kind !== "ready"
     )
       return;
+    const lease = sessionOperation.begin();
     setSession({ kind: "launching" });
     try {
       const recordingGrant = preset.recording
@@ -309,16 +336,9 @@ export default function MirrorRoute() {
             `droidsmith-recording-${new Date().toISOString().slice(0, 10)}.mp4`,
           )
         : null;
+      if (!lease.isCurrent()) return;
       if (preset.recording && !recordingGrant) {
         setSession({ kind: "idle" });
-        return;
-      }
-      // If the selection changed while the save dialog was open, abandon this
-      // launch so we don't start (and record) a session against a stale device.
-      if (!sameDeviceTarget(selectedTargetRef.current, selectedTarget)) {
-        setSession((current) =>
-          current.kind === "launching" ? { kind: "idle" } : current,
-        );
         return;
       }
       setRecordingPath(recordingGrant?.local_path ?? null);
@@ -363,29 +383,27 @@ export default function MirrorRoute() {
         },
         recordingGrant?.id,
       );
-      if (!sameDeviceTarget(selectedTargetRef.current, selectedTarget)) {
+      if (!lease.isCurrent()) {
         // The backend validated and launched the original immutable target,
         // but that session no longer belongs to the visible selection. Stop it
         // immediately so a late response cannot leave an untracked window or
         // recording running for the previous device.
         try {
           await callStopScrcpy(next.id);
-        } catch (error) {
-          setSession({
-            kind: "error",
-            message: t("mirror.staleSessionCleanupFailed", {
-              message: errorMessage(error),
-            }),
-          });
+        } catch {
+          // The visible target owns a different lifecycle; never surface a
+          // stale cleanup failure over its session state.
         }
         return;
       }
-      setSession({ kind: "running", session: next });
+      lease.commit(() => setSession({ kind: "running", session: next }));
     } catch (e) {
-      setSession({
-        kind: "error",
-        message: errorMessage(e),
-      });
+      lease.commit(() =>
+        setSession({
+          kind: "error",
+          message: errorMessage(e),
+        }),
+      );
     }
   }, [
     authorizedTarget,
@@ -393,21 +411,24 @@ export default function MirrorRoute() {
     selectedTarget,
     scrcpyState,
     preset,
-    t,
+    sessionOperation,
   ]);
 
   const stopMirror = useCallback(async () => {
     if (session.kind !== "running") return;
+    const lease = sessionOperation.begin();
     try {
       const stopped = await callStopScrcpy(session.session.id);
-      setSession({ kind: "ended", session: stopped });
+      lease.commit(() => setSession({ kind: "ended", session: stopped }));
     } catch (e) {
-      setSession({
-        kind: "error",
-        message: errorMessage(e),
-      });
+      lease.commit(() =>
+        setSession({
+          kind: "error",
+          message: errorMessage(e),
+        }),
+      );
     }
-  }, [session]);
+  }, [session, sessionOperation]);
 
   return (
     <>
