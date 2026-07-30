@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { env, execPath, platform, stdout } from "node:process";
@@ -19,6 +20,7 @@ verifyFrontendDist();
 run(execPath, [path.join(repoRoot, "scripts", "check-tauri-resources.mjs")]);
 verifyBundleMetadata();
 verifyThirdPartyNotices();
+verifyPublicReleaseUpgrade();
 runNpmScript("tauri:build");
 verifyArtifacts();
 
@@ -202,6 +204,34 @@ function verifyThirdPartyNotices() {
     );
     assert(Boolean(notice.source), `Missing source URL/path for ${id}`);
     assert(Boolean(notice.usage), `Missing usage note for ${id}`);
+  }
+}
+
+function verifyPublicReleaseUpgrade() {
+  const scratchRoot = fs.mkdtempSync(
+    path.join(os.tmpdir(), "droidsmith-upgrade-smoke-"),
+  );
+  const workDir = path.join(scratchRoot, "isolated-store");
+  try {
+    run("cargo", [
+      "run",
+      "--quiet",
+      "--locked",
+      "--manifest-path",
+      path.join(tauriDir, "Cargo.toml"),
+      "--bin",
+      "droidsmith-upgrade-check",
+      "--",
+      path.join(tauriDir, "fixtures", "upgrade", "v0.5.3"),
+      workDir,
+    ]);
+  } finally {
+    const resolved = path.resolve(scratchRoot);
+    assert(
+      resolved.startsWith(`${path.resolve(os.tmpdir())}${path.sep}`),
+      `Refusing to remove upgrade scratch outside OS temp: ${resolved}`,
+    );
+    fs.rmSync(resolved, { recursive: true, force: true });
   }
 }
 

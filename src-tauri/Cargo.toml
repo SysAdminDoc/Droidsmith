@@ -70,6 +70,10 @@ path = "src/bin/droidsmith_cli.rs"
 name = "droidsmith-bindings"
 path = "src/bin/generate_bindings.rs"
 
+[[bin]]
+name = "droidsmith-upgrade-check"
+path = "src/bin/upgrade_check.rs"
+
 [[test]]
 name = "fake_tool_contract"
 path = "tests/fake_tool_contract.rs"

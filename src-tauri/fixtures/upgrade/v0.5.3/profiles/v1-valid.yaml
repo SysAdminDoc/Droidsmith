@@ -1,0 +1,10 @@
+name: "Legacy release gate profile fixture"
+version: "1"
+description: "Proves that profile v1 remains explicitly migratable to v2."
+device:
+  require_manufacturer: "Google"
+actions:
+  - kind: disable
+    package: com.android.bookmarkprovider
+    note: "Backward-compatibility fixture"
+    user: 0

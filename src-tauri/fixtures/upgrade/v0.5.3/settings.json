@@ -1,0 +1,40 @@
+{
+  "version": "1",
+  "legacyImportComplete": true,
+  "language": "ru",
+  "mirrorPresets": {
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa": {
+      "maxSize": "1920",
+      "bitRate": "12M",
+      "noAudio": false,
+      "recording": false,
+      "keyboardMode": "uhid",
+      "videoCodec": "h265",
+      "videoEncoder": "c2.vendor.encoder",
+      "turnScreenOff": true,
+      "stayAwake": true,
+      "showTouches": false
+    }
+  },
+  "logcatQueries": {
+    "global": [
+      {
+        "id": "v053-errors",
+        "name": "Release errors",
+        "tagFilter": "PackageManager",
+        "messageFilter": "",
+        "pidFilter": "",
+        "packageFilter": "",
+        "processFilter": "",
+        "minLevel": "W",
+        "maxAgeSeconds": 3600,
+        "useRegex": false,
+        "negateTag": false,
+        "negateMessage": false,
+        "negatePid": false,
+        "negatePackage": false,
+        "negateProcess": false
+      }
+    ]
+  }
+}

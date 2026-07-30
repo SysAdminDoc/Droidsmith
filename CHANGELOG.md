@@ -16,6 +16,12 @@ each milestone tag.
 
 ### Added
 
+- **Public-release upgrade preservation gate.** A byte-for-byte v0.5.3 fixture
+  now exercises historical settings, journals, v1/v2 profiles, and recovery
+  baselines through current loaders in an isolated temporary store. The release
+  smoke takes and atomically restores a full pre-migration backup, repeats the
+  upgrade to prove idempotence, and verifies that future-version documents fail
+  closed without touching real application data. (IMP-91)
 - **Tracked multi-platform quality gates.** SHA-pinned GitHub Actions now run
   frontend, rendered-route, native Rust, dependency, license, and IPC isolation
   checks on pushes and pull requests. A scheduled/manual matrix builds and

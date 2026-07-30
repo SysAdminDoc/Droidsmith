@@ -35,6 +35,7 @@ mod scrcpy;
 pub mod settings;
 mod support_bundle;
 pub mod time;
+pub mod upgrade;
 
 use commands::{
     analyze_apk, apply_action, apply_action_batch, apply_device_control,

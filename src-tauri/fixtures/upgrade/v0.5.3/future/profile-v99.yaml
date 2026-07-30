@@ -1,0 +1,7 @@
+name: "Future profile"
+version: "99"
+description: "Must not be interpreted by an older Droidsmith build."
+device: {}
+user:
+  mode: owner
+actions: []

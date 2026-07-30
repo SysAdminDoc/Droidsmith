@@ -1,0 +1,21 @@
+{
+  "format": "droidsmith_recovery_baseline",
+  "schema_version": 99,
+  "exported_at": "2026-07-17T12:00:00Z",
+  "device": {
+    "identity_sha256": "02fc10cf6f1d6b2e1b6cc17787a4b90f05da6311b7c81b03a3c19a3a480cc6fe",
+    "build_fingerprint": "future/build"
+  },
+  "android_user": 0,
+  "pack": null,
+  "packages": [
+    {
+      "package": "com.android.bookmarkprovider",
+      "present": true,
+      "enabled": true,
+      "system": true,
+      "requested_action": "disable",
+      "undo_plan": null
+    }
+  ]
+}

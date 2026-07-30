@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "sourceVersion": "0.5.3",
+  "journals": [
+    {
+      "serial": "ABC123",
+      "expectedEntries": 1
+    }
+  ],
+  "profiles": [
+    {
+      "path": "profiles/v1-valid.yaml",
+      "kind": "migration_available"
+    },
+    {
+      "path": "profiles/v2-valid.yaml",
+      "kind": "current"
+    }
+  ],
+  "recoveryBaselines": [
+    {
+      "path": "recovery-baselines/v1-valid.json",
+      "expectedPackages": 1
+    }
+  ],
+  "futureSettingsStore": "future/settings-store",
+  "futureProfile": "future/profile-v99.yaml",
+  "futureRecoveryBaseline": "future/recovery-baseline-v99.json"
+}

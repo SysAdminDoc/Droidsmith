@@ -1202,7 +1202,17 @@ fn initialize_locked(
                     legacy_cleanup_allowed: settings.legacy_import_complete,
                 });
             }
-            Err(_) => quarantine_corrupt_file(app_data_dir, &path)?,
+            Err(error) => {
+                // A syntactically valid store from a newer (or otherwise
+                // unsupported) schema is not corruption. Quarantining it and
+                // writing defaults would silently discard future-version
+                // preferences during a downgrade. Leave every byte in place
+                // and fail closed until an explicit migration exists.
+                if explicit_unsupported_version(&path) {
+                    return Err(error);
+                }
+                quarantine_corrupt_file(app_data_dir, &path)?;
+            }
         }
         let settings = import_legacy(app_data_dir, legacy)?;
         return Ok(SettingsLoadResult {
@@ -1292,6 +1302,19 @@ fn read_valid_document(path: &Path) -> Result<SettingsDocument, SettingsError> {
         serde_json::from_str(&text).map_err(|error| SettingsError::Invalid(error.to_string()))?;
     validate_document(&settings)?;
     Ok(settings)
+}
+
+fn explicit_unsupported_version(path: &Path) -> bool {
+    crate::fs_util::read_to_string_limited(path, MAX_SETTINGS_BYTES)
+        .ok()
+        .and_then(|text| serde_json::from_str::<serde_json::Value>(&text).ok())
+        .and_then(|value| {
+            value
+                .get("version")
+                .and_then(serde_json::Value::as_str)
+                .map(str::to_owned)
+        })
+        .is_some_and(|version| version != SETTINGS_VERSION)
 }
 
 fn validate_document(settings: &SettingsDocument) -> Result<(), SettingsError> {
@@ -1891,6 +1914,26 @@ mod tests {
                 .to_string_lossy()
                 .starts_with("settings-corrupt-")
         }));
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn future_settings_fail_closed_without_quarantine_or_rewrite() {
+        let dir = temp_dir("future");
+        let path = dir.join(SETTINGS_FILE);
+        let future = br#"{
+  "version": "99",
+  "legacyImportComplete": true,
+  "futureOnly": {"preserve": true}
+}"#;
+        fs::write(&path, future).unwrap();
+
+        let error = initialize(&dir, LegacySettingsImport::default())
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("unknown field") || error.contains("unsupported settings version"));
+        assert_eq!(fs::read(&path).unwrap(), future);
+        assert_eq!(fs::read_dir(&dir).unwrap().count(), 1);
         fs::remove_dir_all(dir).unwrap();
     }
 
