@@ -14,6 +14,15 @@ completion.
 Working batches live here. Sections collapse into a versioned release on
 each milestone tag.
 
+### Added
+
+- **Tracked multi-platform quality gates.** SHA-pinned GitHub Actions now run
+  frontend, rendered-route, native Rust, dependency, license, and IPC isolation
+  checks on pushes and pull requests. A scheduled/manual matrix builds and
+  validates unsigned bundles on Windows, macOS, and Linux. Dependabot groups and
+  rate-limits npm, Cargo, and workflow updates, while the local release policy
+  rejects missing required jobs or mutable action tags. (IMP-89)
+
 ### Fixed
 
 - **Release validation and frontend build-tool advisories.** The npm lockfile

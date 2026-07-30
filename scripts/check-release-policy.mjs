@@ -129,6 +129,7 @@ function validatePolicy() {
   validatePlatformToolsPolicy();
   validateLanguageContract();
   validateSubprocessCaptureContract();
+  validateAutomationPolicy();
 }
 
 function validateRendererBundlePolicy(policy) {
@@ -594,6 +595,77 @@ export function validateVersionValues(versions) {
   assert(
     distinct.size === 1 && !distinct.has(undefined),
     `release versions differ: ${JSON.stringify(versions)}`,
+  );
+}
+
+function validateAutomationPolicy() {
+  validateAutomationFiles(
+    fs.readFileSync(
+      path.join(repoRoot, ".github", "workflows", "ci.yml"),
+      "utf8",
+    ),
+    fs.readFileSync(path.join(repoRoot, ".github", "dependabot.yml"), "utf8"),
+  );
+}
+
+export function validateAutomationFiles(ciWorkflow, dependabot) {
+  const requiredWorkflowMarkers = [
+    "pull_request:",
+    "push:",
+    "schedule:",
+    "workflow_dispatch:",
+    "permissions:\n  contents: read",
+    "\n  frontend:\n",
+    "\n  native:\n",
+    "\n  security:\n",
+    "\n  release-smoke:\n",
+    "os: [ubuntu-latest, windows-latest, macos-latest]",
+    "npm ci",
+    "npm run ui:smoke",
+    "cargo test --locked",
+    "npm run security:audit",
+    "npm run release:check",
+    "github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'",
+  ];
+  for (const marker of requiredWorkflowMarkers) {
+    assert(
+      ciWorkflow.includes(marker),
+      `CI workflow is missing required marker: ${marker}`,
+    );
+  }
+
+  const actionReferences = [
+    ...ciWorkflow.matchAll(/^\s*-\s+uses:\s+[^@\s]+@([^\s#]+)/gmu),
+  ].map((match) => match[1]);
+  assert(actionReferences.length > 0, "CI workflow has no action references");
+  assert(
+    actionReferences.every((reference) => /^[0-9a-f]{40}$/u.test(reference)),
+    "CI actions must be pinned to full commit SHAs",
+  );
+
+  const requiredDependabotMarkers = [
+    "version: 2",
+    "package-ecosystem: npm",
+    "package-ecosystem: cargo",
+    "package-ecosystem: github-actions",
+    "directory: /src-tauri",
+    "interval: weekly",
+    "open-pull-requests-limit:",
+    "groups:",
+  ];
+  for (const marker of requiredDependabotMarkers) {
+    assert(
+      dependabot.includes(marker),
+      `Dependabot policy is missing required marker: ${marker}`,
+    );
+  }
+  const pullRequestLimits = [
+    ...dependabot.matchAll(/open-pull-requests-limit:\s*(\d+)/gu),
+  ].map((match) => Number.parseInt(match[1], 10));
+  assert(
+    pullRequestLimits.length === 3 &&
+      pullRequestLimits.every((limit) => limit > 0 && limit <= 4),
+    "Dependabot ecosystems must each cap open pull requests at four",
   );
 }
 
