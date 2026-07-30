@@ -16,6 +16,13 @@ each milestone tag.
 
 ### Added
 
+- **Enforced public project and contributor contract.** The tracked README now
+  owns current architecture boundaries, contribution guidance, supported
+  runtime/schema versions, and explicit unsigned/no-updater release facts.
+  Structured GitHub bug and feature forms replace ignored Markdown templates,
+  while the release gate rejects stale project claims, placeholder domains,
+  dead local links, unsupported distribution promises, and documentation
+  version drift. (IMP-92)
 - **Public-release upgrade preservation gate.** A byte-for-byte v0.5.3 fixture
   now exercises historical settings, journals, v1/v2 profiles, and recovery
   baselines through current loaders in an isolated temporary store. The release

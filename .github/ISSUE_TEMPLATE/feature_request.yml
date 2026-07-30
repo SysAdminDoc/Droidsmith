@@ -1,0 +1,49 @@
+name: Feature request
+description: Propose a user-visible Droidsmith improvement
+title: "[Feature] "
+labels:
+  - enhancement
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: Describe the Android-management task that is difficult or unsafe today.
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Desired outcome
+      description: Describe observable behavior, including review, failure, and recovery states.
+    validations:
+      required: true
+  - type: dropdown
+    id: scope
+    attributes:
+      label: Primary area
+      options:
+        - Device readiness or files
+        - Wireless ADB
+        - Apps or debloat
+        - Profiles or CLI automation
+        - Mirror or reverse tethering
+        - Console or Logcat
+        - Fastboot
+        - APK Analyzer
+        - Settings, diagnostics, or accessibility
+        - Packaging or developer experience
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence and alternatives
+      description: Link relevant Android or tool documentation and note what you tried.
+  - type: checkboxes
+    id: principles
+    attributes:
+      label: Project fit
+      options:
+        - label: The proposal can remain local-first, free, and explicit about destructive actions.
+          required: true

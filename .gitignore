@@ -52,9 +52,12 @@ playwright-report/
 playwright/.cache/
 test-results/
 
-# Markdown files local-only (except README)
+# Markdown files are local-only except the durable public README. GitHub intake
+# uses YAML issue forms so contributor guidance cannot disappear behind this
+# rule.
 *.md
 !README.md
+!.github/ISSUE_TEMPLATE/*.yml
 
 # AI config
 CLAUDE.md

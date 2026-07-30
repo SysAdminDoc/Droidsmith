@@ -92,6 +92,7 @@ function validatePolicy() {
     "release-policy.json exceptions must be an array",
   );
   validateRendererBundlePolicy(policy.rendererBundle);
+  validateTrackedDocumentationPolicy(policy.trackedDocumentation);
 
   const byKind = new Map();
   for (const exception of policy.exceptions) {
@@ -127,10 +128,180 @@ function validatePolicy() {
     "release-policy.json contains an unsupported exception kind",
   );
   validateVersionParity();
+  validateTrackedDocumentationPolicyFiles(policy.trackedDocumentation);
   validatePlatformToolsPolicy();
   validateLanguageContract();
   validateSubprocessCaptureContract();
   validateAutomationPolicy();
+}
+
+function validateTrackedDocumentationPolicy(policy) {
+  const expectedFiles = [
+    "README.md",
+    ".github/ISSUE_TEMPLATE/bug_report.yml",
+    ".github/ISSUE_TEMPLATE/feature_request.yml",
+    ".github/ISSUE_TEMPLATE/config.yml",
+  ];
+  assert(
+    Array.isArray(policy?.files) &&
+      JSON.stringify(policy.files) === JSON.stringify(expectedFiles),
+    "trackedDocumentation.files must name the README and three GitHub issue-form files",
+  );
+}
+
+function validateTrackedDocumentationPolicyFiles(policy) {
+  const documents = Object.fromEntries(
+    policy.files.map((relativePath) => [
+      relativePath,
+      fs.readFileSync(path.join(repoRoot, relativePath), "utf8"),
+    ]),
+  );
+  const packageJson = readJson(path.join(repoRoot, "package.json"));
+  const cargoToml = fs.readFileSync(tauriManifest, "utf8");
+  const platformTools = readJson(platformToolsPolicyPath);
+  const schemas = readJson(
+    path.join(repoRoot, "contribution-schema-policy.json"),
+  ).schemas;
+  const expectations = {
+    appVersion: packageJson.version,
+    nodeRange: packageJson.engines?.node,
+    rustRange: `>=${cargoToml.match(/^rust-version\s*=\s*"([^"]+)"\s*$/mu)?.[1]}`,
+    tauriMajor: `${cargoToml.match(/^tauri\s*=\s*\{\s*version\s*=\s*"(\d+)"/mu)?.[1]}.x`,
+    platformToolsRecommended: platformTools.recommendedVersion,
+    platformToolsWarningBelow: platformTools.warningBelowVersion,
+    packSchema: schemas.pack.document_version,
+    quirkSchema: schemas.quirk.document_version,
+    profileSchema: schemas.profile.document_version,
+  };
+  validateTrackedDocumentation(documents, expectations, (relativePath) =>
+    fs.existsSync(path.join(repoRoot, relativePath)),
+  );
+}
+
+export function validateTrackedDocumentation(
+  documents,
+  expectations,
+  localPathExists = () => true,
+) {
+  const readme = documents["README.md"];
+  assert(
+    typeof readme === "string",
+    "tracked documentation requires README.md",
+  );
+  const combined = Object.entries(documents)
+    .map(([relativePath, content]) => `${relativePath}\n${content}`)
+    .join("\n");
+
+  const staleClaims = [
+    [/\badb_client\b/iu, "obsolete adb_client claim"],
+    [/\bUAD-NG\b/iu, "obsolete UAD-NG claim"],
+    [/\bRESEARCH_REPORT\.md\b/iu, "obsolete research document claim"],
+    [/\blive route surfaces?\b/iu, "obsolete route inventory claim"],
+  ];
+  for (const [pattern, label] of staleClaims) {
+    assert(!pattern.test(combined), `tracked documentation contains ${label}`);
+  }
+
+  assert(
+    !/https?:\/\/(?:[^/\s@]+@)?(?:www\.)?(?:example\.(?:com|org|net)|localhost|127\.0\.0\.1)(?=[:/\s]|$)/iu.test(
+      combined,
+    ),
+    "tracked documentation contains a placeholder domain",
+  );
+  const unsupportedDistributionClaims = [
+    /\b(?:code[- ]signed|digitally signed|signed)\s+(?:artifacts?|builds?|downloads?|installers?|releases?)\b/iu,
+    /\b(?:automatic|in-app|built-in)\s+(?:application\s+)?updates?\b/iu,
+    /\bauto[- ]?updater\b/iu,
+    /\bupdate feed\b/iu,
+  ];
+  for (const pattern of unsupportedDistributionClaims) {
+    assert(
+      !pattern.test(combined),
+      "tracked documentation claims unsupported signing or updater behavior",
+    );
+  }
+
+  const normalizedReadme = readme.replace(/\s+/gu, " ");
+  assert(
+    normalizedReadme.includes(
+      "Release artifacts are unsigned and Droidsmith does not check for or install application updates.",
+    ),
+    "README must state the unsigned, no-updater release contract",
+  );
+
+  const versionRows = [
+    `| Droidsmith source/manifests | \`${expectations.appVersion}\` |`,
+    `| Node.js | \`${expectations.nodeRange}\` |`,
+    `| Rust | \`${expectations.rustRange}\` |`,
+    `| Tauri | \`${expectations.tauriMajor}\` |`,
+    `| Android SDK Platform Tools | \`${expectations.platformToolsRecommended}\` recommended; warn below \`${expectations.platformToolsWarningBelow}\` |`,
+    `| Pack / quirk documents | schema \`"${expectations.packSchema}"\` / \`"${expectations.quirkSchema}"\` |`,
+    `| Profile documents | schema \`"${expectations.profileSchema}"\`; v1 has a reviewed import migration |`,
+  ];
+  for (const row of versionRows) {
+    assert(
+      readme.includes(row),
+      `README supported-version table differs from manifests: ${row}`,
+    );
+  }
+
+  for (const [relativePath, content] of Object.entries(documents)) {
+    for (const match of content.matchAll(
+      /!?\[[^\]]*\]\(([^)\s]+)(?:\s+[^)]*)?\)/gu,
+    )) {
+      const target = match[1].replace(/^<|>$/gu, "");
+      if (target.startsWith("#") || /^(?:https?:|mailto:)/iu.test(target)) {
+        continue;
+      }
+      const withoutSuffix = target.split(/[?#]/u, 1)[0];
+      let decoded;
+      try {
+        decoded = decodeURIComponent(withoutSuffix);
+      } catch {
+        throw new Error(
+          `tracked documentation has an invalid local link in ${relativePath}: ${target}`,
+        );
+      }
+      const resolved = path.posix.normalize(
+        path.posix.join(path.posix.dirname(relativePath), decoded),
+      );
+      assert(
+        resolved !== ".." &&
+          !resolved.startsWith("../") &&
+          localPathExists(resolved),
+        `tracked documentation has a dead local link in ${relativePath}: ${target}`,
+      );
+    }
+  }
+
+  validateIssueForm(
+    documents[".github/ISSUE_TEMPLATE/bug_report.yml"],
+    "bug report",
+    ["Affected workflow", "Reproduction steps", "Redacted diagnostics"],
+  );
+  validateIssueForm(
+    documents[".github/ISSUE_TEMPLATE/feature_request.yml"],
+    "feature request",
+    ["Problem", "Desired outcome", "Project fit"],
+  );
+  const config = documents[".github/ISSUE_TEMPLATE/config.yml"];
+  assert(
+    typeof config === "string" &&
+      config.includes("blank_issues_enabled: false") &&
+      config.includes("/security/advisories/new"),
+    "issue-form config must disable blank issues and route security reports privately",
+  );
+}
+
+function validateIssueForm(content, label, requiredMarkers) {
+  assert(
+    typeof content === "string" &&
+      content.includes("name:") &&
+      content.includes("description:") &&
+      content.includes("body:") &&
+      requiredMarkers.every((marker) => content.includes(marker)),
+    `${label} issue form is missing required intake fields`,
+  );
 }
 
 function validateRendererBundlePolicy(policy) {

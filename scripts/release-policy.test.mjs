@@ -7,6 +7,7 @@ import {
   validateRendererBundleManifest,
   validateExpiry,
   validatePlatformToolsDocumentation,
+  validateTrackedDocumentation,
   validateVersionValues,
 } from "./check-release-policy.mjs";
 
@@ -97,6 +98,132 @@ test("release versions must all exist and match", () => {
       () => validateVersionValues({ ...versions, [source]: undefined }),
       /release versions differ/u,
       `${source} absence must fail the release gate`,
+    );
+  }
+});
+
+const documentationExpectations = {
+  appVersion: "0.9.12",
+  nodeRange: ">=20.19.0",
+  rustRange: ">=1.81",
+  tauriMajor: "2.x",
+  platformToolsRecommended: "37.0.0",
+  platformToolsWarningBelow: "36.0.2",
+  packSchema: "1",
+  quirkSchema: "1",
+  profileSchema: "2",
+};
+
+const documentationFixture = {
+  "README.md": `
+[asset](docs/screenshot.png)
+| Droidsmith source/manifests | \`0.9.12\` |
+| Node.js | \`>=20.19.0\` |
+| Rust | \`>=1.81\` |
+| Tauri | \`2.x\` |
+| Android SDK Platform Tools | \`37.0.0\` recommended; warn below \`36.0.2\` |
+| Pack / quirk documents | schema \`"1"\` / \`"1"\` |
+| Profile documents | schema \`"2"\`; v1 has a reviewed import migration |
+Release artifacts are unsigned and Droidsmith does not check for or install application updates.
+`,
+  ".github/ISSUE_TEMPLATE/bug_report.yml": `
+name: Bug report
+description: Report a bug
+body:
+  Affected workflow
+  Reproduction steps
+  Redacted diagnostics
+`,
+  ".github/ISSUE_TEMPLATE/feature_request.yml": `
+name: Feature request
+description: Request a feature
+body:
+  Problem
+  Desired outcome
+  Project fit
+`,
+  ".github/ISSUE_TEMPLATE/config.yml": `
+blank_issues_enabled: false
+url: https://github.com/SysAdminDoc/Droidsmith/security/advisories/new
+`,
+};
+
+test("tracked documentation enforces truth, live links, and version rows", () => {
+  const existingPaths = new Set(["docs/screenshot.png"]);
+  const validate = (documents) =>
+    validateTrackedDocumentation(
+      documents,
+      documentationExpectations,
+      (relativePath) => existingPaths.has(relativePath),
+    );
+  assert.doesNotThrow(() => validate(documentationFixture));
+
+  const readmeWith = (addition) => ({
+    ...documentationFixture,
+    "README.md": `${documentationFixture["README.md"]}\n${addition}`,
+  });
+  for (const claim of [
+    "See https://example.com/releases.",
+    "Downloads are signed releases.",
+    "The built-in updates are automatic.",
+    "We integrate adb_client.",
+    "See RESEARCH_REPORT.md.",
+    "These live route surfaces are complete.",
+  ]) {
+    assert.throws(
+      () => validate(readmeWith(claim)),
+      /placeholder domain|unsupported signing or updater|obsolete/u,
+      claim,
+    );
+  }
+  assert.throws(
+    () =>
+      validate({
+        ...documentationFixture,
+        "README.md": documentationFixture["README.md"].replace(
+          "docs/screenshot.png",
+          "docs/missing.png",
+        ),
+      }),
+    /dead local link/u,
+  );
+
+  for (const currentValue of [
+    "0.9.12",
+    ">=20.19.0",
+    ">=1.81",
+    "2.x",
+    "37.0.0",
+    "36.0.2",
+  ]) {
+    assert.throws(
+      () =>
+        validate({
+          ...documentationFixture,
+          "README.md": documentationFixture["README.md"].replace(
+            currentValue,
+            "stale",
+          ),
+        }),
+      /supported-version table differs/u,
+      `${currentValue} drift must fail`,
+    );
+  }
+  for (const currentRow of [
+    '| Pack / quirk documents | schema `"1"` / `"1"` |',
+    '| Profile documents | schema `"2"`; v1 has a reviewed import migration |',
+  ]) {
+    assert.throws(
+      () =>
+        validate({
+          ...documentationFixture,
+          "README.md": documentationFixture["README.md"].replace(
+            currentRow,
+            currentRow.replace("schema", "stale schema"),
+          ),
+        }),
+      /supported-version table differs/u,
+      `${currentRow} drift must fail`,
     );
   }
 });

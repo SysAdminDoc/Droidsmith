@@ -1,0 +1,83 @@
+name: Bug report
+description: Report a reproducible Droidsmith failure or regression
+title: "[Bug] "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not attach Android bugreport archives, raw device serials, pairing codes, or secrets. Droidsmith's Diagnostics preview shows the redacted support data that is safe to review before sharing.
+  - type: dropdown
+    id: workflow
+    attributes:
+      label: Affected workflow
+      options:
+        - Device readiness or files
+        - Wireless ADB
+        - Apps or package export
+        - Debloat
+        - Profiles or CLI
+        - Mirror or reverse tethering
+        - Console or Logcat
+        - Fastboot
+        - APK Analyzer
+        - Settings or Diagnostics
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: Include the action you attempted and the visible result.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction steps
+      placeholder: |
+        1. Connect…
+        2. Open…
+        3. Select…
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected result
+    validations:
+      required: true
+  - type: input
+    id: app_version
+    attributes:
+      label: Droidsmith version
+      placeholder: 0.9.12
+    validations:
+      required: true
+  - type: input
+    id: host
+    attributes:
+      label: Host OS
+      placeholder: Windows 11 24H2, macOS 15, or Ubuntu 24.04
+    validations:
+      required: true
+  - type: input
+    id: device
+    attributes:
+      label: Device and Android version
+      description: Use the model and ROM; omit the serial.
+      placeholder: Pixel 8, Android 16
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Redacted diagnostics
+      description: Paste only the reviewed output from Settings → Diagnostics → Preview support bundle.
+      render: text
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Safety check
+      options:
+        - label: I reviewed the text above and removed serials, pairing data, credentials, and other sensitive values.
+          required: true

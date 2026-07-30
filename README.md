@@ -92,7 +92,7 @@ validation. Detected data entries are not a promise of completeness or future
 restore compatibility; Droidsmith does not present `adb restore` as a reliable
 recovery path.
 
-The source tree and manifests are version `0.9.12`. As checked on 2026-07-24,
+The source tree and manifests are version `0.9.12`. As checked on 2026-07-29,
 the newest downloadable GitHub artifact is the older
 [v0.5.3 release](https://github.com/SysAdminDoc/Droidsmith/releases/tag/v0.5.3),
 published on 2026-07-17; changes after that tag are available from source but
@@ -124,7 +124,7 @@ ADB front end, but it has hard limits that an open project can fix:
 | Source | Closed | MIT, public on GitHub |
 | Platforms | Windows only (.NET 4.6+) | Windows, macOS, Linux |
 | Free tier | Core only — dark theme, Process Manager, batch ops are sponsor-gated | All features always free |
-| Debloat lists | Static, underperforms Universal Android Debloater per user reports | Versioned YAML packs, vendor quirks, recovery baselines, and a final count/unsafe-tier review before apply; UAD-NG import is blocked on redistribution permission |
+| Debloat lists | Static | Versioned YAML packs, vendor quirks, recovery baselines, and a final count/unsafe-tier review before apply; external data imports require provenance and redistribution review |
 | Screen mirror | Virtual buttons + screenshots | Capability-negotiated scrcpy launch/supervision with per-device presets, encoder selection, and actionable bounded failure diagnostics; bundled scrcpy remains planned |
 | Wireless ADB | Manual `adb pair` in console | First-class Android 11+ pairing, exact mDNS TLS provenance, explicit legacy/unknown TCP warnings, and privacy-bounded VPN/mDNS failure guidance |
 | Automation | None | GUI-authored YAML profiles, explicit v1 migration, live dry-run diffs, and a JSON-capable headless CLI |
@@ -134,8 +134,7 @@ ADB front end, but it has hard limits that an open project can fix:
 
 ## Current tech stack
 
-- **Tauri 2** — Rust core + native webview, single-binary distribution (~10 MB
-  vs Electron's ~100 MB)
+- **Tauri 2** — Rust core, native webview, and platform installers
 - **React + TypeScript + Vite** — frontend
 - **ADB shell transport** — typed Rust wrappers around the platform-tools
   `adb` binary, with direct parser coverage for device/package/process/file
@@ -147,7 +146,7 @@ ADB front end, but it has hard limits that an open project can fix:
   mirror/control sessions
 - **Versioned YAML packs, quirks, and profiles** — packaged as Tauri resources
   for local linting and reproducible actions
-- **Tailwind** — dark-first route surfaces
+- **Tailwind** — shared light/dark theme tokens and route surfaces
 - **i18next** — translations
 
 Bundled platform-tools and bundled scrcpy are not wired into the installer yet;
@@ -155,8 +154,40 @@ install those tools on the host when their workflows are needed.
 The current extension surface is schema-only: this build accepts schema version
 `"1"` for packs and quirks and version `"2"` for profiles. Profile v1 has an
 explicit review-and-migrate path; future revisions are rejected with migration
-guidance. The plugin API and marketplace remain deferred. See
-[RESEARCH.md](RESEARCH.md) for current rationale and alternatives considered.
+guidance. The plugin API and marketplace remain deferred.
+
+## Architecture and safety boundaries
+
+- The React renderer owns presentation and calls generated, typed Tauri IPC
+  bindings. It does not invoke host tools or read arbitrary host paths directly.
+- Rust command handlers validate device identity, Android user, transport,
+  native file grants, and argument boundaries before reaching the ADB, scrcpy,
+  profile, journal, or diagnostics domains.
+- External tools are launched with argument arrays and bounded capture. Reviewed
+  shell mutations use dedicated quoting and validation rather than interpolated
+  user commands.
+- Settings, action journals, profiles, and recovery baselines use versioned
+  documents. Unknown future versions fail closed; replacement writes and
+  pre-import backups are atomic.
+- Tauri isolation and capability policy constrain the renderer-to-core boundary.
+  Generated bindings, isolation parity, schema compatibility, and release
+  resources are checked by `npm run release:check`.
+
+## Supported versions and release facts
+
+| Contract | Supported value |
+|---|---|
+| Droidsmith source/manifests | `0.9.12` |
+| Node.js | `>=20.19.0` |
+| Rust | `>=1.81` |
+| Tauri | `2.x` |
+| Android SDK Platform Tools | `37.0.0` recommended; warn below `36.0.2` |
+| Pack / quirk documents | schema `"1"` / `"1"` |
+| Profile documents | schema `"2"`; v1 has a reviewed import migration |
+
+The release gate derives these rows from the manifests and schema policies, so
+stale documentation fails before packaging. Release artifacts are unsigned and
+Droidsmith does not check for or install application updates.
 
 ## Profiles and headless automation
 
@@ -297,7 +328,9 @@ npm run release:check
 fails on frontend or Rust formatting/lint/type/test regressions, rendered-route
 smoke failures, npm/Rust advisories, unreviewed Cargo licenses/sources/bans or
 duplicate versions, invalid pack/quirk/profile YAML, version/resource drift,
-and missing production bundle artifacts. Install its Rust tools once with
+stale supported-version documentation, dead local documentation links,
+placeholder domains, unsupported distribution claims, and missing production
+bundle artifacts. Install its Rust tools once with
 `cargo install --locked cargo-audit cargo-deny`; every temporary exception in
 `release-policy.json` names an owner, rationale, and absolute expiry date.
 
@@ -354,10 +387,32 @@ key coverage, and locale-sensitive formatting.
 
 ## Getting involved
 
-Use the Development setup and Local verification sections above. Before
-proposing a feature, check [ROADMAP.md](ROADMAP.md) and
-[RESEARCH.md](RESEARCH.md) so existing implementation work and explicitly
-deferred architecture choices are not duplicated.
+Use the tracked
+[bug and feature forms](https://github.com/SysAdminDoc/Droidsmith/issues/new/choose)
+so reports include the workflow, environment, expected result, and safe
+diagnostic context needed for review. Never attach Android bugreport archives,
+raw serials, pairing codes, credentials, or unreviewed support data to a public
+issue.
+
+Before proposing a feature, check [ROADMAP.md](ROADMAP.md) and
+[RESEARCH.md](RESEARCH.md) so existing work and deliberately deferred choices
+are not duplicated. Contributions should preserve Droidsmith's local-first,
+free, cross-platform design and keep destructive operations explicit,
+journaled, and recoverable where Android permits.
+
+For code changes:
+
+1. Follow the Development setup above and use a conventional `feat:`, `fix:`,
+   `refactor:`, `test:`, `perf:`, or `chore:` commit subject.
+2. Add regression coverage for new behavior and failure paths. Backend logic
+   that does not require a physical device belongs in Rust unit or fake-tool
+   integration tests.
+3. Run `npm run release:check`; it is the complete frontend, Rust, isolation,
+   schema, security, rendered-route, and unsigned-bundle gate.
+
+Pack and quirk contributions must validate against the generated schemas in
+`packs/schema.json` and `quirks/schema.json`. Translation contributions must
+keep every locale's key tree aligned with `src/locales/en.json`.
 
 ## License
 
