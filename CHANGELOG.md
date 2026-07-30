@@ -16,6 +16,13 @@ each milestone tag.
 
 ### Fixed
 
+- **Release validation and frontend build-tool advisories.** The npm lockfile
+  now matches the v0.9.12 manifests, and the version-policy regression test
+  independently rejects drift or omission in every authoritative version
+  source. ESLint, its TypeScript/React plugins, and PostCSS now use maintained
+  releases that remove the vulnerable minimatch/brace-expansion and source-map
+  loading paths reported by the 2026-07-29 npm audit. The documented Node.js
+  floor is 20.19 to match ESLint 10's runtime contract. (IMP-87, IMP-88)
 - **Debloat failed with "package disappeared after apply" for many entries.**
   The pack assessment counted uninstalled-for-user "retained" remnants (surfaced
   by the `pm list packages -u` pass) and archived apps as installed, so it

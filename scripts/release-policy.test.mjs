@@ -77,17 +77,27 @@ version = "2.0.0"
 });
 
 test("release versions must all exist and match", () => {
-  assert.doesNotThrow(() =>
-    validateVersionValues({ package: "0.1.0", cargo: "0.1.0" }),
-  );
-  assert.throws(
-    () => validateVersionValues({ package: "0.1.0", cargo: "0.2.0" }),
-    /release versions differ/u,
-  );
-  assert.throws(
-    () => validateVersionValues({ package: "0.1.0", cargo: undefined }),
-    /release versions differ/u,
-  );
+  const versions = {
+    "package.json": "0.1.0",
+    "package-lock.json": "0.1.0",
+    "src-tauri/Cargo.toml": "0.1.0",
+    "src-tauri/tauri.conf.json": "0.1.0",
+    "README.md badge": "0.1.0",
+  };
+  assert.doesNotThrow(() => validateVersionValues(versions));
+
+  for (const source of Object.keys(versions)) {
+    assert.throws(
+      () => validateVersionValues({ ...versions, [source]: "0.2.0" }),
+      /release versions differ/u,
+      `${source} drift must fail the release gate`,
+    );
+    assert.throws(
+      () => validateVersionValues({ ...versions, [source]: undefined }),
+      /release versions differ/u,
+      `${source} absence must fail the release gate`,
+    );
+  }
 });
 
 test("renderer manifest keeps every route dynamic and the entry under budget", () => {

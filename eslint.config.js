@@ -35,10 +35,11 @@ export default [
     },
     rules: {
       ...tseslint.configs.recommended.rules,
-      ...reactHooks.configs.recommended.rules,
+      "react-hooks/rules-of-hooks": "error",
+      "react-hooks/exhaustive-deps": "warn",
       "react-refresh/only-export-components": [
         "warn",
-        { allowConstantExport: true },
+        { allowConstantExport: true, allowExportNames: ["NAV_ITEMS"] },
       ],
       "no-undef": "off",
       "@typescript-eslint/no-unused-vars": [

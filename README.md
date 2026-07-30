@@ -259,7 +259,7 @@ Droidsmith/
 
 ## Development setup
 
-Prerequisites are Rust stable 1.81 or newer, Node.js 20 or newer, and the
+Prerequisites are Rust stable 1.81 or newer, Node.js 20.19 or newer, and the
 Tauri 2 OS dependencies: WebView2 plus MSVC build tools on Windows, Xcode
 Command Line Tools on macOS, or WebKitGTK 4.1/GTK 3/AppIndicator/RSVG development
 packages on Linux. Install Android SDK Platform Tools separately and put `adb`
