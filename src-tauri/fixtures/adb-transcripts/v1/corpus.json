@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "cases": [
+    "platform-tools-36.0.2-aosp.json",
+    "platform-tools-37.0.0-samsung.json",
+    "platform-tools-37.0.1-xiaomi.json"
+  ]
+}

@@ -1,0 +1,141 @@
+{
+  "schemaVersion": 1,
+  "id": "platform-tools-37.0.1-xiaomi",
+  "platformToolsVersion": "37.0.1",
+  "deviceFamily": "xiaomi-hyperos",
+  "sanitized": true,
+  "commands": [
+    {
+      "argv": ["devices", "-l"],
+      "exitCode": 0,
+      "stdout": "List of devices attached\nXIAOMI371USB device product:rubypro model:22101316G device:ruby transport_id:303\nXIAOMI371UNKNOWN vendor_state product:rubypro model:Unknown device:ruby transport_id:399\n<invalid> device product:bad model:Bad device:bad transport_id:not-a-number\n",
+      "stderr": ""
+    },
+    {
+      "argv": ["-t", "303", "shell", "getprop"],
+      "exitCode": 0,
+      "stdout": "[ro.product.model]: [Redmi Note 12 Pro]\n[ro.product.manufacturer]: [Xiaomi]\n[ro.build.version.release]: [15]\n[ro.build.version.sdk]: [35]\n[ro.build.fingerprint]: [Xiaomi/rubypro/ruby:15/AQ3A.250101.002/OS2.0:user/release-keys]\n[ro.build.version.security_patch]: [2026-07-01]\n[ro.serialno]: [SANITIZED-XIAOMI]\n[dhcp.wlan0.ipaddress]: [203.0.113.30]\n[broken]: missing brackets\n",
+      "stderr": ""
+    },
+    {
+      "argv": ["-t", "303", "shell", "dumpsys", "battery"],
+      "exitCode": 0,
+      "stdout": "Current Battery Service state:\n  status: 5\n  health: 2\n  level: 92\n  temperature: 287\n  voltage: 4380\n  Charge cycle count: 220\n",
+      "stderr": ""
+    },
+    {
+      "argv": ["-t", "303", "shell", "df", "-k"],
+      "exitCode": 0,
+      "stdout": "Filesystem 1024-blocks Used Available Capacity Mounted on\n/dev/block/dm-9 180000000 70000000 110000000 39% /data\n/dev/block/dm-0 4600000 4500000 100000 98% /system\nunexpected tokens here\n",
+      "stderr": ""
+    },
+    {
+      "argv": ["-t", "303", "shell", "dumpsys", "thermalservice"],
+      "exitCode": 0,
+      "stdout": "Current temperatures from HAL:\n  Temperature{mValue=31.7, mType=3, mName=CPU-0, mStatus=0}\nCached temperatures:\n  Temperature{mValue=99.0, mType=3, mName=CPU-0, mStatus=6}\n",
+      "stderr": ""
+    },
+    {
+      "argv": ["-t", "303", "shell", "getprop", "ro.build.version.sdk"],
+      "exitCode": 0,
+      "stdout": "35\n",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "-t",
+        "303",
+        "shell",
+        "pm",
+        "list",
+        "packages",
+        "--user",
+        "0",
+        "-e",
+        "-f",
+        "-U",
+        "-i"
+      ],
+      "exitCode": 0,
+      "stdout": "package:/system_ext/priv-app/MIUISecurityCenter/MIUISecurityCenter.apk=com.miui.securitycenter uid:1000 installer=com.android.vending\npackage:/data/app/unsafe.apk=../../escape uid:99999 installer=attacker\n",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "-t",
+        "303",
+        "shell",
+        "pm",
+        "list",
+        "packages",
+        "--user",
+        "0",
+        "-d",
+        "-f",
+        "-U",
+        "-i"
+      ],
+      "exitCode": 0,
+      "stdout": "package:/data/app/com.example.reader/base.apk=com.example.reader uid:10666 installer=com.android.vending\n",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "-t",
+        "303",
+        "shell",
+        "pm",
+        "list",
+        "packages",
+        "--user",
+        "0",
+        "-u",
+        "-f",
+        "-U",
+        "-i"
+      ],
+      "exitCode": 0,
+      "stdout": "package:/system_ext/priv-app/MIUISecurityCenter/MIUISecurityCenter.apk=com.miui.securitycenter uid:1000 installer=com.android.vending\npackage:/data/app/com.example.reader/base.apk=com.example.reader uid:10666 installer=com.android.vending\n",
+      "stderr": ""
+    },
+    {
+      "argv": ["-t", "303", "shell", "pm", "list", "users"],
+      "exitCode": 0,
+      "stdout": "Users:\n  UserInfo{0:Owner:c13} running (current)\n  UserInfo{999999999999999999999:Overflow:0} running\n",
+      "stderr": ""
+    },
+    {
+      "argv": ["-t", "303", "shell", "am", "get-current-user"],
+      "exitCode": 0,
+      "stdout": "0\n",
+      "stderr": ""
+    },
+    {
+      "argv": ["-t", "303", "shell", "dumpsys", "activity", "services"],
+      "exitCode": 0,
+      "stdout": "ACTIVITY MANAGER SERVICES\n  * ServiceRecord{aaa u0 com.miui.securitycenter/.service.MainService}\n  * ServiceRecord{bbb u0 com.example.reader/.ReaderService}\n  * ServiceRecord{missing-component u0 no-component-here}\n",
+      "stderr": ""
+    },
+    {
+      "argv": ["mdns", "services"],
+      "exitCode": 0,
+      "stdout": "List of discovered mdns services\nadb-xiaomi-connect _adb-tls-connect._tcp [2001:db8::30]:40123\nadb-xiaomi-bad _adb-tls-connect._tcp 203.0.113.30:0\n",
+      "stderr": ""
+    }
+  ],
+  "expectations": {
+    "serial": "XIAOMI371USB",
+    "model": "22101316G",
+    "transportId": 303,
+    "manufacturer": "Xiaomi",
+    "packageCount": 2,
+    "enrichedPackageMetadata": true,
+    "storagePartitionCount": 2,
+    "serviceCount": 2,
+    "userCount": 1,
+    "currentUser": 0,
+    "mdnsServiceCount": 1,
+    "unknownDeviceCount": 1,
+    "enrichedFallbackUsed": false
+  }
+}

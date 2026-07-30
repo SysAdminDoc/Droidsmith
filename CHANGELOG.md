@@ -16,6 +16,13 @@ each milestone tag.
 
 ### Added
 
+- **Versioned ADB/OEM transcript regression corpus.** Sanitized schema-v1
+  fixtures now drive full fake-ADB workflows for the supported Platform Tools
+  floor, current stable, and canary across AOSP, Samsung/One UI, and
+  Xiaomi/HyperOS output. Device, enriched/fallback package, property, wrapped
+  storage, service, Android-user, and mDNS parsing is deterministic under
+  malformed/unknown rows; package identifiers beginning with an option marker
+  now fail closed in both Rust and mirror presets. (IMP-93)
 - **Enforced public project and contributor contract.** The tracked README now
   owns current architecture boundaries, contribution guidance, supported
   runtime/schema versions, and explicit unsigned/no-updater release facts.

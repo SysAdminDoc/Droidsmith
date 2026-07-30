@@ -1,0 +1,141 @@
+{
+  "schemaVersion": 1,
+  "id": "platform-tools-36.0.2-aosp",
+  "platformToolsVersion": "36.0.2",
+  "deviceFamily": "aosp",
+  "sanitized": true,
+  "commands": [
+    {
+      "argv": ["devices", "-l"],
+      "exitCode": 0,
+      "stdout": "List of devices attached\nAOSP36USB device product:akita model:Pixel_8a device:akita transport_id:101\nAOSP36UNKNOWN mystery product:generic model:Unknown device:generic transport_id:199\nmalformed-row-without-state\n",
+      "stderr": ""
+    },
+    {
+      "argv": ["-t", "101", "shell", "getprop"],
+      "exitCode": 0,
+      "stdout": "[ro.product.model]: [Pixel 8a]\n[ro.product.manufacturer]: [Google]\n[ro.build.version.release]: [15]\n[ro.build.version.sdk]: [35]\n[ro.build.fingerprint]: [google/akita/akita:15/AP3A.241105.007/1234567:user/release-keys]\n[ro.build.version.security_patch]: [2026-06-05]\n[ro.serialno]: [SANITIZED-AOSP]\n[dhcp.wlan0.ipaddress]: [192.0.2.10]\nmalformed property row\n",
+      "stderr": ""
+    },
+    {
+      "argv": ["-t", "101", "shell", "dumpsys", "battery"],
+      "exitCode": 0,
+      "stdout": "Current Battery Service state:\n  AC powered: false\n  USB powered: true\n  status: 2\n  health: 2\n  level: 78\n  temperature: 295\n  voltage: 4301\n  technology: Li-ion\n",
+      "stderr": ""
+    },
+    {
+      "argv": ["-t", "101", "shell", "df", "-k"],
+      "exitCode": 0,
+      "stdout": "Filesystem     1K-blocks    Used Available Use% Mounted on\n/dev/block/bootdevice/by-name/userdata-with-a-very-long-mapper-name\n                113021876 87654320 25367556 78% /data\n/dev/block/dm-0 2500000 2400000 100000 96% /system\n/dev/block/dm-2 900000 120000 780000 14% /cache\ninvalid df row\n",
+      "stderr": ""
+    },
+    {
+      "argv": ["-t", "101", "shell", "dumpsys", "thermalservice"],
+      "exitCode": 0,
+      "stdout": "Current temperatures from HAL:\n  Temperature{mValue=30.0, mType=3, mName=CPU, mStatus=0}\n  Temperature{mValue=28.5, mType=2, mName=battery, mStatus=1}\n",
+      "stderr": ""
+    },
+    {
+      "argv": ["-t", "101", "shell", "getprop", "ro.build.version.sdk"],
+      "exitCode": 0,
+      "stdout": "35\n",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "-t",
+        "101",
+        "shell",
+        "pm",
+        "list",
+        "packages",
+        "--user",
+        "0",
+        "-e",
+        "-f",
+        "-U",
+        "-i"
+      ],
+      "exitCode": 0,
+      "stdout": "package:/system/priv-app/Settings/Settings.apk=com.android.settings uid:1000 installer=com.android.vending\npackage:../../escape.apk=--unsafe uid:not-a-number installer=attacker\n",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "-t",
+        "101",
+        "shell",
+        "pm",
+        "list",
+        "packages",
+        "--user",
+        "0",
+        "-d",
+        "-f",
+        "-U",
+        "-i"
+      ],
+      "exitCode": 0,
+      "stdout": "package:/data/app/~~sanitized/com.example.notes/base.apk=com.example.notes uid:10412 installer=com.android.vending\n",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "-t",
+        "101",
+        "shell",
+        "pm",
+        "list",
+        "packages",
+        "--user",
+        "0",
+        "-u",
+        "-f",
+        "-U",
+        "-i"
+      ],
+      "exitCode": 0,
+      "stdout": "package:/system/priv-app/Settings/Settings.apk=com.android.settings uid:1000 installer=com.android.vending\npackage:/data/app/~~sanitized/com.example.notes/base.apk=com.example.notes uid:10412 installer=com.android.vending\n",
+      "stderr": ""
+    },
+    {
+      "argv": ["-t", "101", "shell", "pm", "list", "users"],
+      "exitCode": 0,
+      "stdout": "Users:\n  UserInfo{0:Owner:c13} running (current)\n  UserInfo{10:Work profile:1030} running\n  broken-user-row\n",
+      "stderr": ""
+    },
+    {
+      "argv": ["-t", "101", "shell", "am", "get-current-user"],
+      "exitCode": 0,
+      "stdout": "0\n",
+      "stderr": ""
+    },
+    {
+      "argv": ["-t", "101", "shell", "dumpsys", "activity", "services"],
+      "exitCode": 0,
+      "stdout": "ACTIVITY MANAGER SERVICES\n  * ServiceRecord{abc u0 com.example.notes/.SyncService}\n  * ServiceRecord{def u0 com.android.settings/.SettingsService}\n  * malformed service record\n",
+      "stderr": ""
+    },
+    {
+      "argv": ["mdns", "services"],
+      "exitCode": 0,
+      "stdout": "List of discovered mdns services\nadb-aosp-pair _adb-tls-pairing._tcp 192.0.2.10:37001\nadb-aosp-connect _adb-tls-connect._tcp aosp36.local:37002\nmalformed _adb-tls-connect._tcp missing-port\n",
+      "stderr": ""
+    }
+  ],
+  "expectations": {
+    "serial": "AOSP36USB",
+    "model": "Pixel_8a",
+    "transportId": 101,
+    "manufacturer": "Google",
+    "packageCount": 2,
+    "enrichedPackageMetadata": true,
+    "storagePartitionCount": 3,
+    "serviceCount": 2,
+    "userCount": 2,
+    "currentUser": 0,
+    "mdnsServiceCount": 2,
+    "unknownDeviceCount": 1,
+    "enrichedFallbackUsed": false
+  }
+}

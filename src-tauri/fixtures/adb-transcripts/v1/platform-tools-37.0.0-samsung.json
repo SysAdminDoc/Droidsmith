@@ -1,0 +1,192 @@
+{
+  "schemaVersion": 1,
+  "id": "platform-tools-37.0.0-samsung",
+  "platformToolsVersion": "37.0.0",
+  "deviceFamily": "samsung-oneui",
+  "sanitized": true,
+  "commands": [
+    {
+      "argv": ["devices", "-l"],
+      "exitCode": 0,
+      "stdout": "* daemon not running; starting now at tcp:5037\n* daemon started successfully\nList of devices attached\nSAMSUNG37USB device usb:1-2 product:e3qxxx model:SM_S928B device:e3q transport_id:202\nSAMSUNG37UNKNOWN vendor_sideload product:e3qxxx model:SM_S928B device:e3q transport_id:299\n",
+      "stderr": ""
+    },
+    {
+      "argv": ["-t", "202", "shell", "getprop"],
+      "exitCode": 0,
+      "stdout": "[ro.product.model]: [SM-S928B]\n[ro.product.manufacturer]: [samsung]\n[ro.build.version.release]: [14]\n[ro.build.version.sdk]: [34]\n[ro.build.fingerprint]: [samsung/e3qxxx/e3q:14/UP1A.231005.007/S928BXXU4:user/release-keys]\n[ro.build.version.security_patch]: [2026-05-01]\n[ro.serialno]: [SANITIZED-SAMSUNG]\n[wifi.interface.ip]: [198.51.100.20]\n[persist.vendor.channels]: [[1,2,3]]\n",
+      "stderr": ""
+    },
+    {
+      "argv": ["-t", "202", "shell", "dumpsys", "battery"],
+      "exitCode": 0,
+      "stdout": "Current Battery Service state:\n  status: 3\n  health: 2\n  level: 51\n  temperature: 310\n  voltage: 4100\n",
+      "stderr": ""
+    },
+    {
+      "argv": ["-t", "202", "shell", "df", "-k"],
+      "exitCode": 0,
+      "stdout": "Filesystem 1K-blocks Used Available Use% Mounted on\n/dev/block/mapper/userdata\n  220000000 100000000 120000000 46% /data\n/dev/block/dm-0 5200000 5100000 100000 99% /system\n/dev/block/dm-3 800000 100000 700000 13% /cache\n",
+      "stderr": ""
+    },
+    {
+      "argv": ["-t", "202", "shell", "dumpsys", "thermalservice"],
+      "exitCode": 0,
+      "stdout": "Current temperatures from HAL:\n  Temperature{mValue=34.2, mType=3, mName=AP, mStatus=0}\n",
+      "stderr": ""
+    },
+    {
+      "argv": ["-t", "202", "shell", "getprop", "ro.build.version.sdk"],
+      "exitCode": 0,
+      "stdout": "34\n",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "-t",
+        "202",
+        "shell",
+        "pm",
+        "list",
+        "packages",
+        "--user",
+        "0",
+        "-e",
+        "-f",
+        "-U",
+        "-i"
+      ],
+      "exitCode": 1,
+      "stdout": "",
+      "stderr": "Error: Unknown option: -i\n"
+    },
+    {
+      "argv": [
+        "-t",
+        "202",
+        "shell",
+        "pm",
+        "list",
+        "packages",
+        "--user",
+        "0",
+        "-e",
+        "-f"
+      ],
+      "exitCode": 0,
+      "stdout": "package:/system/priv-app/SecSettings/SecSettings.apk=com.android.settings\n",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "-t",
+        "202",
+        "shell",
+        "pm",
+        "list",
+        "packages",
+        "--user",
+        "0",
+        "-d",
+        "-f",
+        "-U",
+        "-i"
+      ],
+      "exitCode": 1,
+      "stdout": "",
+      "stderr": "Error: Unknown option: -i\n"
+    },
+    {
+      "argv": [
+        "-t",
+        "202",
+        "shell",
+        "pm",
+        "list",
+        "packages",
+        "--user",
+        "0",
+        "-d",
+        "-f"
+      ],
+      "exitCode": 0,
+      "stdout": "package:/data/app/com.example.camera/base.apk=com.example.camera\n",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "-t",
+        "202",
+        "shell",
+        "pm",
+        "list",
+        "packages",
+        "--user",
+        "0",
+        "-u",
+        "-f",
+        "-U",
+        "-i"
+      ],
+      "exitCode": 1,
+      "stdout": "",
+      "stderr": "Error: Unknown option: -i\n"
+    },
+    {
+      "argv": [
+        "-t",
+        "202",
+        "shell",
+        "pm",
+        "list",
+        "packages",
+        "--user",
+        "0",
+        "-u",
+        "-f"
+      ],
+      "exitCode": 0,
+      "stdout": "package:/system/priv-app/SecSettings/SecSettings.apk=com.android.settings\npackage:/data/app/com.example.camera/base.apk=com.example.camera\n",
+      "stderr": ""
+    },
+    {
+      "argv": ["-t", "202", "shell", "pm", "list", "users"],
+      "exitCode": 0,
+      "stdout": "Users:\n  UserInfo{0:Owner:c13} running\n  UserInfo{10:Work:1030} running (current)\n  UserInfo{not-a-number:Broken:0} running\n",
+      "stderr": ""
+    },
+    {
+      "argv": ["-t", "202", "shell", "am", "get-current-user"],
+      "exitCode": 0,
+      "stdout": "10\n",
+      "stderr": ""
+    },
+    {
+      "argv": ["-t", "202", "shell", "dumpsys", "activity", "services"],
+      "exitCode": 0,
+      "stdout": "ACTIVITY MANAGER SERVICES\n  User 10 active services:\n  * ServiceRecord{123 u10 com.example.camera/.UploadService}\n  ServiceRecord without marker com.bad/.Ignored\n",
+      "stderr": ""
+    },
+    {
+      "argv": ["mdns", "services"],
+      "exitCode": 0,
+      "stdout": "List of discovered mdns services\nadb-samsung-connect _adb-tls-connect._tcp samsung37.local:38899\nnoise without enough columns\n",
+      "stderr": ""
+    }
+  ],
+  "expectations": {
+    "serial": "SAMSUNG37USB",
+    "model": "SM_S928B",
+    "transportId": 202,
+    "manufacturer": "samsung",
+    "packageCount": 2,
+    "enrichedPackageMetadata": false,
+    "storagePartitionCount": 3,
+    "serviceCount": 1,
+    "userCount": 2,
+    "currentUser": 10,
+    "mdnsServiceCount": 1,
+    "unknownDeviceCount": 1,
+    "enrichedFallbackUsed": true
+  }
+}

@@ -1,6 +1,7 @@
 use droidsmith_lib::adb::packages::parse_pm_list;
 use droidsmith_lib::adb::parsers::{
-    parse_fastboot_devices, parse_ls_output, parse_ps_output, parse_ss_output,
+    parse_fastboot_devices, parse_ls_output, parse_ps_output, parse_running_services,
+    parse_ss_output,
 };
 use droidsmith_lib::adb::transport::parse_devices_long;
 use droidsmith_lib::adb::users::parse_pm_list_users;
@@ -8,6 +9,8 @@ use droidsmith_lib::adb::wireless::parse_mdns_services;
 use droidsmith_lib::{journal::JournalEntry, packs, profile, quirks};
 use proptest::prelude::*;
 use proptest::test_runner::{Config, RngSeed};
+use std::fs;
+use std::path::PathBuf;
 
 fn stable_config() -> Config {
     Config {
@@ -35,18 +38,20 @@ proptest! {
         let fastboot = parse_fastboot_devices(&text);
         let sockets = parse_ss_output(&text);
         let processes = parse_ps_output(&text);
+        let services = parse_running_services(&text);
         let mdns = parse_mdns_services(&text).unwrap();
 
         for count in [
             devices.len(), packages.len(), users.len(), files.len(),
-            fastboot.len(), sockets.len(), processes.len(), mdns.len(),
+            fastboot.len(), sockets.len(), processes.len(), services.len(),
+            mdns.len(),
         ] {
             prop_assert!(count <= line_budget);
         }
 
         let encoded = serde_json::to_vec(&(
             &devices, &packages, &users, &files, &fastboot, &sockets,
-            &processes, &mdns,
+            &processes, &services, &mdns,
         )).unwrap();
         let repeated = serde_json::to_vec(&(
             parse_devices_long(&text).unwrap(),
@@ -56,6 +61,7 @@ proptest! {
             parse_fastboot_devices(&text),
             parse_ss_output(&text),
             parse_ps_output(&text),
+            parse_running_services(&text),
             parse_mdns_services(&text).unwrap(),
         )).unwrap();
         prop_assert_eq!(&encoded, &repeated);
@@ -126,4 +132,51 @@ proptest! {
         prop_assert!(parsed[0].enabled);
         prop_assert!(!parsed[0].system);
     }
+}
+
+#[test]
+fn versioned_transcript_corpus_is_deterministic_and_fail_closed() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("fixtures")
+        .join("adb-transcripts")
+        .join("v1");
+    let corpus: serde_json::Value =
+        serde_json::from_slice(&fs::read(root.join("corpus.json")).unwrap()).unwrap();
+    assert_eq!(corpus["schemaVersion"], 1);
+    let cases = corpus["cases"].as_array().unwrap();
+    assert_eq!(cases.len(), 3);
+
+    for relative_path in cases {
+        let case: serde_json::Value =
+            serde_json::from_slice(&fs::read(root.join(relative_path.as_str().unwrap())).unwrap())
+                .unwrap();
+        assert_eq!(case["schemaVersion"], 1);
+        assert_eq!(case["sanitized"], true);
+        for command in case["commands"].as_array().unwrap() {
+            let text = command["stdout"].as_str().unwrap();
+            let first = parse_every_public_adb_row(text);
+            let repeated = parse_every_public_adb_row(text);
+            assert_eq!(first, repeated, "{}", case["id"]);
+            assert!(
+                first.len() <= text.len().saturating_mul(64).saturating_add(1024),
+                "{}",
+                case["id"]
+            );
+        }
+    }
+}
+
+fn parse_every_public_adb_row(text: &str) -> Vec<u8> {
+    serde_json::to_vec(&(
+        parse_devices_long(text).unwrap(),
+        parse_pm_list(text, true),
+        parse_pm_list_users(text),
+        parse_ls_output(text),
+        parse_fastboot_devices(text),
+        parse_ss_output(text),
+        parse_ps_output(text),
+        parse_running_services(text),
+        parse_mdns_services(text).unwrap(),
+    ))
+    .unwrap()
 }

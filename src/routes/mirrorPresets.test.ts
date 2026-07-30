@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   DEFAULT_MIRROR_PRESET,
+  isValidPackageName,
   normalizePreset,
   presetStorageKey,
   type MirrorPreset,
@@ -49,6 +50,12 @@ describe("mirror presets", () => {
 
     expect(migrated.recording).toBe(true);
     expect(migrated).not.toHaveProperty("recordPath");
+  });
+
+  it("rejects package-like values that tools could reinterpret as options", () => {
+    expect(isValidPackageName("--user")).toBe(false);
+    expect(isValidPackageName("-rf")).toBe(false);
+    expect(isValidPackageName("com.vendor.feature-name")).toBe(true);
   });
 
   it("scopes saved presets to each device serial", () => {

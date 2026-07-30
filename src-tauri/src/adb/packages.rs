@@ -441,7 +441,7 @@ fn is_system_path(p: &str) -> bool {
 /// allows letters/digits/dot/underscore; this catches obvious junk
 /// (empty, leading dot, etc.) without rejecting real packages.
 pub fn valid_package_name(s: &str) -> bool {
-    if s.is_empty() || s.starts_with('.') || s.ends_with('.') {
+    if s.is_empty() || s.starts_with('.') || s.starts_with('-') || s.ends_with('.') {
         return false;
     }
     s.chars()
@@ -494,6 +494,13 @@ package:/system/app/FacebookStub/FacebookStub.apk=com.facebook.appmanager uid:10
         let foo = &v[1];
         assert_eq!(foo.installer, None); // "null" → None
         assert!(!foo.system); // /data/app/ → user
+    }
+
+    #[test]
+    fn package_names_cannot_be_reinterpreted_as_options() {
+        assert!(!valid_package_name("--user"));
+        assert!(!valid_package_name("-rf"));
+        assert!(valid_package_name("com.vendor.feature-name"));
     }
 
     #[test]

@@ -90,15 +90,16 @@ export const DEFAULT_MIRROR_PRESET: MirrorPreset = {
 };
 
 /**
- * Mirror of the Rust `valid_package_name` rule: non-empty, no leading/trailing
- * dot, and only `[A-Za-z0-9._-]`. Used to keep persisted presets clean and to
- * gate the launch-app control.
+ * Mirror of the Rust `valid_package_name` rule: non-empty, no leading option
+ * marker or dot, no trailing dot, and only `[A-Za-z0-9._-]`. Used to keep
+ * persisted presets clean and to gate the launch-app control.
  */
 export function isValidPackageName(value: string): boolean {
   return (
     value.length > 0 &&
     value.length <= 255 &&
     !value.startsWith(".") &&
+    !value.startsWith("-") &&
     !value.endsWith(".") &&
     /^[A-Za-z0-9._-]+$/u.test(value)
   );
