@@ -21,6 +21,41 @@ const tauriLib = await readFile(
   new URL("../src-tauri/src/lib.rs", import.meta.url),
   "utf8",
 );
+const commandRegistry = await readFile(
+  new URL("../src-tauri/src/command_registry.rs", import.meta.url),
+  "utf8",
+);
+const commandCore = await readFile(
+  new URL("../src-tauri/src/commands.rs", import.meta.url),
+  "utf8",
+);
+const commandDomainNames = [
+  "actions_commands",
+  "console",
+  "devices",
+  "diagnostics",
+  "files",
+  "installs",
+  "mirror",
+  "packages",
+  "packs",
+  "plans",
+  "profiles",
+  "settings_commands",
+  "system",
+  "wireless",
+];
+const commandDomains = Object.fromEntries(
+  await Promise.all(
+    commandDomainNames.map(async (name) => [
+      name,
+      await readFile(
+        new URL(`../src-tauri/src/commands/${name}.rs`, import.meta.url),
+        "utf8",
+      ),
+    ]),
+  ),
+);
 const sandbox = { window: {} };
 vm.runInNewContext(source, sandbox, { filename: "isolation/index.js" });
 const hook = sandbox.window.__TAURI_ISOLATION_HOOK__;
@@ -43,6 +78,20 @@ function message(cmd, payload) {
   return { cmd, callback: 1, error: 2, options: {}, payload };
 }
 
+function registeredCommandNames() {
+  const block = commandRegistry.match(
+    /macro_rules! droidsmith_commands[\s\S]*?\$consumer!\[([\s\S]*?)\]\s*\};/u,
+  )?.[1];
+  assert.ok(block);
+  const names = block.match(/[a-z][a-z0-9_]*/gu) ?? [];
+  assert.equal(
+    names.length,
+    new Set(names).size,
+    "command registry has duplicates",
+  );
+  return names;
+}
+
 test("production config enables isolation with a strict CSP", () => {
   const security = tauriConfig.app.security;
   assert.equal(security.pattern.use, "isolation");
@@ -55,24 +104,20 @@ test("production config enables isolation with a strict CSP", () => {
 });
 
 test("every registered Rust command has an explicit isolation classification", () => {
-  const handlerBlock = tauriLib.match(
-    /tauri_specta::collect_commands!\[([\s\S]*?)\]\)/u,
-  )?.[1];
   const readOnlyBlock = source.match(
     /READ_ONLY_COMMANDS = new Set\(\[([\s\S]*?)\]\);/u,
   )?.[1];
   const sensitiveBlock = source.match(
     /SENSITIVE_COMMANDS = Object\.freeze\(\{([\s\S]*?)^ {2}\}\);/mu,
   )?.[1];
-  assert.ok(handlerBlock);
   assert.ok(readOnlyBlock);
   assert.ok(sensitiveBlock);
-
-  const registered = new Set(
-    handlerBlock
-      .match(/[a-z][a-z0-9_]*/gu)
-      ?.filter((name) => name !== "tauri") ?? [],
+  assert.match(
+    tauriLib,
+    /command_registry::droidsmith_commands!\(\s*collect_registered_commands\s*\)/u,
   );
+
+  const registered = new Set(registeredCommandNames());
   const readOnly = new Set(
     [...readOnlyBlock.matchAll(/"([a-z][a-z0-9_]*)"/gu)].map(
       (match) => match[1],
@@ -85,6 +130,34 @@ test("every registered Rust command has an explicit isolation classification", (
   );
   const classified = new Set([...readOnly, ...sensitive]);
   assert.deepEqual([...classified].sort(), [...registered].sort());
+});
+
+test("domain modules and the declarative registry retain exact command parity", () => {
+  assert.doesNotMatch(commandCore, /#\[tauri::command\]/u);
+  assert.ok(
+    commandCore.split(/\r?\n/u).length < 2_000,
+    "shared command core grew back into a monolith",
+  );
+  for (const name of commandDomainNames) {
+    assert.match(commandCore, new RegExp(`mod ${name};`, "u"));
+  }
+
+  const definitions = Object.values(commandDomains).flatMap((content) =>
+    [
+      ...content.matchAll(
+        /#\[tauri::command\]\s*#\[specta::specta\]\s*(?:#\[[^\]]+\]\s*)*pub (?:async )?fn ([a-z][a-z0-9_]*)/gu,
+      ),
+    ].map((match) => match[1]),
+  );
+  assert.equal(
+    definitions.length,
+    new Set(definitions).size,
+    "domain command definitions have duplicate wire names",
+  );
+  assert.deepEqual(
+    [...definitions].sort(),
+    [...registeredCommandNames()].sort(),
+  );
 });
 
 test("passes known read-only and plugin commands unchanged", () => {

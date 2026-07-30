@@ -1,0 +1,118 @@
+//! Domain-scoped Tauri command boundary.
+
+use super::*;
+
+/// Synthesise an ADB action without running it. Pure: this is the
+/// preview surface the confirmation dialog renders before the user
+/// commits.
+#[tauri::command]
+#[specta::specta]
+pub fn plan_action(
+    mut request: actions::ActionRequest,
+) -> Result<actions::PlannedAction, CommandError> {
+    if !matches!(
+        request.kind,
+        actions::ActionKind::Disable
+            | actions::ActionKind::Enable
+            | actions::ActionKind::Archive
+            | actions::ActionKind::RequestUnarchive
+            | actions::ActionKind::UninstallForUser
+            | actions::ActionKind::ClearData
+            | actions::ActionKind::ForceStop
+    ) {
+        return Err(CommandError {
+            code: "invalid_action_kind",
+            message: "use the dedicated audited planner for this operation kind".to_string(),
+        });
+    }
+    request.pack_context = None;
+    request.context = actions::ActionContext {
+        confirmation_source: actions::ConfirmationSource::AppsPreview,
+        ..Default::default()
+    };
+    Ok(actions::plan(request))
+}
+
+/// Build one reviewed, reversible package-action plan for multiple packages.
+/// Every item is bound to the same immutable device target, Android user, and
+/// action kind; destructive or conditionally-reversible kinds stay on the
+/// single-item path.
+#[tauri::command]
+#[specta::specta]
+pub fn plan_action_batch(
+    requests: Vec<actions::ActionRequest>,
+) -> Result<BatchActionPlan, CommandError> {
+    if !(2..=MAX_ACTION_BATCH_ITEMS).contains(&requests.len()) {
+        return Err(CommandError {
+            code: "invalid_action_batch",
+            message: format!(
+                "a package batch must contain between 2 and {MAX_ACTION_BATCH_ITEMS} items"
+            ),
+        });
+    }
+    let first = requests.first().expect("length checked");
+    if !matches!(
+        first.kind,
+        actions::ActionKind::Disable
+            | actions::ActionKind::Enable
+            | actions::ActionKind::Archive
+            | actions::ActionKind::RequestUnarchive
+    ) {
+        return Err(CommandError {
+            code: "invalid_action_kind",
+            message: "batch actions must have a losslessly reversible inverse".to_string(),
+        });
+    }
+    let target = first.target.clone();
+    let serial = first.serial.clone();
+    let user_id = first.user_id;
+    let kind = first.kind;
+    let mut packages = HashSet::with_capacity(requests.len());
+    let mut plans = Vec::with_capacity(requests.len());
+    for mut request in requests {
+        if request.serial != serial
+            || request.target != target
+            || request.user_id != user_id
+            || request.kind != kind
+        {
+            return Err(CommandError {
+                code: "mixed_action_batch",
+                message: "every batch item must use the same device target, Android user, and action kind"
+                    .to_string(),
+            });
+        }
+        validate_package_arg(&request.package)?;
+        if !packages.insert(request.package.clone()) {
+            return Err(CommandError {
+                code: "duplicate_batch_package",
+                message: format!(
+                    "package {} appears more than once in the batch",
+                    request.package
+                ),
+            });
+        }
+        request.pack_context = None;
+        request.context = actions::ActionContext {
+            confirmation_source: actions::ConfirmationSource::AppsPreview,
+            ..Default::default()
+        };
+        plans.push(actions::plan(request));
+    }
+    let description = batch_action_description(kind, plans.len(), user_id);
+    Ok(BatchActionPlan { plans, description })
+}
+
+pub(crate) fn batch_action_description(
+    kind: actions::ActionKind,
+    count: usize,
+    user_id: u32,
+) -> String {
+    let action = match kind {
+        actions::ActionKind::Disable => "Disable",
+        actions::ActionKind::Enable => "Enable",
+        actions::ActionKind::Archive => "Archive",
+        actions::ActionKind::RequestUnarchive => "Request unarchive for",
+        _ => "Apply action to",
+    };
+    format!("{action} {count} packages for Android user {user_id}")
+}

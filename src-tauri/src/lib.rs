@@ -8,6 +8,7 @@ mod apk_signing;
 mod backup;
 mod bugreport;
 mod captured_tail;
+mod command_registry;
 mod commands;
 pub mod contribution_schema;
 mod diagnostics;
@@ -64,108 +65,17 @@ use commands::{
 };
 
 fn ipc_builder() -> tauri_specta::Builder<tauri::Wry> {
+    macro_rules! collect_registered_commands {
+        ($($command:ident),* $(,)?) => {
+            tauri_specta::collect_commands![$($command),*]
+        };
+    }
+
     tauri_specta::Builder::<tauri::Wry>::new()
         .error_handling(tauri_specta::ErrorHandlingMode::Throw)
-        .commands(tauri_specta::collect_commands![
-            heartbeat,
-            initialize_settings,
-            set_settings_language,
-            get_settings_mirror_preset,
-            set_settings_mirror_preset,
-            reset_settings_mirror_preset,
-            reset_settings,
-            export_settings,
-            preview_settings_import,
-            apply_settings_import,
-            restore_settings_import_backup,
-            has_settings_import_backup,
-            list_logcat_queries,
-            save_logcat_queries,
-            capture_layout,
-            save_layout_export,
-            perfetto_capabilities,
-            capture_perfetto_trace,
-            run_host_doctor,
-            list_devices,
-            watch_devices,
-            recover_adb,
-            select_host_path,
-            grant_dropped_path,
-            disconnect_device,
-            reveal_in_folder,
-            open_artifact_with,
-            reveal_diagnostics_directory,
-            preview_diagnostics,
-            save_diagnostics,
-            wipe_diagnostics,
-            get_device_info,
-            list_device_settings,
-            put_device_setting,
-            list_wireless_services,
-            pair_wireless,
-            connect_wireless,
-            list_wireless_history,
-            forget_wireless_endpoint,
-            set_wireless_auto_reconnect,
-            observe_device_fingerprint,
-            list_packages,
-            get_package_metadata,
-            list_users,
-            inspect_profile,
-            save_profile,
-            list_packs,
-            import_pack,
-            remove_imported_pack,
-            export_device_pack,
-            analyze_apk,
-            plan_pack,
-            plan_action,
-            plan_action_batch,
-            plan_shell_action,
-            apply_action,
-            apply_action_batch,
-            export_recovery_baseline,
-            inspect_recovery_baseline,
-            apply_device_control,
-            shell_run,
-            stream_logcat,
-            cancel_operation,
-            save_logcat_export,
-            list_remote_files,
-            plan_remote_file_mutation,
-            apply_remote_file_mutation,
-            push_file,
-            pull_file,
-            preflight_package_backup,
-            export_package_apks,
-            backup_package,
-            capture_bugreport,
-            list_network_connections,
-            list_permissions,
-            set_permission,
-            list_processes,
-            list_running_services,
-            take_screenshot,
-            locate_scrcpy,
-            scrcpy_capabilities,
-            launch_scrcpy,
-            scrcpy_session_status,
-            stop_scrcpy,
-            locate_gnirehtet,
-            start_gnirehtet,
-            find_gnirehtet_session,
-            gnirehtet_session_status,
-            stop_gnirehtet,
-            install_apk,
-            extract_apk,
-            journal_list,
-            journal_undo,
-            journal_undo_batch,
-            explain_failure,
-            locate_fastboot,
-            list_fastboot_devices,
-            fastboot_getvar,
-        ])
+        .commands(command_registry::droidsmith_commands!(
+            collect_registered_commands
+        ))
 }
 
 fn typescript_exporter() -> specta_typescript::Typescript {

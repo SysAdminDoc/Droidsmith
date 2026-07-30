@@ -43,6 +43,15 @@ each milestone tag.
   rate-limits npm, Cargo, and workflow updates, while the local release policy
   rejects missing required jobs or mutable action tags. (IMP-89)
 
+### Changed
+
+- **Privileged command boundary split by domain.** The former monolithic Tauri
+  command module now keeps only shared target, path, error, journal, and process
+  primitives; 98 renderer-callable commands live in focused domain modules. One
+  declarative registry now drives Specta/Tauri registration, while isolation
+  tests enforce exact parity between definitions, registration, and security
+  classifications without changing generated IPC bindings. (IMP-94)
+
 ### Fixed
 
 - **Target-bound device workflow lifecycle.** Device, Android-user, transport
