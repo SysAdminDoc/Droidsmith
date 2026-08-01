@@ -10,7 +10,7 @@
     },
     "profile": {
       "document_version": "2",
-      "schema_sha256": "7932b8eecdd17f6b12a5f065e2cb5925a64ed6ab3e053d49278bef444897f756",
+      "schema_sha256": "d0f38ca8e9c2f3a276c59f0c2e42301b04b91cdee7e51fece1880b53bf3c36b2",
       "migration": "profile v1 is inspected and migrated explicitly to v2; review the profile-level Android user target before saving or applying it",
       "compatibility_fixture": "src-tauri/fixtures/profiles/v1-valid.yaml",
       "fixture_version": "1"

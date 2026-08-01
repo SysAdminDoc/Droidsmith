@@ -357,6 +357,18 @@ fn adb_transcript_corpus_exercises_complete_workflows() {
             Some(case.expectations.model.as_str())
         );
         assert_eq!(device.transport_id, Some(case.expectations.transport_id));
+        if case.id == "platform-tools-37.0.1-xiaomi" {
+            assert_eq!(device.bus_address.as_deref(), Some("1-3"));
+            assert_eq!(
+                device.connection_type,
+                Some(droidsmith_lib::adb::DeviceConnectionType::Usb)
+            );
+            assert_eq!(device.negotiated_speed, Some(5_000_000_000));
+            assert_eq!(device.max_speed, Some(10_000_000_000));
+        } else {
+            assert_eq!(device.negotiated_speed, None, "{}", case.id);
+            assert_eq!(device.max_speed, None, "{}", case.id);
+        }
         let target = device.target();
 
         let info = get_device_info(&transport, &target).unwrap();
@@ -429,6 +441,19 @@ fn adb_transcript_corpus_exercises_complete_workflows() {
         );
 
         let invocations = fs::read_to_string(&record_path).unwrap();
+        let used_structured_tracker = invocations
+            .lines()
+            .any(|line| line == r#"["track-devices","--proto-text"]"#);
+        let used_legacy_inventory = invocations
+            .lines()
+            .any(|line| line == r#"["devices","-l"]"#);
+        assert!(used_structured_tracker, "{}", case.id);
+        assert_eq!(
+            used_legacy_inventory,
+            case.id != "platform-tools-37.0.1-xiaomi",
+            "{}",
+            case.id
+        );
         let used_enriched = invocations
             .lines()
             .any(|line| line.contains(r#""-U","-i""#));
@@ -472,6 +497,10 @@ fn device(serial: &str, build: &str) -> Device {
         model: Some("Pixel".to_string()),
         product: Some("panther".to_string()),
         device: Some("panther".to_string()),
+        bus_address: None,
+        connection_type: None,
+        negotiated_speed: None,
+        max_speed: None,
         build_fingerprint: Some(build.to_string()),
         transport_id: Some(77),
         connection_generation: 0,

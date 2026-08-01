@@ -56,11 +56,22 @@ export function deviceStateTone(
     return "success";
   }
 
-  if (state === "bootloader" || state === "recovery" || state === "sideload") {
+  if (
+    state === "bootloader" ||
+    state === "recovery" ||
+    state === "rescue" ||
+    state === "sideload"
+  ) {
     return "info";
   }
 
-  if (state === "unauthorized" || state === "offline") {
+  if (
+    state === "authorizing" ||
+    state === "connecting" ||
+    state === "detached" ||
+    state === "offline" ||
+    state === "unauthorized"
+  ) {
     return "warning";
   }
 
@@ -69,6 +80,29 @@ export function deviceStateTone(
   }
 
   return "neutral";
+}
+
+/** Localized explanation key for each non-actionable structured ADB state. */
+export function deviceStateHelpKey(
+  state: SerializedDeviceState,
+): `devices.stateHelp.${string}` | null {
+  if (state === "device") return null;
+  if (typeof state !== "string") return "devices.stateHelp.other";
+  return `devices.stateHelp.${state}`;
+}
+
+/** Human-readable SI link speed for ADB's bits-per-second proto fields. */
+export function formatLinkSpeed(bitsPerSecond: number): string {
+  if (bitsPerSecond >= 1_000_000_000) {
+    return `${(bitsPerSecond / 1_000_000_000).toFixed(1)} Gbps`;
+  }
+  if (bitsPerSecond >= 1_000_000) {
+    return `${(bitsPerSecond / 1_000_000).toFixed(1)} Mbps`;
+  }
+  if (bitsPerSecond >= 1_000) {
+    return `${(bitsPerSecond / 1_000).toFixed(1)} Kbps`;
+  }
+  return `${bitsPerSecond} bps`;
 }
 
 export function formatBytes(bytes: number | null, unknown: string): string {

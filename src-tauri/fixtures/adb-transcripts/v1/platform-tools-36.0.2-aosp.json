@@ -10,6 +10,12 @@
   },
   "commands": [
     {
+      "argv": ["track-devices", "--proto-text"],
+      "exitCode": 0,
+      "stdout": "0005oops",
+      "stderr": ""
+    },
+    {
       "argv": ["devices", "-l"],
       "exitCode": 0,
       "stdout": "List of devices attached\nAOSP36USB device product:akita model:Pixel_8a device:akita transport_id:101\nAOSP36UNKNOWN mystery product:generic model:Unknown device:generic transport_id:199\nmalformed-row-without-state\n",

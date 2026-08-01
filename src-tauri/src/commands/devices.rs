@@ -34,7 +34,15 @@ pub(crate) fn collect_devices(
     transport: &adb::ShellTransport,
     fingerprint_cache: &mut HashMap<String, String>,
 ) -> Result<ListDevicesResult, adb::TransportError> {
-    let mut devices = transport.list_devices()?;
+    let devices = transport.list_devices()?;
+    collect_device_snapshot(transport, devices, fingerprint_cache)
+}
+
+fn collect_device_snapshot(
+    transport: &adb::ShellTransport,
+    mut devices: Vec<adb::Device>,
+    fingerprint_cache: &mut HashMap<String, String>,
+) -> Result<ListDevicesResult, adb::TransportError> {
     adb::observe_connection_generations(&mut devices);
     for device in devices
         .iter_mut()
@@ -112,30 +120,95 @@ pub async fn watch_devices(
         let mut last_snapshot = String::new();
         let mut last_health = None;
         let mut health_checked_at: Option<std::time::Instant> = None;
+        let mut active_path: Option<PathBuf> = None;
+        let mut transport: Option<adb::ShellTransport> = None;
+        let mut tracker: Option<adb::transport::StructuredDeviceTracker> = None;
+        let mut latest_result: Option<ListDevicesResult> = None;
+        let mut legacy_checked_at: Option<std::time::Instant> = None;
 
         while !cancellation.is_cancelled() {
             let resolution = adb::locate_adb();
-            let result = if let Some(path) = resolution.path.as_ref() {
-                let transport = adb::ShellTransport::new(path);
-                collect_devices(&transport, &mut fingerprints).map_err(CommandError::from)
+            let resolved_path = resolution.path.as_ref().map(PathBuf::from);
+            if resolved_path != active_path {
+                tracker = None;
+                transport = resolved_path.as_ref().map(adb::ShellTransport::new);
+                active_path = resolved_path.clone();
+                legacy_checked_at = None;
+                fingerprints.clear();
+            }
+
+            let result = if let Some(transport) = transport.as_ref() {
+                let snapshot = if let Some(active_tracker) = tracker.as_ref() {
+                    match active_tracker.next_snapshot(std::time::Duration::from_millis(250)) {
+                        Ok(Some(mut devices)) => {
+                            adb::attach_transport_provenance(&mut devices);
+                            Some(Ok(devices))
+                        }
+                        Ok(None) => None,
+                        Err(_) => {
+                            tracker = None;
+                            transport.mark_structured_tracking(false);
+                            Some(transport.list_devices_legacy())
+                        }
+                    }
+                } else if transport.structured_tracking_available() != Some(false) {
+                    match transport.start_structured_tracker() {
+                        Ok(candidate) => {
+                            match candidate.next_snapshot(std::time::Duration::from_secs(2)) {
+                                Ok(Some(mut devices)) => {
+                                    transport.mark_structured_tracking(true);
+                                    adb::attach_transport_provenance(&mut devices);
+                                    tracker = Some(candidate);
+                                    Some(Ok(devices))
+                                }
+                                Ok(None) | Err(_) => {
+                                    transport.mark_structured_tracking(false);
+                                    Some(transport.list_devices_legacy())
+                                }
+                            }
+                        }
+                        Err(_) => {
+                            transport.mark_structured_tracking(false);
+                            Some(transport.list_devices_legacy())
+                        }
+                    }
+                } else if legacy_checked_at
+                    .is_none_or(|checked| checked.elapsed() >= std::time::Duration::from_secs(1))
+                {
+                    legacy_checked_at = Some(std::time::Instant::now());
+                    Some(transport.list_devices_legacy())
+                } else {
+                    None
+                };
+
+                snapshot.map(|devices| {
+                    devices
+                        .and_then(|devices| {
+                            collect_device_snapshot(transport, devices, &mut fingerprints)
+                        })
+                        .map_err(CommandError::from)
+                })
             } else {
-                Ok(ListDevicesResult {
+                Some(Ok(ListDevicesResult {
                     adb_resolved: false,
                     adb_path: None,
                     devices: Vec::new(),
-                })
+                }))
             };
 
-            match result {
+            match result.transpose() {
                 Ok(result) => {
-                    let encoded = serde_json::to_string(&result).unwrap_or_default();
-                    if encoded != last_snapshot {
-                        last_snapshot = encoded;
-                        let _ = on_event.send(DeviceLifecycleEvent::Snapshot {
-                            result: result.clone(),
-                            health: last_health.clone().map(Box::new),
-                            observed_at: iso_now(),
-                        });
+                    if let Some(result) = result {
+                        let encoded = serde_json::to_string(&result).unwrap_or_default();
+                        if encoded != last_snapshot {
+                            last_snapshot = encoded;
+                            let _ = on_event.send(DeviceLifecycleEvent::Snapshot {
+                                result: result.clone(),
+                                health: last_health.clone().map(Box::new),
+                                observed_at: iso_now(),
+                            });
+                        }
+                        latest_result = Some(result);
                     }
 
                     let health_due = health_checked_at.is_none_or(|checked| {
@@ -149,11 +222,13 @@ pub async fn watch_devices(
                         });
                         if health != last_health {
                             last_health = health.clone();
-                            let _ = on_event.send(DeviceLifecycleEvent::Snapshot {
-                                result,
-                                health: health.map(Box::new),
-                                observed_at: iso_now(),
-                            });
+                            if let Some(result) = latest_result.clone() {
+                                let _ = on_event.send(DeviceLifecycleEvent::Snapshot {
+                                    result,
+                                    health: health.map(Box::new),
+                                    observed_at: iso_now(),
+                                });
+                            }
                         }
                     }
                 }
@@ -169,7 +244,7 @@ pub async fn watch_devices(
                 }
             }
 
-            for _ in 0..20 {
+            for _ in 0..2 {
                 if cancellation.is_cancelled() {
                     break;
                 }

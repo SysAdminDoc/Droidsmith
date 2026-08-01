@@ -131,6 +131,16 @@
     "ActionKind": {
       "oneOf": [
         {
+          "description": "`pm suspend --user 0 <pkg>` — reversible with `pm unsuspend` and\nless destructive than disabling the package.",
+          "type": "string",
+          "const": "suspend"
+        },
+        {
+          "description": "`pm unsuspend --user 0 <pkg>` — reverses Suspend.",
+          "type": "string",
+          "const": "unsuspend"
+        },
+        {
           "description": "`pm disable-user --user 0 <pkg>` — reversible with `pm enable`.",
           "type": "string",
           "const": "disable"

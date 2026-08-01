@@ -41,8 +41,8 @@ pub mod wireless;
 // Items in `actions` are reached via `crate::adb::actions::*` so no
 // short alias is needed here.
 pub use device::{
-    attach_transport_provenance, observe_connection_generations, Device, DeviceState, DeviceTarget,
-    DeviceTransportKind,
+    attach_transport_provenance, observe_connection_generations, Device, DeviceConnectionType,
+    DeviceState, DeviceTarget, DeviceTransportKind,
 };
 pub use device_info::{
     get_device_info, get_wireless_debugging_risk, DeviceInfo, WirelessDeviceRisk,

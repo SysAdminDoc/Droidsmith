@@ -7,7 +7,8 @@ use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
 
-/// A single connected device, as seen by `adb devices -l`.
+/// A single connected device, as seen by the structured ADB tracker or the
+/// legacy `adb devices -l` fallback.
 #[derive(specta::Type, Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Device {
     /// Hardware serial or `host:port` for TCP/wireless devices. Stable
@@ -21,6 +22,17 @@ pub struct Device {
     pub product: Option<String>,
     /// Optional `device:` field — the kernel device codename.
     pub device: Option<String>,
+    /// USB bus address reported by the structured tracker. Legacy inventory
+    /// output does not carry this field.
+    pub bus_address: Option<String>,
+    /// Physical/socket connection class reported by the structured tracker.
+    pub connection_type: Option<DeviceConnectionType>,
+    /// Negotiated link speed in bits per second. `None` means the structured
+    /// message omitted the field; zero remains a carried, explicit value.
+    pub negotiated_speed: Option<u64>,
+    /// Maximum link speed in bits per second, under the same presence rule as
+    /// `negotiated_speed`.
+    pub max_speed: Option<u64>,
     /// Build fingerprint captured while this connection target is prepared.
     pub build_fingerprint: Option<String>,
     /// Optional `transport_id:`. Stable for the life of the adb-server
@@ -37,6 +49,14 @@ pub struct Device {
     /// True if the device serial parses as a `host:port` (wireless)
     /// rather than a hardware serial.
     pub wireless: bool,
+}
+
+#[derive(specta::Type, Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DeviceConnectionType {
+    Unknown,
+    Usb,
+    Socket,
 }
 
 #[derive(
@@ -259,6 +279,12 @@ pub fn observe_connection_generations(devices: &mut [Device]) {
 #[derive(specta::Type, Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum DeviceState {
+    /// `any` — an internal wildcard/default state reported by the host.
+    Any,
+    /// `connecting` — the host is establishing the transport.
+    Connecting,
+    /// `authorizing` — authentication is in progress.
+    Authorizing,
     /// `device` — fully authorized.
     Device,
     /// `unauthorized` — user hasn't tapped "Allow USB debugging" yet.
@@ -275,6 +301,12 @@ pub enum DeviceState {
     /// `no permissions` — udev rules missing on Linux. We surface this
     /// distinctly so the UI can show a fix-it tip.
     NoPermissions,
+    /// `detached` — the transport record exists but its device is detached.
+    Detached,
+    /// `host` — an ADB host-side transport record.
+    Host,
+    /// `rescue` — Android rescue mode.
+    Rescue,
     /// Anything we don't recognise. We keep the raw string so support
     /// requests can include it without losing fidelity.
     Other(String),
@@ -285,17 +317,24 @@ impl DeviceState {
         // `adb devices` outputs the state as a single token. The "no
         // permissions" case is actually two tokens but we collapse
         // before the call site.
-        match raw {
+        match raw.to_ascii_lowercase().as_str() {
+            "any" => Self::Any,
+            "connecting" => Self::Connecting,
+            "authorizing" => Self::Authorizing,
             "device" => Self::Device,
             "unauthorized" => Self::Unauthorized,
             "offline" => Self::Offline,
             "recovery" => Self::Recovery,
             "bootloader" => Self::Bootloader,
             "sideload" => Self::Sideload,
+            "detached" => Self::Detached,
+            "host" => Self::Host,
+            "rescue" => Self::Rescue,
+            "nopermission" => Self::NoPermissions,
             // Some adb builds print `no permissions (user in plugdev group; are your udev rules wrong?); see [http://...]`.
             // We collapse the whole tail.
             s if s.starts_with("no permissions") => Self::NoPermissions,
-            other => Self::Other(other.to_string()),
+            _ => Self::Other(raw.to_string()),
         }
     }
 
@@ -355,6 +394,13 @@ mod tests {
         assert_eq!(DeviceState::parse("recovery"), DeviceState::Recovery);
         assert_eq!(DeviceState::parse("bootloader"), DeviceState::Bootloader);
         assert_eq!(DeviceState::parse("sideload"), DeviceState::Sideload);
+        assert_eq!(DeviceState::parse("DETACHED"), DeviceState::Detached);
+        assert_eq!(
+            DeviceState::parse("NOPERMISSION"),
+            DeviceState::NoPermissions
+        );
+        assert_eq!(DeviceState::parse("RESCUE"), DeviceState::Rescue);
+        assert_eq!(DeviceState::parse("CONNECTING"), DeviceState::Connecting);
     }
 
     #[test]
@@ -416,6 +462,10 @@ mod tests {
                 model: None,
                 product: None,
                 device: None,
+                bus_address: None,
+                connection_type: None,
+                negotiated_speed: None,
+                max_speed: None,
                 build_fingerprint: None,
                 transport_id: Some(99),
                 connection_generation: 0,

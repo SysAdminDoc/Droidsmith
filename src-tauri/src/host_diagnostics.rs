@@ -589,6 +589,9 @@ fn apply_platform_tools_summary(
 
 fn state_key(state: &DeviceState) -> String {
     match state {
+        DeviceState::Any => "any",
+        DeviceState::Connecting => "connecting",
+        DeviceState::Authorizing => "authorizing",
         DeviceState::Device => "device",
         DeviceState::Unauthorized => "unauthorized",
         DeviceState::Offline => "offline",
@@ -596,6 +599,9 @@ fn state_key(state: &DeviceState) -> String {
         DeviceState::Bootloader => "bootloader",
         DeviceState::Sideload => "sideload",
         DeviceState::NoPermissions => "no_permissions",
+        DeviceState::Detached => "detached",
+        DeviceState::Host => "host",
+        DeviceState::Rescue => "rescue",
         DeviceState::Other(_) => "other",
     }
     .to_string()

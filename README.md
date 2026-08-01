@@ -26,7 +26,8 @@ hashed base/split APK export, audited permission/device-control mutations, revie
 mutations, journal undo, debloat queue recovery, scrcpy launch and session
 supervision, optional gnirehtet reverse-tethering ("Share Internet") when the
 binary is on PATH, cancellable background shell/export/file operations, incremental
-Logcat streaming and export, live cross-route device hot-plug updates, ADB
+Logcat streaming and export, live cross-route device hot-plug updates from ADB's
+runtime-probed structured text-proto tracker (with a legacy text fallback), ADB
 server/mDNS/Wi-Fi 2.0 health with audited guided recovery, provenance-classified
 USB/TLS/legacy/unknown transports with fail-closed unsafe-TCP acknowledgement,
 read-only host connection diagnostics for ADB/tool/USB/driver/udev state,
@@ -145,8 +146,10 @@ ADB front end, but it has hard limits that an open project can fix:
 - **Tauri 2** — Rust core, native webview, and platform installers
 - **React + TypeScript + Vite** — frontend
 - **ADB shell transport** — typed Rust wrappers around the platform-tools
-  `adb` binary, with direct parser coverage for device/package/process/file
-  transcripts
+  `adb` binary, with a bounded, dependency-free decoder for the structured
+  device-tracking channel and direct parser coverage for legacy device,
+  package, process, and file transcripts. Per-device connection state and link
+  speed appear only when ADB publishes those fields.
 - **Lazy APK metadata** — Apps rows near the viewport gain bounded,
   identity-cached labels and raster icons without pulling every installed APK
 - **scrcpy on PATH** — version and device encoders are probed, cached against

@@ -14,7 +14,12 @@ import {
   TableHeaderCell,
   TransportBadge,
 } from "../common";
-import { deviceStateTone, formatStateLabel } from "./common";
+import {
+  deviceStateHelpKey,
+  deviceStateTone,
+  formatLinkSpeed,
+  formatStateLabel,
+} from "./common";
 import { MoreIcon, SelectionIcon } from "./icons";
 
 export function DeviceToolbar({
@@ -116,10 +121,11 @@ export function DeviceTable({
                 selectedDeviceKey != null &&
                 String(device.transport_id ?? device.serial) ===
                   selectedDeviceKey;
+              const stateHelpKey = deviceStateHelpKey(device.state);
               return (
                 <tr
                   key={`${device.transport_id ?? device.serial}:${device.connection_generation}`}
-                  title={!isDevice ? t("devices.mustAuthorize") : undefined}
+                  title={stateHelpKey ? t(stateHelpKey) : undefined}
                   className={[
                     "transition",
                     isDevice
@@ -154,9 +160,16 @@ export function DeviceTable({
                     </div>
                   </TableCell>
                   <TableCell>
-                    <Badge tone={deviceStateTone(device.state)}>
-                      {formatStateLabel(device.state)}
-                    </Badge>
+                    <div className="min-w-[12rem]">
+                      <Badge tone={deviceStateTone(device.state)}>
+                        {formatStateLabel(device.state)}
+                      </Badge>
+                      {stateHelpKey ? (
+                        <p className="mt-1 text-xs leading-5 text-anvil-400">
+                          {t(stateHelpKey)}
+                        </p>
+                      ) : null}
+                    </div>
                   </TableCell>
                   <TableCell>
                     <div className="min-w-[13rem]">
@@ -171,17 +184,47 @@ export function DeviceTable({
                     </div>
                   </TableCell>
                   <TableCell>
-                    {device.transport_id != null ? (
-                      <code className="font-mono text-xs">
-                        {t("devices.transportId", {
-                          id: device.transport_id,
-                        })}
-                      </code>
-                    ) : (
-                      <span className="text-anvil-500">
-                        {t("common.notReported")}
-                      </span>
-                    )}
+                    <div className="min-w-[11rem] text-xs">
+                      {device.transport_id != null ? (
+                        <code className="font-mono">
+                          {t("devices.transportId", {
+                            id: device.transport_id,
+                          })}
+                        </code>
+                      ) : (
+                        <span className="text-anvil-500">
+                          {t("common.notReported")}
+                        </span>
+                      )}
+                      {device.connection_type != null ? (
+                        <p className="mt-1 text-anvil-300">
+                          {t(
+                            `devices.connectionType.${device.connection_type}`,
+                          )}
+                        </p>
+                      ) : null}
+                      {device.bus_address ? (
+                        <p className="mt-1 text-anvil-400">
+                          {t("devices.busAddress", {
+                            address: device.bus_address,
+                          })}
+                        </p>
+                      ) : null}
+                      {device.negotiated_speed != null ? (
+                        <p className="mt-1 text-anvil-300">
+                          {t("devices.negotiatedSpeed", {
+                            speed: formatLinkSpeed(device.negotiated_speed),
+                          })}
+                        </p>
+                      ) : null}
+                      {device.max_speed != null ? (
+                        <p className="mt-1 text-anvil-400">
+                          {t("devices.maximumSpeed", {
+                            speed: formatLinkSpeed(device.max_speed),
+                          })}
+                        </p>
+                      ) : null}
+                    </div>
                   </TableCell>
                   <TableCell className="ps-0 text-end">
                     <button

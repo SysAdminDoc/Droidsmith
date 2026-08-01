@@ -1521,7 +1521,8 @@ export type ConfirmationSource =
   | "journal_undo"
   | "recovery_baseline";
 /**
- * A single connected device, as seen by `adb devices -l`.
+ * A single connected device, as seen by the structured ADB tracker or the
+ * legacy `adb devices -l` fallback.
  */
 export type Device = {
   /**
@@ -1543,6 +1544,25 @@ export type Device = {
    * Optional `device:` field — the kernel device codename.
    */
   device: string | null;
+  /**
+   * USB bus address reported by the structured tracker. Legacy inventory
+   * output does not carry this field.
+   */
+  bus_address: string | null;
+  /**
+   * Physical/socket connection class reported by the structured tracker.
+   */
+  connection_type: DeviceConnectionType | null;
+  /**
+   * Negotiated link speed in bits per second. `None` means the structured
+   * message omitted the field; zero remains a carried, explicit value.
+   */
+  negotiated_speed: number | null;
+  /**
+   * Maximum link speed in bits per second, under the same presence rule as
+   * `negotiated_speed`.
+   */
+  max_speed: number | null;
   /**
    * Build fingerprint captured while this connection target is prepared.
    */
@@ -1570,6 +1590,7 @@ export type Device = {
    */
   wireless: boolean;
 };
+export type DeviceConnectionType = "unknown" | "usb" | "socket";
 export type DeviceInfo = {
   serial: string;
   model: string | null;
@@ -1628,6 +1649,18 @@ export type DeviceSettingChange = {
 };
 export type DeviceState =
   /**
+   * `any` — an internal wildcard/default state reported by the host.
+   */
+  | "any"
+  /**
+   * `connecting` — the host is establishing the transport.
+   */
+  | "connecting"
+  /**
+   * `authorizing` — authentication is in progress.
+   */
+  | "authorizing"
+  /**
    * `device` — fully authorized.
    */
   | "device"
@@ -1657,6 +1690,18 @@ export type DeviceState =
    * distinctly so the UI can show a fix-it tip.
    */
   | "no_permissions"
+  /**
+   * `detached` — the transport record exists but its device is detached.
+   */
+  | "detached"
+  /**
+   * `host` — an ADB host-side transport record.
+   */
+  | "host"
+  /**
+   * `rescue` — Android rescue mode.
+   */
+  | "rescue"
   /**
    * Anything we don't recognise. We keep the raw string so support
    * requests can include it without losing fidelity.

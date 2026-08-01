@@ -25,6 +25,10 @@ function device(
     model: null,
     product: null,
     device: null,
+    bus_address: null,
+    connection_type: null,
+    negotiated_speed: null,
+    max_speed: null,
     build_fingerprint: null,
     wireless: false,
   };

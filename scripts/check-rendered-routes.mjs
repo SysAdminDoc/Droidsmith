@@ -159,6 +159,8 @@ async function runDesktopFlow(browser) {
   await page.getByText("ADB ready", { exact: true }).waitFor();
   await page.getByText(/Platform Tools 37\.0\.0 makes libadbmdns/).waitFor();
   await page.getByRole("button", { name: "Select Pixel QA" }).waitFor();
+  await page.getByText("Negotiated 5.0 Gbps", { exact: true }).waitFor();
+  await page.getByText("Maximum 10.0 Gbps", { exact: true }).waitFor();
   if ((await page.locator("tr[role='button']").count()) !== 0) {
     throw new Error("Device table rows must retain native table semantics");
   }
@@ -2185,6 +2187,10 @@ async function installTauriMock(
       model: "Pixel QA",
       product: "oriole",
       device: "oriole",
+      bus_address: "1-4",
+      connection_type: "usb",
+      negotiated_speed: 5_000_000_000,
+      max_speed: 10_000_000_000,
       build_fingerprint: "google/oriole/oriole:15/QA",
       transport_id: 7,
       connection_generation: 8,

@@ -1,5 +1,347 @@
 use serde::Serialize;
 
+use crate::adb::device::{
+    looks_wireless, Device, DeviceConnectionType, DeviceState, DeviceTransportKind,
+};
+
+const MAX_TRACK_DEVICES_PROTO_BYTES: usize = 1024 * 1024;
+const MAX_TRACKED_DEVICES: usize = 1024;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum TextProtoToken {
+    Open,
+    Close,
+    Colon,
+    Identifier(String),
+    Quoted(String),
+}
+
+/// Parse ADB's `track-devices --proto-text` payload without linking a protobuf
+/// runtime. This intentionally implements only the bounded text-format grammar
+/// needed by `adb.proto.Devices`, while safely skipping future unknown fields.
+pub fn parse_adb_devices_proto_text(payload: &str) -> Result<Vec<Device>, String> {
+    if payload.len() > MAX_TRACK_DEVICES_PROTO_BYTES {
+        return Err("structured device snapshot exceeds the 1 MiB limit".to_string());
+    }
+
+    let tokens = tokenize_text_proto(payload)?;
+    let mut cursor = 0;
+    let mut devices = Vec::new();
+    while cursor < tokens.len() {
+        let field = take_identifier(&tokens, &mut cursor, "top-level field")?;
+        take_optional_colon(&tokens, &mut cursor);
+        if field == "device" {
+            if devices.len() >= MAX_TRACKED_DEVICES {
+                return Err("structured device snapshot exceeds the device limit".to_string());
+            }
+            devices.push(parse_proto_device(&tokens, &mut cursor)?);
+        } else {
+            skip_text_proto_value(&tokens, &mut cursor)?;
+        }
+    }
+    Ok(devices)
+}
+
+fn parse_proto_device(tokens: &[TextProtoToken], cursor: &mut usize) -> Result<Device, String> {
+    expect_token(
+        tokens,
+        cursor,
+        &TextProtoToken::Open,
+        "device opening brace",
+    )?;
+    let mut serial = None;
+    let mut state = DeviceState::Any;
+    let mut model = None;
+    let mut product = None;
+    let mut device_name = None;
+    let mut bus_address = None;
+    let mut connection_type = None;
+    let mut negotiated_speed = None;
+    let mut max_speed = None;
+    let mut transport_id = None;
+
+    loop {
+        if matches!(tokens.get(*cursor), Some(TextProtoToken::Close)) {
+            *cursor += 1;
+            break;
+        }
+        if *cursor >= tokens.len() {
+            return Err("unterminated structured device record".to_string());
+        }
+
+        let field = take_identifier(tokens, cursor, "device field")?;
+        take_optional_colon(tokens, cursor);
+        match field.as_str() {
+            "serial" => serial = Some(take_quoted(tokens, cursor, "serial")?),
+            "state" => {
+                let value = take_identifier(tokens, cursor, "state")?;
+                state = DeviceState::parse(&value);
+            }
+            "bus_address" => bus_address = Some(take_quoted(tokens, cursor, "bus_address")?),
+            "product" => product = Some(take_quoted(tokens, cursor, "product")?),
+            "model" => model = Some(take_quoted(tokens, cursor, "model")?),
+            "device" => device_name = Some(take_quoted(tokens, cursor, "device")?),
+            "connection_type" => {
+                let value = take_identifier(tokens, cursor, "connection_type")?;
+                connection_type = Some(match value.as_str() {
+                    "UNKNOWN" => DeviceConnectionType::Unknown,
+                    "USB" => DeviceConnectionType::Usb,
+                    "SOCKET" => DeviceConnectionType::Socket,
+                    other => {
+                        return Err(format!(
+                            "unknown structured device connection type {other:?}"
+                        ))
+                    }
+                });
+            }
+            "negotiated_speed" => {
+                negotiated_speed = Some(take_nonnegative_integer(
+                    tokens,
+                    cursor,
+                    "negotiated_speed",
+                )?)
+            }
+            "max_speed" => max_speed = Some(take_nonnegative_integer(tokens, cursor, "max_speed")?),
+            "transport_id" => {
+                let value = take_nonnegative_integer(tokens, cursor, "transport_id")?;
+                transport_id = Some(u32::try_from(value).map_err(|_| {
+                    "structured device transport_id exceeds the supported range".to_string()
+                })?);
+            }
+            _ => skip_text_proto_value(tokens, cursor)?,
+        }
+    }
+
+    let serial = serial
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| "structured device record omitted its serial".to_string())?;
+    let wireless = looks_wireless(&serial);
+    Ok(Device {
+        serial,
+        state,
+        model,
+        product,
+        device: device_name,
+        bus_address,
+        connection_type,
+        negotiated_speed,
+        max_speed,
+        build_fingerprint: None,
+        transport_id,
+        connection_generation: 0,
+        transport_kind: if wireless {
+            DeviceTransportKind::UnknownTcp
+        } else {
+            DeviceTransportKind::Usb
+        },
+        wireless,
+    })
+}
+
+fn tokenize_text_proto(input: &str) -> Result<Vec<TextProtoToken>, String> {
+    let mut chars = input.chars().peekable();
+    let mut tokens = Vec::new();
+    while let Some(character) = chars.next() {
+        match character {
+            value if value.is_whitespace() => {}
+            '#' => {
+                for value in chars.by_ref() {
+                    if value == '\n' {
+                        break;
+                    }
+                }
+            }
+            '{' | '<' => tokens.push(TextProtoToken::Open),
+            '}' | '>' => tokens.push(TextProtoToken::Close),
+            ':' => tokens.push(TextProtoToken::Colon),
+            '"' | '\'' => tokens.push(TextProtoToken::Quoted(read_proto_string(
+                &mut chars, character,
+            )?)),
+            value => {
+                let mut identifier = String::from(value);
+                while let Some(next) = chars.peek().copied() {
+                    if next.is_whitespace()
+                        || matches!(next, '{' | '}' | '<' | '>' | ':' | '"' | '\'')
+                    {
+                        break;
+                    }
+                    identifier.push(next);
+                    chars.next();
+                }
+                tokens.push(TextProtoToken::Identifier(identifier));
+            }
+        }
+    }
+    Ok(tokens)
+}
+
+fn read_proto_string(
+    chars: &mut std::iter::Peekable<std::str::Chars<'_>>,
+    quote: char,
+) -> Result<String, String> {
+    let mut out = String::new();
+    while let Some(character) = chars.next() {
+        if character == quote {
+            return Ok(out);
+        }
+        if character != '\\' {
+            out.push(character);
+            continue;
+        }
+
+        let escaped = chars
+            .next()
+            .ok_or_else(|| "unterminated escape in structured device string".to_string())?;
+        match escaped {
+            'a' => out.push('\u{0007}'),
+            'b' => out.push('\u{0008}'),
+            'f' => out.push('\u{000c}'),
+            'n' => out.push('\n'),
+            'r' => out.push('\r'),
+            't' => out.push('\t'),
+            'v' => out.push('\u{000b}'),
+            '\\' => out.push('\\'),
+            '\'' => out.push('\''),
+            '"' => out.push('"'),
+            'x' | 'X' => out.push(read_radix_escape(chars, 16, 2)?),
+            'u' => out.push(read_radix_escape(chars, 16, 4)?),
+            'U' => out.push(read_radix_escape(chars, 16, 8)?),
+            value @ '0'..='7' => {
+                let mut digits = String::from(value);
+                for _ in 0..2 {
+                    if chars.peek().is_some_and(|next| matches!(next, '0'..='7')) {
+                        digits.push(chars.next().expect("peeked octal digit"));
+                    } else {
+                        break;
+                    }
+                }
+                let scalar = u32::from_str_radix(&digits, 8)
+                    .ok()
+                    .and_then(char::from_u32)
+                    .ok_or_else(|| {
+                        "invalid octal escape in structured device string".to_string()
+                    })?;
+                out.push(scalar);
+            }
+            other => {
+                return Err(format!(
+                    "unsupported escape \\{other} in structured device string"
+                ))
+            }
+        }
+    }
+    Err("unterminated structured device string".to_string())
+}
+
+fn read_radix_escape(
+    chars: &mut std::iter::Peekable<std::str::Chars<'_>>,
+    radix: u32,
+    digits: usize,
+) -> Result<char, String> {
+    let mut encoded = String::new();
+    for _ in 0..digits {
+        encoded.push(
+            chars
+                .next()
+                .ok_or_else(|| "short escape in structured device string".to_string())?,
+        );
+    }
+    u32::from_str_radix(&encoded, radix)
+        .ok()
+        .and_then(char::from_u32)
+        .ok_or_else(|| "invalid escape in structured device string".to_string())
+}
+
+fn take_identifier(
+    tokens: &[TextProtoToken],
+    cursor: &mut usize,
+    description: &str,
+) -> Result<String, String> {
+    match tokens.get(*cursor) {
+        Some(TextProtoToken::Identifier(value)) => {
+            *cursor += 1;
+            Ok(value.clone())
+        }
+        _ => Err(format!(
+            "expected {description} in structured device snapshot"
+        )),
+    }
+}
+
+fn take_quoted(
+    tokens: &[TextProtoToken],
+    cursor: &mut usize,
+    description: &str,
+) -> Result<String, String> {
+    match tokens.get(*cursor) {
+        Some(TextProtoToken::Quoted(value)) => {
+            *cursor += 1;
+            Ok(value.clone())
+        }
+        _ => Err(format!(
+            "expected quoted {description} in structured device snapshot"
+        )),
+    }
+}
+
+fn take_nonnegative_integer(
+    tokens: &[TextProtoToken],
+    cursor: &mut usize,
+    description: &str,
+) -> Result<u64, String> {
+    let value = take_identifier(tokens, cursor, description)?;
+    let parsed = value
+        .parse::<i64>()
+        .map_err(|_| format!("invalid structured device {description} {value:?}"))?;
+    u64::try_from(parsed).map_err(|_| format!("negative structured device {description} {value:?}"))
+}
+
+fn take_optional_colon(tokens: &[TextProtoToken], cursor: &mut usize) {
+    if matches!(tokens.get(*cursor), Some(TextProtoToken::Colon)) {
+        *cursor += 1;
+    }
+}
+
+fn expect_token(
+    tokens: &[TextProtoToken],
+    cursor: &mut usize,
+    expected: &TextProtoToken,
+    description: &str,
+) -> Result<(), String> {
+    if tokens.get(*cursor) == Some(expected) {
+        *cursor += 1;
+        Ok(())
+    } else {
+        Err(format!(
+            "expected {description} in structured device snapshot"
+        ))
+    }
+}
+
+fn skip_text_proto_value(tokens: &[TextProtoToken], cursor: &mut usize) -> Result<(), String> {
+    match tokens.get(*cursor) {
+        Some(TextProtoToken::Open) => {
+            *cursor += 1;
+            let mut depth = 1usize;
+            while depth > 0 {
+                match tokens.get(*cursor) {
+                    Some(TextProtoToken::Open) => depth += 1,
+                    Some(TextProtoToken::Close) => depth -= 1,
+                    Some(_) => {}
+                    None => return Err("unterminated unknown structured field".to_string()),
+                }
+                *cursor += 1;
+            }
+            Ok(())
+        }
+        Some(TextProtoToken::Identifier(_) | TextProtoToken::Quoted(_)) => {
+            *cursor += 1;
+            Ok(())
+        }
+        _ => Err("expected structured field value".to_string()),
+    }
+}
+
 #[derive(specta::Type, Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct RemoteFileEntry {
     pub name: String,
@@ -795,6 +1137,77 @@ fn layout_parse_error(message: &str) -> LayoutNode {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn parses_structured_adb_device_snapshot_with_presence() {
+        let payload = r#"
+device {
+  serial: "USB-123"
+  state: DEVICE
+  bus_address: "1-4"
+  product: "panther"
+  model: "Pixel 7"
+  device: "panther"
+  connection_type: USB
+  negotiated_speed: 5000000000
+  max_speed: 10000000000
+  transport_id: 42
+  future_scalar: "ignored"
+}
+device {
+  serial: "192.0.2.5:5555"
+  state: RESCUE
+  connection_type: SOCKET
+  transport_id: 43
+}
+device { serial: "detached" state: DETACHED }
+device { serial: "permissions" state: NOPERMISSION }
+"#;
+
+        let devices = parse_adb_devices_proto_text(payload).unwrap();
+        assert_eq!(devices.len(), 4);
+        assert_eq!(devices[0].state, DeviceState::Device);
+        assert_eq!(devices[0].bus_address.as_deref(), Some("1-4"));
+        assert_eq!(devices[0].connection_type, Some(DeviceConnectionType::Usb));
+        assert_eq!(devices[0].negotiated_speed, Some(5_000_000_000));
+        assert_eq!(devices[0].max_speed, Some(10_000_000_000));
+        assert_eq!(devices[0].transport_id, Some(42));
+        assert_eq!(devices[1].state, DeviceState::Rescue);
+        assert_eq!(
+            devices[1].connection_type,
+            Some(DeviceConnectionType::Socket)
+        );
+        assert_eq!(devices[1].negotiated_speed, None);
+        assert!(devices[1].wireless);
+        assert_eq!(devices[2].state, DeviceState::Detached);
+        assert_eq!(devices[3].state, DeviceState::NoPermissions);
+    }
+
+    #[test]
+    fn structured_adb_snapshot_preserves_explicit_zero_and_decodes_escapes() {
+        let devices = parse_adb_devices_proto_text(
+            r#"device { serial: "pixel\x2d7" state: OFFLINE negotiated_speed: 0 max_speed: 0 }"#,
+        )
+        .unwrap();
+        assert_eq!(devices[0].serial, "pixel-7");
+        assert_eq!(devices[0].negotiated_speed, Some(0));
+        assert_eq!(devices[0].max_speed, Some(0));
+    }
+
+    #[test]
+    fn malformed_structured_adb_snapshot_is_rejected_for_legacy_fallback() {
+        for malformed in [
+            r#"device { serial: "unterminated state: DEVICE }"#,
+            r#"device { state: DEVICE }"#,
+            r#"device { serial: "pixel" negotiated_speed: -1 }"#,
+            r#"device { serial: "pixel" connection_type: FUTURE }"#,
+        ] {
+            assert!(
+                parse_adb_devices_proto_text(malformed).is_err(),
+                "accepted malformed payload: {malformed}"
+            );
+        }
+    }
 
     #[test]
     fn parses_uiautomator_hierarchy_with_depth_and_entities() {

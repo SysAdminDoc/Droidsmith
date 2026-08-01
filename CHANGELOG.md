@@ -16,6 +16,18 @@ each milestone tag.
 
 ### Added
 
+- **Device discovery now consumes ADB's structured tracking channel.** The
+  app runtime-probes `adb track-devices --proto-text`, decodes its bounded,
+  length-prefixed messages without adding a protobuf runtime, and keeps the
+  successful channel open for hot-plug updates. Unsupported, truncated, or
+  malformed responses fail over to the existing `adb devices -l` parser rather
+  than breaking discovery. The full AOSP state set is preserved, with distinct
+  localized explanations for detached, no-permission, and rescue records; USB
+  bus, connection type, negotiated speed, and maximum speed appear only when
+  their individual proto fields are present. Sanitized fake-ADB fixtures prove
+  the structured path, legacy path, and malformed-response fallback, and the
+  obsolete R-101 USB-speed blocker is retired. (R-125)
+
 - **Apps now starts with a fully reversible suspension tier.** The selected
   device is probed through its own `pm help`, so suspend and unsuspend appear
   only when each exact subcommand is advertised; the privileged apply boundary

@@ -40,13 +40,6 @@ R-119 / IMP-95.
 
 ### P2
 
-- [ ] P2 — R-125: Consume the structured ADB device-tracking channel
-  Why: the app regex-parses `adb devices -l`, which cannot express connection states or link speed that AOSP already publishes as structured data — and this retires the premise of the blocked R-101 note.
-  Evidence: AOSP `services.cpp` exposes `host:track-devices-proto-binary` / `-proto-text`; `proto/adb_host.proto` defines `Device{serial, state, bus_address, product, model, device, connection_type, negotiated_speed, max_speed, transport_id}` and a `ConnectionState` including `DETACHED`, `RESCUE`, `NOPERMISSION`; Roadmap_Blocked.md R-101 correctly notes `server-status` has no USB-speed field — the speed lives on the per-device message instead. Needs live validation: the service names are verified from AOSP source, but the host `adb` CLI surface for reaching them at the supported versions is not — probe before building.
-  Touches: `src-tauri/src/adb/transport.rs`, `src-tauri/src/adb/parsers.rs`, `src-tauri/src/adb/device.rs`, `src-tauri/src/commands/devices.rs`, `src/lib/deviceStore.ts`, `src/routes/Devices.tsx`, fixtures, `Roadmap_Blocked.md`.
-  Acceptance: the text-proto path is used when the host `adb` supports it and falls back to the existing text parser otherwise, decided by runtime probe rather than a version assumption and with no new protobuf dependency; `DETACHED`/`NOPERMISSION`/`RESCUE` become distinct, explained states instead of collapsing into "unauthorized" or "offline"; `negotiated_speed`/`max_speed` are surfaced only when the device message actually carries them; fixtures cover both paths and a malformed proto response degrades to the text parser rather than failing. On success, close out the R-101 USB-link-speed remainder in Roadmap_Blocked.md.
-  Complexity: L
-
 - [ ] P2 — R-126: Add a guided pre-OTA restore and post-OTA re-apply round trip
   Why: debloated devices break on OTA updates, and the accepted community workflow — restore everything, update, re-debloat — is entirely manual today.
   Evidence: XDA guidance ("Do not install OTA update on a debloated phone, as you will face boot loops") and recovery threads; Droidsmith already has read-only OTA drift review, portable recovery baselines, and profiles, so only the orchestration is missing.

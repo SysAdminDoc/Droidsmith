@@ -13,14 +13,18 @@
 //! `tauri::async_runtime::spawn_blocking`. We may revisit if we hit a
 //! call site that genuinely needs streaming output (logcat — R-051).
 
+use std::io::Read;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Child, Command, Stdio};
+use std::sync::{mpsc, Arc, Mutex};
+use std::thread::JoinHandle;
 use std::time::Duration;
 
 use crate::adb::device::{
     attach_transport_provenance, looks_wireless, observe_connection_generations, valid_serial,
     Device, DeviceState, DeviceTarget, DeviceTransportKind,
 };
+use crate::adb::parsers::parse_adb_devices_proto_text;
 
 /// Default timeout for non-streaming `adb` calls. Two seconds is enough
 /// for `devices`, `shell`, and most metadata reads; longer-running flows
@@ -103,6 +107,7 @@ pub trait AdbTransport: Send + Sync {
 pub struct ShellTransport {
     pub adb_path: PathBuf,
     pub timeout: Duration,
+    structured_tracking: Arc<Mutex<Option<bool>>>,
 }
 
 impl ShellTransport {
@@ -110,6 +115,7 @@ impl ShellTransport {
         Self {
             adb_path: adb_path.into(),
             timeout: DEFAULT_TIMEOUT,
+            structured_tracking: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -145,14 +151,52 @@ impl ShellTransport {
         full.extend_from_slice(args);
         self.run(&full)
     }
-}
 
-impl AdbTransport for ShellTransport {
-    fn list_devices(&self) -> Result<Vec<Device>, TransportError> {
+    pub(crate) fn structured_tracking_available(&self) -> Option<bool> {
+        self.structured_tracking
+            .lock()
+            .ok()
+            .and_then(|value| *value)
+    }
+
+    pub(crate) fn mark_structured_tracking(&self, supported: bool) {
+        if let Ok(mut value) = self.structured_tracking.lock() {
+            *value = Some(supported);
+        }
+    }
+
+    pub(crate) fn start_structured_tracker(
+        &self,
+    ) -> Result<StructuredDeviceTracker, TransportError> {
+        StructuredDeviceTracker::start(&self.adb_path)
+    }
+
+    pub(crate) fn list_devices_legacy(&self) -> Result<Vec<Device>, TransportError> {
         let stdout = self.run(&["devices", "-l"])?;
         let mut devices = parse_devices_long(&stdout)?;
         attach_transport_provenance(&mut devices);
         Ok(devices)
+    }
+}
+
+impl AdbTransport for ShellTransport {
+    fn list_devices(&self) -> Result<Vec<Device>, TransportError> {
+        if self.structured_tracking_available() != Some(false) {
+            let structured = self.start_structured_tracker().and_then(|tracker| {
+                tracker
+                    .next_snapshot(self.timeout)?
+                    .ok_or(TransportError::Timeout(self.timeout))
+            });
+            match structured {
+                Ok(mut devices) => {
+                    self.mark_structured_tracking(true);
+                    attach_transport_provenance(&mut devices);
+                    return Ok(devices);
+                }
+                Err(_) => self.mark_structured_tracking(false),
+            }
+        }
+        self.list_devices_legacy()
     }
 
     fn shell(&self, serial: &str, args: &[&str]) -> Result<String, TransportError> {
@@ -171,6 +215,164 @@ impl AdbTransport for ShellTransport {
         full.extend_from_slice(args);
         self.run(&full)
     }
+}
+
+/// Live decoder for ADB's length-prefixed text-proto tracking channel. The
+/// first successful frame is also the runtime capability probe; no platform-
+/// tools version table is involved.
+pub(crate) struct StructuredDeviceTracker {
+    child: Child,
+    snapshots: mpsc::Receiver<Result<Vec<Device>, TransportError>>,
+    reader: Option<JoinHandle<()>>,
+}
+
+impl StructuredDeviceTracker {
+    fn start(adb_path: &Path) -> Result<Self, TransportError> {
+        let mut command = Command::new(adb_path);
+        command
+            .args(["track-devices", "--proto-text"])
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null());
+        crate::process_tree::configure(&mut command);
+        let mut child = command.spawn().map_err(TransportError::Spawn)?;
+        let Some(mut stdout) = child.stdout.take() else {
+            let _ = crate::process_tree::terminate(&mut child);
+            return Err(TransportError::Parse(
+                "ADB tracker did not expose stdout".to_string(),
+            ));
+        };
+        let (sender, snapshots) = mpsc::channel();
+        let reader = match std::thread::Builder::new()
+            .name("adb-device-tracker".to_string())
+            .spawn(move || loop {
+                let result = read_structured_device_frame(&mut stdout);
+                let terminal = result.is_err();
+                if sender.send(result).is_err() || terminal {
+                    break;
+                }
+            }) {
+            Ok(reader) => reader,
+            Err(error) => {
+                let _ = crate::process_tree::terminate(&mut child);
+                return Err(TransportError::Spawn(error));
+            }
+        };
+        Ok(Self {
+            child,
+            snapshots,
+            reader: Some(reader),
+        })
+    }
+
+    pub(crate) fn next_snapshot(
+        &self,
+        timeout: Duration,
+    ) -> Result<Option<Vec<Device>>, TransportError> {
+        match self.snapshots.recv_timeout(timeout) {
+            Ok(result) => result.map(Some),
+            Err(mpsc::RecvTimeoutError::Timeout) => Ok(None),
+            Err(mpsc::RecvTimeoutError::Disconnected) => Err(TransportError::Parse(
+                "ADB structured device tracker closed unexpectedly".to_string(),
+            )),
+        }
+    }
+}
+
+impl Drop for StructuredDeviceTracker {
+    fn drop(&mut self) {
+        let _ = crate::process_tree::terminate(&mut self.child);
+        if let Some(reader) = self.reader.take() {
+            let _ = reader.join();
+        }
+    }
+}
+
+fn read_structured_device_frame(reader: &mut impl Read) -> Result<Vec<Device>, TransportError> {
+    const FRAME_HEADER_BYTES: usize = 4;
+    const MAX_FRAME_BYTES: usize = 1024 * 1024;
+
+    let mut header = [0u8; FRAME_HEADER_BYTES];
+    reader.read_exact(&mut header).map_err(|error| {
+        TransportError::Parse(format!(
+            "ADB structured device tracker returned no complete frame header: {error}"
+        ))
+    })?;
+    let header = std::str::from_utf8(&header)
+        .map_err(|_| TransportError::Parse("ADB tracker frame header was not ASCII".to_string()))?;
+    let length = usize::from_str_radix(header, 16).map_err(|_| {
+        TransportError::Parse(format!(
+            "ADB tracker frame header was not hexadecimal: {header:?}"
+        ))
+    })?;
+    if length > MAX_FRAME_BYTES {
+        return Err(TransportError::OutputLimit {
+            stream: OutputStream::Stdout,
+            limit_bytes: MAX_FRAME_BYTES,
+        });
+    }
+    let payload = read_structured_payload(reader, length)?;
+    let payload = std::str::from_utf8(&payload).map_err(|_| {
+        TransportError::Parse("ADB structured device payload was not UTF-8".to_string())
+    })?;
+    parse_adb_devices_proto_text(payload).map_err(TransportError::Parse)
+}
+
+#[cfg(not(windows))]
+fn read_structured_payload(
+    reader: &mut impl Read,
+    length: usize,
+) -> Result<Vec<u8>, TransportError> {
+    let mut payload = vec![0u8; length];
+    reader.read_exact(&mut payload).map_err(|error| {
+        TransportError::Parse(format!(
+            "ADB structured device tracker returned a truncated frame: {error}"
+        ))
+    })?;
+    Ok(payload)
+}
+
+#[cfg(windows)]
+fn read_structured_payload(
+    reader: &mut impl Read,
+    logical_length: usize,
+) -> Result<Vec<u8>, TransportError> {
+    // The Windows adb CLI writes text-mode stdout: each LF from the server's
+    // text-proto payload becomes CRLF, but the four-byte prefix still counts
+    // the original LF-only payload. Count normalized bytes so one frame cannot
+    // consume the next frame's header.
+    let mut payload = Vec::with_capacity(logical_length);
+    while payload.len() < logical_length {
+        let mut byte = [0u8; 1];
+        reader.read_exact(&mut byte).map_err(|error| {
+            TransportError::Parse(format!(
+                "ADB structured device tracker returned a truncated frame: {error}"
+            ))
+        })?;
+        if byte[0] != b'\r' {
+            payload.push(byte[0]);
+            continue;
+        }
+
+        let mut next = [0u8; 1];
+        reader.read_exact(&mut next).map_err(|error| {
+            TransportError::Parse(format!(
+                "ADB structured device tracker returned a truncated CRLF pair: {error}"
+            ))
+        })?;
+        if next[0] == b'\n' {
+            payload.push(b'\n');
+        } else {
+            payload.push(b'\r');
+            if payload.len() >= logical_length {
+                return Err(TransportError::Parse(
+                    "ADB structured frame ended inside an unexpected carriage return".to_string(),
+                ));
+            }
+            payload.push(next[0]);
+        }
+    }
+    Ok(payload)
 }
 
 /// Re-resolve a captured target immediately before an operation. This is the
@@ -332,6 +534,10 @@ pub fn parse_devices_long(stdout: &str) -> Result<Vec<Device>, TransportError> {
             model: None,
             product: None,
             device: None,
+            bus_address: None,
+            connection_type: None,
+            negotiated_speed: None,
+            max_speed: None,
             build_fingerprint: None,
             transport_id: None,
             connection_generation: 0,
@@ -527,6 +733,10 @@ mod tests {
             model: Some("Pixel".into()),
             product: Some("panther".into()),
             device: Some("panther".into()),
+            bus_address: None,
+            connection_type: None,
+            negotiated_speed: None,
+            max_speed: None,
             build_fingerprint: Some(build.into()),
             transport_id,
             connection_generation: 0,
@@ -558,6 +768,41 @@ R5CT60ZQR4M            unauthorized usb:1-2 transport_id:2
         assert_eq!(devices[2].serial, "192.168.1.42:5555");
         assert!(devices[2].wireless);
         assert_eq!(devices[2].model.as_deref(), Some("Pixel_5"));
+    }
+
+    #[test]
+    fn reads_length_prefixed_structured_tracker_frame() {
+        let payload = r#"device { serial: "pixel" state: DEVICE negotiated_speed: 480000000 transport_id: 7 }"#;
+        let frame = format!("{:04x}{payload}", payload.len());
+        let devices = read_structured_device_frame(&mut std::io::Cursor::new(frame)).unwrap();
+        assert_eq!(devices.len(), 1);
+        assert_eq!(devices[0].serial, "pixel");
+        assert_eq!(devices[0].negotiated_speed, Some(480_000_000));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_tracker_frame_normalizes_crlf_without_consuming_the_next_header() {
+        let first = "device {\r\n  serial: \"pixel\"\r\n  state: DEVICE\r\n}\r\n";
+        let logical = first.replace("\r\n", "\n");
+        let second = r#"device { serial: "next" state: RESCUE }"#;
+        let frame = format!("{:04x}{first}{:04x}{second}", logical.len(), second.len());
+        let mut reader = std::io::Cursor::new(frame);
+        assert_eq!(
+            read_structured_device_frame(&mut reader).unwrap()[0].serial,
+            "pixel"
+        );
+        assert_eq!(
+            read_structured_device_frame(&mut reader).unwrap()[0].serial,
+            "next"
+        );
+    }
+
+    #[test]
+    fn rejects_malformed_structured_tracker_frame_for_fallback() {
+        for frame in ["zzzz", "0005oops", "0010short"] {
+            assert!(read_structured_device_frame(&mut std::io::Cursor::new(frame)).is_err());
+        }
     }
 
     #[test]
@@ -600,6 +845,10 @@ emulator-5554          device transport_id:1
             model: Some("Pixel".into()),
             product: None,
             device: None,
+            bus_address: None,
+            connection_type: None,
+            negotiated_speed: None,
+            max_speed: None,
             build_fingerprint: Some("build/test".into()),
             transport_id: Some(1),
             connection_generation: 0,

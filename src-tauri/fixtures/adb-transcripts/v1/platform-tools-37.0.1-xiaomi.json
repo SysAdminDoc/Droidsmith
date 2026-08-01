@@ -10,6 +10,12 @@
   },
   "commands": [
     {
+      "argv": ["track-devices", "--proto-text"],
+      "exitCode": 0,
+      "stdout": "0201device {\n  serial: \"XIAOMI371USB\"\n  state: DEVICE\n  bus_address: \"1-3\"\n  product: \"rubypro\"\n  model: \"22101316G\"\n  device: \"ruby\"\n  connection_type: USB\n  negotiated_speed: 5000000000\n  max_speed: 10000000000\n  transport_id: 303\n}\ndevice {\n  serial: \"XIAOMI371UNKNOWN\"\n  state: VENDOR_STATE\n  product: \"rubypro\"\n  model: \"Unknown\"\n  device: \"ruby\"\n  connection_type: USB\n  transport_id: 399\n}\ndevice {\n  serial: \"<invalid>\"\n  state: DEVICE\n  product: \"bad\"\n  model: \"Bad\"\n  device: \"bad\"\n  connection_type: USB\n}\n",
+      "stderr": ""
+    },
+    {
       "argv": ["devices", "-l"],
       "exitCode": 0,
       "stdout": "List of devices attached\nXIAOMI371USB device product:rubypro model:22101316G device:ruby transport_id:303\nXIAOMI371UNKNOWN vendor_state product:rubypro model:Unknown device:ruby transport_id:399\n<invalid> device product:bad model:Bad device:bad transport_id:not-a-number\n",
