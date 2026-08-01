@@ -91,6 +91,7 @@ function validatePolicy() {
     Array.isArray(policy.exceptions),
     "release-policy.json exceptions must be an array",
   );
+  validateAccessibilityAuditPolicy(policy.accessibilityAudit);
   validateRendererBundlePolicy(policy.rendererBundle);
   validateTrackedDocumentationPolicy(policy.trackedDocumentation);
 
@@ -135,6 +136,41 @@ function validatePolicy() {
   validateLanguageContract();
   validateSubprocessCaptureContract();
   validateAutomationPolicy();
+}
+
+export function validateAccessibilityAuditPolicy(policy) {
+  const expectedTags = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"];
+  assertEqualJson(
+    policy?.tags,
+    expectedTags,
+    "accessibilityAudit.tags must retain the reviewed WCAG A/AA rule set",
+  );
+  assert(
+    Array.isArray(policy?.excludedRules),
+    "accessibilityAudit.excludedRules must be an array",
+  );
+  const ids = new Set();
+  for (const exclusion of policy.excludedRules) {
+    assert(
+      typeof exclusion?.id === "string" && exclusion.id.length > 0,
+      "accessibility audit exclusions require a rule id",
+    );
+    assert(
+      !ids.has(exclusion.id),
+      `duplicate accessibility audit exclusion: ${exclusion.id}`,
+    );
+    assert(
+      typeof exclusion.rationale === "string" &&
+        exclusion.rationale.trim().length >= 40,
+      `${exclusion.id} accessibility exclusion rationale is too short`,
+    );
+    ids.add(exclusion.id);
+  }
+  assertEqualJson(
+    [...ids],
+    ["color-contrast"],
+    "only the compositing-aware contrast rule tracked by IMP-105 may be excluded",
+  );
 }
 
 function validateTrackedDocumentationPolicy(policy) {

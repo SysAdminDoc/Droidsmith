@@ -1,5 +1,14 @@
 {
   "schemaVersion": 1,
+  "accessibilityAudit": {
+    "tags": ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"],
+    "excludedRules": [
+      {
+        "id": "color-contrast",
+        "rationale": "Axe cannot resolve Droidsmith's layered translucent surfaces reliably. IMP-105 owns a computed-style and compositing-aware WCAG contrast gate; all non-contrast WCAG A/AA rules remain zero-tolerance here."
+      }
+    ]
+  },
   "rendererBundle": {
     "initialJavaScriptBudgetBytes": 450000,
     "dynamicRouteEntries": [

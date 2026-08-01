@@ -5,6 +5,7 @@ import {
   collectCargoDuplicates,
   readCargoDependencyRequirement,
   validateAutomationFiles,
+  validateAccessibilityAuditPolicy,
   validateDependencyFloor,
   validateRendererBundleManifest,
   validateScrcpyPolicyDocument,
@@ -27,6 +28,36 @@ const rendererRoutes = [
   "DeviceSettings",
   "ApkAnalyzer",
 ].map((name) => `src/routes/${name}.tsx`);
+
+test("accessibility audit policy keeps WCAG rules and reviewed exclusions explicit", () => {
+  const policy = {
+    tags: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"],
+    excludedRules: [
+      {
+        id: "color-contrast",
+        rationale:
+          "Computed contrast is enforced by the dedicated compositing-aware IMP-105 rendered-style gate.",
+      },
+    ],
+  };
+  assert.doesNotThrow(() => validateAccessibilityAuditPolicy(policy));
+  assert.throws(
+    () =>
+      validateAccessibilityAuditPolicy({
+        ...policy,
+        excludedRules: [],
+      }),
+    /only the compositing-aware contrast rule/u,
+  );
+  assert.throws(
+    () =>
+      validateAccessibilityAuditPolicy({
+        ...policy,
+        tags: ["wcag2a"],
+      }),
+    /reviewed WCAG A\/AA rule set/u,
+  );
+});
 
 test("exception dates are absolute, valid, and unexpired", () => {
   const now = new Date("2026-07-15T12:00:00Z");

@@ -54,13 +54,6 @@ R-119 / IMP-95.
   Acceptance: quirk rules exist for each vendor that ships a pack, each citing a public source URL and the ROM/build it was observed on; rules match on package plus manufacturer/ROM rather than error text alone where the hazard is pre-emptive; the debloat review surfaces a hazard before apply, not only after a failure; every rule validates against schema `"1"` with no schema change; each rule states its evidence basis so an unobserved combination reports `unknown` rather than implying verification. Note: this adds *rules describing publicly reported behaviour with attribution*, which is distinct from redistributing UAD-NG's curated list — that remains blocked as R-036.
   Complexity: M
 
-- [ ] P2 — IMP-104: Add automated accessibility assertions to the rendered-route smoke
-  Why: substantial hand-built accessibility work (forced-colors, 2.5.8 target sizing, focus trapping, live regions, reduced motion) is protected by review alone; nine-plus a11y fix commits in the last 200 show it regresses.
-  Evidence: `src/index.css` carries explicit IMP-61 WCAG work; `scripts/check-rendered-routes.mjs` (4,379 lines) contains no axe or contrast assertions; `src/lib/contrast.test.ts` checks tokens only, not rendered surfaces.
-  Touches: `scripts/check-rendered-routes.mjs`, `package.json`, `.github/workflows/ci.yml`, `release-policy.json`.
-  Acceptance: an axe-core pass runs against every route in the existing mocked-IPC harness plus modals, the command palette, and onboarding; the rule set and any documented exclusions are declared in a reviewed config with rationale; violations fail `npm run ui:smoke`; the baseline is zero violations at introduction, not a suppressed snapshot.
-  Complexity: M
-
 - [ ] P2 — IMP-105: Add a computed-contrast harness over rendered surfaces
   Why: this is the single stated blocker on the light-theme item, and it is a harness gap rather than a hardware gap — the environment can compute rendered contrast, it just does not.
   Evidence: Roadmap_Blocked.md light-theme entry says the harness "checks console errors and document overflow, not contrast ratios"; `src/lib/contrast.test.ts` already implements WCAG relative-luminance maths against Tailwind tokens; Playwright can read computed styles per element.

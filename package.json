@@ -43,6 +43,7 @@
     "zustand": "^5.0.2"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.12.1",
     "@eslint/js": "^10.0.1",
     "@tauri-apps/cli": "^2.11.4",
     "@types/node": "^24.10.1",

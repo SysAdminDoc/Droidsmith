@@ -14,6 +14,17 @@ completion.
 Working batches live here. Sections collapse into a versioned release on
 each milestone tag.
 
+### Added
+
+- **Rendered accessibility is now a zero-violation release gate.** The existing
+  mocked-native smoke runs axe against all 11 workspaces, onboarding, the
+  command palette, settings, and a destructive-action review. Its WCAG A/AA
+  rule set and sole reviewed exclusion live in release policy with validation
+  tests; any semantic violation fails `npm run ui:smoke` and therefore CI. The
+  layered-surface contrast rule remains explicitly assigned to the dedicated
+  computed-contrast harness in IMP-105 instead of being silently suppressed.
+  (IMP-104)
+
 ### Changed
 
 - **Consolidated the workspace into a denser technical visual system.** The

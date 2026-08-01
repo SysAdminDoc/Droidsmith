@@ -9,6 +9,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 
 import { chromium } from "playwright";
+import AxeBuilder from "@axe-core/playwright";
 
 const repoRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -22,6 +23,9 @@ const docsScreenshotDir = path.join(repoRoot, "docs", "screenshots");
 const languageContract = JSON.parse(
   fs.readFileSync(path.join(repoRoot, "language-contract.json"), "utf8"),
 );
+const accessibilityAuditPolicy = JSON.parse(
+  fs.readFileSync(path.join(repoRoot, "release-policy.json"), "utf8"),
+).accessibilityAudit;
 const localeContracts = languageContract.languages.map(({ code, locale }) => ({
   code,
   locale,
@@ -46,6 +50,7 @@ try {
   const browser = await chromium.launch();
   try {
     await runDesktopFlow(browser);
+    await runAccessibilityAuditFlow(browser);
     await runMobileFlow(browser);
     await runLocaleZoomFlow(browser);
     await runApkAccessibilityFlow(browser);
@@ -62,6 +67,71 @@ try {
   stdout.write("Rendered route smoke OK\n");
 } finally {
   stopServer(server);
+}
+
+// IMP-104: keep semantic accessibility regression coverage on the same mocked
+// native state as the rendered-route smoke. The rule set and its single scoped
+// exclusion are reviewed in release-policy.json rather than hidden in code.
+async function runAccessibilityAuditFlow(browser) {
+  const context = await browser.newContext({
+    viewport: { width: 1366, height: 900 },
+  });
+  const page = await context.newPage();
+  const errors = collectConsoleErrors(page);
+  await installTauriMock(page);
+  await page.goto(baseUrl, { waitUntil: "networkidle" });
+
+  const routes = [
+    "Devices",
+    "Wireless",
+    "Apps",
+    "Debloat",
+    "Profiles",
+    "Mirror",
+    "Console",
+    "Logcat",
+    "Fastboot",
+    "Tuning",
+    "APK Analyzer",
+  ];
+  for (const route of routes) {
+    await page
+      .getByRole("button", { name: new RegExp(`^${escapeRegex(route)}`) })
+      .first()
+      .click();
+    await page.getByRole("heading", { name: route, exact: true }).waitFor();
+    await assertAxeClean(page, `${route} route`);
+  }
+
+  await page.keyboard.press("Control+k");
+  await page.getByRole("dialog", { name: "Command palette" }).waitFor();
+  await assertAxeClean(page, "command palette");
+  await page.keyboard.press("Escape");
+
+  await page.getByRole("button", { name: "Help", exact: true }).click();
+  await page.getByRole("dialog", { name: "Getting started" }).waitFor();
+  await assertAxeClean(page, "onboarding dialog");
+  await page.keyboard.press("Escape");
+
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await page.getByRole("dialog", { name: /settings/i }).waitFor();
+  await assertAxeClean(page, "settings dialog");
+  await page.keyboard.press("Escape");
+
+  await page
+    .getByRole("button", { name: /^Console/ })
+    .first()
+    .click();
+  await page.getByRole("heading", { name: "Console", exact: true }).waitFor();
+  await page.getByLabel("ADB shell command").fill("rm /sdcard/qa.txt");
+  await page.getByRole("button", { name: "Run", exact: true }).click();
+  await page
+    .getByRole("alertdialog", { name: "Review shell mutation" })
+    .waitFor();
+  await assertAxeClean(page, "destructive action review dialog");
+
+  assertNoConsoleErrors(errors, "accessibility route smoke");
+  await context.close();
 }
 
 async function runDesktopFlow(browser) {
@@ -1683,6 +1753,38 @@ function assertNoConsoleErrors(errors, label) {
   if (errors.length > 0) {
     throw new Error(`${label} console errors:\n${errors.join("\n")}`);
   }
+}
+
+async function assertAxeClean(page, label) {
+  if (
+    !Array.isArray(accessibilityAuditPolicy?.tags) ||
+    !Array.isArray(accessibilityAuditPolicy?.excludedRules)
+  ) {
+    throw new Error("release-policy.json accessibilityAudit is malformed");
+  }
+  await settleLayout(page);
+  const builder = new AxeBuilder({ page }).withTags(
+    accessibilityAuditPolicy.tags,
+  );
+  const excludedRuleIds = accessibilityAuditPolicy.excludedRules.map(
+    (entry) => entry.id,
+  );
+  if (excludedRuleIds.length > 0) builder.disableRules(excludedRuleIds);
+  const { violations } = await builder.analyze();
+  if (violations.length === 0) return;
+
+  const details = violations
+    .map((violation) => {
+      const nodes = violation.nodes
+        .map(
+          (node) =>
+            `  ${node.target.join(" ")}\n  ${node.failureSummary ?? node.html}`,
+        )
+        .join("\n");
+      return `${violation.id} (${violation.impact ?? "unknown impact"}): ${violation.help}\n${nodes}`;
+    })
+    .join("\n\n");
+  throw new Error(`${label} accessibility violations:\n${details}`);
 }
 
 function escapeRegex(value) {
