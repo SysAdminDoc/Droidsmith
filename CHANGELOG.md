@@ -14,6 +14,8 @@ completion.
 Working batches live here. Sections collapse into a versioned release on
 each milestone tag.
 
+## [0.9.13] - 2026-07-31
+
 ### Changed
 
 - **Moved off the end-of-life Node runtime.** Node 20 reached end of life on

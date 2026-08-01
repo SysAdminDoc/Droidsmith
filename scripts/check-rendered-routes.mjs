@@ -3792,14 +3792,6 @@ async function installTauriMock(
               security_floor_version: "3.3.4",
               source_url: null,
             },
-            // 4.1 is above the CVE-2025-34449 floor, so the host-risk panel
-            // must stay hidden on the happy path.
-            security: {
-              status: "supported",
-              advisories: [],
-              security_floor_version: "3.3.4",
-              source_url: null,
-            },
             available_video_codecs: ["h264", "h265"],
             video_encoders: [
               {
