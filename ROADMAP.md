@@ -46,13 +46,6 @@ R-119 / IMP-95.
 
 ### P0
 
-- [ ] P0 — IMP-97: Make the CVE-2026-42184 fix a manifest requirement, not a lockfile accident
-  Why: `src-tauri/Cargo.toml` declares `tauri = "2"`, which permits versions with an origin-confusion bug that lets a remote page invoke local-only IPC commands on Windows — against a surface of 98 privileged device-mutation commands.
-  Evidence: GHSA-7gmj-67g7-phm9 / CVE-2026-42184 (2026-05-06, CVSS 8.8), `is_local_url()` `split_once('.')`, fixed in 2.11.1; `src-tauri/Cargo.lock` currently resolves 2.11.2.
-  Touches: `src-tauri/Cargo.toml`, `src-tauri/Cargo.lock`.
-  Acceptance: `tauri = "2.11.1"` and `tauri-build = "2.6"` are the declared floors; a `cargo update` cannot resolve below the fix; the release gate asserts the floor so it cannot silently regress.
-  Complexity: S
-
 - [ ] P0 — R-120: Gate wireless debugging on the device security-patch level
   Why: Droidsmith's own pairing flow plants an RSA host key in the device trust store, which is a stated precondition of CVE-2026-0073 — an adbd mutual-auth bypass giving remote shell-user code execution with no user interaction.
   Evidence: AOSP bulletin 2026-05-01 (CVSS 8.8, Critical, Android 14/15/16); `EVP_PKEY_cmp` `-1` treated as truthy in `adbd_tls_verify_cert`; `ro.build.version.security_patch` is already parsed at `src-tauri/src/adb/device_info.rs:117` but only rendered as a neutral field at `src/routes/devices/DeviceDetail.tsx:179`.

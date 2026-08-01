@@ -128,6 +128,7 @@ function validatePolicy() {
     "release-policy.json contains an unsupported exception kind",
   );
   validateVersionParity();
+  validateDependencySecurityFloors(policy.dependencySecurityFloors);
   validateTrackedDocumentationPolicyFiles(policy.trackedDocumentation);
   validatePlatformToolsPolicy();
   validateLanguageContract();
@@ -166,7 +167,9 @@ function validateTrackedDocumentationPolicyFiles(policy) {
     appVersion: packageJson.version,
     nodeRange: packageJson.engines?.node,
     rustRange: `>=${cargoToml.match(/^rust-version\s*=\s*"([^"]+)"\s*$/mu)?.[1]}`,
-    tauriMajor: `${cargoToml.match(/^tauri\s*=\s*\{\s*version\s*=\s*"(\d+)"/mu)?.[1]}.x`,
+    // The requirement carries a full security floor (see
+    // dependencySecurityFloors), so take only its major for the README row.
+    tauriMajor: `${cargoToml.match(/^tauri\s*=\s*\{\s*version\s*=\s*"(\d+)(?:\.\d+)*"/mu)?.[1]}.x`,
     platformToolsRecommended: platformTools.recommendedVersion,
     platformToolsWarningBelow: platformTools.warningBelowVersion,
     packSchema: schemas.pack.document_version,
@@ -760,6 +763,83 @@ function validateVersionParity() {
     "README.md badge": badgeVersion,
   };
   validateVersionValues(versions);
+}
+
+function validateDependencySecurityFloors(floors) {
+  assert(
+    Array.isArray(floors) && floors.length > 0,
+    "release-policy.json dependencySecurityFloors must be a non-empty array",
+  );
+  for (const floor of floors) {
+    const manifestPath = path.join(repoRoot, floor.manifest ?? "");
+    assert(
+      typeof floor.manifest === "string" && fs.existsSync(manifestPath),
+      `dependency security floor manifest is missing: ${floor.manifest}`,
+    );
+    assert(
+      typeof floor.crate === "string" && floor.crate.length > 0,
+      "dependency security floor crate is required",
+    );
+    assertSemver(`${floor.crate} security floor`, floor.minimumVersion);
+    assert(
+      typeof floor.rationale === "string" &&
+        floor.rationale.trim().length >= 20,
+      `${floor.crate} security floor rationale is too short`,
+    );
+    assert(
+      typeof floor.sourceUrl === "string" &&
+        floor.sourceUrl.startsWith("https://"),
+      `${floor.crate} security floor needs an https source URL`,
+    );
+    const declared = readCargoDependencyRequirement(
+      fs.readFileSync(manifestPath, "utf8"),
+      floor.crate,
+    );
+    assert(
+      declared !== undefined,
+      `${floor.crate} is not declared in ${floor.manifest}`,
+    );
+    validateDependencyFloor(floor, declared);
+  }
+}
+
+// A caret requirement only guarantees the advisory fix when the declared floor
+// is at or above the patched release; `tauri = "2"` would silently allow a
+// vulnerable resolve on a fresh lockfile.
+export function validateDependencyFloor(floor, declared) {
+  assert(
+    /^\d+(\.\d+){0,2}$/u.test(declared),
+    `${floor.crate} requirement must be a plain caret floor, found "${declared}"`,
+  );
+  const required = floor.minimumVersion.split(".").map(Number);
+  const actual = declared.split(".").map(Number);
+  for (let index = 0; index < required.length; index += 1) {
+    const left = actual[index];
+    if (left === undefined) {
+      // "2" or "2.11" cannot express the 2.11.1 floor.
+      assert(
+        required[index] === 0,
+        `${floor.crate} requirement "${declared}" is below the ${floor.minimumVersion} security floor (${floor.cve ?? floor.advisory})`,
+      );
+      continue;
+    }
+    if (left > required[index]) return;
+    assert(
+      left === required[index],
+      `${floor.crate} requirement "${declared}" is below the ${floor.minimumVersion} security floor (${floor.cve ?? floor.advisory})`,
+    );
+  }
+}
+
+export function readCargoDependencyRequirement(manifest, crate) {
+  const inline = manifest.match(
+    new RegExp(`^${crate}\\s*=\\s*"([^"]+)"\\s*$`, "mu"),
+  );
+  if (inline) return inline[1];
+  const table = manifest.match(
+    new RegExp(`^${crate}\\s*=\\s*\\{([^}]*)\\}`, "mu"),
+  );
+  return table?.[1].match(/version\s*=\s*"([^"]+)"/u)?.[1];
 }
 
 export function validateVersionValues(versions) {

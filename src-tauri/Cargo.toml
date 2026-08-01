@@ -16,10 +16,16 @@ name = "droidsmith_lib"
 crate-type = ["cdylib", "rlib"]
 
 [build-dependencies]
-tauri-build = { version = "2", features = ["isolation"] }
+tauri-build = { version = "2.6", features = ["isolation"] }
 
 [dependencies]
-tauri = { version = "2", features = ["isolation"] }
+# Floor is 2.11.1, not "2": CVE-2026-42184 / GHSA-7gmj-67g7-phm9 let a remote
+# page match the `app://` custom protocol on Windows (`is_local_url` used
+# `split_once('.')`, so `http://app.evil.com` passed) and invoke local-only IPC
+# commands. Droidsmith exposes privileged device-mutation commands over that
+# boundary, so the fixed version is a hard requirement rather than whatever the
+# lockfile happens to resolve. `scripts/check-release-policy.mjs` asserts it.
+tauri = { version = "2.11.1", features = ["isolation"] }
 tauri-plugin-dialog = "2"
 tauri-plugin-single-instance = "2"
 serde = { version = "1", features = ["derive"] }

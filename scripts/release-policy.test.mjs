@@ -3,7 +3,9 @@ import test from "node:test";
 
 import {
   collectCargoDuplicates,
+  readCargoDependencyRequirement,
   validateAutomationFiles,
+  validateDependencyFloor,
   validateRendererBundleManifest,
   validateExpiry,
   validatePlatformToolsDocumentation,
@@ -357,4 +359,65 @@ test("renderer manifest keeps every route dynamic and the entry under budget", (
       ),
     /missing dynamic route import/u,
   );
+});
+
+const tauriFloor = {
+  crate: "tauri",
+  minimumVersion: "2.11.1",
+  cve: "CVE-2026-42184",
+};
+
+test("dependency security floor rejects requirements below the patched release", () => {
+  // The pre-fix declaration. A caret "2" resolves anything in the 2.x line,
+  // including the versions vulnerable to the app:// origin-confusion bug.
+  assert.throws(
+    () => validateDependencyFloor(tauriFloor, "2"),
+    /CVE-2026-42184/,
+  );
+  assert.throws(
+    () => validateDependencyFloor(tauriFloor, "2.11"),
+    /below the 2.11.1/,
+  );
+  assert.throws(
+    () => validateDependencyFloor(tauriFloor, "2.11.0"),
+    /below the 2.11.1/,
+  );
+  assert.throws(
+    () => validateDependencyFloor(tauriFloor, "2.10.9"),
+    /below the 2.11.1/,
+  );
+  assert.throws(
+    () => validateDependencyFloor(tauriFloor, "1.9.9"),
+    /below the 2.11.1/,
+  );
+});
+
+test("dependency security floor accepts the patched release and newer", () => {
+  for (const declared of ["2.11.1", "2.11.2", "2.12.0", "3.0.0"]) {
+    assert.doesNotThrow(() => validateDependencyFloor(tauriFloor, declared));
+  }
+});
+
+test("dependency security floor rejects non-caret requirements it cannot reason about", () => {
+  for (const declared of ["=2.11.1", ">=2.11.1", "2.11.1-beta.1", "*"]) {
+    assert.throws(
+      () => validateDependencyFloor(tauriFloor, declared),
+      /plain caret floor/,
+    );
+  }
+});
+
+test("cargo dependency requirements are read from both inline and table form", () => {
+  const manifest = [
+    "[dependencies]",
+    'serde_json = "1"',
+    'tauri = { version = "2.11.1", features = ["isolation"] }',
+    "",
+    "[build-dependencies]",
+    'tauri-build = { version = "2.6", features = ["isolation"] }',
+  ].join("\n");
+  assert.equal(readCargoDependencyRequirement(manifest, "tauri"), "2.11.1");
+  assert.equal(readCargoDependencyRequirement(manifest, "tauri-build"), "2.6");
+  assert.equal(readCargoDependencyRequirement(manifest, "serde_json"), "1");
+  assert.equal(readCargoDependencyRequirement(manifest, "absent"), undefined);
 });

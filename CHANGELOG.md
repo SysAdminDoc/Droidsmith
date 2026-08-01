@@ -16,6 +16,15 @@ each milestone tag.
 
 ### Security
 
+- **Declared a Tauri security floor instead of relying on the lockfile.**
+  `tauri` now requires `2.11.1` and `tauri-build` requires `2.6`, so the fix for
+  CVE-2026-42184 / GHSA-7gmj-67g7-phm9 — where `is_local_url` used
+  `split_once('.')` and let a remote page such as `http://app.evil.com` match the
+  `app://` custom protocol on Windows and reach local-only IPC commands — can no
+  longer be lost by a fresh `cargo update`. A new
+  `dependencySecurityFloors` block in `release-policy.json` records the advisory,
+  rationale, and source, and the release gate fails if any declared requirement
+  drops below its floor or stops being a plain caret it can reason about. (IMP-97)
 - **Cleared RUSTSEC-2026-0221.** `event-listener` moved from 5.4.1 to 5.4.2,
   which fixes a soundness hole where `StackSlot` unconditionally implemented
   `Send`/`Sync` and let `!Send` tags cross thread boundaries in safe code. The
