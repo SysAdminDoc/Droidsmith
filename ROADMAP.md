@@ -13,17 +13,6 @@ instead.
 - Priority tags: **P0** (must ship in v0.1) . **P1** (v0.1 desirable / v0.2 must) . **P2** (later milestones) . **P3** (cosmetic / nice-to-have)
 - **R-NNN** are roadmap items; **IMP-NN** are hardening / improvement items
 
-## Remaining
-
-### P2
-
-- [ ] P2 — R-119: Add resumable fleet execution from a prior report
-  Why: Commercial fleets and OSS multi-device tools emphasize batch continuity; Droidsmith emits stable fleet JSON but cannot safely rerun only failed/skipped targets after interruption.
-  Evidence: `src-tauri/src/bin/droidsmith_cli.rs`; DeviceFarmer STF; Escrcpy multi-device workflows; commercial fleet/session reporting.
-  Touches: `src-tauri/src/bin/droidsmith_cli.rs`, `src-tauri/src/profile.rs`, `src-tauri/src/journal/`, CLI fixtures and smoke tests.
-  Acceptance: `run --retry-from <report.json>` validates report schema, profile hash, action set, device identity, Android user, and current transport before selecting only failed/skipped devices; dry-run is required before apply when inputs drift; completed actions are never replayed implicitly; JSON records lineage to the source report and uses stable exit codes for mixed outcomes.
-  Complexity: L
-
 ## Research-Driven Additions — 2026-07-31 (v0.9.12)
 
 From the 2026-07-31 RESEARCH.md pass. The prior pass's frontier (lockfile/version

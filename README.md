@@ -215,7 +215,8 @@ the user must review and save the v2 document before it can run.
 
 The CLI uses the same validation and planning code. `--json` emits stable
 machine-readable results, and exit codes are `0` for success, `1` for a failed
-operation or incompatibility, `2` for invalid input, and `3` when ADB is absent.
+operation or incompatibility, `2` for invalid input, `3` when ADB is absent, and
+`4` when a resume is blocked by drift (see below).
 
 ```bash
 droidsmith-cli devices --json
@@ -237,6 +238,36 @@ droidsmith-cli run profile-v2.yaml --all-devices --apply --json
 
 Legacy or unknown TCP transports additionally require
 `--allow-unsafe-transport`; USB and paired TLS Wi-Fi do not.
+
+### Resuming an interrupted fleet run
+
+A fleet report saved with `--json` can be replayed with `--retry-from`. Only
+devices the report left failed or skipped are selected; a device the report
+proves finished is never touched again, and an action the report proves applied
+is never replayed — it is reported with `status: skipped` instead.
+
+```bash
+droidsmith-cli run profile-v2.yaml --all-devices --apply --json > fleet.json
+# ...interrupted, or some devices were offline...
+droidsmith-cli run profile-v2.yaml --retry-from fleet.json --dry-run --json
+droidsmith-cli run profile-v2.yaml --retry-from fleet.json --apply --json
+```
+
+Before selecting anything, the resume re-proves that it is continuing the same
+work: the report schema, the profile document hash, the ordered action set, the
+per-device hashed identity, the resolved Android user, and the current
+transport. Any mismatch is *drift*. Drift never blocks `--dry-run` — reviewing
+it is what the dry run is for — but it blocks `--apply` with exit code `4` until
+it is re-run with `--accept-drift`. An edited action set and an edited note are
+reported as different drift classes, since only the first changes what would
+run.
+
+Reports are schema `2`. Schema `1` reports recorded neither the profile
+fingerprint nor per-action kinds, so they cannot prove which work completed and
+are refused with migration guidance rather than resumed on a guess. Each resume
+writes a `lineage` block naming the source report's content digest, its
+generation number, the devices it selected, and the devices it deliberately
+excluded, so a chain of resumes stays auditable.
 
 ## Portable recovery baselines
 

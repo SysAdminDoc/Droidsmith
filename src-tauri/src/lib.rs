@@ -13,6 +13,9 @@ mod commands;
 pub mod contribution_schema;
 pub mod device_identity;
 mod diagnostics;
+/// Public for the `droidsmith-cli` binary: it both writes fleet run reports
+/// and resumes from them via `run --retry-from`.
+pub mod fleet_report;
 mod fs_util;
 mod gnirehtet;
 mod host_diagnostics;

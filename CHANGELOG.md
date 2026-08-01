@@ -16,6 +16,23 @@ each milestone tag.
 
 ### Added
 
+- **An interrupted fleet run can now be resumed from its own report.**
+  `droidsmith-cli run <profile> --retry-from <report.json>` selects only the
+  devices the source report left failed or skipped, and never replays an action
+  the report proves applied — those are reported with `status: skipped` in both
+  dry-run and apply. Before selecting anything, the resume re-proves the report
+  schema, the profile document hash, the ordered action set, the per-device
+  hashed identity, the resolved Android user, and the current transport; any
+  mismatch is reported as drift, never silently absorbed. Drift leaves
+  `--dry-run` unblocked (reviewing it is the point) but refuses `--apply` with
+  the new exit code `4` until `--accept-drift` is passed. Fleet reports move to
+  schema `2`, adding the profile and action-set fingerprints, per-device hashed
+  identity and transport, and the action kind beside each result; schema `1`
+  reports carry none of that and are refused with migration guidance rather
+  than resumed on a guess. Each resume records a `lineage` block naming the
+  source report's content digest, its generation, and the devices it selected
+  and deliberately excluded. (R-119)
+
 - **Device discovery now consumes ADB's structured tracking channel.** The
   app runtime-probes `adb track-devices --proto-text`, decodes its bounded,
   length-prefixed messages without adding a protobuf runtime, and keeps the
