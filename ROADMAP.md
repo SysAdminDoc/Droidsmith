@@ -54,13 +54,6 @@ R-119 / IMP-95.
   Acceptance: quirk rules exist for each vendor that ships a pack, each citing a public source URL and the ROM/build it was observed on; rules match on package plus manufacturer/ROM rather than error text alone where the hazard is pre-emptive; the debloat review surfaces a hazard before apply, not only after a failure; every rule validates against schema `"1"` with no schema change; each rule states its evidence basis so an unobserved combination reports `unknown` rather than implying verification. Note: this adds *rules describing publicly reported behaviour with attribution*, which is distinct from redistributing UAD-NG's curated list — that remains blocked as R-036.
   Complexity: M
 
-- [ ] P2 — IMP-103: Auto-classify shared-system-UID packages as unsafe
-  Why: packages sharing `android.uid.system` are a deterministic, offline-detectable bootloop risk that current tiering does not account for.
-  Evidence: UAD-NG #770 ("treat system UIDs as unsafe", unmet); UAD-NG #1311/#1295/#1400 are all Recommended-tier removals that bricked devices.
-  Touches: `src-tauri/src/adb/packages.rs`, `src-tauri/src/packs/mod.rs`, `src/routes/debloat/ApplyReview.tsx`, `src/routes/debloat/PackPreview.tsx`, `src/locales/*.json`, fake-tool fixtures.
-  Acceptance: shared-UID detection runs from existing package enumeration with no extra device round trip where possible; a package sharing the system UID is raised to the unsafe tier regardless of its pack tier, is called out by name in the final count/unsafe review, and cannot be silently included in a batch; the override remains possible but requires explicit per-package acknowledgement.
-  Complexity: S
-
 - [ ] P2 — IMP-104: Add automated accessibility assertions to the rendered-route smoke
   Why: substantial hand-built accessibility work (forced-colors, 2.5.8 target sizing, focus trapping, live regions, reduced motion) is protected by review alone; nine-plus a11y fix commits in the last 200 show it regresses.
   Evidence: `src/index.css` carries explicit IMP-61 WCAG work; `scripts/check-rendered-routes.mjs` (4,379 lines) contains no axe or contrast assertions; `src/lib/contrast.test.ts` checks tokens only, not rendered surfaces.

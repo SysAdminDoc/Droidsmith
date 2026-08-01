@@ -26,6 +26,17 @@ each milestone tag.
   green across all 11 workspaces, settings, diagnostics, onboarding, keyboard
   flows, non-English locales, narrow widths, and 200% zoom. (IMP-95)
 
+### Fixed
+
+- **Shared-system-UID packages can no longer enter a debloat batch silently.**
+  Existing package enumeration now recognizes `android.uid.system` for owner
+  and secondary Android users and raises matching entries to Unsafe regardless
+  of their pack tier. Recommended defaults and presets exclude those entries;
+  preview and final review identify them by package name and runtime evidence;
+  and an override requires a separate acknowledgement for every unsafe package.
+  Backend fixtures, selection tests, generated IPC bindings, and the rendered
+  debloat flow cover the classification and acknowledgement gate. (IMP-103)
+
 ## [0.9.14] - 2026-08-01
 
 ### Changed

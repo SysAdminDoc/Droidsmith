@@ -519,6 +519,8 @@
     "unknownValue": "desconocido",
     "unsafe": "Inseguro",
     "unsafeAcknowledge": "Entiendo que estos paquetes de nivel inseguro pueden dañar funciones del dispositivo o del OEM y acepto el riesgo.",
+    "unsafeAcknowledgePackage": "He revisado este paquete y acepto su riesgo individual.",
+    "sharedSystemUidReason": "PackageManager informa android.uid.system; este paquete puede afectar servicios centrales del sistema y se trata como Inseguro.",
     "unsafeSelectedBody": "Estas entradas pueden dañar funciones principales del dispositivo o del OEM. Verifica cada ID de paquete antes de continuar.",
     "unsafeSelectedTitle": "Los paquetes inseguros requieren escrutinio adicional",
     "verify": {

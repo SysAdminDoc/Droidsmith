@@ -2286,6 +2286,16 @@ export type PackEntryAssessment = {
   id: string;
   status: PackEntryStatus;
   detail: string | null;
+  /**
+   * Runtime safety tier after deterministic device evidence is applied.
+   * This never mutates the source pack or its schema-v1 removal tier.
+   */
+  effective_removal: RemovalLevel;
+  /**
+   * True when the entry was raised to Unsafe because it shares
+   * `android.uid.system` on the selected device/user.
+   */
+  shared_system_uid: boolean;
 };
 export type PackEntryStatus = "ready" | "missing" | "unsupported";
 /**

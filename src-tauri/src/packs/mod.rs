@@ -187,6 +187,9 @@ pub struct DevicePackContext {
     pub user_id: u32,
     pub user_current: bool,
     pub installed_packages: HashSet<String>,
+    /// Installed packages whose PackageManager UID resolves to the
+    /// `android.uid.system` app id for the selected Android user.
+    pub system_uid_packages: HashSet<String>,
 }
 
 #[derive(specta::Type, Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -218,6 +221,12 @@ pub struct PackEntryAssessment {
     pub id: String,
     pub status: PackEntryStatus,
     pub detail: Option<String>,
+    /// Runtime safety tier after deterministic device evidence is applied.
+    /// This never mutates the source pack or its schema-v1 removal tier.
+    pub effective_removal: RemovalLevel,
+    /// True when the entry was raised to Unsafe because it shares
+    /// `android.uid.system` on the selected device/user.
+    pub shared_system_uid: bool,
 }
 
 #[derive(specta::Type, Debug, Clone, Serialize)]
@@ -690,6 +699,12 @@ pub fn assess(pack: &Pack, context: &DevicePackContext) -> PackAssessment {
         .packages
         .iter()
         .map(|entry| {
+            let shared_system_uid = context.system_uid_packages.contains(&entry.id);
+            let effective_removal = if shared_system_uid {
+                RemovalLevel::Unsafe
+            } else {
+                entry.removal
+            };
             if !context.installed_packages.contains(&entry.id) {
                 return PackEntryAssessment {
                     id: entry.id.clone(),
@@ -697,6 +712,8 @@ pub fn assess(pack: &Pack, context: &DevicePackContext) -> PackAssessment {
                     detail: Some(
                         "package is not installed for the selected Android user".to_string(),
                     ),
+                    effective_removal,
+                    shared_system_uid,
                 };
             }
             let unavailable: Vec<&str> = entry
@@ -713,6 +730,8 @@ pub fn assess(pack: &Pack, context: &DevicePackContext) -> PackAssessment {
                     id: entry.id.clone(),
                     status: PackEntryStatus::Ready,
                     detail: None,
+                    effective_removal,
+                    shared_system_uid,
                 }
             } else {
                 PackEntryAssessment {
@@ -722,6 +741,8 @@ pub fn assess(pack: &Pack, context: &DevicePackContext) -> PackAssessment {
                         "required package(s) unavailable: {}",
                         unavailable.join(", ")
                     )),
+                    effective_removal,
+                    shared_system_uid,
                 }
             }
         })
@@ -1063,6 +1084,7 @@ packages:
             user_id: 10,
             user_current: true,
             installed_packages: HashSet::from([pack.packages[1].id.clone()]),
+            system_uid_packages: HashSet::from([pack.packages[1].id.clone()]),
         };
 
         let assessment = assess(&pack, &context);
@@ -1070,6 +1092,11 @@ packages:
         assert!(assessment.override_required);
         assert_eq!(assessment.entries[0].status, PackEntryStatus::Missing);
         assert_eq!(assessment.entries[1].status, PackEntryStatus::Unsupported);
+        assert_eq!(
+            assessment.entries[1].effective_removal,
+            RemovalLevel::Unsafe
+        );
+        assert!(assessment.entries[1].shared_system_uid);
         assert!(assessment.entries[1]
             .detail
             .as_deref()

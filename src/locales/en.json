@@ -958,6 +958,8 @@
     "unsafeSelectedTitle": "Unsafe packages require extra scrutiny",
     "unsafeSelectedBody": "These entries can break core device or OEM features. Verify every package ID before continuing.",
     "unsafeAcknowledge": "I understand these unsafe-tier packages can break device or OEM features and accept the risk.",
+    "unsafeAcknowledgePackage": "I reviewed this package and accept its individual risk.",
+    "sharedSystemUidReason": "PackageManager reports android.uid.system; this package can affect core OS services and is treated as Unsafe.",
     "noUnsafeSelected": "No unsafe-tier packages are selected.",
     "searchPlaceholder": "Search packages or descriptions…",
     "searchLabel": "Filter pack entries by id, description, or label",

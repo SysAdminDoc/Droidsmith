@@ -203,12 +203,15 @@ pub(crate) fn pack_context(
             message: format!("Android user {user_id} is not available"),
         })?;
     let info = adb::get_device_info(transport, target)?;
-    let installed_packages = debloat_target_ids(adb::list_packages(
-        transport,
-        target,
-        adb::PackageFilter::All,
-        user_id,
-    )?);
+    let packages = adb::list_packages(transport, target, adb::PackageFilter::All, user_id)?;
+    let system_uid_packages = packages
+        .iter()
+        .filter(|package| {
+            !package.archived && !package.retained && package.uses_android_system_uid()
+        })
+        .map(|package| package.package.clone())
+        .collect();
+    let installed_packages = debloat_target_ids(packages);
     Ok(crate::packs::DevicePackContext {
         manufacturer: info.manufacturer,
         model: info.model,
@@ -217,6 +220,7 @@ pub(crate) fn pack_context(
         user_id,
         user_current: user.current,
         installed_packages,
+        system_uid_packages,
     })
 }
 

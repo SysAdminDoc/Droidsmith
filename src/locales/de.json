@@ -958,6 +958,8 @@
     "unsafeSelectedTitle": "Unsichere Pakete erfordern zusätzliche Prüfung",
     "unsafeSelectedBody": "Diese Einträge können Kernfunktionen des Geräts oder OEM-Funktionen beeinträchtigen. Überprüfen Sie jede Paket-ID vor dem Fortfahren.",
     "unsafeAcknowledge": "Ich verstehe, dass diese unsicheren Pakete Geräte- oder OEM-Funktionen beeinträchtigen können und akzeptiere das Risiko.",
+    "unsafeAcknowledgePackage": "Ich habe dieses Paket geprüft und akzeptiere sein individuelles Risiko.",
+    "sharedSystemUidReason": "PackageManager meldet android.uid.system; dieses Paket kann zentrale Betriebssystemdienste beeinflussen und wird als Unsicher behandelt.",
     "noUnsafeSelected": "Keine Pakete der Stufe Unsicher sind ausgewählt.",
     "searchPlaceholder": "Pakete oder Beschreibungen suchen…",
     "searchLabel": "Paketeinträge nach ID, Beschreibung oder Label filtern",

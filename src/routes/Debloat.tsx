@@ -292,9 +292,16 @@ export default function DebloatRoute() {
         .filter((entry) => entry.status === "ready")
         .map((entry) => entry.id),
     );
+    const effectiveRemoval = new Map(
+      assessment.entries.map((entry) => [entry.id, entry.effective_removal]),
+    );
     const recommended = new Set(
       pack.packages
-        .filter((p) => p.removal === "recommended" && ready.has(p.id))
+        .filter(
+          (p) =>
+            (effectiveRemoval.get(p.id) ?? p.removal) === "recommended" &&
+            ready.has(p.id),
+        )
         .map((p) => p.id),
     );
     setWizard({
@@ -333,7 +340,10 @@ export default function DebloatRoute() {
       if (prev.step !== "preview") return prev;
       const ready = new Set(
         prev.assessment.entries
-          .filter((entry) => entry.status === "ready")
+          .filter(
+            (entry) =>
+              entry.status === "ready" && entry.effective_removal !== "unsafe",
+          )
           .map((entry) => entry.id),
       );
       const matched = packagesForPreset(prev.pack, preset, ready);
@@ -862,6 +872,7 @@ export default function DebloatRoute() {
             {applyReviewOpen && (
               <DebloatApplyReview
                 pack={wizard.pack}
+                assessment={wizard.assessment}
                 selected={wizard.selected}
                 target={authorizedTarget}
                 onCancel={() => setApplyReviewOpen(false)}

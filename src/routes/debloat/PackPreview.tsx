@@ -64,10 +64,10 @@ export function PackPreview({
           .includes(query),
       )
     : pack.packages;
-  const tiers = groupByTier(visiblePackages);
   const assessments = new Map(
     assessment.entries.map((entry) => [entry.id, entry]),
   );
+  const tiers = groupByTier(visiblePackages, assessments);
 
   return (
     <>
@@ -228,6 +228,11 @@ export function PackPreview({
                             {support.detail}
                           </p>
                         )}
+                        {support?.shared_system_uid && (
+                          <p className="mt-1 text-xs font-medium leading-5 text-red-200">
+                            {t("debloat.sharedSystemUidReason")}
+                          </p>
+                        )}
                         {entry.labels.length > 0 && (
                           <div className="mt-2 flex flex-wrap gap-1">
                             {entry.labels.map((l) => (
@@ -312,12 +317,16 @@ function entryStatusTone(
   }
 }
 
-function groupByTier(entries: PackEntry[]): Map<RemovalLevel, PackEntry[]> {
+function groupByTier(
+  entries: PackEntry[],
+  assessments: ReadonlyMap<string, PackEntryAssessment>,
+): Map<RemovalLevel, PackEntry[]> {
   const map = new Map<RemovalLevel, PackEntry[]>();
   for (const entry of entries) {
-    const list = map.get(entry.removal) ?? [];
+    const tier = assessments.get(entry.id)?.effective_removal ?? entry.removal;
+    const list = map.get(tier) ?? [];
     list.push(entry);
-    map.set(entry.removal, list);
+    map.set(tier, list);
   }
   return map;
 }

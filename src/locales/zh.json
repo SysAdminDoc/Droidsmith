@@ -958,6 +958,8 @@
     "unsafeSelectedTitle": "不安全的包需要额外审查",
     "unsafeSelectedBody": "这些条目可能会破坏核心设备或 OEM 功能。请在继续之前验证每个包 ID。",
     "unsafeAcknowledge": "我了解这些不安全等级的包可能会破坏设备或 OEM 功能，并接受风险。",
+    "unsafeAcknowledgePackage": "我已审查此软件包，并接受其单独风险。",
+    "sharedSystemUidReason": "PackageManager 报告 android.uid.system；此软件包可能影响核心系统服务，因此按不安全级别处理。",
     "noUnsafeSelected": "未选择不安全等级的包。",
     "searchPlaceholder": "搜索包或描述…",
     "searchLabel": "按 ID、描述或标签筛选方案包条目",

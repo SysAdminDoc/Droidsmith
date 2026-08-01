@@ -830,7 +830,10 @@ async function runDesktopFlow(browser) {
     .getByText("com.android.settings", { exact: true })
     .waitFor();
   await debloatReview.locator("dd").getByText("3", { exact: true }).waitFor();
-  await debloatReview.locator("dd").getByText("1", { exact: true }).waitFor();
+  await debloatReview.locator("dd").getByText("2", { exact: true }).waitFor();
+  await debloatReview
+    .getByText(/PackageManager reports android\.uid\.system/)
+    .waitFor();
   // R-112: the review surfaces packages that are running services right now.
   await debloatReview.getByText("Some selected apps are running now").waitFor();
   await debloatReview.getByText("com.example.app", { exact: true }).waitFor();
@@ -844,9 +847,17 @@ async function runDesktopFlow(browser) {
   });
   await debloatDisable.waitFor();
   if (await debloatDisable.isDisabled()) {
-    await debloatReview
-      .getByRole("checkbox", { name: /I understand these unsafe-tier/ })
-      .check();
+    const unsafeAcknowledgements = debloatReview.getByRole("checkbox", {
+      name: /I reviewed this package/,
+    });
+    if ((await unsafeAcknowledgements.count()) !== 2) {
+      throw new Error(
+        "Unsafe debloat entries did not require one acknowledgement per package",
+      );
+    }
+    for (let index = 0; index < 2; index += 1) {
+      await unsafeAcknowledgements.nth(index).check();
+    }
   } else {
     throw new Error(
       "Unsafe-tier debloat selection did not gate the confirm button",
@@ -2076,9 +2087,27 @@ async function installTauriMock(
         },
       ],
       entries: [
-        { id: "com.example.app", status: "ready", detail: null },
-        { id: "com.example.fail", status: "ready", detail: null },
-        { id: "com.android.settings", status: "ready", detail: null },
+        {
+          id: "com.example.app",
+          status: "ready",
+          detail: null,
+          effective_removal: "recommended",
+          shared_system_uid: false,
+        },
+        {
+          id: "com.example.fail",
+          status: "ready",
+          detail: null,
+          effective_removal: "unsafe",
+          shared_system_uid: true,
+        },
+        {
+          id: "com.android.settings",
+          status: "ready",
+          detail: null,
+          effective_removal: "unsafe",
+          shared_system_uid: false,
+        },
       ],
     };
 

@@ -52,8 +52,10 @@ export function packagesForPreset(
 export function summarizePackSelection(
   pack: Pack,
   selected: Iterable<string>,
+  runtimeUnsafe: Iterable<string> = [],
 ): PackSelectionSummary {
   const selectedIds = new Set(selected);
+  const runtimeUnsafeIds = new Set(runtimeUnsafe);
   const knownIds = new Set(pack.packages.map((entry) => entry.id));
   for (const id of selectedIds) {
     if (!knownIds.has(id)) {
@@ -64,7 +66,9 @@ export function summarizePackSelection(
     total: selectedIds.size,
     unsafeIds: pack.packages
       .filter(
-        (entry) => entry.removal === "unsafe" && selectedIds.has(entry.id),
+        (entry) =>
+          selectedIds.has(entry.id) &&
+          (entry.removal === "unsafe" || runtimeUnsafeIds.has(entry.id)),
       )
       .map((entry) => entry.id),
   };

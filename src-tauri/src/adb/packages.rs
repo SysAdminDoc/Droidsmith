@@ -20,6 +20,9 @@ use crate::adb::transport::{AdbTransport, TransportError};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 
+const ANDROID_UID_USER_RANGE: u32 = 100_000;
+const ANDROID_SYSTEM_APP_ID: u32 = 1_000;
+
 #[derive(specta::Type, Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct AppPackage {
     /// Application package id, e.g. `com.android.chrome`.
@@ -204,6 +207,16 @@ impl AppPackage {
     #[allow(dead_code)]
     pub fn is_user(&self) -> bool {
         !self.system
+    }
+
+    /// True when PackageManager reports the well-known `android.uid.system`
+    /// app id for this Android user. Secondary users offset Linux UIDs by
+    /// `PER_USER_RANGE`, so compare the app-id portion rather than only UID
+    /// 1000. A missing UID is unknown and must never be classified as safe or
+    /// unsafe from this signal alone.
+    pub fn uses_android_system_uid(&self) -> bool {
+        self.uid
+            .is_some_and(|uid| uid % ANDROID_UID_USER_RANGE == ANDROID_SYSTEM_APP_ID)
     }
 }
 
@@ -623,6 +636,29 @@ package:/system/app/FacebookStub/FacebookStub.apk=com.facebook.appmanager uid:10
         let foo = &v[1];
         assert_eq!(foo.installer, None); // "null" → None
         assert!(!foo.system); // /data/app/ → user
+    }
+
+    #[test]
+    fn system_uid_detection_handles_owner_and_secondary_android_users() {
+        let mut package = AppPackage {
+            package: "com.example.system".to_string(),
+            enabled: true,
+            system: true,
+            apk_path: Some("/system/app/System/System.apk".to_string()),
+            uid: Some(1_000),
+            installer: None,
+            archived: false,
+            retained: false,
+        };
+        assert!(package.uses_android_system_uid());
+
+        package.uid = Some(101_000);
+        assert!(package.uses_android_system_uid());
+
+        package.uid = Some(10_042);
+        assert!(!package.uses_android_system_uid());
+        package.uid = None;
+        assert!(!package.uses_android_system_uid());
     }
 
     #[test]

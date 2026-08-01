@@ -87,6 +87,12 @@ describe("summarizePackSelection", () => {
     });
   });
 
+  it("raises runtime-classified packages into the unsafe summary", () => {
+    expect(
+      summarizePackSelection(pack, ["com.example.base"], ["com.example.base"]),
+    ).toEqual({ total: 1, unsafeIds: ["com.example.base"] });
+  });
+
   it("rejects selections outside the reviewed pack revision", () => {
     expect(() => summarizePackSelection(pack, ["com.example.unknown"])).toThrow(
       "is not in pack",

@@ -6,6 +6,7 @@ import {
   errorMessage,
   type DeviceTarget,
   type Pack,
+  type PackAssessment,
 } from "../../lib/tauri";
 import { useTargetOperation } from "../../lib/targetOperation";
 import { useFocusTrap } from "../../lib/useFocusTrap";
@@ -29,12 +30,14 @@ type ServiceProbeState =
 
 export function DebloatApplyReview({
   pack,
+  assessment,
   selected,
   target,
   onCancel,
   onConfirm,
 }: {
   pack: Pack;
+  assessment: PackAssessment;
   selected: Set<string>;
   target: DeviceTarget | null;
   onCancel: () => void;
@@ -43,10 +46,20 @@ export function DebloatApplyReview({
   const { t } = useTranslation();
   const trapRef = useFocusTrap<HTMLDivElement>();
   const serviceOperation = useTargetOperation(target, "running-services");
-  const summary = summarizePackSelection(pack, selected);
-  const [unsafeAcknowledged, setUnsafeAcknowledged] = useState(false);
+  const assessmentById = new Map(
+    assessment.entries.map((entry) => [entry.id, entry]),
+  );
+  const runtimeUnsafe = assessment.entries
+    .filter((entry) => entry.effective_removal === "unsafe")
+    .map((entry) => entry.id);
+  const summary = summarizePackSelection(pack, selected, runtimeUnsafe);
+  const [unsafeAcknowledged, setUnsafeAcknowledged] = useState<Set<string>>(
+    () => new Set(),
+  );
   const hasUnsafe = summary.unsafeIds.length > 0;
-  const confirmBlocked = hasUnsafe && !unsafeAcknowledged;
+  const confirmBlocked = summary.unsafeIds.some(
+    (id) => !unsafeAcknowledged.has(id),
+  );
 
   // R-112: surface which selected apps are running services right now, so the
   // reviewer knows a disable won't stop live services until reboot/force-stop.
@@ -149,26 +162,43 @@ export function DebloatApplyReview({
             <p className="mt-1 text-xs leading-5 text-red-100/80">
               {t("debloat.unsafeSelectedBody")}
             </p>
-            <ul className="mt-3 space-y-1">
-              {summary.unsafeIds.map((id) => (
-                <li key={id}>
-                  <code className="break-all font-mono text-xs text-red-50">
-                    {id}
-                  </code>
-                </li>
-              ))}
+            <ul className="mt-3 space-y-2">
+              {summary.unsafeIds.map((id) => {
+                const runtimeEvidence = assessmentById.get(id);
+                return (
+                  <li key={id}>
+                    <label className="flex cursor-pointer items-start gap-2 border border-red-300/20 bg-red-950/20 p-2.5 text-xs leading-5 text-red-100">
+                      <input
+                        type="checkbox"
+                        checked={unsafeAcknowledged.has(id)}
+                        onChange={(event) => {
+                          setUnsafeAcknowledged((current) => {
+                            const next = new Set(current);
+                            if (event.target.checked) next.add(id);
+                            else next.delete(id);
+                            return next;
+                          });
+                        }}
+                        className="mt-0.5 h-4 w-4 shrink-0 rounded border-red-300/40 bg-red-300/10 text-red-400 focus:ring-2 focus:ring-red-300/40"
+                      />
+                      <span className="min-w-0">
+                        <code className="block break-all font-mono text-xs text-red-50">
+                          {id}
+                        </code>
+                        {runtimeEvidence?.shared_system_uid && (
+                          <span className="mt-1 block text-red-100/80">
+                            {t("debloat.sharedSystemUidReason")}
+                          </span>
+                        )}
+                        <span className="mt-1 block">
+                          {t("debloat.unsafeAcknowledgePackage")}
+                        </span>
+                      </span>
+                    </label>
+                  </li>
+                );
+              })}
             </ul>
-            <label className="mt-3 flex items-start gap-2 text-xs leading-5 text-red-100">
-              <input
-                type="checkbox"
-                checked={unsafeAcknowledged}
-                onChange={(event) =>
-                  setUnsafeAcknowledged(event.target.checked)
-                }
-                className="mt-0.5 h-4 w-4 shrink-0 rounded border-red-300/40 bg-red-300/10 text-red-400 focus:ring-2 focus:ring-red-300/40"
-              />
-              <span>{t("debloat.unsafeAcknowledge")}</span>
-            </label>
           </div>
         ) : (
           <p className="mt-4 rounded-md border border-circuit-300/20 bg-circuit-300/[0.06] p-3 text-sm text-circuit-100">
