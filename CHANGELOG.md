@@ -27,6 +27,14 @@ each milestone tag.
 
 ### Fixed
 
+- **Picked up the Tauri isolation-pattern fix.** Droidsmith runs the isolation
+  pattern, and Tauri 2.7.0 fixed a bug where it created iframes within iframes
+  on Windows — the primary platform. Tauri moves 2.11.2 to 2.11.5 and
+  `tauri-build` 2.6.2 to 2.6.3, which also brings the 2.5.0 channel-throughput
+  fix for small payloads (Logcat streaming) and the 2.6.0 async-command dispatch
+  change. `@tauri-apps/api` and `@tauri-apps/cli` move to 2.11.1/2.11.4 so the
+  Rust and JS halves stay aligned. (IMP-102)
+
 - **Host Doctor no longer asserts an mDNS backend it cannot know.**
   Platform Tools 37.0.0 made `libadbmdns` the default and 37.0.1 deleted the
   openscreen implementation, but AOSP's `AdbServerStatus` proto still carries

@@ -69,13 +69,6 @@ R-119 / IMP-95.
   Acceptance: `rust-version = "1.90"` with a committed `rust-toolchain.toml` pinning the exact stable; the `=` pins on `proptest`, `specta`, `tauri-specta`, and `schemars` are relaxed or re-justified on their own merits; the `paste` suppression is removed from `audit.toml` rather than re-dated; `cargo check/clippy/test --all-targets --all-features` and the README supported-versions row all agree. Edition 2024 migration is explicitly out of this item.
   Complexity: M
 
-- [ ] P1 — IMP-102: Adopt Tauri 2.11.5 for the isolation-pattern correctness fix
-  Why: Droidsmith runs `"pattern": {"use": "isolation"}`, and Tauri 2.7.0 fixed a bug where the isolation pattern created iframes-within-iframes on Windows — a live correctness issue on the primary platform.
-  Evidence: `crates/tauri/CHANGELOG.md` 2.7.0 (isolation iframe fix), 2.6.0 (`dynamic-acl` behind a default feature; async-command dispatch compile-time win), 2.5.0 (channel perf fix for small payloads — relevant to Logcat streaming); locked at 2.11.2, latest 2.11.5 (2026-07-01).
-  Touches: `src-tauri/Cargo.lock`, `package.json` (`@tauri-apps/api`, `@tauri-apps/cli`), `isolation/index.js` if behaviour shifts, `scripts/isolation-policy.test.mjs`.
-  Acceptance: Tauri crates and JS packages move to current 2.11.x together; `npm run security:isolation` and `npm run ui:smoke` pass; the isolation policy tests still assert the full validated command contract; evaluate `default-features = false` to drop the ACL reference tables and record the binary-size delta.
-  Complexity: S
-
 - [ ] P1 — R-122: Prove reinstall feasibility before permitting uninstall-for-user
   Why: Droidsmith records package provenance around the mutation, but nothing proves `pm install-existing` will succeed *before* the irreversible step — which is the exact moment users need the answer.
   Evidence: UAD-NG #559 ("warn if reinstalling an app isn't possible", unmet); the bootloop corpus (#1069 user half-bricked with no backup, #1400, #1311) shows the failure is always discovered too late; Droidsmith's `RestoreExistingForUser` path already knows how to verify retention (`src-tauri/src/adb/actions.rs`).
