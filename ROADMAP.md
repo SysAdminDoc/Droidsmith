@@ -46,13 +46,6 @@ R-119 / IMP-95.
 
 ### P0
 
-- [ ] P0 — IMP-96: Clear RUSTSEC-2026-0221 and restore a green release gate
-  Why: `cargo audit --deny warnings` fails today, so `npm run security:audit` and therefore `npm run release:check` — the authoritative gate — cannot pass.
-  Evidence: RUSTSEC-2026-0221 (issued 2026-07-31); `src-tauri/Cargo.lock:1087` pins `event-listener` 5.4.1; fixed in 5.4.2 (2026-07-27); local run returns `error: 1 denied warning found!`.
-  Touches: `src-tauri/Cargo.lock`.
-  Acceptance: `cargo update -p event-listener --precise 5.4.2` lands; `cargo audit --deny warnings` exits 0; `npm run security:audit` passes; no `audit.toml` suppression is added.
-  Complexity: S
-
 - [ ] P0 — IMP-97: Make the CVE-2026-42184 fix a manifest requirement, not a lockfile accident
   Why: `src-tauri/Cargo.toml` declares `tauri = "2"`, which permits versions with an origin-confusion bug that lets a remote page invoke local-only IPC commands on Windows — against a surface of 98 privileged device-mutation commands.
   Evidence: GHSA-7gmj-67g7-phm9 / CVE-2026-42184 (2026-05-06, CVSS 8.8), `is_local_url()` `split_once('.')`, fixed in 2.11.1; `src-tauri/Cargo.lock` currently resolves 2.11.2.

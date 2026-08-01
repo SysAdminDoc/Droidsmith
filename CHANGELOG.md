@@ -14,6 +14,16 @@ completion.
 Working batches live here. Sections collapse into a versioned release on
 each milestone tag.
 
+### Security
+
+- **Cleared RUSTSEC-2026-0221.** `event-listener` moved from 5.4.1 to 5.4.2,
+  which fixes a soundness hole where `StackSlot` unconditionally implemented
+  `Send`/`Sync` and let `!Send` tags cross thread boundaries in safe code. The
+  crate reaches Droidsmith only on Linux, through
+  `tauri-plugin-single-instance` and `zbus`, but `cargo audit --deny warnings`
+  failed on it and therefore blocked the whole `release:check` gate. Cleared by
+  upgrading rather than by an `audit.toml` suppression. (IMP-96)
+
 ### Added
 
 - **Reviewed scrcpy encoder-constraint recovery.** scrcpy 4.1+ capability
