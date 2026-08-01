@@ -83,6 +83,7 @@
     ],
     inspect_recovery_baseline: [["target", "path_grant"], []],
     inspect_profile: [["target", "path_grant"], []],
+    inspect_fleet_report: [["path_grant"], []],
     save_profile: [["path_grant", "profile"], []],
     journal_undo: [["target", "entry_id"], []],
     journal_undo_batch: [["target", "batch_id"], []],

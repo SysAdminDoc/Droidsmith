@@ -419,6 +419,23 @@ export const commands = {
     });
   },
   /**
+   * Render a saved fleet run report through a one-shot native read grant.
+   *
+   * Deliberately the only command in this file that never constructs a
+   * transport: opening a report is an offline, read-only operation, and a
+   * report is often reviewed on a machine that has none of its devices
+   * attached. Raw serials never cross the boundary — the view names every
+   * device by digest (see [`fleet_report::view`]).
+   *
+   * Resuming a report is the CLI's `run --retry-from`; this command renders the
+   * same document rather than reimplementing the selection rules.
+   */
+  async inspectFleetReport(pathGrant: string): Promise<FleetReportView> {
+    return await TAURI_INVOKE("inspect_fleet_report", {
+      path_grant: pathGrant,
+    });
+  },
+  /**
    * Validate and atomically export a current v2 profile through a purpose-
    * scoped native save grant. This is also the only GUI path that finalizes a
    * reviewed v1 migration.
@@ -1155,6 +1172,14 @@ export type ActionRequest = {
    */
   context?: ActionContext;
 };
+export type ActionStatus =
+  | "applied"
+  | "failed"
+  /**
+   * Deliberately not executed on this run. Only a resume produces this:
+   * the action already succeeded in the source report.
+   */
+  | "skipped";
 export type AdbHealth = {
   server_status_supported: boolean;
   client_version: string | null;
@@ -1625,6 +1650,7 @@ export type DeviceLifecycleEvent =
       observed_at: string;
     }
   | { kind: "error"; message: string; observed_at: string };
+export type DeviceOutcome = "ran" | "error" | "skipped";
 export type DeviceSetting = {
   id: string;
   namespace: SettingNamespace;
@@ -1760,6 +1786,10 @@ export type DisconnectResult = {
   message: string;
 };
 /**
+ * A mismatch between the source report and the inputs of the resume.
+ */
+export type DriftItem = { code: string; message: string };
+/**
  * Request shape for [`explain_failure`].
  */
 export type ExplainFailureRequest = {
@@ -1807,6 +1837,63 @@ export type FindingSeverity = "info" | "warning" | "error";
 export type FingerprintObservation = {
   changed: boolean;
   previous: string | null;
+};
+export type FleetReportActionView = {
+  index: number;
+  package: string;
+  action: ActionKind;
+  user_id: number;
+  before_state: string;
+  description: string;
+  /**
+   * `None` in a dry-run report, where the action was planned but nothing
+   * was executed.
+   */
+  status: ActionStatus | null;
+  error: string | null;
+};
+export type FleetReportDeviceView = {
+  device: RedactedDevice;
+  outcome: DeviceOutcome;
+  transport_kind: DeviceTransportKind | null;
+  android_user: number | null;
+  /**
+   * `None` for devices that never ran.
+   */
+  success: boolean | null;
+  /**
+   * Stable error code for an `error` outcome.
+   */
+  failure_code: string | null;
+  /**
+   * The error message or the skip cause, whichever applies.
+   */
+  failure_reason: string | null;
+  actions: FleetReportActionView[];
+};
+export type FleetReportTotals = {
+  devices: number;
+  ran: number;
+  errored: number;
+  skipped: number;
+  actions_planned: number;
+  actions_applied: number;
+  actions_failed: number;
+  actions_skipped: number;
+};
+export type FleetReportView = {
+  schema_version: number;
+  generated_at: string;
+  /**
+   * `true` when the report records an apply; `false` for a dry-run, where
+   * no action was executed and every status is absent.
+   */
+  apply: boolean;
+  profile: ReportProfile;
+  lineage: RedactedLineage | null;
+  totals: FleetReportTotals;
+  devices: FleetReportDeviceView[];
+  success: boolean;
 };
 export type GnirehtetExitReason =
   | "user_stopped"
@@ -1932,6 +2019,7 @@ export type HostPathPurpose =
   | "install_open"
   | "recovery_baseline_open"
   | "profile_open"
+  | "fleet_report_open"
   | "pack_import_open"
   | "pack_export_save"
   | "apk_analyze_open";
@@ -2706,6 +2794,31 @@ export type RecoveryBaselineDiff = {
   rows: BaselineDiffRow[];
   plans: PlannedAction[];
 };
+/**
+ * How a device is named in a rendered report.
+ */
+export type RedactedDevice = {
+  identity_sha256: string;
+  /**
+   * `true` when the digest covers a verified build fingerprint as well as
+   * the serial. `false` means the run never bound the device (it errored or
+   * was skipped before the fingerprint probe), so the digest covers the
+   * serial alone and cannot distinguish two devices reporting the same one.
+   */
+  fingerprint_bound: boolean;
+};
+export type RedactedExclusion = { device: RedactedDevice; reason: string };
+/**
+ * [`ReportLineage`] with its serials replaced by digests.
+ */
+export type RedactedLineage = {
+  source_sha256: string;
+  source_generated_at: string;
+  retry_generation: number;
+  retried_devices: RedactedDevice[];
+  excluded_devices: RedactedExclusion[];
+  accepted_drift: DriftItem[];
+};
 export type RemoteFileEntry = {
   name: string;
   is_dir: boolean;
@@ -2737,6 +2850,23 @@ export type RemoteListing = {
   free_space_kb: number | null;
 };
 export type RemovalLevel = "recommended" | "advanced" | "expert" | "unsafe";
+/**
+ * The profile a report was produced from, reduced to what a resume must prove.
+ */
+export type ReportProfile = {
+  name: string;
+  version: string;
+  /**
+   * Digest over the whole profile document.
+   */
+  fingerprint_sha256: string;
+  /**
+   * Digest over only the ordered `(kind, package)` pairs. Equal action sets
+   * with differing prose are a benign drift; a differing action set is not.
+   */
+  action_set_sha256: string;
+  action_count: number;
+};
 export type ResolveSource =
   /**
    * Found on the user's `PATH`.

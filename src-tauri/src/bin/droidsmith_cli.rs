@@ -2053,6 +2053,19 @@ mod tests {
             reparsed.report.profile.action_set_sha256,
             fleet_report::action_set_fingerprint(&sample_profile())
         );
+
+        // ...and the GUI renders that same emitted document, with the serials
+        // the CLI necessarily wrote into it redacted away. Asserting this here
+        // rather than only in `fleet_report`'s own tests keeps the writer and
+        // the renderer pinned to one document.
+        let rendered =
+            serde_json::to_string(&fleet_report::view(&reparsed.report)).expect("view serializes");
+        for serial in ["USB1", "USB2", "tcp:5555"] {
+            assert!(
+                !rendered.contains(serial),
+                "serial {serial} survived into the rendered view"
+            );
+        }
     }
 
     #[test]

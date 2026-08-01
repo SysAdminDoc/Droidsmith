@@ -43,13 +43,6 @@ R-119 / IMP-95.
   Acceptance: profile schema `"3"` supports predicates over attributes Droidsmith already enumerates (system vs user, enabled state, installer package, Android user, archived state) combined by a bounded, non-backtracking boolean grammar; v2 files migrate explicitly with review, exactly as v1→v2 does, and v2 remains loadable; the import diff resolves predicates against the live device and shows every matched package and planned command before apply; expression evaluation is total — an unresolvable attribute excludes the package and is reported, never silently matched.
   Complexity: L
 
-- [ ] P2 — R-129: Render a local fleet report from existing run output
-  Why: the CLI emits stable per-device JSON that nothing renders, and reporting is precisely what commercial fleet tools paywall.
-  Evidence: `droidsmith-cli run --all-devices --json` emits a `devices[]` array with `outcome: ran | error | skipped`; AirDroid Business gates Alerts and Reports behind its Standard tier; DeviceFarmer STF's value is operational status across a pool.
-  Touches: `src-tauri/src/bin/droidsmith_cli.rs`, `src/routes/Profiles.tsx`, new renderer module under `src/routes/`, `src/locales/*.json`, fixtures.
-  Acceptance: a saved fleet report JSON can be opened read-only and rendered as a per-device outcome summary with failure reasons, skip causes, and per-action detail; rendering performs no device access and no network access; hashed device identity is shown rather than raw serials, matching the redaction rules already used by recovery baselines; the renderer rejects unknown schema versions with migration guidance; it composes with R-119's `--retry-from` rather than duplicating it.
-  Complexity: M
-
 ### P3
 
 - [ ] P3 — R-130: Report accurate per-app storage from PackageManager

@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import {
   errorMessage,
   callGetDeviceInfo,
+  callInspectFleetReport,
   callInspectProfile,
   callListPackages,
   callListUsers,
@@ -42,6 +43,10 @@ import {
   TransportBadge,
   TransportTrustNotice,
 } from "./common";
+import {
+  FleetReportWorkspace,
+  type FleetReportState,
+} from "./profiles/FleetReportPanel";
 
 const PROFILE_ACTIONS: ReadonlyArray<{
   value: Exclude<
@@ -132,7 +137,9 @@ export default function ProfilesRoute() {
     null,
   );
   const [selectedSerial, setSelectedSerial] = useState<string | null>(null);
-  const [workspace, setWorkspace] = useState<"author" | "import">("author");
+  const [workspace, setWorkspace] = useState<"author" | "import" | "report">(
+    "author",
+  );
   const [inventory, setInventory] = useState<InventoryState>({ kind: "idle" });
   const [profileName, setProfileName] = useState("");
   const [description, setDescription] = useState("");
@@ -152,6 +159,9 @@ export default function ProfilesRoute() {
   const [actions, setActions] = useState<ProfileAction[]>([]);
   const [notice, setNotice] = useState<Notice | null>(null);
   const [previewState, setPreviewState] = useState<PreviewState>({
+    kind: "idle",
+  });
+  const [reportState, setReportState] = useState<FleetReportState>({
     kind: "idle",
   });
 
@@ -370,6 +380,26 @@ export default function ProfilesRoute() {
     }
   }
 
+  /** Open and render a saved fleet report. No device is involved on either
+   *  side of this call, so it stays available with nothing connected — which
+   *  is the case a report is most often reviewed in. */
+  async function openFleetReport() {
+    setNotice(null);
+    setReportState({ kind: "choosing" });
+    try {
+      const grant = await callSelectHostPath("fleet_report_open");
+      if (!grant) {
+        setReportState({ kind: "idle" });
+        return;
+      }
+      setReportState({ kind: "loading", path: grant.local_path });
+      const report = await callInspectFleetReport(grant.id);
+      setReportState({ kind: "ready", path: grant.local_path, report });
+    } catch (error) {
+      setReportState({ kind: "error", message: errorMessage(error) });
+    }
+  }
+
   return (
     <div>
       <PaneHeader
@@ -436,27 +466,43 @@ export default function ProfilesRoute() {
           </StatePanel>
         )}
 
-        {selectedTarget && (
-          <>
-            <div
-              className="inline-flex gap-5 border-b border-white/10"
-              role="group"
-              aria-label={t("profiles.workspaceLabel")}
-            >
-              <WorkspaceTab
-                active={workspace === "author"}
-                onClick={() => setWorkspace("author")}
-              >
-                {t("profiles.authorTab")}
-              </WorkspaceTab>
-              <WorkspaceTab
-                active={workspace === "import"}
-                onClick={() => setWorkspace("import")}
-              >
-                {t("profiles.importTab")}
-              </WorkspaceTab>
-            </div>
+        <div
+          className="inline-flex gap-5 border-b border-white/10"
+          role="group"
+          aria-label={t("profiles.workspaceLabel")}
+        >
+          <WorkspaceTab
+            active={workspace === "author"}
+            disabled={!selectedTarget}
+            onClick={() => setWorkspace("author")}
+          >
+            {t("profiles.authorTab")}
+          </WorkspaceTab>
+          <WorkspaceTab
+            active={workspace === "import"}
+            disabled={!selectedTarget}
+            onClick={() => setWorkspace("import")}
+          >
+            {t("profiles.importTab")}
+          </WorkspaceTab>
+          <WorkspaceTab
+            active={workspace === "report"}
+            onClick={() => setWorkspace("report")}
+          >
+            {t("profiles.reportTab")}
+          </WorkspaceTab>
+        </div>
 
+        {workspace === "report" && (
+          <FleetReportWorkspace
+            state={reportState}
+            openReport={() => void openFleetReport()}
+            dismiss={() => setReportState({ kind: "idle" })}
+          />
+        )}
+
+        {selectedTarget && workspace !== "report" && (
+          <>
             {workspace === "author" ? (
               <AuthorWorkspace
                 inventory={inventory}
@@ -1076,21 +1122,26 @@ function DeviceChoice({
 function WorkspaceTab({
   active,
   onClick,
+  disabled = false,
   children,
 }: {
   active: boolean;
   onClick: () => void;
+  /** Authoring and importing need a live device; reviewing a saved report does
+   *  not. Disabling is clearer than a tab that opens an empty pane. */
+  disabled?: boolean;
   children: React.ReactNode;
 }) {
   return (
     <button
       type="button"
       aria-pressed={active}
+      disabled={disabled}
       className={`-mb-px border-b-2 px-0.5 py-2 text-sm font-medium transition ${
         active
           ? "border-circuit-300 text-circuit-100"
           : "border-transparent text-anvil-400 hover:text-anvil-50"
-      }`}
+      } ${disabled ? "cursor-not-allowed opacity-50 hover:text-anvil-400" : ""}`}
       onClick={onClick}
     >
       {children}

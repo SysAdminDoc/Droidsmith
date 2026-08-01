@@ -269,6 +269,23 @@ writes a `lineage` block naming the source report's content digest, its
 generation number, the devices it selected, and the devices it deliberately
 excluded, so a chain of resumes stays auditable.
 
+### Reviewing a fleet report in the app
+
+The **Profiles** workspace has a third tab, **Fleet report**, that opens the
+same saved JSON read-only and renders it: per-device outcome, failure reason or
+skip cause, and every planned action with its result. It is available with no
+device connected, because rendering a report reaches no device and makes no
+network request — a batch can be reviewed on a machine that has none of its
+hardware attached.
+
+Devices are named by digest, never by serial, matching the redaction already
+used by recovery baselines. Where the run bound the device, the digest covers
+the serial and the verified build fingerprint; where it did not (an errored or
+skipped device), it covers the serial alone and the row says so. Unknown schema
+versions are refused with the same migration guidance the CLI gives. Reviewing
+is all the app does — resuming remains `--retry-from` on the CLI, and the
+review points at that command.
+
 ## Portable recovery baselines
 
 Before applying a package action in Apps or a selected Debloat batch, export a

@@ -28,6 +28,7 @@ use crate::apk_metadata;
 use crate::backup;
 use crate::bugreport;
 use crate::device_identity::DeviceIdentity;
+use crate::fleet_report;
 use crate::fs_util::{ArtifactError, ArtifactKind, HostArtifact, StagedArtifact};
 use crate::host_path::{
     open_directory_command, open_with_command, reveal_command, validate_suggested_file_name,
@@ -149,6 +150,15 @@ impl From<profile::ProfileError> for CommandError {
         };
         Self {
             code,
+            message: error.to_string(),
+        }
+    }
+}
+
+impl From<fleet_report::FleetReportError> for CommandError {
+    fn from(error: fleet_report::FleetReportError) -> Self {
+        Self {
+            code: error.code(),
             message: error.to_string(),
         }
     }

@@ -85,7 +85,7 @@ pub struct RunPlanOutput {
     pub adb_args: Vec<String>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(specta::Type, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ActionStatus {
     Applied,
@@ -160,7 +160,7 @@ impl DeviceRunResult {
 }
 
 /// The profile a report was produced from, reduced to what a resume must prove.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(specta::Type, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ReportProfile {
     pub name: String,
     pub version: String,
@@ -403,7 +403,7 @@ pub struct RetryExclusion {
 }
 
 /// A mismatch between the source report and the inputs of the resume.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(specta::Type, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DriftItem {
     pub code: String,
     pub message: String,
@@ -422,6 +422,236 @@ pub struct RetryPlan {
 impl RetryPlan {
     pub fn has_drift(&self) -> bool {
         !self.drift.is_empty()
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Read-only rendering
+// ---------------------------------------------------------------------------
+//
+// A saved report is opened and rendered without touching a device. The view
+// below is the entire IPC surface for that, and it exists to make one property
+// structural rather than a convention the renderer has to remember: no raw
+// serial reaches it. Every device is named by the digest the report already
+// carries, or — for a device the run never bound — by a serial-only digest in
+// the same domain, flagged so the UI can say which of the two it is showing.
+
+/// How a device is named in a rendered report.
+#[derive(specta::Type, Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct RedactedDevice {
+    pub identity_sha256: String,
+    /// `true` when the digest covers a verified build fingerprint as well as
+    /// the serial. `false` means the run never bound the device (it errored or
+    /// was skipped before the fingerprint probe), so the digest covers the
+    /// serial alone and cannot distinguish two devices reporting the same one.
+    pub fingerprint_bound: bool,
+}
+
+#[derive(specta::Type, Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DeviceOutcome {
+    Ran,
+    Error,
+    Skipped,
+}
+
+#[derive(specta::Type, Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct FleetReportActionView {
+    pub index: usize,
+    pub package: String,
+    pub action: ActionKind,
+    pub user_id: u32,
+    pub before_state: String,
+    pub description: String,
+    /// `None` in a dry-run report, where the action was planned but nothing
+    /// was executed.
+    pub status: Option<ActionStatus>,
+    pub error: Option<String>,
+}
+
+#[derive(specta::Type, Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct FleetReportDeviceView {
+    pub device: RedactedDevice,
+    pub outcome: DeviceOutcome,
+    pub transport_kind: Option<DeviceTransportKind>,
+    pub android_user: Option<u32>,
+    /// `None` for devices that never ran.
+    pub success: Option<bool>,
+    /// Stable error code for an `error` outcome.
+    pub failure_code: Option<String>,
+    /// The error message or the skip cause, whichever applies.
+    pub failure_reason: Option<String>,
+    pub actions: Vec<FleetReportActionView>,
+}
+
+#[derive(specta::Type, Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
+pub struct FleetReportTotals {
+    pub devices: usize,
+    pub ran: usize,
+    pub errored: usize,
+    pub skipped: usize,
+    pub actions_planned: usize,
+    pub actions_applied: usize,
+    pub actions_failed: usize,
+    pub actions_skipped: usize,
+}
+
+/// [`ReportLineage`] with its serials replaced by digests.
+#[derive(specta::Type, Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct RedactedLineage {
+    pub source_sha256: String,
+    pub source_generated_at: String,
+    pub retry_generation: u32,
+    pub retried_devices: Vec<RedactedDevice>,
+    pub excluded_devices: Vec<RedactedExclusion>,
+    pub accepted_drift: Vec<DriftItem>,
+}
+
+#[derive(specta::Type, Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct RedactedExclusion {
+    pub device: RedactedDevice,
+    pub reason: String,
+}
+
+#[derive(specta::Type, Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct FleetReportView {
+    pub schema_version: u32,
+    pub generated_at: String,
+    /// `true` when the report records an apply; `false` for a dry-run, where
+    /// no action was executed and every status is absent.
+    pub apply: bool,
+    pub profile: ReportProfile,
+    pub lineage: Option<RedactedLineage>,
+    pub totals: FleetReportTotals,
+    pub devices: Vec<FleetReportDeviceView>,
+    pub success: bool,
+}
+
+/// Name a device that the run never bound, using the serial alone.
+fn redact_serial(serial: &str) -> RedactedDevice {
+    RedactedDevice {
+        identity_sha256: hashed_identity(&DeviceIdentity::legacy_serial_only(serial)),
+        fingerprint_bound: false,
+    }
+}
+
+/// Build the read-only render of a loaded report. Pure: no device access, no
+/// network, no clock.
+pub fn view(report: &FleetRunReport) -> FleetReportView {
+    let mut totals = FleetReportTotals {
+        devices: report.devices.len(),
+        ..FleetReportTotals::default()
+    };
+    let devices = report
+        .devices
+        .iter()
+        .map(|device| match device {
+            DeviceRunResult::Skipped {
+                device_serial,
+                reason,
+            } => {
+                totals.skipped += 1;
+                FleetReportDeviceView {
+                    device: redact_serial(device_serial),
+                    outcome: DeviceOutcome::Skipped,
+                    transport_kind: None,
+                    android_user: None,
+                    success: None,
+                    failure_code: None,
+                    failure_reason: Some(reason.clone()),
+                    actions: Vec::new(),
+                }
+            }
+            DeviceRunResult::Error(error) => {
+                totals.errored += 1;
+                FleetReportDeviceView {
+                    device: redact_serial(&error.device_serial),
+                    outcome: DeviceOutcome::Error,
+                    transport_kind: None,
+                    android_user: None,
+                    success: None,
+                    failure_code: Some(error.code.clone()),
+                    failure_reason: Some(error.message.clone()),
+                    actions: Vec::new(),
+                }
+            }
+            DeviceRunResult::Ran(output) => {
+                totals.ran += 1;
+                let actions = output
+                    .plans
+                    .iter()
+                    .map(|plan| {
+                        // Results are keyed by the plan index the same run
+                        // produced, so a dry-run (no results) and an interrupted
+                        // apply (fewer results than plans) both render without
+                        // inventing a status.
+                        let result = output
+                            .results
+                            .iter()
+                            .find(|result| result.index == plan.index);
+                        totals.actions_planned += 1;
+                        match result.map(|result| result.status) {
+                            Some(ActionStatus::Applied) => totals.actions_applied += 1,
+                            Some(ActionStatus::Failed) => totals.actions_failed += 1,
+                            Some(ActionStatus::Skipped) => totals.actions_skipped += 1,
+                            None => {}
+                        }
+                        FleetReportActionView {
+                            index: plan.index,
+                            package: plan.package.clone(),
+                            action: plan.action,
+                            user_id: plan.user_id,
+                            before_state: plan.before_state.clone(),
+                            description: plan.description.clone(),
+                            status: result.map(|result| result.status),
+                            error: result.and_then(|result| result.error.clone()),
+                        }
+                    })
+                    .collect();
+                FleetReportDeviceView {
+                    device: RedactedDevice {
+                        identity_sha256: output.device_identity_sha256.clone(),
+                        fingerprint_bound: true,
+                    },
+                    outcome: DeviceOutcome::Ran,
+                    transport_kind: Some(output.transport_kind),
+                    android_user: Some(output.android_user),
+                    success: Some(output.success),
+                    failure_code: None,
+                    failure_reason: None,
+                    actions,
+                }
+            }
+        })
+        .collect();
+
+    FleetReportView {
+        schema_version: report.schema_version,
+        generated_at: report.generated_at.clone(),
+        apply: report.apply,
+        profile: report.profile.clone(),
+        lineage: report.lineage.as_ref().map(|lineage| RedactedLineage {
+            source_sha256: lineage.source_sha256.clone(),
+            source_generated_at: lineage.source_generated_at.clone(),
+            retry_generation: lineage.retry_generation,
+            retried_devices: lineage
+                .retried_devices
+                .iter()
+                .map(|serial| redact_serial(serial))
+                .collect(),
+            excluded_devices: lineage
+                .excluded_devices
+                .iter()
+                .map(|excluded| RedactedExclusion {
+                    device: redact_serial(&excluded.serial),
+                    reason: excluded.reason.clone(),
+                })
+                .collect(),
+            accepted_drift: lineage.accepted_drift.clone(),
+        }),
+        totals,
+        devices,
+        success: report.success,
     }
 }
 
@@ -881,6 +1111,135 @@ mod tests {
         let again = parse(Path::new("r.json"), &bytes).expect("stable");
         assert_eq!(again.source_sha256, reparsed.source_sha256);
         assert_ne!(reparsed.source_sha256, loaded.source_sha256);
+    }
+
+    #[test]
+    fn the_rendered_view_never_carries_a_raw_serial() {
+        // The redaction is the point of the render path: a report is a support
+        // artifact, and a serial identifies a specific handset.
+        let source = profile(&[(ActionKind::Disable, "com.a")]);
+        let mut loaded = report(
+            true,
+            vec![
+                ran(
+                    "R5CT60ZQR4M",
+                    "a".repeat(64).as_str(),
+                    0,
+                    vec![("com.a", ActionKind::Disable, ActionStatus::Applied)],
+                    true,
+                ),
+                DeviceRunResult::Error(DeviceErrorOutput {
+                    device_serial: "SECRETSERIAL2".to_string(),
+                    code: "device_probe_failed".to_string(),
+                    message: "boom".to_string(),
+                }),
+                DeviceRunResult::Skipped {
+                    device_serial: "192.168.1.5:5555".to_string(),
+                    reason: "unauthenticated transport".to_string(),
+                },
+            ],
+            &source,
+        );
+        loaded.report.lineage = Some(ReportLineage {
+            source_sha256: "b".repeat(64),
+            source_generated_at: "2026-07-31T00:00:00Z".to_string(),
+            retry_generation: 1,
+            retried_devices: vec!["SECRETSERIAL2".to_string()],
+            excluded_devices: vec![RetryExclusion {
+                serial: "R5CT60ZQR4M".to_string(),
+                reason: "already applied".to_string(),
+            }],
+            accepted_drift: Vec::new(),
+        });
+
+        let rendered = view(&loaded.report);
+        let json = serde_json::to_string(&rendered).expect("view serializes");
+        for serial in ["R5CT60ZQR4M", "SECRETSERIAL2", "192.168.1.5:5555"] {
+            assert!(
+                !json.contains(serial),
+                "raw serial {serial} leaked into the rendered view: {json}"
+            );
+        }
+        assert_eq!(rendered.devices.len(), 3);
+        assert!(rendered.devices[0].device.fingerprint_bound);
+        // A device the run never bound is named by the serial alone, and says so.
+        assert!(!rendered.devices[1].device.fingerprint_bound);
+        assert!(!rendered.devices[2].device.fingerprint_bound);
+        let lineage = rendered.lineage.expect("lineage renders");
+        assert_eq!(lineage.retried_devices.len(), 1);
+        assert_eq!(lineage.excluded_devices[0].reason, "already applied");
+    }
+
+    #[test]
+    fn the_rendered_view_totals_and_joins_actions_to_their_plans() {
+        let source = profile(&[
+            (ActionKind::Disable, "com.a"),
+            (ActionKind::Disable, "com.b"),
+        ]);
+        let loaded = report(
+            true,
+            vec![
+                ran(
+                    "USB1",
+                    "a".repeat(64).as_str(),
+                    0,
+                    vec![
+                        ("com.a", ActionKind::Disable, ActionStatus::Applied),
+                        ("com.b", ActionKind::Disable, ActionStatus::Failed),
+                    ],
+                    false,
+                ),
+                DeviceRunResult::Skipped {
+                    device_serial: "OFFLINE".to_string(),
+                    reason: "device is not actionable".to_string(),
+                },
+            ],
+            &source,
+        );
+        let rendered = view(&loaded.report);
+        assert_eq!(rendered.totals.devices, 2);
+        assert_eq!(rendered.totals.ran, 1);
+        assert_eq!(rendered.totals.skipped, 1);
+        assert_eq!(rendered.totals.errored, 0);
+        assert_eq!(rendered.totals.actions_planned, 2);
+        assert_eq!(rendered.totals.actions_applied, 1);
+        assert_eq!(rendered.totals.actions_failed, 1);
+        let device = &rendered.devices[0];
+        assert_eq!(device.outcome, DeviceOutcome::Ran);
+        assert_eq!(device.android_user, Some(0));
+        assert_eq!(device.actions[1].status, Some(ActionStatus::Failed));
+        assert_eq!(device.actions[1].package, "com.b");
+        assert_eq!(
+            rendered.devices[1].failure_reason.as_deref(),
+            Some("device is not actionable")
+        );
+    }
+
+    #[test]
+    fn a_dry_run_renders_plans_with_no_status_rather_than_a_guessed_one() {
+        // The absence of a result is information: nothing was executed. It must
+        // not render as "applied" or as "failed".
+        let source = profile(&[(ActionKind::Disable, "com.a")]);
+        let mut loaded = report(
+            false,
+            vec![ran(
+                "USB1",
+                "a".repeat(64).as_str(),
+                0,
+                vec![("com.a", ActionKind::Disable, ActionStatus::Applied)],
+                true,
+            )],
+            &source,
+        );
+        if let DeviceRunResult::Ran(output) = &mut loaded.report.devices[0] {
+            output.results.clear();
+            output.mode = "dry_run".to_string();
+        }
+        let rendered = view(&loaded.report);
+        assert!(!rendered.apply);
+        assert_eq!(rendered.totals.actions_planned, 1);
+        assert_eq!(rendered.totals.actions_applied, 0);
+        assert_eq!(rendered.devices[0].actions[0].status, None);
     }
 
     #[test]

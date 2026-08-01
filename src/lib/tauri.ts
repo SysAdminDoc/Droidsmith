@@ -29,6 +29,7 @@ import {
   type DeviceTarget as GeneratedDeviceTarget,
   type DisconnectResult,
   type FastbootDevice,
+  type FleetReportView,
   type Heartbeat,
   type HostArtifact,
   type HostDoctorReport,
@@ -719,6 +720,14 @@ export async function callInspectProfile(
   pathGrant: string,
 ): Promise<ProfilePreview> {
   return rendererRecord(await commands.inspectProfile(target, pathGrant));
+}
+
+/** Render a saved fleet run report. Offline by construction: no device target
+ *  is passed and the backend command never builds a transport. */
+export async function callInspectFleetReport(
+  pathGrant: string,
+): Promise<FleetReportView> {
+  return rendererRecord(await commands.inspectFleetReport(pathGrant));
 }
 
 export async function callSaveProfile(

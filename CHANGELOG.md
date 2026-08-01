@@ -16,6 +16,17 @@ each milestone tag.
 
 ### Added
 
+- **Saved fleet reports now render in the app.** A third Profiles tab opens a
+  `run --all-devices --json` report read-only and shows per-device outcome,
+  failure reason or skip cause, and every planned action with its result —
+  including actions a resume deliberately did not replay. It is available with
+  no device connected, because the backing command builds no transport and
+  makes no network request. Devices are named by digest rather than serial,
+  matching recovery-baseline redaction; a row states whether its digest covers
+  the verified build fingerprint or only the serial. Unknown schema versions
+  are refused with the same migration guidance the CLI gives, and resuming
+  stays with `--retry-from` rather than being duplicated in the UI. (R-129)
+
 - **An interrupted fleet run can now be resumed from its own report.**
   `droidsmith-cli run <profile> --retry-from <report.json>` selects only the
   devices the source report left failed or skipped, and never replays an action

@@ -31,6 +31,27 @@ pub struct ProfilePreview {
     pub rows: Vec<ProfilePreviewRow>,
 }
 
+/// Render a saved fleet run report through a one-shot native read grant.
+///
+/// Deliberately the only command in this file that never constructs a
+/// transport: opening a report is an offline, read-only operation, and a
+/// report is often reviewed on a machine that has none of its devices
+/// attached. Raw serials never cross the boundary — the view names every
+/// device by digest (see [`fleet_report::view`]).
+///
+/// Resuming a report is the CLI's `run --retry-from`; this command renders the
+/// same document rather than reimplementing the selection rules.
+#[tauri::command]
+#[specta::specta]
+pub fn inspect_fleet_report(
+    grants: tauri::State<'_, PathGrantStore>,
+    path_grant: String,
+) -> Result<fleet_report::FleetReportView, CommandError> {
+    let path = grants.consume(&path_grant, HostPathPurpose::FleetReportOpen)?;
+    let loaded = fleet_report::load(&path)?;
+    Ok(fleet_report::view(&loaded.report))
+}
+
 /// Import a profile through a one-shot native read grant and build a complete,
 /// read-only device/user/package diff. Legacy v1 input is returned only as an
 /// explicit migration candidate and cannot be applied as-is.

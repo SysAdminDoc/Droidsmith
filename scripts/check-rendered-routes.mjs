@@ -839,6 +839,45 @@ async function runDesktopFlow(browser) {
   await page.getByRole("button", { name: "Save reviewed v2 profile" }).click();
   await page.getByText(/Validated schema v2 profile saved to/).waitFor();
   await assertNoHorizontalOverflow(page, "desktop Profiles diff");
+
+  // R-129: a saved fleet report renders read-only, names devices by digest,
+  // and never shows a serial.
+  await page.getByRole("button", { name: "Fleet report" }).click();
+  await page.getByRole("button", { name: "Open report…" }).click();
+  await page
+    .getByText("Report for profile QA fleet debloat", { exact: true })
+    .waitFor();
+  await page.getByText("Resumed run, generation 1", { exact: true }).waitFor();
+  // The status badge, not the totals line: an action the source report proved
+  // applied must render as excluded rather than as a success or a failure.
+  await page
+    .getByRole("row", { name: /com\.example\.done/ })
+    .getByText("Not replayed", { exact: true })
+    .waitFor();
+  await page
+    .getByRole("row", { name: /com\.example\.absent/ })
+    .getByText("package not found", { exact: true })
+    .waitFor();
+  await page
+    .getByText(
+      "Digest covers the serial only — the run never bound this device.",
+      { exact: true },
+    )
+    .waitFor();
+  const reportBody = await page.locator("main").innerText();
+  for (const digestPrefix of ["cccccccccccc", "aaaaaaaaaaaa"]) {
+    if (!reportBody.includes(digestPrefix)) {
+      throw new Error(
+        `Fleet report did not name device ${digestPrefix} by digest`,
+      );
+    }
+  }
+  if (/\bQA1234567890\b/u.test(reportBody)) {
+    throw new Error("Fleet report leaked a raw device serial");
+  }
+  await assertNoHorizontalOverflow(page, "desktop fleet report");
+  await page.getByRole("button", { name: "Close report" }).click();
+  await page.getByRole("button", { name: "Author" }).click();
   await page.screenshot({
     path: path.join(screenshotDir, "desktop-profiles-diff.png"),
     fullPage: false,
@@ -2491,6 +2530,10 @@ async function installTauriMock(
               id: "123e4567-e89b-42d3-a456-42661417400b",
               local_path: "C:/Users/QA/Desktop/legacy-profile-v1.yaml",
             },
+            fleet_report_open: {
+              id: "123e4567-e89b-42d3-a456-42661417401a",
+              local_path: "C:/Users/QA/Desktop/fleet-run-2026-08-01.json",
+            },
             package_export_save: {
               id: "123e4567-e89b-42d3-a456-426614174006",
               local_path: "C:/Users/QA/Desktop/com.example.app.apks.zip",
@@ -3285,6 +3328,117 @@ async function installTauriMock(
             local_path: "C:/Users/QA/Desktop/qa-profile-v2.yaml",
             size_bytes: 768,
             sha256: "c".repeat(64),
+          };
+        }
+        if (cmd === "inspect_fleet_report") {
+          if (args.path_grant !== "123e4567-e89b-42d3-a456-42661417401a") {
+            throw new Error("Fleet report open did not consume its read grant");
+          }
+          // The backend redacts before this boundary, so the fixture carries
+          // digests only — a serial appearing here would mean the contract
+          // changed underneath the renderer.
+          return {
+            schema_version: 2,
+            generated_at: "2026-08-01T09:12:00Z",
+            apply: true,
+            profile: {
+              name: "QA fleet debloat",
+              version: "2",
+              fingerprint_sha256: "d".repeat(64),
+              action_set_sha256: "e".repeat(64),
+              action_count: 2,
+            },
+            lineage: {
+              source_sha256: "f".repeat(64),
+              source_generated_at: "2026-08-01T08:30:00Z",
+              retry_generation: 1,
+              retried_devices: [
+                { identity_sha256: "a".repeat(64), fingerprint_bound: false },
+              ],
+              excluded_devices: [
+                {
+                  device: {
+                    identity_sha256: "b".repeat(64),
+                    fingerprint_bound: true,
+                  },
+                  reason: "every action already applied (2 of 2)",
+                },
+              ],
+              accepted_drift: [],
+            },
+            totals: {
+              devices: 2,
+              ran: 1,
+              errored: 0,
+              skipped: 1,
+              actions_planned: 3,
+              actions_applied: 1,
+              actions_failed: 1,
+              actions_skipped: 1,
+            },
+            devices: [
+              {
+                device: {
+                  identity_sha256: "c".repeat(64),
+                  fingerprint_bound: true,
+                },
+                outcome: "ran",
+                transport_kind: "usb",
+                android_user: 0,
+                success: false,
+                failure_code: null,
+                failure_reason: null,
+                actions: [
+                  {
+                    index: 1,
+                    package: "com.example.app",
+                    action: "disable",
+                    user_id: 0,
+                    before_state: "enabled",
+                    description: "Disable com.example.app for user 0",
+                    status: "applied",
+                    error: null,
+                  },
+                  {
+                    index: 2,
+                    package: "com.example.absent",
+                    action: "disable",
+                    user_id: 0,
+                    before_state: "not_installed",
+                    description: "Disable com.example.absent for user 0",
+                    status: "failed",
+                    error: "package not found",
+                  },
+                  {
+                    // Proven applied by the source report, so the resume
+                    // excluded it rather than replaying it (R-119).
+                    index: 3,
+                    package: "com.example.done",
+                    action: "disable",
+                    user_id: 0,
+                    before_state: "disabled",
+                    description: "Disable com.example.done for user 0",
+                    status: "skipped",
+                    error: null,
+                  },
+                ],
+              },
+              {
+                device: {
+                  identity_sha256: "a".repeat(64),
+                  fingerprint_bound: false,
+                },
+                outcome: "skipped",
+                transport_kind: null,
+                android_user: null,
+                success: null,
+                failure_code: null,
+                failure_reason:
+                  "uses an unauthenticated unknown TCP transport; pass --allow-unsafe-transport to include it",
+                actions: [],
+              },
+            ],
+            success: false,
           };
         }
         if (cmd === "inspect_profile") {
