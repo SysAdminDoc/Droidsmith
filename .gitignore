@@ -51,6 +51,7 @@ coverage/
 playwright-report/
 playwright/.cache/
 test-results/
+provenance/
 
 # Markdown files are local-only except the durable public README. GitHub intake
 # uses YAML issue forms so contributor guidance cannot disappear behind this

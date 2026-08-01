@@ -16,6 +16,16 @@ each milestone tag.
 
 ### Added
 
+- **Release provenance now has an offline, dependency-free foundation.** A
+  deterministic generator merges npm's production lock graph with Cargo's
+  runtime/build graph into a parseable CycloneDX 1.6 SBOM and writes a SHA-256
+  manifest covering both lockfiles, the maintained notices, and the SBOM. Its
+  unit tests prove development-only dependency exclusion, transitive traversal,
+  determinism, and input binding; the authoritative release gate regenerates
+  and validates exact package-URL parity without network access or a built
+  bundle. README verification steps are documented, while cargo-auditable and
+  key-based minisign work remain explicitly blocked under R-110. (IMP-106)
+
 - **Rendered accessibility is now a zero-violation release gate.** The existing
   mocked-native smoke runs axe against all 11 workspaces, onboarding, the
   command palette, settings, and a destructive-action review. Its WCAG A/AA

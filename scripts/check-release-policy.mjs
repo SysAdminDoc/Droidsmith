@@ -34,6 +34,7 @@ function main() {
   runNpm("test");
   runNpm("test:policy");
   runNpm("test:target-lifecycle");
+  runNpm("provenance:check");
   runNpm("ui:smoke");
   run("cargo", [
     "fmt",

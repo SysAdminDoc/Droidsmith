@@ -54,13 +54,6 @@ R-119 / IMP-95.
   Acceptance: quirk rules exist for each vendor that ships a pack, each citing a public source URL and the ROM/build it was observed on; rules match on package plus manufacturer/ROM rather than error text alone where the hazard is pre-emptive; the debloat review surfaces a hazard before apply, not only after a failure; every rule validates against schema `"1"` with no schema change; each rule states its evidence basis so an unobserved combination reports `unknown` rather than implying verification. Note: this adds *rules describing publicly reported behaviour with attribution*, which is distinct from redistributing UAD-NG's curated list — that remains blocked as R-036.
   Complexity: M
 
-- [ ] P2 — IMP-106: Ship the dependency-free half of the provenance bundle
-  Why: R-110 is blocked on a minisign key decision and a bundle-capable host, but SBOM and checksum generation read lockfiles and require neither — the blocked note conflates the two halves.
-  Evidence: `Roadmap_Blocked.md` R-110 states the SBOM/checksum generation "is dependency-free"; `npm sbom --sbom-format cyclonedx --omit dev` is built into npm; `cargo-cyclonedx` 0.5.9 (2026-03-19) covers the Rust half; the project already maintains `third-party-notices.json` and a `deny.toml` licence allow-list.
-  Touches: new `scripts/generate-provenance.mjs`, `scripts/check-release-policy.mjs`, new `*.test.mjs`, `README.md`.
-  Acceptance: a unit-tested generator emits a merged CycloneDX SBOM covering runtime npm and cargo dependencies plus a `SHA256SUMS` file, deterministically and without network access or a built bundle; the release gate validates the SBOM parses and matches the lockfiles; README documents the verification steps; minisign signing and `cargo auditable` remain out of scope and stay in Roadmap_Blocked.md under R-110.
-  Complexity: M
-
 - [ ] P2 — R-125: Consume the structured ADB device-tracking channel
   Why: the app regex-parses `adb devices -l`, which cannot express connection states or link speed that AOSP already publishes as structured data — and this retires the premise of the blocked R-101 note.
   Evidence: AOSP `services.cpp` exposes `host:track-devices-proto-binary` / `-proto-text`; `proto/adb_host.proto` defines `Device{serial, state, bus_address, product, model, device, connection_type, negotiated_speed, max_speed, transport_id}` and a `ConnectionState` including `DETACHED`, `RESCUE`, `NOPERMISSION`; Roadmap_Blocked.md R-101 correctly notes `server-status` has no USB-speed field — the speed lives on the per-device message instead. Needs live validation: the service names are verified from AOSP source, but the host `adb` CLI surface for reaching them at the supported versions is not — probe before building.

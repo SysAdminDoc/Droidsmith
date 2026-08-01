@@ -24,6 +24,8 @@
     "test:target-lifecycle": "node --test scripts/target-lifecycle-policy.test.mjs && node scripts/check-target-lifecycle.mjs",
     "packaging:generate": "node scripts/generate-packaging-manifests.mjs",
     "packaging:check": "node --test scripts/packaging-manifests.test.mjs",
+    "provenance:generate": "node scripts/generate-provenance.mjs",
+    "provenance:check": "node --test scripts/generate-provenance.test.mjs && node scripts/generate-provenance.mjs --check",
     "lint": "eslint .",
     "format:check": "prettier --check \"src/**/*.{ts,tsx,css,json}\" \"scripts/**/*.mjs\" \"isolation/**/*.js\" \"*.json\" \"*.config.ts\"",
     "format:write": "prettier --write \"src/**/*.{ts,tsx,css,json}\" \"scripts/**/*.mjs\" \"isolation/**/*.js\" \"*.json\" \"*.config.ts\"",

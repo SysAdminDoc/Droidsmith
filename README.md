@@ -353,6 +353,23 @@ The individual commands (`npm run format:check`, `npm run lint`,
 `npm run typecheck`, `npm test`, `npm run security:audit`, `npm run ui:smoke`,
 and `npm run release:smoke`) remain available for fast iteration.
 
+Generate the offline release provenance inventory before publishing artifacts:
+
+```bash
+npm run provenance:generate
+sha256sum -c provenance/SHA256SUMS
+```
+
+The command writes a deterministic CycloneDX 1.6 SBOM and SHA-256 manifest
+under `provenance/` using only the npm and Cargo lockfiles plus the maintained
+third-party notices. It excludes npm development-only packages and walks the
+Cargo runtime/build graph without contacting a registry or requiring a built
+application bundle. `npm run provenance:check`, also included in the release
+gate, regenerates the inventory in memory, parses it, and requires exact
+package-URL parity with those lockfile graphs. The generated directory is
+ignored so release automation can attach fresh artifacts without dirtying the
+source tree.
+
 Seeded optional fuzz targets for ADB/OEM text, YAML documents, and journal
 JSONL live under `src-tauri/fuzz`. On a supported Unix-like host with nightly
 Rust and `cargo-fuzz` installed, run them from `src-tauri` with
