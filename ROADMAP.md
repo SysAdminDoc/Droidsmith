@@ -48,13 +48,6 @@ R-119 / IMP-95.
 
 ### P1
 
-- [ ] P1 — IMP-99: Make persisted device identity survive duplicate or blank serials
-  Why: undo journals and per-device settings are keyed on the serial, so two devices reporting the same serial share one journal — an undo row recorded against device A becomes offerable against device B.
-  Evidence: `src-tauri/src/journal/mod.rs:22,293` writes `<app_data>/journal/<serial>.jsonl`; `src-tauri/src/settings.rs::device_scope` hashes a caller-supplied identity string; duplicate/blank serials are documented upstream (scrcpy #1148, #3537). Runtime addressing is already correct — `DeviceTarget::adb_selector()` prefers `-t <transport_id>` — but `transport_id` is per-server-session and cannot key persistence.
-  Touches: `src-tauri/src/journal/mod.rs`, `src-tauri/src/settings.rs`, `src-tauri/src/recovery_baseline.rs`, `src-tauri/src/commands/devices.rs`, `src/lib/deviceStore.ts`, migration + Rust tests.
-  Acceptance: persisted identity mixes the build fingerprint (or an equivalent stable device attribute) with the serial; two fake devices sharing a serial but differing in fingerprint get distinct journals, settings scopes, and baseline identities; existing single-device data migrates in place with no loss and the legacy path stays readable; a blank serial does not produce a shared or empty-named store.
-  Complexity: M
-
 - [ ] P1 — IMP-101: Raise the Rust MSRV from 1.81 to 1.90
   Why: the floor is a scheduled wall set by an upstream project, and it is actively costing security posture rather than only convenience.
   Evidence: Tauri merged an MSRV bump to 1.90 on `dev` (PR #13221, 2026-07-02) with a stated "latest − 3" policy, so the next Tauri minor hard-blocks; `src-tauri/Cargo.toml` comments name the floor as the reason for `proptest = "=1.8.0"`, and `.cargo/audit.toml` names it as the reason RUSTSEC-2024-0436 (`paste`, unmaintained) is permanently suppressed; `specta = "=2.0.0-rc.22"` and `schemars = "=1.2.1"` are pinned for the same reason.

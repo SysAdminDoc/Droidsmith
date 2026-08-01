@@ -19,11 +19,15 @@
 //!
 //! ## File layout
 //!
-//! `<app_data_dir>/journal/<serial>.jsonl`, one immutable state transition per
-//! line. Repeated ids form a write-ahead intent followed by one terminal
-//! outcome; replay keeps the last durable transition. The directory is created
-//! on demand. Per-device files isolate noise — a wedged file lock on one device
-//! doesn't poison others.
+//! `<app_data_dir>/journal/<device identity stem>.jsonl`, one immutable state
+//! transition per line. Repeated ids form a write-ahead intent followed by one
+//! terminal outcome; replay keeps the last durable transition. The directory is
+//! created on demand. Per-device files isolate noise — a wedged file lock on one
+//! device doesn't poison others.
+//!
+//! The stem is derived from a [`crate::device_identity::DeviceIdentity`], not
+//! from the serial alone: duplicate serials would otherwise share one file and
+//! make device A's undo rows offerable against device B.
 
 use std::collections::HashMap;
 use std::fs::{self, File, OpenOptions};
@@ -36,6 +40,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 use crate::adb::actions::{ActionRequest, AppliedAction, PlannedAction};
+use crate::device_identity::DeviceIdentity;
 
 const MAX_JOURNAL_LINE_BYTES: usize = 1024 * 1024;
 const TAIL_SCAN_CHUNK_BYTES: usize = 8 * 1024;
@@ -44,12 +49,12 @@ const TAIL_SCAN_CHUNK_BYTES: usize = 8 * 1024;
 /// Two concurrent `apply_action` calls on the same device would otherwise
 /// each open an independent [`Journal`], both derive the same `next_id`
 /// from the file, and append duplicate ids with stale undo state.
-fn device_lock(serial: &str) -> Arc<Mutex<()>> {
+fn device_lock(identity: &DeviceIdentity) -> Arc<Mutex<()>> {
     static LOCKS: OnceLock<Mutex<HashMap<String, Arc<Mutex<()>>>>> = OnceLock::new();
     let map = LOCKS.get_or_init(|| Mutex::new(HashMap::new()));
     let mut guard = map.lock().unwrap_or_else(|e| e.into_inner());
     guard
-        .entry(safe_serial(serial))
+        .entry(journal_stem(identity))
         .or_insert_with(|| Arc::new(Mutex::new(())))
         .clone()
 }
@@ -62,21 +67,21 @@ fn device_lock(serial: &str) -> Arc<Mutex<()>> {
 /// two package mutations at once anyway.
 pub fn with_journal<T, E>(
     dir: &Path,
-    serial: &str,
+    identity: &DeviceIdentity,
     f: impl FnOnce(&mut Journal) -> Result<T, E>,
 ) -> Result<T, E>
 where
     E: From<std::io::Error>,
 {
-    let lock = device_lock(serial);
+    let lock = device_lock(identity);
     let _guard = lock.lock().unwrap_or_else(|e| e.into_inner());
     // The in-process mutex above cannot serialize the GUI against the CLI —
     // default_journal_dir is deliberately shared between both binaries. The
     // OS-level advisory lock covers the whole open→mutate cycle so a second
     // process cannot mint duplicate ids, mark this process's live Pending
     // intent Interrupted, or truncate the tail we are appending to.
-    let _file_lock = JournalFileLock::acquire(dir, serial)?;
-    let mut journal = Journal::open(dir, serial)?;
+    let _file_lock = JournalFileLock::acquire(dir, identity)?;
+    let mut journal = Journal::open(dir, identity)?;
     f(&mut journal)
 }
 
@@ -91,9 +96,9 @@ struct JournalFileLock {
 }
 
 impl JournalFileLock {
-    fn acquire(dir: &Path, serial: &str) -> std::io::Result<Self> {
+    fn acquire(dir: &Path, identity: &DeviceIdentity) -> std::io::Result<Self> {
         fs::create_dir_all(dir)?;
-        let path = dir.join(format!("{}.lock", safe_serial(serial)));
+        let path = dir.join(format!("{}.lock", journal_stem(identity)));
         let file = OpenOptions::new()
             .create(true)
             .truncate(false)
@@ -286,12 +291,12 @@ enum PersistFailure {
 }
 
 impl Journal {
-    /// Open the journal for `serial` under `dir`. Creates the directory
+    /// Open the journal for `identity` under `dir`. Creates the directory
     /// if missing; replays any existing JSONL into memory.
-    pub fn open(dir: &Path, serial: &str) -> std::io::Result<Self> {
+    pub fn open(dir: &Path, identity: &DeviceIdentity) -> std::io::Result<Self> {
         fs::create_dir_all(dir)?;
-        let path = dir.join(format!("{}.jsonl", safe_serial(serial)));
-        migrate_legacy_path(dir, serial, &path)?;
+        let path = dir.join(format!("{}.jsonl", journal_stem(identity)));
+        migrate_legacy_path(dir, identity, &path)?;
         let mut entries: Vec<JournalEntry> = Vec::new();
         let mut max_id = 0u64;
         if path.exists() {
@@ -736,11 +741,29 @@ fn injected(point: &str) -> std::io::Error {
     std::io::Error::other(format!("injected journal {point} failure"))
 }
 
-/// Build a bounded filename-safe variant of a device serial. The readable
-/// prefix helps diagnostics, while the full SHA-256 suffix prevents distinct
-/// serials (including escaped wireless names and Windows device names) from
-/// sharing a journal file.
-fn safe_serial(serial: &str) -> String {
+/// Build a bounded filename-safe stem for one device identity. The readable
+/// prefix helps diagnostics, the serial digest prevents distinct serials
+/// (including escaped wireless names and Windows device names) from sharing a
+/// file, and the trailing fingerprint digest separates devices that report the
+/// same serial.
+///
+/// An identity with no known fingerprint produces exactly the pre-fingerprint
+/// stem, so legacy journals stay addressable and
+/// [`migrate_legacy_path`] can find them.
+fn journal_stem(identity: &DeviceIdentity) -> String {
+    let serial_stem = serial_stem(identity.serial());
+    match identity.fingerprint() {
+        // Windows caps a path component at 255 characters: 7 + 80 + 2 + 64 + 2
+        // + 64 + 6 (".jsonl") = 225 worst case, so the stem always fits.
+        Some(fingerprint) => {
+            let digest = Sha256::digest(fingerprint.as_bytes());
+            format!("{serial_stem}--{digest:x}")
+        }
+        None => serial_stem,
+    }
+}
+
+fn serial_stem(serial: &str) -> String {
     let mut prefix = String::with_capacity(serial.len().min(80));
     for character in serial.chars().take(80) {
         if character.is_ascii_alphanumeric() || matches!(character, '-' | '_' | '.') {
@@ -774,13 +797,35 @@ fn legacy_safe_serial(serial: &str) -> String {
     }
 }
 
-fn migrate_legacy_path(dir: &Path, serial: &str, destination: &Path) -> std::io::Result<()> {
+/// Adopt an older journal filename in place, newest scheme first.
+///
+/// Two schemes precede the current one: the serial-digest stem written before
+/// the build fingerprint was mixed into the identity, and the escaped-serial
+/// name before that. A device that has only ever connected once therefore keeps
+/// its full history across both renames with no rewrite of the file contents.
+///
+/// If two devices genuinely share a serial, whichever connects first adopts the
+/// pre-existing file. Which of them actually wrote those rows is not knowable
+/// from the store — that ambiguity is exactly what keying on the serial alone
+/// created, and it ends at this migration.
+fn migrate_legacy_path(
+    dir: &Path,
+    identity: &DeviceIdentity,
+    destination: &Path,
+) -> std::io::Result<()> {
     if destination.exists() {
         return Ok(());
     }
-    let legacy = dir.join(format!("{}.jsonl", legacy_safe_serial(serial)));
-    if legacy != destination && legacy.exists() {
-        fs::rename(legacy, destination)?;
+    let mut candidates = Vec::new();
+    if identity.fingerprint().is_some() {
+        candidates.push(dir.join(format!("{}.jsonl", serial_stem(identity.serial()))));
+    }
+    candidates.push(dir.join(format!("{}.jsonl", legacy_safe_serial(identity.serial()))));
+    for candidate in candidates {
+        if candidate != destination && candidate.exists() {
+            fs::rename(candidate, destination)?;
+            return Ok(());
+        }
     }
     Ok(())
 }
@@ -935,6 +980,14 @@ mod tests {
         }
     }
 
+    /// The identity every production journal caller has: a serial plus the
+    /// build fingerprint `adb::validate_device_target` proved before the
+    /// mutation. Matches the fingerprint on [`target`] so plan rows and the
+    /// file stem describe the same device.
+    fn identity(serial: &str) -> DeviceIdentity {
+        DeviceIdentity::new(serial, Some("build/test"))
+    }
+
     fn fresh_tmp_dir(name: &str) -> PathBuf {
         let mut c = TMP_COUNTER.lock().unwrap();
         *c += 1;
@@ -965,14 +1018,14 @@ mod tests {
     #[test]
     fn record_and_reload_roundtrip() {
         let dir = fresh_tmp_dir("rt");
-        let mut j = Journal::open(&dir, "abc").unwrap();
+        let mut j = Journal::open(&dir, &identity("abc")).unwrap();
         j.record(fake_applied("abc", "com.foo", ActionKind::Disable))
             .unwrap();
         j.record(fake_applied("abc", "com.bar", ActionKind::Disable))
             .unwrap();
         drop(j);
 
-        let j2 = Journal::open(&dir, "abc").unwrap();
+        let j2 = Journal::open(&dir, &identity("abc")).unwrap();
         assert_eq!(j2.entries().len(), 2);
         assert_eq!(j2.entries()[0].id, 1);
         assert_eq!(j2.entries()[1].id, 2);
@@ -981,7 +1034,7 @@ mod tests {
     #[test]
     fn pack_provenance_and_override_round_trip() {
         let dir = fresh_tmp_dir("pack-context");
-        let mut journal = Journal::open(&dir, "abc").unwrap();
+        let mut journal = Journal::open(&dir, &identity("abc")).unwrap();
         let mut applied = fake_applied("abc", "com.foo", ActionKind::Disable);
         applied.plan.request.pack_context = Some(crate::adb::actions::PackActionContext {
             pack_id: "pixel-stock".into(),
@@ -994,7 +1047,7 @@ mod tests {
         journal.record(applied).unwrap();
         drop(journal);
 
-        let reloaded = Journal::open(&dir, "abc").unwrap();
+        let reloaded = Journal::open(&dir, &identity("abc")).unwrap();
         let context = reloaded.entries()[0]
             .applied
             .plan
@@ -1010,7 +1063,7 @@ mod tests {
     #[test]
     fn unsafe_transport_override_round_trips_in_mutation_audit() {
         let dir = fresh_tmp_dir("transport-override");
-        let mut journal = Journal::open(&dir, "wifi.local:5555").unwrap();
+        let mut journal = Journal::open(&dir, &identity("wifi.local:5555")).unwrap();
         let mut applied = fake_applied("wifi.local:5555", "com.foo", ActionKind::Disable);
         applied.plan.request.target.transport_kind = crate::adb::DeviceTransportKind::LegacyTcp;
         applied.plan.request.target.untrusted_transport_override = true;
@@ -1019,7 +1072,7 @@ mod tests {
         journal.record(applied).unwrap();
         drop(journal);
 
-        let reloaded = Journal::open(&dir, "wifi.local:5555").unwrap();
+        let reloaded = Journal::open(&dir, &identity("wifi.local:5555")).unwrap();
         assert_eq!(
             reloaded.entries()[0]
                 .applied
@@ -1045,7 +1098,7 @@ mod tests {
                 let dir = dir.clone();
                 scope.spawn(move || {
                     let pkg = format!("com.example.p{i}");
-                    with_journal(&dir, "race", |journal| {
+                    with_journal(&dir, &identity("race"), |journal| {
                         journal.record(fake_applied("race", &pkg, ActionKind::Disable))?;
                         Ok::<_, std::io::Error>(())
                     })
@@ -1054,7 +1107,7 @@ mod tests {
             }
         });
 
-        let reloaded = Journal::open(&dir, "race").unwrap();
+        let reloaded = Journal::open(&dir, &identity("race")).unwrap();
         assert_eq!(reloaded.entries().len(), THREADS);
         let mut ids: Vec<u64> = reloaded.entries().iter().map(|e| e.id).collect();
         ids.sort_unstable();
@@ -1065,7 +1118,7 @@ mod tests {
     #[test]
     fn with_journal_holds_and_releases_the_cross_process_file_lock() {
         let dir = fresh_tmp_dir("file-lock");
-        with_journal(&dir, "abc", |journal| {
+        with_journal(&dir, &identity("abc"), |journal| {
             journal.record(fake_applied("abc", "com.foo", ActionKind::Disable))?;
             Ok::<_, std::io::Error>(())
         })
@@ -1073,9 +1126,9 @@ mod tests {
 
         // The lock file exists next to the journal and was released: a fresh
         // handle can immediately take the exclusive lock again.
-        let lock_path = dir.join(format!("{}.lock", safe_serial("abc")));
+        let lock_path = dir.join(format!("{}.lock", journal_stem(&identity("abc"))));
         assert!(lock_path.exists());
-        let reacquired = JournalFileLock::acquire(&dir, "abc").unwrap();
+        let reacquired = JournalFileLock::acquire(&dir, &identity("abc")).unwrap();
         drop(reacquired);
     }
 
@@ -1083,12 +1136,12 @@ mod tests {
     #[test]
     fn with_journal_blocks_while_another_holder_owns_the_file_lock() {
         let dir = fresh_tmp_dir("file-lock-contention");
-        let holder = JournalFileLock::acquire(&dir, "abc").unwrap();
+        let holder = JournalFileLock::acquire(&dir, &identity("abc")).unwrap();
 
         let (sender, receiver) = std::sync::mpsc::channel();
         let contended_dir = dir.clone();
         let worker = std::thread::spawn(move || {
-            with_journal(&contended_dir, "abc", |journal| {
+            with_journal(&contended_dir, &identity("abc"), |journal| {
                 journal.record(fake_applied("abc", "com.foo", ActionKind::Disable))?;
                 Ok::<_, std::io::Error>(())
             })
@@ -1111,7 +1164,7 @@ mod tests {
     #[test]
     fn undo_request_for_inverts_kind() {
         let dir = fresh_tmp_dir("inv");
-        let mut j = Journal::open(&dir, "abc").unwrap();
+        let mut j = Journal::open(&dir, &identity("abc")).unwrap();
         j.record(fake_applied("abc", "com.foo", ActionKind::Disable))
             .unwrap();
         let req = undo_request_for(&j, 1).unwrap();
@@ -1122,7 +1175,7 @@ mod tests {
     #[test]
     fn display_control_inverse_survives_journal_reload() {
         let dir = fresh_tmp_dir("display-control-inverse");
-        let mut journal = Journal::open(&dir, "abc").unwrap();
+        let mut journal = Journal::open(&dir, &identity("abc")).unwrap();
         let mut planned = plan(ActionRequest {
             serial: "abc".into(),
             target: target("abc"),
@@ -1154,7 +1207,7 @@ mod tests {
             .unwrap();
         drop(journal);
 
-        let reloaded = Journal::open(&dir, "abc").unwrap();
+        let reloaded = Journal::open(&dir, &identity("abc")).unwrap();
         let undo = undo_request_for(&reloaded, 1).unwrap();
         assert_eq!(undo.kind, ActionKind::Shell);
         assert_eq!(undo.context.shell_argv, ["wm", "density", "480"]);
@@ -1171,7 +1224,7 @@ mod tests {
     #[test]
     fn archive_undo_requires_a_verified_round_trip_state() {
         let dir = fresh_tmp_dir("archive-inverse");
-        let mut journal = Journal::open(&dir, "abc").unwrap();
+        let mut journal = Journal::open(&dir, &identity("abc")).unwrap();
         let mut archived = fake_applied("abc", "com.foo", ActionKind::Archive);
         archived.before_state = "user_installed_enabled".into();
         archived.after_state = "archived".into();
@@ -1191,7 +1244,7 @@ mod tests {
     #[test]
     fn uninstall_undo_requires_verified_retained_preinstalled_state() {
         let dir = fresh_tmp_dir("irr");
-        let mut j = Journal::open(&dir, "abc").unwrap();
+        let mut j = Journal::open(&dir, &identity("abc")).unwrap();
         j.record(fake_applied("abc", "com.foo", ActionKind::UninstallForUser))
             .unwrap();
         assert!(undo_request_for(&j, 1).is_none());
@@ -1235,7 +1288,7 @@ mod tests {
             applied_at: "2026-07-14T12:00:00Z".into(),
         };
 
-        let mut journal = Journal::open(&dir, "abc").unwrap();
+        let mut journal = Journal::open(&dir, &identity("abc")).unwrap();
         journal.record(make_applied("unknown", "granted")).unwrap();
         assert!(undo_request_for(&journal, 1).is_none());
         journal.record(make_applied("revoked", "granted")).unwrap();
@@ -1250,7 +1303,7 @@ mod tests {
     #[test]
     fn record_undo_links_both_sides() {
         let dir = fresh_tmp_dir("link");
-        let mut j = Journal::open(&dir, "abc").unwrap();
+        let mut j = Journal::open(&dir, &identity("abc")).unwrap();
         j.record(fake_applied("abc", "com.foo", ActionKind::Disable))
             .unwrap();
         let undo = fake_applied("abc", "com.foo", ActionKind::Enable);
@@ -1265,14 +1318,14 @@ mod tests {
     #[test]
     fn reload_after_undo_keeps_last_state_per_id() {
         let dir = fresh_tmp_dir("link-reload");
-        let mut j = Journal::open(&dir, "abc").unwrap();
+        let mut j = Journal::open(&dir, &identity("abc")).unwrap();
         j.record(fake_applied("abc", "com.foo", ActionKind::Disable))
             .unwrap();
         j.record_undo(1, fake_applied("abc", "com.foo", ActionKind::Enable))
             .unwrap();
         drop(j);
 
-        let mut reloaded = Journal::open(&dir, "abc").unwrap();
+        let mut reloaded = Journal::open(&dir, &identity("abc")).unwrap();
         assert_eq!(reloaded.entries().len(), 2);
         assert_eq!(reloaded.entries()[0].id, 1);
         assert_eq!(reloaded.entries()[0].undone_by, Some(2));
@@ -1284,13 +1337,75 @@ mod tests {
     }
 
     #[test]
-    fn safe_serial_is_bounded_collision_resistant_and_windows_safe() {
-        let wireless = safe_serial("192.168.1.42:5555");
+    fn serial_stem_is_bounded_collision_resistant_and_windows_safe() {
+        let wireless = serial_stem("192.168.1.42:5555");
         assert!(wireless.starts_with("device-192.168.1.42-5555--"));
-        assert_ne!(safe_serial("a:b"), safe_serial("a_x3A_b"));
-        assert_ne!(safe_serial("CON"), safe_serial("con"));
-        assert!(safe_serial(&"_".repeat(256)).len() < 180);
-        assert!(safe_serial("").starts_with("device-unknown--"));
+        assert_ne!(serial_stem("a:b"), serial_stem("a_x3A_b"));
+        assert_ne!(serial_stem("CON"), serial_stem("con"));
+        assert!(serial_stem(&"_".repeat(256)).len() < 180);
+        assert!(serial_stem("").starts_with("device-unknown--"));
+    }
+
+    #[test]
+    fn journal_stem_separates_duplicate_serials_by_build_fingerprint() {
+        let first = journal_stem(&DeviceIdentity::new("SHARED", Some("brand/a:16/A/1:user")));
+        let second = journal_stem(&DeviceIdentity::new("SHARED", Some("brand/b:16/B/2:user")));
+        assert_ne!(first, second);
+        // The shared serial digest stays a common prefix, so a diagnostics
+        // reader can still tell the two files describe one serial.
+        let legacy = serial_stem("SHARED");
+        assert!(first.starts_with(&legacy) && second.starts_with(&legacy));
+        // An unknown fingerprint reproduces the pre-fingerprint stem exactly.
+        assert_eq!(
+            journal_stem(&DeviceIdentity::legacy_serial_only("SHARED")),
+            legacy
+        );
+        // Worst case still fits a 255-character Windows path component.
+        let longest = journal_stem(&DeviceIdentity::new(
+            &"_".repeat(256),
+            Some(&"x".repeat(512)),
+        ));
+        assert!(longest.len() + ".jsonl".len() <= 255, "{}", longest.len());
+    }
+
+    #[test]
+    fn a_blank_serial_does_not_share_a_store_across_builds() {
+        // A device reporting no serial used to land in one `device-unknown--`
+        // file shared with every other blank-serial device.
+        let first = journal_stem(&DeviceIdentity::new("", Some("brand/a:16/A/1:user")));
+        let second = journal_stem(&DeviceIdentity::new("", Some("brand/b:16/B/2:user")));
+        assert_ne!(first, second);
+        assert!(first.starts_with("device-unknown--"));
+        assert!(second.starts_with("device-unknown--"));
+    }
+
+    #[test]
+    fn duplicate_serials_on_different_builds_get_independent_journals() {
+        let dir = fresh_tmp_dir("duplicate-serial");
+        let first = DeviceIdentity::new("SHARED", Some("brand/a:16/A/1:user"));
+        let second = DeviceIdentity::new("SHARED", Some("brand/b:16/B/2:user"));
+
+        let mut a = Journal::open(&dir, &first).unwrap();
+        a.record(fake_applied("SHARED", "com.foo", ActionKind::Disable))
+            .unwrap();
+        drop(a);
+        let mut b = Journal::open(&dir, &second).unwrap();
+        assert!(
+            b.entries().is_empty(),
+            "device B must not inherit device A's rows"
+        );
+        // An undo recorded against A is not offerable against B.
+        assert!(undo_request_for(&b, 1).is_none());
+        b.record(fake_applied("SHARED", "com.bar", ActionKind::Disable))
+            .unwrap();
+        drop(b);
+
+        let a = Journal::open(&dir, &first).unwrap();
+        assert_eq!(a.entries().len(), 1);
+        assert_eq!(a.entries()[0].applied.plan.request.package, "com.foo");
+        let b = Journal::open(&dir, &second).unwrap();
+        assert_eq!(b.entries().len(), 1);
+        assert_eq!(b.entries()[0].applied.plan.request.package, "com.bar");
     }
 
     #[test]
@@ -1300,7 +1415,7 @@ mod tests {
         let legacy = dir.join("192.168.1.42_x3A_5555.jsonl");
         File::create(&legacy).unwrap().sync_data().unwrap();
 
-        let journal = Journal::open(&dir, "192.168.1.42:5555").unwrap();
+        let journal = Journal::open(&dir, &identity("192.168.1.42:5555")).unwrap();
         assert!(!legacy.exists());
         assert!(journal.path().exists());
         assert!(journal
@@ -1309,6 +1424,64 @@ mod tests {
             .unwrap()
             .to_string_lossy()
             .starts_with("device-192.168.1.42-5555--"));
+    }
+
+    #[test]
+    fn open_adopts_a_serial_keyed_journal_in_place() {
+        // Everything written before the fingerprint joined the identity lives
+        // under the serial-only stem. Opening once with a fingerprint must
+        // carry that history forward rather than start empty.
+        let dir = fresh_tmp_dir("serial-keyed-migration");
+        let legacy_identity = DeviceIdentity::legacy_serial_only("abc");
+        let mut legacy = Journal::open(&dir, &legacy_identity).unwrap();
+        legacy
+            .record(fake_applied("abc", "com.foo", ActionKind::Disable))
+            .unwrap();
+        let legacy_path = legacy.path().to_path_buf();
+        drop(legacy);
+
+        let migrated = Journal::open(&dir, &identity("abc")).unwrap();
+        assert!(!legacy_path.exists(), "the serial-keyed file was adopted");
+        assert_ne!(migrated.path(), legacy_path);
+        assert_eq!(migrated.entries().len(), 1);
+        assert_eq!(
+            migrated.entries()[0].applied.plan.request.package,
+            "com.foo"
+        );
+        // Migration is one-way and idempotent: reopening does not duplicate.
+        assert_eq!(
+            Journal::open(&dir, &identity("abc"))
+                .unwrap()
+                .entries()
+                .len(),
+            1
+        );
+    }
+
+    #[test]
+    fn migration_never_overwrites_an_existing_fingerprint_keyed_journal() {
+        let dir = fresh_tmp_dir("migration-no-clobber");
+        let current = identity("abc");
+        let mut journal = Journal::open(&dir, &current).unwrap();
+        journal
+            .record(fake_applied("abc", "com.current", ActionKind::Disable))
+            .unwrap();
+        drop(journal);
+
+        // A stale serial-keyed file appears afterwards (a second device with
+        // the same serial connected to an older build, say).
+        let stale = dir.join(format!("{}.jsonl", serial_stem("abc")));
+        let mut file = File::create(&stale).unwrap();
+        writeln!(file, "{{\"corrupt\": true}}").unwrap();
+        file.sync_data().unwrap();
+
+        let reopened = Journal::open(&dir, &current).unwrap();
+        assert_eq!(reopened.entries().len(), 1);
+        assert_eq!(
+            reopened.entries()[0].applied.plan.request.package,
+            "com.current"
+        );
+        assert!(stale.exists(), "the stale file is left alone, not merged");
     }
 
     #[test]
@@ -1345,7 +1518,7 @@ mod tests {
         writeln!(f, "{}", serde_json::to_string(&entry).unwrap()).unwrap();
         drop(f);
 
-        let j = Journal::open(&dir, "abc").unwrap();
+        let j = Journal::open(&dir, &identity("abc")).unwrap();
         // The corrupt line was dropped, the good one survived.
         assert_eq!(j.entries().len(), 1);
         assert_eq!(j.entries()[0].id, 1);
@@ -1371,7 +1544,7 @@ mod tests {
         writeln!(file, "{}", serde_json::to_string(&entry).unwrap()).unwrap();
         file.sync_data().unwrap();
 
-        let journal = Journal::open(&dir, "abc").unwrap();
+        let journal = Journal::open(&dir, &identity("abc")).unwrap();
         assert_eq!(journal.entries().len(), 1);
         assert_eq!(journal.entries()[0].id, 1);
     }
@@ -1393,7 +1566,7 @@ mod tests {
         writeln!(file, "{}", serde_json::to_string(&entry).unwrap()).unwrap();
         file.sync_data().unwrap();
 
-        let journal = Journal::open(&dir, "abc").unwrap();
+        let journal = Journal::open(&dir, &identity("abc")).unwrap();
         assert_eq!(journal.entry(1).unwrap().undone_by, None);
         assert!(undo_request_for(&journal, 1).is_some());
     }
@@ -1415,7 +1588,7 @@ mod tests {
         writeln!(file, "{}", serde_json::to_string(&entry).unwrap()).unwrap();
         file.sync_data().unwrap();
 
-        let error = match Journal::open(&dir, "abc") {
+        let error = match Journal::open(&dir, &identity("abc")) {
             Ok(_) => panic!("an exhausted id space must prevent journal replay"),
             Err(error) => error,
         };
@@ -1444,7 +1617,7 @@ mod tests {
     #[test]
     fn execute_syncs_pending_intent_before_running_operation() {
         let dir = fresh_tmp_dir("wal-order");
-        let mut journal = Journal::open(&dir, "abc").unwrap();
+        let mut journal = Journal::open(&dir, &identity("abc")).unwrap();
         let applied = fake_applied("abc", "com.foo", ActionKind::Disable);
         let path = journal.path().to_path_buf();
         let result = journal
@@ -1473,7 +1646,7 @@ mod tests {
         .enumerate()
         {
             let dir = fresh_tmp_dir(&format!("wal-failure-{index}"));
-            let mut journal = Journal::open(&dir, "abc").unwrap();
+            let mut journal = Journal::open(&dir, &identity("abc")).unwrap();
             journal.fail_persist = Some(failure);
             let ran = std::cell::Cell::new(false);
             let applied = fake_applied("abc", "com.foo", ActionKind::Disable);
@@ -1490,14 +1663,14 @@ mod tests {
     #[test]
     fn startup_marks_a_crashed_operation_interrupted() {
         let dir = fresh_tmp_dir("crash-recovery");
-        let mut journal = Journal::open(&dir, "abc").unwrap();
+        let mut journal = Journal::open(&dir, &identity("abc")).unwrap();
         let applied = fake_applied("abc", "com.foo", ActionKind::Disable);
         let id = journal
             .begin(applied.plan, "2026-05-25T11:59:59Z", None)
             .unwrap();
         drop(journal); // process stopped after durable intent, before outcome
 
-        let recovered = Journal::open(&dir, "abc").unwrap();
+        let recovered = Journal::open(&dir, &identity("abc")).unwrap();
         let entry = recovered.entry(id).unwrap();
         assert_eq!(entry.outcome, JournalOutcome::Interrupted);
         assert!(entry
@@ -1510,7 +1683,7 @@ mod tests {
     #[test]
     fn failed_terminal_sync_recovers_as_visible_interrupted_operation() {
         let dir = fresh_tmp_dir("terminal-sync-failure");
-        let mut journal = Journal::open(&dir, "abc").unwrap();
+        let mut journal = Journal::open(&dir, &identity("abc")).unwrap();
         let applied = fake_applied("abc", "com.foo", ActionKind::Disable);
         let id = journal
             .begin(applied.plan.clone(), "2026-05-25T11:59:59Z", None)
@@ -1519,7 +1692,7 @@ mod tests {
         assert!(journal.succeed(id, applied).is_err());
         drop(journal);
 
-        let recovered = Journal::open(&dir, "abc").unwrap();
+        let recovered = Journal::open(&dir, &identity("abc")).unwrap();
         assert!(matches!(
             recovered.entry(id).unwrap().outcome,
             JournalOutcome::Succeeded | JournalOutcome::Interrupted
@@ -1529,7 +1702,7 @@ mod tests {
     #[test]
     fn operation_errors_receive_a_durable_failed_outcome() {
         let dir = fresh_tmp_dir("terminal-operation-failure");
-        let mut journal = Journal::open(&dir, "abc").unwrap();
+        let mut journal = Journal::open(&dir, &identity("abc")).unwrap();
         let applied = fake_applied("abc", "com.foo", ActionKind::Disable);
         let result = journal.execute(applied.plan, None, "2026-05-25T11:59:59Z", |_| {
             Err::<AppliedAction, _>("adb rejected the mutation")
@@ -1543,7 +1716,7 @@ mod tests {
         );
         drop(journal);
         assert_eq!(
-            Journal::open(&dir, "abc").unwrap().entries()[0].outcome,
+            Journal::open(&dir, &identity("abc")).unwrap().entries()[0].outcome,
             JournalOutcome::Failed
         );
     }
@@ -1551,7 +1724,7 @@ mod tests {
     #[test]
     fn shell_failures_persist_only_a_redacted_summary() {
         let dir = fresh_tmp_dir("shell-failure-redaction");
-        let mut journal = Journal::open(&dir, "abc").unwrap();
+        let mut journal = Journal::open(&dir, &identity("abc")).unwrap();
         let plan = plan(ActionRequest {
             serial: "abc".into(),
             target: target("abc"),
@@ -1582,7 +1755,7 @@ mod tests {
     #[test]
     fn truncated_terminal_record_recovers_the_durable_intent() {
         let dir = fresh_tmp_dir("truncated-outcome");
-        let mut journal = Journal::open(&dir, "abc").unwrap();
+        let mut journal = Journal::open(&dir, &identity("abc")).unwrap();
         let applied = fake_applied("abc", "com.foo", ActionKind::Disable);
         let id = journal
             .begin(applied.plan.clone(), "2026-05-25T11:59:59Z", None)
@@ -1600,7 +1773,7 @@ mod tests {
         file.sync_data().unwrap();
         drop(file);
 
-        let recovered = Journal::open(&dir, "abc").unwrap();
+        let recovered = Journal::open(&dir, &identity("abc")).unwrap();
         assert_eq!(
             recovered.entry(id).unwrap().outcome,
             JournalOutcome::Interrupted
@@ -1611,7 +1784,7 @@ mod tests {
     #[test]
     fn interrupted_undo_is_idempotently_blocked_after_restart() {
         let dir = fresh_tmp_dir("undo-interrupted");
-        let mut journal = Journal::open(&dir, "abc").unwrap();
+        let mut journal = Journal::open(&dir, &identity("abc")).unwrap();
         journal
             .record(fake_applied("abc", "com.foo", ActionKind::Disable))
             .unwrap();
@@ -1622,7 +1795,7 @@ mod tests {
         assert!(undo_request_for(&journal, 1).is_none());
         drop(journal);
 
-        let mut recovered = Journal::open(&dir, "abc").unwrap();
+        let mut recovered = Journal::open(&dir, &identity("abc")).unwrap();
         assert_eq!(
             recovered.entry(undo_id).unwrap().outcome,
             JournalOutcome::Interrupted
@@ -1636,7 +1809,7 @@ mod tests {
     #[test]
     fn failed_undo_releases_original_and_success_is_idempotent() {
         let dir = fresh_tmp_dir("undo-terminal");
-        let mut journal = Journal::open(&dir, "abc").unwrap();
+        let mut journal = Journal::open(&dir, &identity("abc")).unwrap();
         journal
             .record(fake_applied("abc", "com.foo", ActionKind::Disable))
             .unwrap();
@@ -1684,7 +1857,7 @@ mod tests {
         writeln!(file, "{}", serde_json::to_string(&value).unwrap()).unwrap();
         file.sync_data().unwrap();
 
-        let journal = Journal::open(&dir, "abc").unwrap();
+        let journal = Journal::open(&dir, &identity("abc")).unwrap();
         assert_eq!(journal.entry(1).unwrap().outcome, JournalOutcome::Succeeded);
     }
 }

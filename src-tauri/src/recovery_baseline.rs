@@ -143,6 +143,21 @@ impl RecoveryBaselineError {
     }
 }
 
+/// Baseline ownership is keyed on the serial alone, deliberately.
+///
+/// Everything else Droidsmith persists per device mixes the build fingerprint
+/// into its identity so duplicate serials cannot share a store (see
+/// [`crate::device_identity`]). A recovery baseline is the one store that must
+/// *not*: its whole purpose is to survive the OTA that changes the
+/// fingerprint, and mixing it in would make every updated device disown its
+/// own baseline.
+///
+/// The fingerprint is therefore reported as a separate compatibility axis
+/// (`build_fingerprint_matches`) rather than folded into identity. That leaves
+/// one case unresolved: a second device reporting the same serial on a
+/// different build is indistinguishable from the same device after an update.
+/// Both surface as "identity matches, build changed", which is the strongest
+/// claim the available evidence supports.
 pub fn hashed_device_identity(serial: &str) -> String {
     let mut hasher = Sha256::new();
     hasher.update(b"droidsmith-recovery-baseline-device-v1\0");
@@ -725,6 +740,40 @@ mod tests {
         assert_eq!(
             missing_user.rows[0].reason_code,
             Some("android_user_missing")
+        );
+    }
+
+    #[test]
+    fn a_changed_build_is_reported_as_a_separate_axis_from_identity() {
+        // IMP-99 mixed the build fingerprint into every other per-device store.
+        // Baselines deliberately opt out: an OTA changes the fingerprint, and a
+        // baseline that disowned its device after an update would be useless
+        // exactly when it is needed. The build change is reported instead.
+        let baseline = build(
+            &target("SHARED", "brand/a:16/A/1:user"),
+            0,
+            None,
+            &[package("com.example.app", true, true)],
+            vec![BaselineActionInput {
+                package: "com.example.app".to_string(),
+                kind: ActionKind::Disable,
+            }],
+            "2026-08-01T12:00:00Z".to_string(),
+        )
+        .unwrap();
+
+        let updated = inspect(
+            baseline,
+            &target("SHARED", "brand/b:16/B/2:user"),
+            &[user(0)],
+            &[package("com.example.app", false, true)],
+        )
+        .unwrap();
+        assert!(updated.compatibility.device_identity_matches);
+        assert!(!updated.compatibility.build_fingerprint_matches);
+        assert!(
+            !updated.plans.is_empty(),
+            "a post-OTA device must still be able to restore from its baseline"
         );
     }
 

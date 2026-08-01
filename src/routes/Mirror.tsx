@@ -28,6 +28,7 @@ import {
   resetStoredMirrorPreset,
   saveStoredMirrorPreset,
 } from "../lib/settings";
+import { deviceIdentityKey } from "../lib/deviceIdentity";
 
 import {
   DEFAULT_MIRROR_PRESET,
@@ -180,7 +181,7 @@ export default function MirrorRoute() {
     setRecordingPath(null);
     setAppInventory({ kind: "idle" });
     setPreset(DEFAULT_MIRROR_PRESET);
-    void loadStoredMirrorPreset(selectedTarget.serial)
+    void loadStoredMirrorPreset(deviceIdentityKey(selectedTarget))
       .then((stored) => {
         lease.commit(() => setPreset(stored));
       })
@@ -287,7 +288,7 @@ export default function MirrorRoute() {
     if (!selectedTarget) return;
     const lease = presetOperation.begin();
     try {
-      await saveStoredMirrorPreset(selectedTarget.serial, preset);
+      await saveStoredMirrorPreset(deviceIdentityKey(selectedTarget), preset);
       lease.commit(() =>
         setPresetMessage(
           t("mirror.presetSaved", { serial: selectedTarget.serial }),
@@ -309,7 +310,7 @@ export default function MirrorRoute() {
     setPreset(DEFAULT_MIRROR_PRESET);
     try {
       if (selectedTarget) {
-        await resetStoredMirrorPreset(selectedTarget.serial);
+        await resetStoredMirrorPreset(deviceIdentityKey(selectedTarget));
       }
       lease.commit(() => setPresetMessage(t("mirror.presetReset")));
     } catch (error) {

@@ -364,14 +364,14 @@ export default function AppsRoute() {
   );
 
   const loadJournal = useCallback(async () => {
-    if (!selectedSerial) {
+    if (!selectedTarget) {
       setJournalState({ kind: "idle" });
       return;
     }
     const lease = journalOperation.begin();
     setJournalState({ kind: "loading" });
     try {
-      const entries = await callJournalList(selectedSerial);
+      const entries = await callJournalList(selectedTarget);
       lease.commit(() => setJournalState({ kind: "ok", entries }));
     } catch (e) {
       lease.commit(() =>
@@ -381,7 +381,7 @@ export default function AppsRoute() {
         }),
       );
     }
-  }, [journalOperation, selectedSerial]);
+  }, [journalOperation, selectedTarget]);
 
   useEffect(() => {
     const current = authorizedDevices.find((device) =>

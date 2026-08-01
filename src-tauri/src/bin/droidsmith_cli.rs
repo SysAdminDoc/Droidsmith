@@ -29,6 +29,7 @@ use droidsmith_lib::adb::{
     device::{valid_serial, Device},
     AdbTransport, DeviceTarget, ShellTransport,
 };
+use droidsmith_lib::device_identity::DeviceIdentity;
 use droidsmith_lib::journal;
 use droidsmith_lib::profile;
 use droidsmith_lib::recovery_baseline::{self, BaselineActionInput};
@@ -1284,10 +1285,13 @@ fn run_profile_on_target(
     if apply {
         let journal_dir = journal::default_journal_dir()
             .map_err(|error| err("journal_unavailable", error.to_string()))?;
+        // `validate_device_target` already proved the fingerprint, so this
+        // identity is the same one the GUI writes under for this device.
+        let identity = DeviceIdentity::from_target(target);
         for (index, plan) in plans.into_iter().enumerate() {
             let package = plan.request.package.clone();
             let now = iso_now();
-            let result = journal::with_journal(&journal_dir, &target.serial, |journal| {
+            let result = journal::with_journal(&journal_dir, &identity, |journal| {
                 journal.execute(plan, None, &now, |plan| {
                     actions::apply(transport, plan, &iso_now())
                 })

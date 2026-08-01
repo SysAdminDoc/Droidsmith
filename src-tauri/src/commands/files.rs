@@ -241,10 +241,10 @@ pub fn apply_remote_file_mutation(
     }
     let (transport, transport_override) = privileged_transport(&target)?;
     let user_id = current_android_user(&transport, &target)?;
-    let serial = target.serial.clone();
+    let identity = DeviceIdentity::from_target(&target);
     let plan = remote_files::action_plan(target, user_id, transport_override, &reviewed);
     let dir = journal_dir(&app)?;
-    journal::with_journal(&dir, &serial, |journal| {
+    journal::with_journal(&dir, &identity, |journal| {
         execute_remote_file_journaled(journal, &transport, plan)
     })
 }
@@ -280,6 +280,7 @@ pub async fn push_file(
     let adb_path = transport.adb_path.clone();
     let sink = operations::channel_sink(on_event);
     let serial = target.serial.clone();
+    let identity = DeviceIdentity::from_target(&target);
     let journal_path = journal_dir(&app)?;
     let mut plan = actions::plan(actions::ActionRequest {
         serial: serial.clone(),
@@ -305,7 +306,7 @@ pub async fn push_file(
         remote_files::capture_path_state(&transport, &target, &remote)
     );
     spawn_blocking_operation(move || {
-        journal::with_journal(&journal_path, &serial, |journal| {
+        journal::with_journal(&journal_path, &identity, |journal| {
             let started_at = iso_now();
             let entry = journal
                 .execute(plan, None, &started_at, |plan| {

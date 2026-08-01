@@ -13,6 +13,7 @@ import {
   type LogcatQueryScope,
   type OperationEvent,
 } from "../lib/tauri";
+import { deviceIdentityKey } from "../lib/deviceIdentity";
 import { useTargetOperation } from "../lib/targetOperation";
 import {
   loadLogcatLibrary,
@@ -118,7 +119,9 @@ export default function LogcatRoute() {
     "logcat-processes",
   );
 
-  const deviceIdentity = selectedTarget?.serial ?? null;
+  const deviceIdentity = selectedTarget
+    ? deviceIdentityKey(selectedTarget)
+    : null;
 
   const queueLogAnnouncement = useCallback(() => {
     setAnnouncement("");

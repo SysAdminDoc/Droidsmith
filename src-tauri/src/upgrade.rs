@@ -12,6 +12,7 @@ use std::path::{Component, Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
+use crate::device_identity::DeviceIdentity;
 use crate::journal::Journal;
 use crate::profile::ProfileDocument;
 
@@ -176,7 +177,11 @@ fn validate_installed_fixture(
     let journal_dir = active.join("journal");
     let mut journal_entries = 0usize;
     for expected in &fixture.journals {
-        let journal = Journal::open(&journal_dir, &expected.serial)?;
+        // Upgrade fixtures describe pre-fingerprint installs, so they address the
+        // serial-only store directly: this check exists to prove that store is
+        // still readable after an upgrade, not to exercise the current identity.
+        let identity = DeviceIdentity::legacy_serial_only(&expected.serial);
+        let journal = Journal::open(&journal_dir, &identity)?;
         if journal.entries().len() != expected.expected_entries {
             return Err(UpgradeCheckError::Validation(format!(
                 "journal {:?} has {} entries; expected {}",

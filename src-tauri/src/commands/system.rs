@@ -384,6 +384,7 @@ pub fn set_permission(
         });
     }
     let serial = target.serial.clone();
+    let identity = DeviceIdentity::from_target(&target);
     let plan = actions::plan(actions::ActionRequest {
         serial: serial.clone(),
         target,
@@ -407,7 +408,7 @@ pub fn set_permission(
         },
     });
     let dir = journal_dir(&app)?;
-    journal::with_journal(&dir, &serial, |journal| {
+    journal::with_journal(&dir, &identity, |journal| {
         execute_journaled(journal, &transport, plan, None)
     })
 }

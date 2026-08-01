@@ -937,8 +937,8 @@ export const commands = {
       on_event: onEvent,
     });
   },
-  async journalList(serial: string): Promise<JournalEntry[]> {
-    return await TAURI_INVOKE("journal_list", { serial });
+  async journalList(target: DeviceTarget): Promise<JournalEntry[]> {
+    return await TAURI_INVOKE("journal_list", { target });
   },
   /**
    * Undo entry `entry_id` in `serial`'s journal. Returns the new

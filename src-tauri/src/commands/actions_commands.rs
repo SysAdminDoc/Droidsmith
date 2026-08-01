@@ -26,11 +26,11 @@ pub fn apply_action(
     let (transport, transport_override) = privileged_transport(&plan.request.target)?;
     plan.request.context.transport_override = transport_override;
 
-    let serial = plan.request.serial.clone();
+    let identity = DeviceIdentity::from_target(&plan.request.target);
     // Serialize intent → device mutation → terminal outcome per device. The
     // durable intent is written and synced before `actions::apply` runs.
     let dir = journal_dir(&app)?;
-    let result = journal::with_journal(&dir, &serial, |journal| {
+    let result = journal::with_journal(&dir, &identity, |journal| {
         execute_journaled(journal, &transport, plan, None)
     })?;
     Ok(result)
@@ -45,7 +45,7 @@ pub fn apply_action_batch(
     validate_action_batch_plan(&batch)?;
     let first = batch.plans.first().expect("validated non-empty batch");
     let target = first.request.target.clone();
-    let serial = first.request.serial.clone();
+    let identity = DeviceIdentity::from_target(&target);
     let (transport, transport_override) = privileged_transport(&target)?;
     let batch_id = next_batch_id();
     for plan in &mut batch.plans {
@@ -54,7 +54,7 @@ pub fn apply_action_batch(
     }
 
     let dir = journal_dir(&app)?;
-    let items = journal::with_journal(&dir, &serial, |journal| {
+    let items = journal::with_journal(&dir, &identity, |journal| {
         execute_batch_plans(journal, &transport, batch.plans, None)
     })?;
     Ok(BatchActionResult { batch_id, items })
@@ -240,13 +240,34 @@ pub fn inspect_recovery_baseline(
 #[specta::specta]
 pub fn journal_list(
     app: tauri::AppHandle,
-    serial: String,
+    target: adb::DeviceTarget,
 ) -> Result<Vec<JournalEntry>, CommandError> {
-    validate_serial_arg(&serial)?;
+    validate_serial_arg(&target.serial)?;
+    // A journal is keyed on serial *and* build fingerprint, so reading one
+    // without a fingerprint could only answer for a device identity no
+    // mutation path can produce. Say so instead of rendering an empty history
+    // that looks like lost data.
+    let identity = journaled_identity(&target)?;
     let dir = journal_dir(&app)?;
-    journal::with_journal(&dir, &serial, |journal| {
+    journal::with_journal(&dir, &identity, |journal| {
         Ok::<_, CommandError>(journal.entries().to_vec())
     })
+}
+
+/// Resolve the persistence identity for a device whose journal is about to be
+/// opened. Fails closed when the build fingerprint is unknown — the same
+/// precondition `adb::validate_device_target` enforces before any mutation.
+fn journaled_identity(target: &adb::DeviceTarget) -> Result<DeviceIdentity, CommandError> {
+    let identity = DeviceIdentity::from_target(target);
+    if identity.fingerprint().is_none() {
+        return Err(CommandError {
+            code: "device_identity_unverified",
+            message:
+                "this device has not reported a build fingerprint yet; reconnect and authorize it before opening its history"
+                    .to_string(),
+        });
+    }
+    Ok(identity)
 }
 
 /// Undo entry `entry_id` in `serial`'s journal. Returns the new
@@ -261,13 +282,14 @@ pub fn journal_undo(
 ) -> Result<JournalEntry, CommandError> {
     let serial = target.serial.clone();
     validate_serial_arg(&serial)?;
+    let identity = journaled_identity(&target)?;
     let (transport, transport_override) = privileged_transport(&target)?;
 
     // Hold the per-device lock across the reversibility check, the inverse
     // ADB call, and the undo record so two undos of the same entry cannot
     // both pass the check and double-apply.
     let dir = journal_dir(&app)?;
-    let entry = journal::with_journal(&dir, &serial, |journal| {
+    let entry = journal::with_journal(&dir, &identity, |journal| {
         let mut undo_request = journal::undo_request_for(journal, entry_id).ok_or(CommandError {
             code: "not_reversible",
             message: format!(
@@ -303,9 +325,10 @@ pub fn journal_undo_batch(
     }
     let serial = target.serial.clone();
     validate_serial_arg(&serial)?;
+    let identity = journaled_identity(&target)?;
     let (transport, transport_override) = privileged_transport(&target)?;
     let dir = journal_dir(&app)?;
-    let items = journal::with_journal(&dir, &serial, |journal| {
+    let items = journal::with_journal(&dir, &identity, |journal| {
         let originals = journal
             .entries()
             .iter()

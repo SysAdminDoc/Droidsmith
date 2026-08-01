@@ -14,6 +14,23 @@ completion.
 Working batches live here. Sections collapse into a versioned release on
 each milestone tag.
 
+### Fixed
+
+- **Devices reporting the same serial no longer share persisted state.** The
+  action journal and per-device settings scopes were keyed on the ADB serial
+  alone, but serials are not unique — clone and OEM firmware ships duplicated
+  values and some devices report an empty one. Two such devices shared one
+  journal file, so an undo row recorded against device A was offered against
+  device B. Persistence is now keyed on a canonical identity that mixes the
+  verified build fingerprint into the serial. Existing journals and settings
+  scopes are adopted in place on first use, so no history is lost, and a device
+  that has not proven a fingerprint is refused rather than silently shown an
+  empty history. Recovery baselines deliberately keep serial-only identity —
+  their purpose is to survive the OTA that changes the fingerprint — and report
+  the build change as a separate compatibility axis instead. Duplicate serials
+  on *identical* builds remain indistinguishable; that limit is documented
+  rather than papered over. (IMP-99)
+
 ## [0.9.13] - 2026-07-31
 
 ### Changed

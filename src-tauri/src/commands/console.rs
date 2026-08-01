@@ -318,6 +318,7 @@ pub fn apply_device_control(
         })?;
     let prepared = actions::prepare_device_control(&transport, &target, user_id, &argv)?;
     let serial = target.serial.clone();
+    let identity = DeviceIdentity::from_target(&target);
     let mut plan = actions::plan(actions::ActionRequest {
         serial: serial.clone(),
         target,
@@ -338,7 +339,7 @@ pub fn apply_device_control(
     });
     plan.before_state = prepared.before_state;
     let dir = journal_dir(&app)?;
-    journal::with_journal(&dir, &serial, |journal| {
+    journal::with_journal(&dir, &identity, |journal| {
         execute_journaled(journal, &transport, plan, None)
     })
 }

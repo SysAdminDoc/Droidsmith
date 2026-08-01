@@ -762,8 +762,10 @@ export async function callInspectRecoveryBaseline(
   );
 }
 
-export async function callJournalList(serial: string): Promise<JournalEntry[]> {
-  return rendererRecord(await commands.journalList(serial));
+export async function callJournalList(
+  target: DeviceTarget,
+): Promise<JournalEntry[]> {
+  return rendererRecord(await commands.journalList(target));
 }
 
 export async function callJournalUndo(

@@ -14,6 +14,7 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
+use crate::device_identity::DeviceIdentity;
 use crate::fs_util::{ArtifactKind, StagedArtifact};
 
 pub const SETTINGS_VERSION: &str = "1";
@@ -499,10 +500,8 @@ pub fn get_mirror_preset(
         let loaded = initialize_locked(app_data_dir, &LegacySettingsImport::default())?;
         let document = read_valid_document(&settings_path(app_data_dir))?;
         debug_assert_eq!(loaded.settings.version, document.version);
-        Ok(document
-            .mirror_presets
-            .get(&device_scope(device_identity)?)
-            .cloned())
+        let scope = read_device_scope(&document.mirror_presets, device_identity)?;
+        Ok(document.mirror_presets.get(&scope).cloned())
     })
 }
 
@@ -513,7 +512,9 @@ pub fn set_mirror_preset(
 ) -> Result<SettingsSnapshot, SettingsError> {
     validate_preset(&preset)?;
     let scope = device_scope(device_identity)?;
+    let identity = device_identity.to_string();
     mutate(app_data_dir, move |settings| {
+        adopt_device_scope(&mut settings.mirror_presets, &identity);
         settings.mirror_presets.insert(scope, preset);
     })
 }
@@ -523,7 +524,9 @@ pub fn reset_mirror_preset(
     device_identity: &str,
 ) -> Result<SettingsSnapshot, SettingsError> {
     let scope = device_scope(device_identity)?;
+    let identity = device_identity.to_string();
     mutate(app_data_dir, move |settings| {
+        adopt_device_scope(&mut settings.mirror_presets, &identity);
         settings.mirror_presets.remove(&scope);
     })
 }
@@ -532,10 +535,14 @@ pub fn list_logcat_queries(
     app_data_dir: &Path,
     device_identity: Option<&str>,
 ) -> Result<LogcatQueryLibrary, SettingsError> {
-    let device_key = device_identity.map(device_scope).transpose()?;
-    with_lock(|| {
+    let identity = device_identity.map(str::to_string);
+    with_lock(move || {
         initialize_locked(app_data_dir, &LegacySettingsImport::default())?;
         let document = read_valid_document(&settings_path(app_data_dir))?;
+        let device_key = identity
+            .as_deref()
+            .map(|identity| read_device_scope(&document.logcat_queries, identity))
+            .transpose()?;
         Ok(logcat_library(&document, device_key.as_deref()))
     })
 }
@@ -572,11 +579,14 @@ pub fn save_logcat_queries(
             )));
         }
     }
-    let device_key = device_identity.map(device_scope).transpose()?;
+    let identity = device_identity.map(str::to_string);
     with_lock(move || {
         initialize_locked(app_data_dir, &LegacySettingsImport::default())?;
         let path = settings_path(app_data_dir);
         let mut settings = read_valid_document(&path)?;
+        if let (LogcatQueryScope::Device, Some(identity)) = (scope, identity.as_deref()) {
+            adopt_device_scope(&mut settings.logcat_queries, identity);
+        }
         if queries.is_empty() {
             settings.logcat_queries.remove(&key);
         } else {
@@ -584,6 +594,10 @@ pub fn save_logcat_queries(
         }
         validate_document(&settings)?;
         write_document(&path, &settings)?;
+        let device_key = identity
+            .as_deref()
+            .map(|identity| read_device_scope(&settings.logcat_queries, identity))
+            .transpose()?;
         Ok(logcat_library(&settings, device_key.as_deref()))
     })
 }
@@ -1736,6 +1750,49 @@ fn normalize_legacy_preset(value: LegacyMirrorPreset) -> MirrorPreset {
     }
 }
 
+/// The scope a pre-fingerprint build would have used for this identity, or
+/// `None` when the identity *is* that older form.
+fn legacy_device_scope(device_identity: &str) -> Result<Option<String>, SettingsError> {
+    DeviceIdentity::parse(device_identity)
+        .legacy_canonical()
+        .map(|legacy| device_scope(&legacy))
+        .transpose()
+}
+
+/// Scope to read a device-scoped value from.
+///
+/// Mixing the build fingerprint into the identity moved every existing device
+/// to a new scope. Rather than rewrite the store on upgrade, a read falls back
+/// to the serial-only scope the value was written under, and the next write
+/// moves it across (see [`adopt_device_scope`]).
+///
+/// Two devices that genuinely share a serial both see the pre-existing value
+/// until one of them writes. These are display preferences, not device
+/// mutations, so converging on first write is preferable to discarding them.
+fn read_device_scope<V>(
+    stored: &BTreeMap<String, V>,
+    device_identity: &str,
+) -> Result<String, SettingsError> {
+    let scope = device_scope(device_identity)?;
+    if stored.contains_key(&scope) {
+        return Ok(scope);
+    }
+    if let Some(legacy) = legacy_device_scope(device_identity)? {
+        if stored.contains_key(&legacy) {
+            return Ok(legacy);
+        }
+    }
+    Ok(scope)
+}
+
+/// Drop the serial-only scope this identity grew out of, so a write under the
+/// current scope leaves exactly one copy behind.
+fn adopt_device_scope<V>(stored: &mut BTreeMap<String, V>, device_identity: &str) {
+    if let Ok(Some(legacy)) = legacy_device_scope(device_identity) {
+        stored.remove(&legacy);
+    }
+}
+
 fn device_scope(device_identity: &str) -> Result<String, SettingsError> {
     if device_identity.is_empty()
         || device_identity.len() > MAX_DEVICE_IDENTITY_BYTES
@@ -1973,6 +2030,44 @@ mod tests {
         assert!(!raw.contains("device-a"));
         reset_mirror_preset(&dir, "device-a").unwrap();
         assert_eq!(get_mirror_preset(&dir, "device-a").unwrap(), None);
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn a_serial_scoped_preset_is_adopted_by_the_fingerprint_identity() {
+        // IMP-99: mixing the build fingerprint into the identity moved every
+        // device to a new scope. An upgrading user must still see their preset.
+        let dir = temp_dir("legacy-scope");
+        initialize(&dir, LegacySettingsImport::default()).unwrap();
+        let preset = MirrorPreset {
+            bit_rate: "12M".to_string(),
+            ..MirrorPreset::default()
+        };
+        set_mirror_preset(&dir, "SHARED", preset.clone()).unwrap();
+
+        let current = DeviceIdentity::new("SHARED", Some("brand/a:16/A/1:user")).canonical();
+        assert_eq!(
+            get_mirror_preset(&dir, &current).unwrap(),
+            Some(preset.clone()),
+            "the serial-only scope is still readable after the identity change"
+        );
+
+        // Writing under the current identity leaves exactly one copy behind,
+        // so the legacy scope stops shadowing a second device with that serial.
+        let updated = MirrorPreset {
+            bit_rate: "20M".to_string(),
+            ..MirrorPreset::default()
+        };
+        set_mirror_preset(&dir, &current, updated.clone()).unwrap();
+        assert_eq!(get_mirror_preset(&dir, &current).unwrap(), Some(updated));
+        assert_eq!(get_mirror_preset(&dir, "SHARED").unwrap(), None);
+
+        let other = DeviceIdentity::new("SHARED", Some("brand/b:16/B/2:user")).canonical();
+        assert_eq!(
+            get_mirror_preset(&dir, &other).unwrap(),
+            None,
+            "a different build with the same serial keeps its own scope"
+        );
         fs::remove_dir_all(dir).unwrap();
     }
 

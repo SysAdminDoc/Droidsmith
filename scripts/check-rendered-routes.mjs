@@ -3066,6 +3066,14 @@ async function installTauriMock(
           ];
         }
         if (cmd === "journal_list") {
+          // IMP-99: a journal is keyed on serial *and* build fingerprint, so
+          // the renderer must send the whole target. Sending a bare serial
+          // would silently read a store no mutation path can write.
+          if (!args?.target?.build_fingerprint) {
+            throw new Error(
+              "journal_list was called without a fingerprint-bearing device target",
+            );
+          }
           return [
             {
               id: 1,

@@ -11,6 +11,7 @@ mod captured_tail;
 mod command_registry;
 mod commands;
 pub mod contribution_schema;
+pub mod device_identity;
 mod diagnostics;
 mod fs_util;
 mod gnirehtet;

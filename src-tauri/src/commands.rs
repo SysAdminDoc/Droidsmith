@@ -27,6 +27,7 @@ use crate::adb::{self, actions};
 use crate::apk_metadata;
 use crate::backup;
 use crate::bugreport;
+use crate::device_identity::DeviceIdentity;
 use crate::fs_util::{ArtifactError, ArtifactKind, HostArtifact, StagedArtifact};
 use crate::host_path::{
     open_directory_command, open_with_command, reveal_command, validate_suggested_file_name,
@@ -745,7 +746,11 @@ mod tests {
             std::process::id(),
             crate::time::iso_utc_now().replace([':', '.'], "-")
         ));
-        let mut journal = crate::journal::Journal::open(&dir, "batch-device").unwrap();
+        let mut journal = crate::journal::Journal::open(
+            &dir,
+            &crate::device_identity::DeviceIdentity::new("batch-device", Some("build/test")),
+        )
+        .unwrap();
         let items = execute_batch_plans(&mut journal, &mock, batch.plans, None).unwrap();
         assert_eq!(items.len(), 2);
         assert!(items[0].error.is_none());

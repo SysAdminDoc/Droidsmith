@@ -13,6 +13,7 @@ use droidsmith_lib::adb::{
     validate_device_target, AdbTransport, OutputStream, PackageFilter, ShellTransport,
     TransportError,
 };
+use droidsmith_lib::device_identity::DeviceIdentity;
 use droidsmith_lib::journal::with_journal;
 use droidsmith_lib::operations::{cancel, run_process, EventSink, OperationError};
 use serde::Deserialize;
@@ -205,10 +206,14 @@ fn target_drift_and_disk_failures_stop_before_mutation() {
     let not_a_directory = dir.join("journal-parent");
     fs::write(&not_a_directory, b"occupied by a file").unwrap();
     let ran = AtomicBool::new(false);
-    let result: Result<(), std::io::Error> = with_journal(&not_a_directory, "device", |_| {
-        ran.store(true, Ordering::Release);
-        Ok(())
-    });
+    let result: Result<(), std::io::Error> = with_journal(
+        &not_a_directory,
+        &DeviceIdentity::new("device", Some("build/test")),
+        |_| {
+            ran.store(true, Ordering::Release);
+            Ok(())
+        },
+    );
     assert!(result.is_err());
     assert!(!ran.load(Ordering::Acquire));
 }
