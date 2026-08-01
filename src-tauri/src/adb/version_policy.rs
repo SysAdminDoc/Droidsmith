@@ -178,9 +178,10 @@ pub fn mdns_backend_is_reliable(server_version: Option<&str>) -> bool {
     let Some(version) = server_version else {
         return true;
     };
-    // `Option::is_none_or` is stable since 1.82; the crate floor is 1.81.
+    // An unparseable version is treated as reliable: the advice this gates is
+    // only ever suppressed, never asserted, on an unknown server.
     compare_versions(version, MDNS_BACKEND_UNRELIABLE_FROM)
-        .map_or(true, |ordering| ordering == Ordering::Less)
+        .is_none_or(|ordering| ordering == Ordering::Less)
 }
 
 fn assessment(

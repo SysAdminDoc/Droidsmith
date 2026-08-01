@@ -28,7 +28,7 @@
     {
       "kind": "rust_advisories",
       "owner": "Droidsmith maintainers",
-      "rationale": "Unfixable transitive Tauri Linux GTK3/webview dependencies and compile-time macro dependencies; none are direct Droidsmith dependencies. Specta's paste dependency is pinned to preserve the Rust 1.81 floor while the maintained next line requires edition 2024. Re-audit against active Tauri and Specta releases before expiry. Last re-audited 2026-07-21: cargo audit --deny warnings clean over 527 crates; every ignored advisory remains an unfixable transitive (GTK3/unic/build-time macro), and no advisory affects a direct dependency (time RUSTSEC-2026-0009 does not apply to the pinned version).",
+      "rationale": "Unfixable transitive Tauri Linux GTK3/webview dependencies and compile-time macro dependencies; none are direct Droidsmith dependencies. Specta's paste dependency comes in through Tauri and is still present on Specta's current rc.25 line, so no bump on this side retires it; the earlier claim that the Rust floor caused it was wrong and was corrected on 2026-08-01 when the floor moved to 1.90. Re-audit against active Tauri and Specta releases before expiry. Last re-audited 2026-07-21: cargo audit --deny warnings clean over 527 crates; every ignored advisory remains an unfixable transitive (GTK3/unic/build-time macro), and no advisory affects a direct dependency (time RUSTSEC-2026-0009 does not apply to the pinned version).",
       "expiresOn": "2027-01-15",
       "subjects": [
         "RUSTSEC-2024-0370",

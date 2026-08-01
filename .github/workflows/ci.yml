@@ -54,6 +54,9 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+      # rust-toolchain.toml pins the version cargo actually uses; rustup installs
+      # it (with rustfmt/clippy) on the first cargo call. This step only ensures
+      # rustup itself is present and warm.
       - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable
         with:
           toolchain: stable
@@ -77,6 +80,9 @@ jobs:
         with:
           node-version: 24
           cache: npm
+      # rust-toolchain.toml pins the version cargo actually uses; rustup installs
+      # it (with rustfmt/clippy) on the first cargo call. This step only ensures
+      # rustup itself is present and warm.
       - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable
         with:
           toolchain: stable
@@ -109,6 +115,9 @@ jobs:
         with:
           node-version: 24
           cache: npm
+      # rust-toolchain.toml pins the version cargo actually uses; rustup installs
+      # it (with rustfmt/clippy) on the first cargo call. This step only ensures
+      # rustup itself is present and warm.
       - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable
         with:
           toolchain: stable

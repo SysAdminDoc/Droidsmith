@@ -179,7 +179,7 @@ guidance. The plugin API and marketplace remain deferred.
 |---|---|
 | Droidsmith source/manifests | `0.9.13` |
 | Node.js | `^22.12.0 \|\| >=24.0.0` |
-| Rust | `>=1.81` |
+| Rust | `>=1.90` |
 | Tauri | `2.x` |
 | Android SDK Platform Tools | `37.0.0` recommended; warn below `36.0.2` |
 | Pack / quirk documents | schema `"1"` / `"1"` |
@@ -290,7 +290,7 @@ Droidsmith/
 
 ## Development setup
 
-Prerequisites are Rust stable 1.81 or newer, Node.js 22.12 or newer (24 LTS
+Prerequisites are Rust stable 1.90 or newer, Node.js 22.12 or newer (24 LTS
 recommended; Node 20 reached end of life on 2026-04-30), and the
 Tauri 2 OS dependencies: WebView2 plus MSVC build tools on Windows, Xcode
 Command Line Tools on macOS, or WebKitGTK 4.1/GTK 3/AppIndicator/RSVG development

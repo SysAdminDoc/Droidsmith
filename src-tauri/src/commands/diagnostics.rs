@@ -99,7 +99,7 @@ pub async fn save_diagnostics(
             message: "support bundles must use a .json extension".to_string(),
         });
     }
-    if path.parent().map_or(true, |parent| !parent.is_dir()) {
+    if path.parent().is_none_or(|parent| !parent.is_dir()) {
         return Err(CommandError {
             code: "invalid_path",
             message: "support bundle parent directory does not exist".to_string(),

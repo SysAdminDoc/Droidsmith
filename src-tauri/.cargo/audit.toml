@@ -10,8 +10,11 @@
 #     runtime surface and cannot be dropped until upstream Tauri migrates off
 #     GTK3.
 #   * proc-macro-error and paste are compile-time-only helpers used by upstream
-#     macros. paste is required by the final Specta release compatible with the
-#     project's Rust 1.81 floor; the maintained next line requires edition 2024.
+#     macros. paste is a dependency of Specta, which Tauri itself pulls in, and
+#     it is still present on Specta's current 2.0.0-rc.25 line - so this entry
+#     is not something a version bump on our side can retire. (Corrected
+#     2026-08-01: this previously claimed the Rust 1.81 floor was the reason.
+#     It was not; raising the floor to 1.90 left paste exactly where it was.)
 #   * The unic-* crates are Unicode data tables pulled transitively by the
 #     webview/url stack.
 #

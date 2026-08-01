@@ -166,7 +166,7 @@ pub fn capabilities(
         .trim()
         .parse::<u32>()
         .ok();
-    if sdk_level.map_or(true, |sdk| sdk < MIN_PERFETTO_SDK) {
+    if sdk_level.is_none_or(|sdk| sdk < MIN_PERFETTO_SDK) {
         return Ok(PerfettoCapabilities {
             supported: false,
             sdk_level,

@@ -48,13 +48,6 @@ R-119 / IMP-95.
 
 ### P1
 
-- [ ] P1 — IMP-101: Raise the Rust MSRV from 1.81 to 1.90
-  Why: the floor is a scheduled wall set by an upstream project, and it is actively costing security posture rather than only convenience.
-  Evidence: Tauri merged an MSRV bump to 1.90 on `dev` (PR #13221, 2026-07-02) with a stated "latest − 3" policy, so the next Tauri minor hard-blocks; `src-tauri/Cargo.toml` comments name the floor as the reason for `proptest = "=1.8.0"`, and `.cargo/audit.toml` names it as the reason RUSTSEC-2024-0436 (`paste`, unmaintained) is permanently suppressed; `specta = "=2.0.0-rc.22"` and `schemars = "=1.2.1"` are pinned for the same reason.
-  Touches: `src-tauri/Cargo.toml`, new `rust-toolchain.toml`, `.cargo/audit.toml`, `src-tauri/Cargo.lock`, `README.md`, `.github/workflows/ci.yml`, `scripts/check-release-policy.mjs`.
-  Acceptance: `rust-version = "1.90"` with a committed `rust-toolchain.toml` pinning the exact stable; the `=` pins on `proptest`, `specta`, `tauri-specta`, and `schemars` are relaxed or re-justified on their own merits; the `paste` suppression is removed from `audit.toml` rather than re-dated; `cargo check/clippy/test --all-targets --all-features` and the README supported-versions row all agree. Edition 2024 migration is explicitly out of this item.
-  Complexity: M
-
 - [ ] P1 — R-122: Prove reinstall feasibility before permitting uninstall-for-user
   Why: Droidsmith records package provenance around the mutation, but nothing proves `pm install-existing` will succeed *before* the irreversible step — which is the exact moment users need the answer.
   Evidence: UAD-NG #559 ("warn if reinstalling an app isn't possible", unmet); the bootloop corpus (#1069 user half-bricked with no backup, #1400, #1311) shows the failure is always discovered too late; Droidsmith's `RestoreExistingForUser` path already knows how to verify retention (`src-tauri/src/adb/actions.rs`).

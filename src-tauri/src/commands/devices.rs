@@ -138,7 +138,7 @@ pub async fn watch_devices(
                         });
                     }
 
-                    let health_due = health_checked_at.map_or(true, |checked| {
+                    let health_due = health_checked_at.is_none_or(|checked| {
                         checked.elapsed() >= std::time::Duration::from_secs(10)
                     });
                     if health_due {

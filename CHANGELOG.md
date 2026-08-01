@@ -14,6 +14,24 @@ completion.
 Working batches live here. Sections collapse into a versioned release on
 each milestone tag.
 
+### Changed
+
+- **Raised the Rust floor from 1.81 to 1.90 and pinned the build toolchain.**
+  The old floor was a wall set by an upstream project rather than by this one:
+  Tauri has merged an MSRV bump to 1.90 with a stated "latest minus three"
+  policy, so the next Tauri minor would have hard-blocked. The floor was also
+  costing correctness — four call sites were written as `map_or(true, ..)`
+  purely because `Option::is_none_or` landed in 1.82, and they now read as
+  intended. A committed `rust-toolchain.toml` pins the exact toolchain every
+  build uses, so a compiler change is a reviewed commit. `proptest` is
+  unpinned as a result. Two pins stay, re-justified on their own merits rather
+  than on the floor: the specta stack is a lock-step prerelease triple whose
+  exporter output the checked-in bindings are verified against, and `schemars`
+  1.2.2 would add a third `syn` major to the reviewed duplicate graph. The
+  `paste` advisory suppression stays too — contrary to the note that claimed
+  otherwise, it is a Specta dependency present on the current release line and
+  no floor change retires it. That note has been corrected. (IMP-101)
+
 ### Fixed
 
 - **Devices reporting the same serial no longer share persisted state.** The

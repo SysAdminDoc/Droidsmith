@@ -1,0 +1,16 @@
+# Pin the exact Rust toolchain every build uses, so a compiler change is a
+# reviewed commit rather than whatever the machine happened to have installed.
+# This mirrors how the rest of the project pins: exact dependency versions,
+# SHA-pinned CI actions, version-gated policy assets.
+#
+# This is not the MSRV. `src-tauri/Cargo.toml` declares `rust-version`, which
+# is the floor clippy's `incompatible_msrv` lint enforces — that lint is what
+# catches a newer-than-floor API being used (it caught `Option::is_none_or`,
+# stable since 1.82, while the floor was 1.81).
+#
+# Bumping: raise `channel` here and re-run `npm run release:check`. Raising the
+# floor in Cargo.toml is a separate, deliberate decision — see the MSRV note
+# there.
+[toolchain]
+channel = "1.97.1"
+components = ["rustfmt", "clippy"]
