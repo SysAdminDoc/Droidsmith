@@ -740,7 +740,7 @@
     "userCurrent": "aktuell",
     "userDiscoveryFailed": "Android-Benutzererkennung fehlgeschlagen",
     "installedPackages": "Installierte Pakete",
-    "installedPackagesBody": "Aktionen werden vor der Anwendung in der Vorschau angezeigt. Deaktivieren, Aktivieren, Archivieren und Dearchivieren sind über das Journal umkehrbar.",
+    "installedPackagesBody": "Aktionen werden vor der Anwendung geprüft. Pausieren ist die am wenigsten einschneidende dauerhafte Option; umkehrbare Aktionen werden im Journal erfasst.",
     "archiveUnavailable": "App-Archivierung nicht verfügbar",
     "archiveNotReversibleTitle": "Archivierung ist möglicherweise nicht umkehrbar",
     "archiveNotReversibleBody": "Android kann eine archivierte App nur über den Installationsdienst wiederherstellen, der sie installiert hat. Diese Pakete haben keinen Store-Installer, der die Wiederherstellung unterstützt – das Archivieren kann daher endgültig sein. Exportieren Sie zuerst eine Wiederherstellungs-Baseline oder behalten Sie die APK.",
@@ -749,6 +749,8 @@
       "installer_missing": "der zugehörige Installer ist nicht mehr vorhanden",
       "unverified": "Installer unterstützt die Wiederherstellung möglicherweise nicht"
     },
+    "suspend": "Pausieren",
+    "unsuspend": "Pausierung aufheben",
     "disable": "Deaktivieren",
     "enable": "Aktivieren",
     "uninstall": "Deinstallieren",
@@ -794,6 +796,8 @@
     "batchSelected": "{{count}} ausgewählt",
     "batchReviewBody": "Prüfen Sie einen kombinierten Plan und wenden Sie ihn auf alle ausgewählten Pakete gleichzeitig an.",
     "batchSelectMore": "Wählen Sie mindestens zwei Pakete aus, um eine Batchaktion anzuwenden.",
+    "batchSuspend": "Ausgewählte pausieren",
+    "batchUnsuspend": "Pausierung aufheben",
     "batchDisable": "Ausgewählte deaktivieren",
     "batchEnable": "Ausgewählte aktivieren",
     "batchArchive": "Ausgewählte archivieren",
@@ -855,6 +859,28 @@
     "actions": "Aktionen",
     "viaInstaller": "via {{installer}}",
     "reviewBeforeApplying": "Vor dem Anwenden prüfen",
+    "actionTier": {
+      "suspend": {
+        "title": "Stufe 1 · Vollständig umkehrbar",
+        "body": "Schonendste dauerhafte Option: Das Paket bleibt installiert und aktiviert; das Journal erfasst das Aufheben der Pausierung als geprüfte Umkehrung."
+      },
+      "disable": {
+        "title": "Stufe 2 · Umkehrbare Deaktivierung",
+        "body": "Android ändert den Aktivierungszustand des Pakets. Das Journal erfasst die entgegengesetzte Aktion."
+      },
+      "archive": {
+        "title": "Stufe 3 · Bedingt umkehrbar",
+        "body": "Android entfernt App-Dateien und behält Daten; die Wiederherstellung hängt weiterhin von einem geeigneten Installer ab."
+      },
+      "destructive": {
+        "title": "Stufe 4 · Destruktiv",
+        "body": "Diese Aktion kann eine App oder ihre Daten entfernen und hat möglicherweise keine sichere Umkehrung."
+      },
+      "utility": {
+        "title": "Hilfsaktion",
+        "body": "Diese geprüfte Aktion ersetzt nicht die schonendere dauerhafte Pausierung."
+      }
+    },
     "applyPackageAction": "Paketaktion anwenden",
     "applyChange": "Änderung anwenden",
     "applyingChange": "Änderung wird angewendet",
@@ -871,7 +897,7 @@
     "denied": "Verweigert",
     "loadingPackages": "Lade Pakete",
     "journalTitle": "Aktionsjournal",
-    "journalBody": "Letzte Paketaktionen für dieses Gerät. Deaktivierungs-, Aktivierungs-, Archivierungs- und Dearchivierungseinträge können nach Zustandsüberprüfung einmal rückgängig gemacht werden.",
+    "journalBody": "Letzte Paketaktionen für dieses Gerät. Pausieren, Aufheben, Deaktivieren, Aktivieren, Archivieren und Dearchivieren können nach Zustandsprüfung einmal rückgängig gemacht werden.",
     "journalEntryCount_one": "{{count}} Eintrag",
     "journalEntryCount_few": "{{count}} Einträge",
     "journalEntryCount_many": "{{count}} Einträge",
@@ -904,6 +930,8 @@
     "journalUndoBatch": "Batch rückgängig ({{count}})",
     "journalUndoingBatch": "Batch wird rückgängig gemacht…",
     "actionKind": {
+      "suspend": "Pausieren",
+      "unsuspend": "Pausierung aufheben",
       "disable": "Deaktivieren",
       "enable": "Aktivieren",
       "archive": "Archivieren",

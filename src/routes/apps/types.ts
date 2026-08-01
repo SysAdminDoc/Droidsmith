@@ -6,6 +6,7 @@ import type {
   BatchActionPlan,
   InstallPackageResult,
   JournalEntry,
+  PackageActionCapabilities,
   PackageArchiveCapability,
   PackageBackupPreflight,
   PlannedAction,
@@ -20,6 +21,7 @@ export type PackagesState =
       kind: "ok";
       packages: AppPackage[];
       archive: PackageArchiveCapability;
+      actions: PackageActionCapabilities;
     }
   | { kind: "error"; message: string };
 

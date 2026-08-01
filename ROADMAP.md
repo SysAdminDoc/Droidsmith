@@ -40,13 +40,6 @@ R-119 / IMP-95.
 
 ### P2
 
-- [ ] P2 — R-123: Add a reversible action tier below disable and uninstall
-  Why: the whole documented failure mode is users reaching for an irreversible action because no safer rung is offered; Android exposes several fully reversible package states that no desktop GUI surfaces.
-  Evidence: `pm suspend`/`unsuspend`, `pm suspend-quarantine`, `pm unstop`, `pm hide-notifications`, `pm set-distracting-restriction` are all present in AOSP `PackageManagerShellCommand.java`; Canta #148 ("allow disabling apps", 14 reactions) is the top request of the leading mobile debloater; grep confirms none of `appops`, `suspend`, or `standby` appears anywhere in `src-tauri/src`.
-  Touches: `src-tauri/src/adb/actions.rs` (`ActionKind`), `src-tauri/src/adb/packages.rs`, `src-tauri/src/journal/`, `src/routes/Apps.tsx`, `src/routes/apps/PackageTable.tsx`, `src/locales/*.json`, `packs/schema.json`, tests.
-  Acceptance: suspend/unsuspend join the journaled action set with a proven inverse and post-state verification; the review screen ranks available actions by reversibility and defaults to the least destructive one that achieves the user's intent; every new subcommand is runtime-probed per device (parse `pm help`) and hidden rather than broken when absent; pack schema v1 remains valid and unchanged.
-  Complexity: M
-
 - [ ] P2 — R-125: Consume the structured ADB device-tracking channel
   Why: the app regex-parses `adb devices -l`, which cannot express connection states or link speed that AOSP already publishes as structured data — and this retires the premise of the blocked R-101 note.
   Evidence: AOSP `services.cpp` exposes `host:track-devices-proto-binary` / `-proto-text`; `proto/adb_host.proto` defines `Device{serial, state, bus_address, product, model, device, connection_type, negotiated_speed, max_speed, transport_id}` and a `ConnectionState` including `DETACHED`, `RESCUE`, `NOPERMISSION`; Roadmap_Blocked.md R-101 correctly notes `server-status` has no USB-speed field — the speed lives on the per-device message instead. Needs live validation: the service names are verified from AOSP source, but the host `adb` CLI surface for reaching them at the supported versions is not — probe before building.

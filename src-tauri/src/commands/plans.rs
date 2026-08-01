@@ -12,7 +12,9 @@ pub fn plan_action(
 ) -> Result<actions::PlannedAction, CommandError> {
     if !matches!(
         request.kind,
-        actions::ActionKind::Disable
+        actions::ActionKind::Suspend
+            | actions::ActionKind::Unsuspend
+            | actions::ActionKind::Disable
             | actions::ActionKind::Enable
             | actions::ActionKind::Archive
             | actions::ActionKind::RequestUnarchive
@@ -91,7 +93,9 @@ pub fn plan_action_batch(
     let first = requests.first().expect("length checked");
     if !matches!(
         first.kind,
-        actions::ActionKind::Disable
+        actions::ActionKind::Suspend
+            | actions::ActionKind::Unsuspend
+            | actions::ActionKind::Disable
             | actions::ActionKind::Enable
             | actions::ActionKind::Archive
             | actions::ActionKind::RequestUnarchive
@@ -146,6 +150,8 @@ pub(crate) fn batch_action_description(
     user_id: u32,
 ) -> String {
     let action = match kind {
+        actions::ActionKind::Suspend => "Suspend",
+        actions::ActionKind::Unsuspend => "Unsuspend",
         actions::ActionKind::Disable => "Disable",
         actions::ActionKind::Enable => "Enable",
         actions::ActionKind::Archive => "Archive",

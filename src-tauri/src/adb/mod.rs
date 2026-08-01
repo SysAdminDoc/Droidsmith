@@ -52,8 +52,9 @@ pub use device_settings::{
     DeviceSetting, DeviceSettingChange,
 };
 pub use packages::{
-    list_packages, list_packages_with_capability, valid_package_name, AppPackage,
-    PackageArchiveCapability, PackageFilter, PackageListing,
+    list_packages, list_packages_with_capability, package_action_capabilities, valid_package_name,
+    AppPackage, PackageActionCapabilities, PackageArchiveCapability, PackageFilter, PackageListing,
+    PackageSubcommandCapability,
 };
 pub use resolver::{locate_adb, AdbResolution};
 pub use security_patch::{classify_wireless_debugging_risk, WirelessDebuggingRisk};

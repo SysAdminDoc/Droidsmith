@@ -37,7 +37,31 @@
       "restore_existing_for_user": "Restaurar aplicación del sistema retenida",
       "revoke_permission": "Revocar permiso",
       "shell": "Mutación de shell revisada",
+      "suspend": "Suspender",
+      "unsuspend": "Reanudar",
       "uninstall_for_user": "Desinstalar para usuario"
+    },
+    "actionTier": {
+      "suspend": {
+        "title": "Nivel 1 · Totalmente reversible",
+        "body": "Opción persistente menos destructiva: el paquete permanece instalado y habilitado, y el diario registra reanudar como su inversa verificada."
+      },
+      "disable": {
+        "title": "Nivel 2 · Deshabilitación reversible",
+        "body": "Android cambia el estado habilitado del paquete. El diario registra la acción opuesta."
+      },
+      "archive": {
+        "title": "Nivel 3 · Reversibilidad condicional",
+        "body": "Android elimina los archivos de la aplicación y conserva los datos; la restauración aún depende de un instalador compatible."
+      },
+      "destructive": {
+        "title": "Nivel 4 · Destructivo",
+        "body": "Esta acción puede eliminar una aplicación o sus datos y podría no tener una inversa segura."
+      },
+      "utility": {
+        "title": "Acción de utilidad",
+        "body": "Esta acción revisada no sustituye el nivel persistente y más seguro de suspensión."
+      }
     },
     "actions": "Acciones",
     "allowBackup": "allowBackup",
@@ -76,6 +100,8 @@
     "batchReviewBody": "Revisa un plan combinado y aplícalo a todos los paquetes seleccionados a la vez.",
     "batchSelectMore": "Selecciona al menos dos paquetes para aplicar una acción por lotes.",
     "batchSelected": "{{count}} seleccionados",
+    "batchSuspend": "Suspender seleccionados",
+    "batchUnsuspend": "Reanudar seleccionados",
     "batchUnarchive": "Desarchivar seleccionados",
     "batchUndoCompleted": "Deshacer lote: {{succeeded}} revertidos, {{failed}} fallidos.",
     "cancel": "Cancelar",
@@ -132,12 +158,12 @@
     "installSucceeded": "Paquete instalado",
     "installSucceededBody": "Se instalaron {{count}} parte(s) del paquete, {{size}} en total. La lista de paquetes se ha actualizado.",
     "installedPackages": "Paquetes instalados",
-    "installedPackagesBody": "Las acciones se previsualizan antes de aplicarse. Deshabilitar, habilitar, archivar y desarchivar son reversibles a través del diario.",
+    "installedPackagesBody": "Las acciones se revisan antes de aplicarse. Suspender es la opción persistente menos destructiva; las acciones reversibles se registran en el diario.",
     "journalAction": "Acción",
     "journalAuditMeta": "{{incident}} · {{source}}",
     "journalBatchMember": "Parte del lote",
     "journalBatchMeta": "Lote {{id}} · {{count}} paquetes",
-    "journalBody": "Acciones recientes de paquetes para este dispositivo. Las entradas de deshabilitar, habilitar, archivar y desarchivar pueden deshacerse una vez después de la verificación del estado.",
+    "journalBody": "Acciones recientes de paquetes para este dispositivo. Las entradas de suspender, reanudar, deshabilitar, habilitar, archivar y desarchivar pueden deshacerse una vez después de verificar el estado.",
     "journalEmpty": "Aún no hay entradas en el diario",
     "journalEmptyBody": "Aplica una acción de paquete y Droidsmith la registrará aquí.",
     "journalEntryCount_few": "{{count}} entradas",
@@ -238,10 +264,12 @@
     "showAdvancedBackup": "Mostrar exportación avanzada de datos",
     "shownCount": "{{shown}} / {{total}} mostrados",
     "stop": "Detener",
+    "suspend": "Suspender",
     "targetApi": "API objetivo",
     "title": "Aplicaciones",
     "type": "Tipo",
     "unarchive": "Desarchivar",
+    "unsuspend": "Reanudar",
     "uninstall": "Desinstalar",
     "userCurrent": "actual",
     "userDiscoveryFailed": "La detección de usuarios de Android falló",

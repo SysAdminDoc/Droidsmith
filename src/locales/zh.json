@@ -740,7 +740,7 @@
     "userCurrent": "当前",
     "userDiscoveryFailed": "Android 用户发现失败",
     "installedPackages": "已安装的包",
-    "installedPackagesBody": "操作会在应用前预览。禁用、启用、归档和取消归档可通过日志撤销。",
+    "installedPackagesBody": "操作会在应用前审查。暂停是破坏性最低的持久选项；可逆操作会记录到日志中。",
     "archiveUnavailable": "应用归档不可用",
     "archiveNotReversibleTitle": "归档可能无法撤销",
     "archiveNotReversibleBody": "Android 只能通过安装该应用的安装程序来恢复已归档的应用。这些软件包没有支持恢复的商店安装程序，因此归档后可能无法恢复——请先导出恢复基线或保留 APK。",
@@ -749,6 +749,8 @@
       "installer_missing": "其安装程序已不存在",
       "unverified": "安装程序可能不支持恢复"
     },
+    "suspend": "暂停",
+    "unsuspend": "取消暂停",
     "disable": "禁用",
     "enable": "启用",
     "uninstall": "卸载",
@@ -794,6 +796,8 @@
     "batchSelected": "已选择 {{count}} 个",
     "batchReviewBody": "审查一个合并计划并一次性应用于每个已选包。",
     "batchSelectMore": "请至少选择两个包以应用批量操作。",
+    "batchSuspend": "暂停选中的",
+    "batchUnsuspend": "取消暂停选中的",
     "batchDisable": "禁用选中的",
     "batchEnable": "启用选中的",
     "batchArchive": "归档选中的",
@@ -855,6 +859,28 @@
     "actions": "操作",
     "viaInstaller": "通过 {{installer}}",
     "reviewBeforeApplying": "应用前审查",
+    "actionTier": {
+      "suspend": {
+        "title": "第 1 级 · 完全可逆",
+        "body": "破坏性最低的持久选项：软件包仍保持安装和启用，日志会记录经过验证的取消暂停逆操作。"
+      },
+      "disable": {
+        "title": "第 2 级 · 可逆禁用",
+        "body": "Android 会更改软件包的启用状态，日志会记录相反的启用状态操作。"
+      },
+      "archive": {
+        "title": "第 3 级 · 有条件可逆",
+        "body": "Android 会移除应用文件但保留数据；恢复仍取决于支持该功能的安装程序。"
+      },
+      "destructive": {
+        "title": "第 4 级 · 破坏性操作",
+        "body": "此操作可能会移除应用或其数据，并且可能没有安全的逆操作。"
+      },
+      "utility": {
+        "title": "实用操作",
+        "body": "此已审查操作不能替代更安全的持久暂停层级。"
+      }
+    },
     "applyPackageAction": "应用包操作",
     "applyChange": "应用更改",
     "applyingChange": "正在应用更改",
@@ -871,7 +897,7 @@
     "denied": "已拒绝",
     "loadingPackages": "正在加载包",
     "journalTitle": "操作日志",
-    "journalBody": "此设备的近期包操作。禁用、启用、归档和取消归档的条目在状态验证后可撤销一次。",
+    "journalBody": "此设备的近期包操作。暂停、取消暂停、禁用、启用、归档和取消归档条目在状态验证后可撤销一次。",
     "journalEntryCount_one": "{{count}} 条记录",
     "journalEntryCount_few": "{{count}} 条记录",
     "journalEntryCount_many": "{{count}} 条记录",
@@ -904,6 +930,8 @@
     "journalUndoBatch": "撤销批次（{{count}}）",
     "journalUndoingBatch": "正在撤销批次…",
     "actionKind": {
+      "suspend": "暂停",
+      "unsuspend": "取消暂停",
       "disable": "禁用",
       "enable": "启用",
       "archive": "归档",

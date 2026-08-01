@@ -153,6 +153,8 @@ export function PackageTable({
   metadata,
   totalCount,
   archiveSupported,
+  suspendSupported,
+  unsuspendSupported,
   selectedPackages,
   onToggleSelected,
   onToggleAll,
@@ -167,6 +169,8 @@ export function PackageTable({
   metadata: Record<string, AppPackageMetadata | null>;
   totalCount: number;
   archiveSupported: boolean;
+  suspendSupported: boolean;
+  unsuspendSupported: boolean;
   selectedPackages: Set<string>;
   onToggleSelected: (pkg: string) => void;
   onToggleAll: () => void;
@@ -332,15 +336,20 @@ export function PackageTable({
                           {t("apps.unarchive")}
                         </Button>
                       ) : pkg.enabled ? (
-                        <>
-                          <Button
-                            type="button"
-                            size="sm"
-                            onClick={() => onAction(pkg.package, "disable")}
-                          >
-                            {t("apps.disable")}
-                          </Button>
-                        </>
+                        <Button
+                          type="button"
+                          size="sm"
+                          onClick={() =>
+                            onAction(
+                              pkg.package,
+                              suspendSupported ? "suspend" : "disable",
+                            )
+                          }
+                        >
+                          {t(
+                            suspendSupported ? "apps.suspend" : "apps.disable",
+                          )}
+                        </Button>
                       ) : (
                         <Button
                           type="button"
@@ -355,6 +364,8 @@ export function PackageTable({
                         <PackageActionMenu
                           pkg={pkg}
                           archiveSupported={archiveSupported}
+                          suspendSupported={suspendSupported}
+                          unsuspendSupported={unsuspendSupported}
                           showLegacyExport={showLegacyExport}
                           onAction={onAction}
                           onInspect={onInspect}
@@ -428,6 +439,8 @@ function PackageIdentity({
 function PackageActionMenu({
   pkg,
   archiveSupported,
+  suspendSupported,
+  unsuspendSupported,
   showLegacyExport,
   onAction,
   onInspect,
@@ -436,6 +449,8 @@ function PackageActionMenu({
 }: {
   pkg: AppPackage;
   archiveSupported: boolean;
+  suspendSupported: boolean;
+  unsuspendSupported: boolean;
   showLegacyExport: boolean;
   onAction: (pkg: string, kind: ActionKind) => void;
   onInspect: (pkg: string) => void;
@@ -459,15 +474,26 @@ function PackageActionMenu({
         role="menu"
         className="mt-1 min-w-40 rounded-lg border border-white/10 bg-surface-dialog p-1.5 shadow-2xl"
       >
-        <MenuAction
-          onClick={(button) => {
-            close(button);
-            onAction(pkg.package, "uninstall_for_user");
-          }}
-          danger
-        >
-          {t("apps.uninstall")}
-        </MenuAction>
+        {unsuspendSupported && pkg.enabled && (
+          <MenuAction
+            onClick={(button) => {
+              close(button);
+              onAction(pkg.package, "unsuspend");
+            }}
+          >
+            {t("apps.unsuspend")}
+          </MenuAction>
+        )}
+        {suspendSupported && pkg.enabled && (
+          <MenuAction
+            onClick={(button) => {
+              close(button);
+              onAction(pkg.package, "disable");
+            }}
+          >
+            {t("apps.disable")}
+          </MenuAction>
+        )}
         {archiveSupported && !pkg.system && (
           <MenuAction
             onClick={(button) => {
@@ -512,6 +538,15 @@ function PackageActionMenu({
             {t("apps.legacyData")}
           </MenuAction>
         )}
+        <MenuAction
+          onClick={(button) => {
+            close(button);
+            onAction(pkg.package, "uninstall_for_user");
+          }}
+          danger
+        >
+          {t("apps.uninstall")}
+        </MenuAction>
       </div>
     </details>
   );

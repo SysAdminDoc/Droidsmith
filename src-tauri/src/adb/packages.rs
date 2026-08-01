@@ -58,6 +58,18 @@ pub struct PackageArchiveCapability {
 }
 
 #[derive(specta::Type, Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct PackageSubcommandCapability {
+    pub supported: bool,
+    pub reason: String,
+}
+
+#[derive(specta::Type, Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct PackageActionCapabilities {
+    pub suspend: PackageSubcommandCapability,
+    pub unsuspend: PackageSubcommandCapability,
+}
+
+#[derive(specta::Type, Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct PackageListing {
     pub packages: Vec<AppPackage>,
     pub archive: PackageArchiveCapability,
@@ -422,6 +434,55 @@ pub fn archive_capability(t: &dyn AdbTransport, target: &DeviceTarget) -> Packag
     }
 }
 
+/// Probe package-manager action support from the device's own command surface.
+/// OEMs routinely backport or remove individual `pm` subcommands, so API level
+/// is not an authority for these actions.
+pub fn package_action_capabilities(
+    t: &dyn AdbTransport,
+    target: &DeviceTarget,
+) -> PackageActionCapabilities {
+    match t.shell_target(target, &["pm", "help"]) {
+        Ok(help) => parse_package_action_capabilities(&help),
+        Err(error) => {
+            let reason = format!("could not inspect package-manager commands: {error}");
+            PackageActionCapabilities {
+                suspend: PackageSubcommandCapability {
+                    supported: false,
+                    reason: reason.clone(),
+                },
+                unsuspend: PackageSubcommandCapability {
+                    supported: false,
+                    reason,
+                },
+            }
+        }
+    }
+}
+
+pub fn parse_package_action_capabilities(help: &str) -> PackageActionCapabilities {
+    let has = |command: &str| {
+        help.lines()
+            .map(str::trim_start)
+            .filter(|line| !line.starts_with('#'))
+            .any(|line| line.split_whitespace().next() == Some(command))
+    };
+    let capability = |command: &str| {
+        let supported = has(command);
+        PackageSubcommandCapability {
+            supported,
+            reason: if supported {
+                format!("pm {command} is advertised by this device")
+            } else {
+                format!("pm {command} is not advertised by this device")
+            },
+        }
+    };
+    PackageActionCapabilities {
+        suspend: capability("suspend"),
+        unsuspend: capability("unsuspend"),
+    }
+}
+
 pub fn is_package_archived(
     t: &dyn AdbTransport,
     target: &DeviceTarget,
@@ -617,6 +678,36 @@ package:/product/app/YouTube/YouTube.apk=com.google.android.youtube uid:10100 in
     const DISABLED_FIXTURE: &str = "\
 package:/system/app/FacebookStub/FacebookStub.apk=com.facebook.appmanager uid:10200 installer=null
 ";
+
+    #[test]
+    fn pm_help_capabilities_require_each_advertised_subcommand() {
+        let capabilities = parse_package_action_capabilities(
+            "Package manager commands:\n  suspend [--user USER_ID] PACKAGE\n  list packages\n",
+        );
+        assert!(capabilities.suspend.supported);
+        assert!(!capabilities.unsuspend.supported);
+        assert!(capabilities.unsuspend.reason.contains("not advertised"));
+
+        let both = parse_package_action_capabilities(
+            "  suspend [--user USER_ID] PACKAGE\n  unsuspend [--user USER_ID] PACKAGE\n",
+        );
+        assert!(both.suspend.supported);
+        assert!(both.unsuspend.supported);
+    }
+
+    #[test]
+    fn failed_pm_help_probe_hides_optional_actions() {
+        let mock = MockTransport::new();
+        mock.expect_shell(
+            "abc",
+            &["pm", "help"],
+            Err(TransportError::Parse("vendor pm failed".into())),
+        );
+        let capabilities = package_action_capabilities(&mock, &target());
+        assert!(!capabilities.suspend.supported);
+        assert!(!capabilities.unsuspend.supported);
+        assert!(capabilities.suspend.reason.contains("could not inspect"));
+    }
 
     #[test]
     fn parses_a_known_line_fully() {

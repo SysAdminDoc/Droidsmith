@@ -51,6 +51,7 @@ import {
   type NetworkConnection,
   type OperationEvent,
   type PackageBackupPreflight,
+  type PackageActionCapabilities,
   type PackageExportResult,
   type PackageFilter,
   type PackageListing,
@@ -691,6 +692,12 @@ export async function callListPackagesWithCapability(
   userId = 0,
 ): Promise<PackageListing> {
   return commands.listPackages(target, filter, userId);
+}
+
+export async function callGetPackageActionCapabilities(
+  target: DeviceTarget,
+): Promise<PackageActionCapabilities> {
+  return commands.getPackageActionCapabilities(target);
 }
 
 export async function callGetPackageMetadata(

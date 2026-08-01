@@ -35,6 +35,18 @@ export function journalEntryStatus(
       ? "undoable"
       : "irreversible";
   }
+  if (kind === "suspend") {
+    return entry.applied.before_state === "unsuspended" &&
+      entry.applied.after_state === "suspended"
+      ? "undoable"
+      : "irreversible";
+  }
+  if (kind === "unsuspend") {
+    return entry.applied.before_state === "suspended" &&
+      entry.applied.after_state === "unsuspended"
+      ? "undoable"
+      : "irreversible";
+  }
   if (kind === "uninstall_for_user") {
     return (entry.applied.before_state === "preinstalled_enabled" ||
       entry.applied.before_state === "preinstalled_disabled") &&

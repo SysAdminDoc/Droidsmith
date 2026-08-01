@@ -16,6 +16,18 @@ each milestone tag.
 
 ### Added
 
+- **Apps now starts with a fully reversible suspension tier.** The selected
+  device is probed through its own `pm help`, so suspend and unsuspend appear
+  only when each exact subcommand is advertised; the privileged apply boundary
+  probes again immediately before mutation. Both actions are Android-user
+  scoped, capture PackageManager suspension state before and after, require the
+  exact inverse transition, and expose Undo only for a proven journal round
+  trip. The Apps table defaults to Suspend when supported, orders safer actions
+  ahead of disable/archive/uninstall, and the review identifies the selected
+  reversibility tier. Rendered smoke coverage proves the supported flow,
+  verified undo, and fallback to Disable on an unsupported device. Pack schema
+  v1 remains byte-for-byte unchanged. (R-123)
+
 - **Vendor quirk warnings now cover every shipped pack family before apply.**
   Nine schema-v1 resources add package-, manufacturer-, and ROM/build-scoped
   observations for Amazon, Google Pixel, Motorola, Nothing, OnePlus, OPPO,

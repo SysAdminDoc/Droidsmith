@@ -23,6 +23,7 @@
       "callBackupPackage",
       "callExportPackageApks",
       "callExportRecoveryBaseline",
+      "callGetPackageActionCapabilities",
       "callGetPackageMetadata",
       "callInspectRecoveryBaseline",
       "callInstallApk",

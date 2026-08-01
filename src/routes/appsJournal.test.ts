@@ -62,6 +62,21 @@ describe("journalEntryStatus", () => {
     expect(journalEntryStatus(entry("revoke_permission"))).toBe("undoable");
   });
 
+  it("offers suspension undo only after a verified state transition", () => {
+    const suspended = entry("suspend");
+    suspended.applied.before_state = "unsuspended";
+    suspended.applied.after_state = "suspended";
+    expect(journalEntryStatus(suspended)).toBe("undoable");
+
+    const resumed = entry("unsuspend");
+    resumed.applied.before_state = "suspended";
+    resumed.applied.after_state = "unsuspended";
+    expect(journalEntryStatus(resumed)).toBe("undoable");
+
+    suspended.applied.before_state = "unknown";
+    expect(journalEntryStatus(suspended)).toBe("irreversible");
+  });
+
   it("does not undo a permission no-op with an unknown prior state", () => {
     expect(
       journalEntryStatus({

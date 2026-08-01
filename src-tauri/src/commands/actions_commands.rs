@@ -76,7 +76,9 @@ pub(crate) fn validate_action_batch_plan(batch: &BatchActionPlan) -> Result<(), 
     let kind = first.request.kind;
     if !matches!(
         kind,
-        actions::ActionKind::Disable
+        actions::ActionKind::Suspend
+            | actions::ActionKind::Unsuspend
+            | actions::ActionKind::Disable
             | actions::ActionKind::Enable
             | actions::ActionKind::Archive
             | actions::ActionKind::RequestUnarchive

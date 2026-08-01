@@ -21,6 +21,7 @@
     "list_wireless_history",
     "get_device_info",
     "list_packages",
+    "get_package_action_capabilities",
     "preflight_package_backup",
     "list_users",
     "list_packs",

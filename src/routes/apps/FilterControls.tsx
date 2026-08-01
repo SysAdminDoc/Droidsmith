@@ -82,6 +82,8 @@ export function FilterChips({
  *  extracted verbatim from the former Apps.tsx god-file). */
 export function BatchActionBar({
   selectedCount,
+  canSuspend,
+  canUnsuspend,
   canDisable,
   canEnable,
   canArchive,
@@ -90,6 +92,8 @@ export function BatchActionBar({
   onAction,
 }: {
   selectedCount: number;
+  canSuspend: boolean;
+  canUnsuspend: boolean;
   canDisable: boolean;
   canEnable: boolean;
   canArchive: boolean;
@@ -112,6 +116,16 @@ export function BatchActionBar({
         </p>
       </div>
       <div className="flex flex-wrap gap-2">
+        {canSuspend && (
+          <Button type="button" size="sm" onClick={() => onAction("suspend")}>
+            {t("apps.batchSuspend")}
+          </Button>
+        )}
+        {canUnsuspend && (
+          <Button type="button" size="sm" onClick={() => onAction("unsuspend")}>
+            {t("apps.batchUnsuspend")}
+          </Button>
+        )}
         <Button
           type="button"
           size="sm"

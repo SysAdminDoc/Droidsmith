@@ -50,6 +50,7 @@ macro_rules! droidsmith_commands {
             set_wireless_auto_reconnect,
             observe_device_fingerprint,
             list_packages,
+            get_package_action_capabilities,
             get_package_metadata,
             list_users,
             inspect_profile,

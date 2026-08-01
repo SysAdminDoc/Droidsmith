@@ -18,7 +18,8 @@ root, without a closed-source binary, without paywalled features.
 
 Functional early desktop build. The Tauri shell builds and runs; shipped routes
 cover device readiness, wireless ADB pairing/connect, package inventory and
-actions, reversible Android 15 package archiving, atomic
+actions, runtime-probed reversible package suspension, reversible Android 15
+package archiving, atomic
 APK/APKS/XAPK/APKM installation with guarded failure remedies and an opt-in
 `--incremental` single-APK mode that falls back cleanly when unsupported,
 hashed base/split APK export, audited permission/device-control mutations, reviewed shell
@@ -82,6 +83,13 @@ when PackageManager proves its APK remains retained for that Android user;
 user-installed `/data/app` packages and unknown/OEM states remain explicitly
 irreversible. Recovery uses `install-existing`, restores the prior enabled state,
 and verifies the result before linking the undo journal row.
+
+Apps probes each selected device's own `pm help` before offering package
+suspension. When both subcommands are advertised, Suspend becomes the default
+persistent action ahead of disable, archive, and uninstall. Suspend/unsuspend
+capture the selected Android user's state from PackageManager before and after
+the mutation, require an exact transition, and record a verified journal
+inverse. Devices that omit either command never show the corresponding action.
 
 Package export defaults to a ZIP containing every base/split APK plus a
 versioned manifest with artifact hashes and hashed device/build identity. The

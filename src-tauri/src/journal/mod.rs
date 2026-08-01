@@ -894,6 +894,18 @@ pub fn undo_request_for(journal: &Journal, entry_id: u64) -> Option<ActionReques
             None
         };
     match original_kind {
+        crate::adb::actions::ActionKind::Suspend
+            if entry.applied.before_state != "unsuspended"
+                || entry.applied.after_state != "suspended" =>
+        {
+            return None;
+        }
+        crate::adb::actions::ActionKind::Unsuspend
+            if entry.applied.before_state != "suspended"
+                || entry.applied.after_state != "unsuspended" =>
+        {
+            return None;
+        }
         crate::adb::actions::ActionKind::Disable
             if entry.applied.plan.request.context.batch_id.is_some()
                 && !(entry.applied.before_state.ends_with("_enabled")
@@ -1237,6 +1249,26 @@ mod tests {
         let mut unverified = fake_applied("abc", "com.bar", ActionKind::Archive);
         unverified.before_state = "user_installed_enabled".into();
         unverified.after_state = "retained_unclassified".into();
+        journal.record(unverified).unwrap();
+        assert!(undo_request_for(&journal, 2).is_none());
+    }
+
+    #[test]
+    fn suspend_undo_requires_a_verified_round_trip_state() {
+        let dir = fresh_tmp_dir("suspend-inverse");
+        let mut journal = Journal::open(&dir, &identity("abc")).unwrap();
+        let mut suspended = fake_applied("abc", "com.foo", ActionKind::Suspend);
+        suspended.before_state = "unsuspended".into();
+        suspended.after_state = "suspended".into();
+        journal.record(suspended).unwrap();
+        assert_eq!(
+            undo_request_for(&journal, 1).unwrap().kind,
+            ActionKind::Unsuspend
+        );
+
+        let mut unverified = fake_applied("abc", "com.bar", ActionKind::Suspend);
+        unverified.before_state = "unknown".into();
+        unverified.after_state = "suspended".into();
         journal.record(unverified).unwrap();
         assert!(undo_request_for(&journal, 2).is_none());
     }

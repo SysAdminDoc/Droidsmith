@@ -372,6 +372,16 @@ export const commands = {
     return await TAURI_INVOKE("list_packages", { target, filter, userId });
   },
   /**
+   * Probe optional package-manager actions from this exact device. Unsupported
+   * commands are returned as capabilities, not errors, so the renderer can hide
+   * them instead of offering a broken action.
+   */
+  async getPackageActionCapabilities(
+    target: DeviceTarget,
+  ): Promise<PackageActionCapabilities> {
+    return await TAURI_INVOKE("get_package_action_capabilities", { target });
+  },
+  /**
    * Lazily enrich one package row after it approaches the renderer viewport.
    * The domain service bounds concurrent pulls and validates a fresh APK
    * size/timestamp before consulting its process-local cache.
@@ -1060,6 +1070,15 @@ export type ActionContext = {
   batch_id?: string | null;
 };
 export type ActionKind =
+  /**
+   * `pm suspend --user 0 <pkg>` — reversible with `pm unsuspend` and
+   * less destructive than disabling the package.
+   */
+  | "suspend"
+  /**
+   * `pm unsuspend --user 0 <pkg>` — reverses Suspend.
+   */
+  | "unsuspend"
   /**
    * `pm disable-user --user 0 <pkg>` — reversible with `pm enable`.
    */
@@ -2383,6 +2402,10 @@ export type PackTargets = {
    */
   user_scope?: UserScope;
 };
+export type PackageActionCapabilities = {
+  suspend: PackageSubcommandCapability;
+  unsuspend: PackageSubcommandCapability;
+};
 export type PackageArchiveCapability = {
   supported: boolean;
   api_level: number | null;
@@ -2423,6 +2446,10 @@ export type PackageFilter =
 export type PackageListing = {
   packages: AppPackage[];
   archive: PackageArchiveCapability;
+};
+export type PackageSubcommandCapability = {
+  supported: boolean;
+  reason: string;
 };
 export type PerfettoCapabilities = {
   supported: boolean;

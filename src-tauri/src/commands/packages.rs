@@ -19,6 +19,24 @@ pub fn list_packages(
     adb::list_packages_with_capability(&transport, &target, filter, userId)
 }
 
+/// Probe optional package-manager actions from this exact device. Unsupported
+/// commands are returned as capabilities, not errors, so the renderer can hide
+/// them instead of offering a broken action.
+#[tauri::command]
+#[specta::specta]
+pub fn get_package_action_capabilities(
+    target: adb::DeviceTarget,
+) -> Result<adb::PackageActionCapabilities, adb::TransportError> {
+    let resolution = adb::locate_adb();
+    let path = resolution
+        .path
+        .as_ref()
+        .ok_or(adb::TransportError::AdbNotFound)?;
+    let transport = adb::ShellTransport::new(path);
+    adb::validate_device_target(&transport, &target)?;
+    Ok(adb::package_action_capabilities(&transport, &target))
+}
+
 /// Lazily enrich one package row after it approaches the renderer viewport.
 /// The domain service bounds concurrent pulls and validates a fresh APK
 /// size/timestamp before consulting its process-local cache.

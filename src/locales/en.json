@@ -740,7 +740,7 @@
     "userCurrent": "current",
     "userDiscoveryFailed": "Android user discovery failed",
     "installedPackages": "Installed packages",
-    "installedPackagesBody": "Actions preview before applying. Disable, enable, archive, and unarchive are reversible via the journal.",
+    "installedPackagesBody": "Actions preview before applying. Suspend is the least-destructive persistent option; reversible actions are recorded in the journal.",
     "archiveUnavailable": "App archiving unavailable",
     "archiveNotReversibleTitle": "Archiving may not be reversible",
     "archiveNotReversibleBody": "Android can only restore an archived app through the installer that placed it. These packages have no store installer that supports unarchive, so archiving them may be permanent — export a recovery baseline or keep the APK first.",
@@ -749,6 +749,8 @@
       "installer_missing": "its installer is no longer present",
       "unverified": "installer may not support unarchive"
     },
+    "suspend": "Suspend",
+    "unsuspend": "Unsuspend",
     "disable": "Disable",
     "enable": "Enable",
     "uninstall": "Uninstall",
@@ -794,6 +796,8 @@
     "batchSelected": "{{count}} selected",
     "batchReviewBody": "Review one combined plan and apply it to every selected package at once.",
     "batchSelectMore": "Select at least two packages to apply a batch action.",
+    "batchSuspend": "Suspend selected",
+    "batchUnsuspend": "Unsuspend selected",
     "batchDisable": "Disable selected",
     "batchEnable": "Enable selected",
     "batchArchive": "Archive selected",
@@ -855,6 +859,28 @@
     "actions": "Actions",
     "viaInstaller": "via {{installer}}",
     "reviewBeforeApplying": "Review before applying",
+    "actionTier": {
+      "suspend": {
+        "title": "Tier 1 · Fully reversible",
+        "body": "Least-destructive persistent option: the package stays installed and enabled, and the journal records unsuspend as its verified inverse."
+      },
+      "disable": {
+        "title": "Tier 2 · Reversible disable",
+        "body": "Android changes the package's enabled state. The journal records the opposite enable-state action."
+      },
+      "archive": {
+        "title": "Tier 3 · Conditionally reversible",
+        "body": "Android removes app files while retaining data; restoration still depends on a capable installer."
+      },
+      "destructive": {
+        "title": "Tier 4 · Destructive",
+        "body": "This action can remove an app or its data and may not have a safe inverse."
+      },
+      "utility": {
+        "title": "Utility action",
+        "body": "This reviewed action does not replace the safer persistent suspend tier."
+      }
+    },
     "applyPackageAction": "Apply package action",
     "applyChange": "Apply change",
     "applyingChange": "Applying change",
@@ -871,7 +897,7 @@
     "denied": "Denied",
     "loadingPackages": "Loading packages",
     "journalTitle": "Action journal",
-    "journalBody": "Recent package actions for this device. Disable, enable, archive, and unarchive entries can be undone once after state verification.",
+    "journalBody": "Recent package actions for this device. Suspend, unsuspend, disable, enable, archive, and unarchive entries can be undone once after state verification.",
     "journalEntryCount_one": "{{count}} entry",
     "journalEntryCount_few": "{{count}} entries",
     "journalEntryCount_many": "{{count}} entries",
@@ -904,6 +930,8 @@
     "journalUndoBatch": "Undo batch ({{count}})",
     "journalUndoingBatch": "Undoing batch…",
     "actionKind": {
+      "suspend": "Suspend",
+      "unsuspend": "Unsuspend",
       "disable": "Disable",
       "enable": "Enable",
       "archive": "Archive",

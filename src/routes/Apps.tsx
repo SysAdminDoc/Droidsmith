@@ -18,6 +18,7 @@ import {
   callExportRecoveryBaseline,
   callInspectRecoveryBaseline,
   callGetPackageMetadata,
+  callGetPackageActionCapabilities,
   callInstallApk,
   callJournalList,
   callJournalUndo,
@@ -307,16 +308,16 @@ export default function AppsRoute() {
     setPackageMetadata({});
     setPkgState({ kind: "loading" });
     try {
-      const listing = await callListPackagesWithCapability(
-        selectedTarget,
-        filter,
-        selectedUser,
-      );
+      const [listing, actions] = await Promise.all([
+        callListPackagesWithCapability(selectedTarget, filter, selectedUser),
+        callGetPackageActionCapabilities(selectedTarget),
+      ]);
       lease.commit(() =>
         setPkgState({
           kind: "ok",
           packages: listing.packages,
           archive: listing.archive,
+          actions,
         }),
       );
     } catch (e) {
@@ -1273,6 +1274,16 @@ export default function AppsRoute() {
     selectedRows.every((pkg) => !pkg.system && !pkg.archived && !pkg.retained);
   const canBatchUnarchive =
     batchReady && selectedRows.every((pkg) => pkg.archived);
+  const canBatchSuspend =
+    batchReady &&
+    pkgState.kind === "ok" &&
+    pkgState.actions.suspend.supported &&
+    selectedRows.every((pkg) => pkg.enabled && !pkg.archived && !pkg.retained);
+  const canBatchUnsuspend =
+    batchReady &&
+    pkgState.kind === "ok" &&
+    pkgState.actions.unsuspend.supported &&
+    selectedRows.every((pkg) => pkg.enabled && !pkg.archived && !pkg.retained);
 
   // R-109: archive is only reversible via `request-unarchive` when the
   // installer-of-record can handle the unarchive intent. Flag packages in the
@@ -1552,6 +1563,8 @@ export default function AppsRoute() {
                 )}
                 <BatchActionBar
                   selectedCount={selectedRows.length}
+                  canSuspend={canBatchSuspend}
+                  canUnsuspend={canBatchUnsuspend}
                   canDisable={canBatchDisable}
                   canEnable={canBatchEnable}
                   canArchive={canBatchArchive}
@@ -1564,6 +1577,8 @@ export default function AppsRoute() {
                   metadata={packageMetadata}
                   totalCount={pkgState.packages.length}
                   archiveSupported={pkgState.archive.supported}
+                  suspendSupported={pkgState.actions.suspend.supported}
+                  unsuspendSupported={pkgState.actions.unsuspend.supported}
                   selectedPackages={selectedPackageSet}
                   onToggleSelected={(pkg) =>
                     setSelectedPackages((previous) =>
@@ -1726,8 +1741,12 @@ function ActionOverlay({
     const plans = state.kind === "confirming" ? [state.plan] : state.plan.plans;
     const description = state.plan.description;
     const portableBaselineSupported = plans.every(
-      (plan) => !["archive", "request_unarchive"].includes(plan.request.kind),
+      (plan) =>
+        !["suspend", "unsuspend", "archive", "request_unarchive"].includes(
+          plan.request.kind,
+        ),
     );
+    const tier = actionTier(plans[0]?.request.kind);
     const recovery =
       state.kind === "confirming" ? presentRecovery(state.recovery) : null;
     return (
@@ -1754,6 +1773,14 @@ function ActionOverlay({
           >
             {description}
           </p>
+          <div className="mt-3 rounded-md border border-circuit-300/25 bg-circuit-950/20 p-3">
+            <p className="text-xs font-semibold text-circuit-100">
+              {t(`apps.actionTier.${tier}.title`)}
+            </p>
+            <p className="mt-1 text-xs leading-5 text-anvil-200">
+              {t(`apps.actionTier.${tier}.body`)}
+            </p>
+          </div>
           {recovery && (
             <div
               className="mt-3 rounded-md border border-white/10 bg-white/[0.04] p-3"
@@ -1913,6 +1940,16 @@ function ActionOverlay({
       <p>{state.message}</p>
     </StatePanel>
   );
+}
+
+function actionTier(kind: ActionKind | undefined): string {
+  if (kind === "suspend" || kind === "unsuspend") return "suspend";
+  if (kind === "disable" || kind === "enable") return "disable";
+  if (kind === "archive" || kind === "request_unarchive") return "archive";
+  if (kind === "uninstall_for_user" || kind === "clear_data") {
+    return "destructive";
+  }
+  return "utility";
 }
 
 function recoveryFileName(packageName: string): string {

@@ -692,27 +692,28 @@ async function runDesktopFlow(browser) {
   await page
     .getByRole("row")
     .filter({ hasText: "com.example.app" })
-    .getByRole("button", { name: "Disable" })
+    .getByRole("button", { name: "Suspend" })
     .click();
   await page.getByRole("alertdialog").waitFor();
-  await page.getByText(/pm disable-user --user 0 com\.example\.app/).waitFor();
+  await page.getByText(/pm suspend --user 0 com\.example\.app/).waitFor();
+  await page.getByText("Tier 1 · Fully reversible", { exact: true }).waitFor();
   await assertTabMovesFocus(page, "Apps action overlay");
-  await page
-    .getByRole("button", { name: "Export pre-change baseline" })
-    .click();
-  await page
-    .getByText(/Portable recovery evidence saved to .*droidsmith-recovery/)
-    .waitFor();
+  if (
+    (await page
+      .getByRole("button", { name: "Export pre-change baseline" })
+      .count()) !== 0
+  ) {
+    throw new Error(
+      "Suspend review exposed an incompatible enabled-state baseline",
+    );
+  }
   await page.getByRole("button", { name: "Cancel" }).click();
-  await assertFocusedButton(page, "Disable");
-  await page
-    .getByRole("button", { name: "Close recovery baseline", exact: true })
-    .click();
+  await assertFocusedButton(page, "Suspend");
 
   await page
     .getByRole("row")
     .filter({ hasText: "com.example.app" })
-    .getByRole("button", { name: "Disable" })
+    .getByRole("button", { name: "Suspend" })
     .click();
   await page.getByRole("alertdialog").waitFor();
   await page.getByRole("button", { name: "Apply change" }).click();
@@ -727,6 +728,14 @@ async function runDesktopFlow(browser) {
     })
     .getByRole("button", { name: "Dismiss", exact: true })
     .click();
+
+  const suspendJournalRow = page
+    .getByRole("row")
+    .filter({ hasText: "com.example.app" })
+    .filter({ hasText: "Suspend" });
+  await suspendJournalRow.getByText(/unsuspended.*suspended/).waitFor();
+  await suspendJournalRow.getByRole("button", { name: "Undo" }).click();
+  await page.getByText("Undo completed for com.example.app.").waitFor();
 
   const archiveActionRow = page
     .getByRole("row")
@@ -773,8 +782,8 @@ async function runDesktopFlow(browser) {
   const restoredPackageRow = page
     .getByRole("row")
     .filter({ hasText: "com.example.app" })
-    .filter({ has: page.getByRole("button", { name: "Enable" }) });
-  await restoredPackageRow.getByText("Disabled", { exact: true }).waitFor();
+    .filter({ has: page.getByRole("button", { name: "Suspend" }) });
+  await restoredPackageRow.getByText("Enabled", { exact: true }).waitFor();
   await page.evaluate(() => window.__DROIDSMITH_MOCK_ARCHIVE_API__(34));
   await page.getByRole("button", { name: "Refresh packages" }).click();
   await page
@@ -1512,6 +1521,26 @@ async function runResilienceFlow(browser) {
   );
   await page.getByText("com.example.app").waitFor();
 
+  // R-123: optional actions come from `pm help`; an unadvertised command is
+  // hidden and the primary action falls back to disable instead of breaking.
+  await page.evaluate(() =>
+    window.__DROIDSMITH_MOCK_SUSPEND_SUPPORTED__(false),
+  );
+  await page.getByRole("button", { name: "Refresh packages" }).click();
+  const unsupportedRow = page
+    .getByRole("row")
+    .filter({ hasText: "com.example.app" });
+  await unsupportedRow.getByRole("button", { name: "Disable" }).waitFor();
+  if (
+    (await unsupportedRow.getByRole("button", { name: "Suspend" }).count()) !==
+    0
+  ) {
+    throw new Error("An unadvertised pm suspend command remained visible");
+  }
+  await page.evaluate(() => window.__DROIDSMITH_MOCK_SUSPEND_SUPPORTED__(true));
+  await page.getByRole("button", { name: "Refresh packages" }).click();
+  await unsupportedRow.getByRole("button", { name: "Suspend" }).waitFor();
+
   // Empty state: an authorized device with zero packages must show the empty
   // panel, not a bare table.
   await page.evaluate(() => window.__DROIDSMITH_MOCK_EMPTY_PACKAGES__(true));
@@ -2191,6 +2220,7 @@ async function installTauriMock(
       {
         package: "com.example.app",
         enabled: true,
+        suspended: false,
         archived: false,
         system: false,
         apk_path: "/data/app/com.example.app/base.apk",
@@ -2253,8 +2283,12 @@ async function installTauriMock(
     let settingsImportBackupAvailable = false;
     const logcatQueries = { global: [] };
     let archiveApi = 35;
+    let suspendActionsSupported = true;
     window.__DROIDSMITH_MOCK_ARCHIVE_API__ = (api) => {
       archiveApi = api;
+    };
+    window.__DROIDSMITH_MOCK_SUSPEND_SUPPORTED__ = (supported) => {
+      suspendActionsSupported = supported;
     };
 
     // IMP-51 resilience controls: force the next call of a command to reject,
@@ -2967,6 +3001,22 @@ async function installTauriMock(
             },
           };
         }
+        if (cmd === "get_package_action_capabilities") {
+          return {
+            suspend: {
+              supported: suspendActionsSupported,
+              reason: suspendActionsSupported
+                ? "pm suspend is advertised by this device"
+                : "pm suspend is not advertised by this device",
+            },
+            unsuspend: {
+              supported: suspendActionsSupported,
+              reason: suspendActionsSupported
+                ? "pm unsuspend is advertised by this device"
+                : "pm unsuspend is not advertised by this device",
+            },
+          };
+        }
         if (cmd === "observe_device_fingerprint") {
           // Model an OTA update once, then record it: the first observation
           // reports changed, subsequent ones do not (matching the backend).
@@ -3493,6 +3543,32 @@ async function installTauriMock(
             runtimeJournal.push(undo);
             return undo;
           }
+          if (original?.applied.plan.request.kind === "suspend") {
+            const pkg = packages.find(
+              (item) => item.package === original.applied.plan.request.package,
+            );
+            if (pkg) pkg.suspended = false;
+            const undo = {
+              id: ++journalId,
+              applied: {
+                plan: planFor({
+                  ...original.applied.plan.request,
+                  kind: "unsuspend",
+                }),
+                stdout: "Success",
+                before_state: "suspended",
+                after_state: "unsuspended",
+                applied_at: "2026-07-15T12:30:00Z",
+              },
+              undone_by: null,
+              undoes: original.id,
+              outcome: "succeeded",
+              failure: null,
+            };
+            original.undone_by = undo.id;
+            runtimeJournal.push(undo);
+            return undo;
+          }
           if (!original || original.applied.plan.request.kind !== "archive") {
             throw new Error("journal entry is not safely undoable");
           }
@@ -3713,15 +3789,21 @@ async function installTauriMock(
           await new Promise((resolve) => window.setTimeout(resolve, 150));
           const pkg = packages.find((item) => item.package === request.package);
           const beforeState =
-            request.kind === "archive"
-              ? pkg?.enabled
-                ? "user_installed_enabled"
-                : "user_installed_disabled"
-              : request.kind === "request_unarchive"
-                ? "archived"
-                : "installed_enabled";
+            request.kind === "suspend" || request.kind === "unsuspend"
+              ? pkg?.suspended
+                ? "suspended"
+                : "unsuspended"
+              : request.kind === "archive"
+                ? pkg?.enabled
+                  ? "user_installed_enabled"
+                  : "user_installed_disabled"
+                : request.kind === "request_unarchive"
+                  ? "archived"
+                  : "installed_enabled";
           if (pkg && request.kind === "disable") pkg.enabled = false;
           if (pkg && request.kind === "enable") pkg.enabled = true;
+          if (pkg && request.kind === "suspend") pkg.suspended = true;
+          if (pkg && request.kind === "unsuspend") pkg.suspended = false;
           if (pkg && request.kind === "archive") {
             pkg.archived = true;
             pkg.enabled = false;
@@ -3731,11 +3813,15 @@ async function installTauriMock(
             pkg.enabled = true;
           }
           const afterState =
-            request.kind === "archive"
-              ? "archived"
-              : request.kind === "request_unarchive"
-                ? "user_installed_enabled"
-                : "installed_disabled";
+            request.kind === "suspend"
+              ? "suspended"
+              : request.kind === "unsuspend"
+                ? "unsuspended"
+                : request.kind === "archive"
+                  ? "archived"
+                  : request.kind === "request_unarchive"
+                    ? "user_installed_enabled"
+                    : "installed_disabled";
           const stdout = `Applied ${request.kind} to ${request.package}`;
           const entry = {
             id: ++journalId,
@@ -4621,25 +4707,33 @@ async function installTauriMock(
 
     function planFor(request) {
       const action =
-        request.kind === "enable"
-          ? ["pm", "enable", request.package]
-          : request.kind === "archive"
-            ? [
-                "pm",
-                "archive",
-                "--user",
-                String(request.user_id),
-                request.package,
-              ]
-            : request.kind === "request_unarchive"
+        request.kind === "suspend" || request.kind === "unsuspend"
+          ? [
+              "pm",
+              request.kind,
+              "--user",
+              String(request.user_id),
+              request.package,
+            ]
+          : request.kind === "enable"
+            ? ["pm", "enable", request.package]
+            : request.kind === "archive"
               ? [
                   "pm",
-                  "request-unarchive",
+                  "archive",
                   "--user",
                   String(request.user_id),
                   request.package,
                 ]
-              : ["pm", "disable-user", "--user", "0", request.package];
+              : request.kind === "request_unarchive"
+                ? [
+                    "pm",
+                    "request-unarchive",
+                    "--user",
+                    String(request.user_id),
+                    request.package,
+                  ]
+                : ["pm", "disable-user", "--user", "0", request.package];
       return {
         request: {
           ...request,
