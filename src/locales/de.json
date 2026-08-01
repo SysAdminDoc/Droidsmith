@@ -366,6 +366,7 @@
       "policyLink": "Offizielle Richtlinienquelle (geprüft {{date}})",
       "usbBackend": "USB-Backend",
       "mdnsBackend": "mDNS-Backend",
+      "mdnsBackendUnreliable": "Gemeldeter Wert ist in dieser Platform-Tools-Version unzuverlässig",
       "mdns": "mDNS-Erkennung",
       "enabled": "Aktiviert",
       "disabled": "Deaktiviert",

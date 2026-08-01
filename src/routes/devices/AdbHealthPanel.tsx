@@ -69,7 +69,13 @@ export function AdbHealthPanel({
           />
           <HealthMetric
             label={t("devices.health.mdnsBackend")}
-            value={health.mdns_backend ?? t("common.notReported")}
+            value={
+              // Platform Tools 37.0.0+ reports a backend name that no longer
+              // tracks the one in use, so do not present it as fact.
+              !health.mdns_backend_reliable
+                ? t("devices.health.mdnsBackendUnreliable")
+                : (health.mdns_backend ?? t("common.notReported"))
+            }
           />
           <HealthMetric
             label={t("devices.health.mdns")}

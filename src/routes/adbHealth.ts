@@ -28,7 +28,7 @@ export function formatAdbDiagnostics({
     `Server build: ${health?.server_build ?? "not available"}`,
     `USB backend: ${health?.usb_backend ?? "not available"}`,
     `mDNS enabled: ${formatOptionalBoolean(health?.mdns_enabled)}`,
-    `mDNS backend: ${health?.mdns_backend ?? "not available"}`,
+    `mDNS backend: ${formatMdnsBackend(health)}`,
     `mDNS check: ${health?.mdns_check ?? "not available"}`,
     `Wi-Fi 2.0 readiness: ${health?.recommended_for_wifi_v2 ? "recommended platform-tools available" : `platform-tools ${health?.platform_tools.recommended_version ?? "recommended version"}+ required`}`,
     `Wi-Fi 2.0 discovery: ${health?.wifi_v2_state ?? "not available"}`,
@@ -51,6 +51,15 @@ export function formatAdbDiagnostics({
   }
 
   return `${lines.join("\n")}\n`;
+}
+
+/** Platform Tools 37.0.0+ reports a backend that no longer tracks the one in
+ * use, so the copyable diagnostics must not read as a plain fact. */
+function formatMdnsBackend(health: AdbHealth | null | undefined): string {
+  if (!health?.mdns_backend) return "not available";
+  return health.mdns_backend_reliable
+    ? health.mdns_backend
+    : `${health.mdns_backend} (not reliably reported by this platform-tools version)`;
 }
 
 function formatOptionalBoolean(value: boolean | null | undefined): string {

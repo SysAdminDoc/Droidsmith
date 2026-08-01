@@ -14,6 +14,20 @@ completion.
 Working batches live here. Sections collapse into a versioned release on
 each milestone tag.
 
+### Fixed
+
+- **Host Doctor no longer asserts an mDNS backend it cannot know.**
+  Platform Tools 37.0.0 made `libadbmdns` the default and 37.0.1 deleted the
+  openscreen implementation, but AOSP's `AdbServerStatus` proto still carries
+  only `BONJOUR` and `OPENSCREEN` — there is no value for the backend actually
+  in use. Droidsmith was printing that field as fact and, worse, telling users
+  on 37.x to move off "the legacy Openscreen backend" that is neither active nor
+  selectable. The value is now gated behind `mdns_backend_reliable`: below
+  37.0.0 it is reported and the switch advice still fires, at or above it the
+  panel and the copyable diagnostics mark it unreliable and the misleading
+  warning is suppressed. The support bundle keeps the raw value but records it
+  as unverified. `mdns_enabled` is unaffected. (IMP-98)
+
 ### Security
 
 - **Wireless debugging now warns before pairing an unpatched device.**

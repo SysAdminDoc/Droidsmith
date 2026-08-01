@@ -689,6 +689,7 @@
       "live": "Monitor en vivo",
       "mdns": "Descubrimiento mDNS",
       "mdnsBackend": "Backend mDNS",
+      "mdnsBackendUnreliable": "el valor informado no es fiable en esta versión de Platform Tools",
       "mdnsCheck": "Verificación de mDNS",
       "noneDetected": "Ninguno detectado",
       "observed": "Última observación {{time}}",

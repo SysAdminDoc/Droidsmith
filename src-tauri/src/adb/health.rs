@@ -17,6 +17,10 @@ pub struct AdbHealth {
     pub server_build: Option<String>,
     pub usb_backend: Option<String>,
     pub mdns_backend: Option<String>,
+    /// Whether [`AdbHealth::mdns_backend`] can be presented as fact. False from
+    /// platform-tools 37.0.0, where the reported value no longer tracks the
+    /// backend actually in use.
+    pub mdns_backend_reliable: bool,
     pub mdns_enabled: Option<bool>,
     pub mdns_check: Option<String>,
     pub burst_mode: Option<bool>,
@@ -58,6 +62,8 @@ pub fn probe(transport: &ShellTransport, client_version: Option<String>) -> AdbH
         }
     }
 
+    health.mdns_backend_reliable =
+        version_policy::mdns_backend_is_reliable(health.server_version.as_deref());
     health.recommended_for_wifi_v2 = health
         .server_version
         .as_deref()
@@ -78,27 +84,37 @@ pub fn probe(transport: &ShellTransport, client_version: Option<String>) -> AdbH
         }
     }
 
-    if health.warning.is_none() {
-        if !health.recommended_for_wifi_v2 {
-            health.warning = Some(format!(
-                "Platform Tools {} or newer is required for ADB Wi-Fi 2.0 diagnostics",
-                health.platform_tools.recommended_version
-            ));
-        } else if health.mdns_enabled == Some(false) {
-            health.warning = Some("ADB mDNS discovery is disabled".to_string());
-        } else if health
+    apply_warning(&mut health);
+
+    health
+}
+
+fn apply_warning(health: &mut AdbHealth) {
+    if health.warning.is_some() {
+        return;
+    }
+    if !health.recommended_for_wifi_v2 {
+        health.warning = Some(format!(
+            "Platform Tools {} or newer is required for ADB Wi-Fi 2.0 diagnostics",
+            health.platform_tools.recommended_version
+        ));
+    } else if health.mdns_enabled == Some(false) {
+        health.warning = Some("ADB mDNS discovery is disabled".to_string());
+    } else if health.mdns_backend_reliable
+        && health
             .mdns_backend
             .as_deref()
             .is_some_and(|backend| backend.eq_ignore_ascii_case("OPENSCREEN"))
-        {
-            health.warning = Some(
-                "ADB is using the legacy Openscreen mDNS backend; libadbmdns is recommended"
-                    .to_string(),
-            );
-        }
+    {
+        // Only actionable while the field still tracks reality. From 37.0.0 the
+        // server reports OPENSCREEN even though libadbmdns is in use (and
+        // 37.0.1 deleted openscreen entirely), so advising a switch would send
+        // the user after a backend that is neither active nor selectable.
+        health.warning = Some(
+            "ADB is using the legacy Openscreen mDNS backend; libadbmdns is recommended"
+                .to_string(),
+        );
     }
-
-    health
 }
 
 fn field(output: &str, name: &str) -> Option<String> {
@@ -212,6 +228,46 @@ build: "123456"
 burst_mode: true
 mdns_enabled: true
 "#;
+
+    #[test]
+    fn mdns_backend_is_only_trusted_below_platform_tools_37() {
+        // The advisory value is meaningful on the older line...
+        assert!(version_policy::mdns_backend_is_reliable(Some("36.0.2")));
+        assert!(version_policy::mdns_backend_is_reliable(Some("35.0.0")));
+        // ...and stops tracking reality once libadbmdns became the default.
+        assert!(!version_policy::mdns_backend_is_reliable(Some("37.0.0")));
+        assert!(!version_policy::mdns_backend_is_reliable(Some("37.0.1")));
+        assert!(!version_policy::mdns_backend_is_reliable(Some("38.0.0")));
+        // An absent or unparseable version keeps the pre-existing behaviour.
+        assert!(version_policy::mdns_backend_is_reliable(None));
+        assert!(version_policy::mdns_backend_is_reliable(Some(
+            "not-a-version"
+        )));
+    }
+
+    #[test]
+    fn openscreen_warning_is_suppressed_once_the_field_stops_tracking_reality() {
+        // 37.x reports OPENSCREEN even though libadbmdns is in use, so telling
+        // the user to switch backends would send them after a non-existent one.
+        let mut health = AdbHealth {
+            mdns_enabled: Some(true),
+            recommended_for_wifi_v2: true,
+            mdns_backend: Some("OPENSCREEN".to_string()),
+            mdns_backend_reliable: false,
+            ..AdbHealth::default()
+        };
+        apply_warning(&mut health);
+        assert_eq!(health.warning, None);
+
+        // On the older line the same value is still actionable.
+        health.warning = None;
+        health.mdns_backend_reliable = true;
+        apply_warning(&mut health);
+        assert!(health
+            .warning
+            .as_deref()
+            .is_some_and(|warning| warning.contains("Openscreen")));
+    }
 
     #[test]
     fn parses_server_status_fields_without_host_paths() {

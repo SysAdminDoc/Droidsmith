@@ -10,6 +10,8 @@ const health: AdbHealth = {
   server_build: "123456",
   usb_backend: "NATIVE",
   mdns_backend: "LIBADBMDNS",
+  // server_version is 37.0.0, where the field stops tracking the live backend.
+  mdns_backend_reliable: false,
   mdns_enabled: true,
   mdns_check: "mdns daemon version [Openscreen discovery 0.0.0]",
   burst_mode: true,
@@ -58,5 +60,25 @@ describe("formatAdbDiagnostics", () => {
     expect(output).toContain("Recovery outcome: succeeded");
     expect(output).toContain("adb reconnect offline");
     expect(output).not.toContain("undefined");
+  });
+});
+
+describe("mDNS backend reporting", () => {
+  it("marks the backend unreliable on platform-tools 37.x", () => {
+    expect(formatAdbDiagnostics({ health, observedAt: null })).toContain(
+      "mDNS backend: LIBADBMDNS (not reliably reported by this platform-tools version)",
+    );
+  });
+
+  it("reports the plain value where it still tracks the live backend", () => {
+    const older: AdbHealth = {
+      ...health,
+      server_version: "36.0.2",
+      mdns_backend: "OPENSCREEN",
+      mdns_backend_reliable: true,
+    };
+    const text = formatAdbDiagnostics({ health: older, observedAt: null });
+    expect(text).toContain("mDNS backend: OPENSCREEN");
+    expect(text).not.toContain("not reliably reported");
   });
 });

@@ -161,6 +161,28 @@ pub fn is_recommended(version: &str) -> bool {
         .is_some_and(|ordering| ordering != Ordering::Less)
 }
 
+/// First platform-tools release where `server-status.mdns_backend` stopped
+/// being meaningful.
+///
+/// 37.0.0 made `libadbmdns` the default backend and 37.0.1 deleted the
+/// openscreen implementation outright, but AOSP's `AdbServerStatus` proto still
+/// only carries `BONJOUR` and `OPENSCREEN` — there is no `LIBADBMDNS` value to
+/// report. From this version the field describes a backend the server may not
+/// be using, so it must not be presented as fact.
+const MDNS_BACKEND_UNRELIABLE_FROM: &str = "37.0.0";
+
+/// Whether `server-status.mdns_backend` can be trusted for a given server
+/// version. An unparseable or absent version is treated as trustworthy so older
+/// setups keep their existing diagnostics.
+pub fn mdns_backend_is_reliable(server_version: Option<&str>) -> bool {
+    let Some(version) = server_version else {
+        return true;
+    };
+    // `Option::is_none_or` is stable since 1.82; the crate floor is 1.81.
+    compare_versions(version, MDNS_BACKEND_UNRELIABLE_FROM)
+        .map_or(true, |ordering| ordering == Ordering::Less)
+}
+
 fn assessment(
     policy: &PlatformToolsPolicy,
     status: PlatformToolsStatus,

@@ -1113,6 +1113,12 @@ export type AdbHealth = {
   server_build: string | null;
   usb_backend: string | null;
   mdns_backend: string | null;
+  /**
+   * Whether [`AdbHealth::mdns_backend`] can be presented as fact. False from
+   * platform-tools 37.0.0, where the reported value no longer tracks the
+   * backend actually in use.
+   */
+  mdns_backend_reliable: boolean;
   mdns_enabled: boolean | null;
   mdns_check: string | null;
   burst_mode: boolean | null;

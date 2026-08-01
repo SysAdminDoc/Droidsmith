@@ -366,6 +366,7 @@
       "policyLink": "官方策略来源（审查于 {{date}}）",
       "usbBackend": "USB 后端",
       "mdnsBackend": "mDNS 后端",
+      "mdnsBackendUnreliable": "此 Platform Tools 版本报告的值不可靠",
       "mdns": "mDNS 发现",
       "enabled": "已启用",
       "disabled": "已禁用",

@@ -103,6 +103,10 @@ struct SupportAdbHealth {
     server_build: Option<String>,
     usb_backend: Option<String>,
     mdns_backend: Option<String>,
+    /// False from platform-tools 37.0.0, where `mdns_backend` stops tracking
+    /// the backend actually in use. The raw value is still recorded so a
+    /// reader can see what the server claimed.
+    mdns_backend_reliable: bool,
     mdns_enabled: Option<bool>,
     mdns_check: Option<String>,
     burst_mode: Option<bool>,
@@ -348,6 +352,7 @@ fn sanitize_health(health: &AdbHealth, aliases: &BTreeMap<String, String>) -> Su
         server_build: clean(&health.server_build),
         usb_backend: clean(&health.usb_backend),
         mdns_backend: clean(&health.mdns_backend),
+        mdns_backend_reliable: health.mdns_backend_reliable,
         mdns_enabled: health.mdns_enabled,
         mdns_check: clean(&health.mdns_check),
         burst_mode: health.burst_mode,

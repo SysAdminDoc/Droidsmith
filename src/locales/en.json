@@ -366,6 +366,7 @@
       "policyLink": "Official policy source (reviewed {{date}})",
       "usbBackend": "USB backend",
       "mdnsBackend": "mDNS backend",
+      "mdnsBackendUnreliable": "reported value is unreliable on this platform-tools version",
       "mdns": "mDNS discovery",
       "enabled": "Enabled",
       "disabled": "Disabled",

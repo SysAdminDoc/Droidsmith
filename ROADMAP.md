@@ -48,13 +48,6 @@ R-119 / IMP-95.
 
 ### P1
 
-- [ ] P1 — IMP-98: Stop surfacing the stale `mdns_backend` field
-  Why: Host Doctor displays a backend name that platform-tools 37.x can no longer report correctly, so the panel asserts something false on the recommended version.
-  Evidence: 37.0.1 deleted the openscreen backend and made `ADB_MDNS_OPENSCREEN` a no-op, but AOSP `adb.cpp` still sets `AdbServerStatus.mdns_backend` to only `BONJOUR`/`OPENSCREEN` — the proto enum has no `LIBADBMDNS` value; surfaced via `src/routes/adbHealth.ts` and `src/routes/devices/AdbHealthPanel.tsx`, parsed in `src-tauri/src/adb/health.rs`.
-  Touches: `src-tauri/src/adb/health.rs`, `src/routes/adbHealth.ts`, `src/routes/devices/AdbHealthPanel.tsx`, `src-tauri/src/support_bundle.rs`, `src/locales/*.json`, tests.
-  Acceptance: on platform-tools ≥37.0.0 the backend name is not presented as fact; `mdns_enabled` remains surfaced; the support bundle records the raw value as unverified rather than as a health claim; a fixture at 36.0.2 and 37.x proves the version-dependent behaviour. Also update the blocked R-116 remainder note in Roadmap_Blocked.md.
-  Complexity: S
-
 - [ ] P1 — IMP-99: Make persisted device identity survive duplicate or blank serials
   Why: undo journals and per-device settings are keyed on the serial, so two devices reporting the same serial share one journal — an undo row recorded against device A becomes offerable against device B.
   Evidence: `src-tauri/src/journal/mod.rs:22,293` writes `<app_data>/journal/<serial>.jsonl`; `src-tauri/src/settings.rs::device_scope` hashes a caller-supplied identity string; duplicate/blank serials are documented upstream (scrcpy #1148, #3537). Runtime addressing is already correct — `DeviceTarget::adb_selector()` prefers `-t <transport_id>` — but `transport_id` is per-server-session and cannot key persistence.

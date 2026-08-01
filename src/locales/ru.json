@@ -366,6 +366,7 @@
       "policyLink": "Официальный источник политики (проверено {{date}})",
       "usbBackend": "USB-бэкенд",
       "mdnsBackend": "mDNS-бэкенд",
+      "mdnsBackendUnreliable": "сообщаемое значение ненадёжно в этой версии Platform Tools",
       "mdns": "Обнаружение mDNS",
       "enabled": "Включено",
       "disabled": "Отключено",
