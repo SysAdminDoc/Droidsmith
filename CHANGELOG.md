@@ -25,6 +25,17 @@ each milestone tag.
   computed-contrast harness in IMP-105 instead of being silently suppressed.
   (IMP-104)
 
+- **Rendered contrast is measured after real surface compositing.** A shared
+  WCAG luminance helper now parses browser colors and resolves translucent
+  foregrounds and every ancestor background layer. The rendered-route smoke
+  samples visible text, control labels, and icon-only interactive surfaces on
+  all 11 workspaces plus onboarding, settings, the command palette, and a
+  destructive review, applying the 4.5:1, large-text 3:1, and non-text 3:1 AA
+  thresholds from reviewed release policy. The dark-theme baseline is green,
+  and the guarded sample floor prevents an empty audit from passing. This
+  clears the automation blocker on the light-theme work, now tracked as
+  IMP-112 in the active roadmap. (IMP-105)
+
 ### Changed
 
 - **Consolidated the workspace into a denser technical visual system.** The

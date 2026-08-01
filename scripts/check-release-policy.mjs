@@ -145,6 +145,18 @@ export function validateAccessibilityAuditPolicy(policy) {
     expectedTags,
     "accessibilityAudit.tags must retain the reviewed WCAG A/AA rule set",
   );
+  assertEqualJson(
+    policy?.contrast,
+    {
+      normalTextMinimum: 4.5,
+      largeTextMinimum: 3,
+      interactiveMinimum: 3,
+      largeTextMinPx: 24,
+      boldTextMinPx: 18.66,
+      boldWeightMinimum: 700,
+    },
+    "accessibilityAudit.contrast must retain the reviewed WCAG AA thresholds",
+  );
   assert(
     Array.isArray(policy?.excludedRules),
     "accessibilityAudit.excludedRules must be an array",

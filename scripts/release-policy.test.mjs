@@ -32,6 +32,14 @@ const rendererRoutes = [
 test("accessibility audit policy keeps WCAG rules and reviewed exclusions explicit", () => {
   const policy = {
     tags: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"],
+    contrast: {
+      normalTextMinimum: 4.5,
+      largeTextMinimum: 3,
+      interactiveMinimum: 3,
+      largeTextMinPx: 24,
+      boldTextMinPx: 18.66,
+      boldWeightMinimum: 700,
+    },
     excludedRules: [
       {
         id: "color-contrast",
@@ -56,6 +64,14 @@ test("accessibility audit policy keeps WCAG rules and reviewed exclusions explic
         tags: ["wcag2a"],
       }),
     /reviewed WCAG A\/AA rule set/u,
+  );
+  assert.throws(
+    () =>
+      validateAccessibilityAuditPolicy({
+        ...policy,
+        contrast: { ...policy.contrast, normalTextMinimum: 3 },
+      }),
+    /reviewed WCAG AA thresholds/u,
   );
 });
 

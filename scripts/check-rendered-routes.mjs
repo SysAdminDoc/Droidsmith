@@ -1,4 +1,4 @@
-/* global window, document, navigator, getComputedStyle, HTMLElement, requestAnimationFrame */
+/* global window, document, navigator, getComputedStyle, HTMLElement, requestAnimationFrame, NodeFilter, Node, CSS */
 import fs from "node:fs";
 import http from "node:http";
 import net from "node:net";
@@ -10,6 +10,7 @@ import { fileURLToPath } from "node:url";
 
 import { chromium } from "playwright";
 import AxeBuilder from "@axe-core/playwright";
+import { contrastRatio, resolveRenderedColors } from "../src/lib/contrast.ts";
 
 const repoRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -101,21 +102,25 @@ async function runAccessibilityAuditFlow(browser) {
       .click();
     await page.getByRole("heading", { name: route, exact: true }).waitFor();
     await assertAxeClean(page, `${route} route`);
+    await assertContrastClean(page, `${route} route`);
   }
 
   await page.keyboard.press("Control+k");
   await page.getByRole("dialog", { name: "Command palette" }).waitFor();
   await assertAxeClean(page, "command palette");
+  await assertContrastClean(page, "command palette");
   await page.keyboard.press("Escape");
 
   await page.getByRole("button", { name: "Help", exact: true }).click();
   await page.getByRole("dialog", { name: "Getting started" }).waitFor();
   await assertAxeClean(page, "onboarding dialog");
+  await assertContrastClean(page, "onboarding dialog");
   await page.keyboard.press("Escape");
 
   await page.getByRole("button", { name: "Settings", exact: true }).click();
   await page.getByRole("dialog", { name: /settings/i }).waitFor();
   await assertAxeClean(page, "settings dialog");
+  await assertContrastClean(page, "settings dialog");
   await page.keyboard.press("Escape");
 
   await page
@@ -129,6 +134,7 @@ async function runAccessibilityAuditFlow(browser) {
     .getByRole("alertdialog", { name: "Review shell mutation" })
     .waitFor();
   await assertAxeClean(page, "destructive action review dialog");
+  await assertContrastClean(page, "destructive action review dialog");
 
   assertNoConsoleErrors(errors, "accessibility route smoke");
   await context.close();
@@ -1785,6 +1791,151 @@ async function assertAxeClean(page, label) {
     })
     .join("\n\n");
   throw new Error(`${label} accessibility violations:\n${details}`);
+}
+
+async function assertContrastClean(page, label) {
+  const thresholds = accessibilityAuditPolicy?.contrast;
+  if (!thresholds) {
+    throw new Error(
+      "release-policy.json accessibilityAudit.contrast is missing",
+    );
+  }
+  await settleLayout(page);
+  const samples = await collectRenderedContrastSamples(page);
+  if (samples.length < 10) {
+    throw new Error(
+      `${label} contrast audit collected only ${samples.length} samples`,
+    );
+  }
+  const failures = [];
+  for (const sample of samples) {
+    const rendered = resolveRenderedColors(sample.color, sample.backgrounds);
+    const ratio = contrastRatio(rendered.foreground, rendered.background);
+    const largeText =
+      sample.fontSize >= thresholds.largeTextMinPx ||
+      (sample.fontSize >= thresholds.boldTextMinPx &&
+        sample.fontWeight >= thresholds.boldWeightMinimum);
+    const minimum =
+      sample.kind === "interactive"
+        ? thresholds.interactiveMinimum
+        : largeText
+          ? thresholds.largeTextMinimum
+          : thresholds.normalTextMinimum;
+    if (ratio + 0.005 < minimum) {
+      failures.push(
+        `${sample.selector} ${JSON.stringify(sample.label)}: ${ratio.toFixed(2)} < ${minimum.toFixed(1)} ` +
+          `(fg ${sample.color}; backgrounds ${sample.backgrounds.join(" -> ")})`,
+      );
+    }
+  }
+  if (failures.length > 0) {
+    throw new Error(`${label} contrast violations:\n${failures.join("\n")}`);
+  }
+}
+
+async function collectRenderedContrastSamples(page) {
+  return page.evaluate(() => {
+    const interactiveSelector = [
+      "a[href]",
+      "button",
+      "input:not([type='checkbox']):not([type='radio']):not([type='range'])",
+      "select",
+      "textarea",
+      "[role='button']",
+      "[role='link']",
+      "[role='menuitem']",
+      "[role='option']",
+      "[role='switch']",
+      "[role='tab']",
+    ].join(",");
+    const elements = new Set(document.querySelectorAll(interactiveSelector));
+    const walker = document.createTreeWalker(
+      document.body,
+      NodeFilter.SHOW_TEXT,
+    );
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      if (node.textContent?.trim()) {
+        const parent = node.parentElement;
+        if (parent && !parent.matches("script, style")) elements.add(parent);
+      }
+    }
+
+    const selectorFor = (element) => {
+      if (element.id) return `#${CSS.escape(element.id)}`;
+      const parts = [];
+      for (
+        let current = element;
+        current && current !== document.body;
+        current = current.parentElement
+      ) {
+        let part = current.tagName.toLowerCase();
+        const parent = current.parentElement;
+        if (parent) {
+          const siblings = [...parent.children].filter(
+            (sibling) => sibling.tagName === current.tagName,
+          );
+          if (siblings.length > 1) {
+            part += `:nth-of-type(${siblings.indexOf(current) + 1})`;
+          }
+        }
+        parts.unshift(part);
+        if (parts.length === 4) break;
+      }
+      return parts.join(" > ");
+    };
+
+    return [...elements].flatMap((element) => {
+      if (!(element instanceof HTMLElement)) return [];
+      const style = getComputedStyle(element);
+      const rect = element.getBoundingClientRect();
+      if (
+        rect.width < 1 ||
+        rect.height < 1 ||
+        style.display === "none" ||
+        style.visibility !== "visible" ||
+        Number(style.opacity) === 0 ||
+        style.clipPath === "inset(50%)" ||
+        style.clip === "rect(0px, 0px, 0px, 0px)" ||
+        element.closest("[aria-hidden='true'], [hidden], [inert]") ||
+        element.closest(":disabled, [aria-disabled='true']")
+      ) {
+        return [];
+      }
+
+      const directText = [...element.childNodes]
+        .filter((node) => node.nodeType === Node.TEXT_NODE)
+        .map((node) => node.textContent?.trim() ?? "")
+        .filter(Boolean)
+        .join(" ");
+      const interactive = element.matches(interactiveSelector);
+      if (!directText && !interactive) return [];
+
+      const backgrounds = [];
+      for (let current = element; current; current = current.parentElement) {
+        backgrounds.push(getComputedStyle(current).backgroundColor);
+      }
+      const parsedWeight = Number.parseInt(style.fontWeight, 10);
+      return [
+        {
+          selector: selectorFor(element),
+          label: (
+            directText ||
+            element.getAttribute("aria-label") ||
+            element.textContent ||
+            element.tagName
+          )
+            .trim()
+            .replace(/\s+/gu, " ")
+            .slice(0, 100),
+          kind: directText ? "text" : "interactive",
+          color: style.color,
+          backgrounds,
+          fontSize: Number.parseFloat(style.fontSize),
+          fontWeight: Number.isFinite(parsedWeight) ? parsedWeight : 400,
+        },
+      ];
+    });
+  });
 }
 
 function escapeRegex(value) {

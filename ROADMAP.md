@@ -54,13 +54,6 @@ R-119 / IMP-95.
   Acceptance: quirk rules exist for each vendor that ships a pack, each citing a public source URL and the ROM/build it was observed on; rules match on package plus manufacturer/ROM rather than error text alone where the hazard is pre-emptive; the debloat review surfaces a hazard before apply, not only after a failure; every rule validates against schema `"1"` with no schema change; each rule states its evidence basis so an unobserved combination reports `unknown` rather than implying verification. Note: this adds *rules describing publicly reported behaviour with attribution*, which is distinct from redistributing UAD-NG's curated list — that remains blocked as R-036.
   Complexity: M
 
-- [ ] P2 — IMP-105: Add a computed-contrast harness over rendered surfaces
-  Why: this is the single stated blocker on the light-theme item, and it is a harness gap rather than a hardware gap — the environment can compute rendered contrast, it just does not.
-  Evidence: Roadmap_Blocked.md light-theme entry says the harness "checks console errors and document overflow, not contrast ratios"; `src/lib/contrast.test.ts` already implements WCAG relative-luminance maths against Tailwind tokens; Playwright can read computed styles per element.
-  Touches: `scripts/check-rendered-routes.mjs`, `src/lib/contrast.test.ts` (extract shared helper), `release-policy.json`, `Roadmap_Blocked.md`.
-  Acceptance: the smoke harness resolves effective foreground/background for text and interactive surfaces across every route — including the 17 files using `white/<opacity>` overlays — and fails below WCAG AA for the element's size class; the pass runs against the current dark theme first and is green before any theme work starts; on success, move the light-theme item back to ROADMAP.md with this harness named as its acceptance mechanism.
-  Complexity: M
-
 - [ ] P2 — IMP-106: Ship the dependency-free half of the provenance bundle
   Why: R-110 is blocked on a minisign key decision and a bundle-capable host, but SBOM and checksum generation read lockfiles and require neither — the blocked note conflates the two halves.
   Evidence: `Roadmap_Blocked.md` R-110 states the SBOM/checksum generation "is dependency-free"; `npm sbom --sbom-format cyclonedx --omit dev` is built into npm; `cargo-cyclonedx` 0.5.9 (2026-03-19) covers the Rust half; the project already maintains `third-party-notices.json` and a `deny.toml` licence allow-list.
@@ -153,6 +146,13 @@ R-119 / IMP-95.
   Touches: `src/routes/Apps.tsx`, `src/routes/Mirror.tsx`, `src/routes/Debloat.tsx` and sibling test files, `vitest.config.ts`, `package.json`.
   Acceptance: component tests cover the destructive-review, stale-completion, and device-switch paths for Apps, Debloat, and Mirror against mocked IPC; a test fails when an in-flight response resolves after a device change; the rendered-route smoke keeps its cross-route responsibility rather than absorbing these cases.
   Complexity: M
+
+- [ ] P3 — IMP-112: Add a light theme toggle
+  Why: a persisted light theme improves daylight readability, but the dark-theme-specific translucent overlays and fixed deep backgrounds must be converted rather than merely reversing the color ramp.
+  Evidence: the computed rendered-contrast gate shipped in IMP-105 now resolves layered foreground/background colors for every route and overlay state; 42 current source files still contain `white/<opacity>`, `bg-white`, or `text-white` treatments tuned for dark surfaces.
+  Touches: `tailwind.config.ts`, `src/index.css`, shared shell and route components, settings persistence, `scripts/check-rendered-routes.mjs`, `src/locales/*.json`.
+  Acceptance: the toggle persists and switches every route without reload; theme-aware surface/text/border tokens replace dark-only overlays and fixed deep backgrounds; `npm run ui:smoke` runs the IMP-105 computed-contrast audit across all routes and overlay states in both themes with zero WCAG AA failures; forced-colors and reduced-motion behavior remains unchanged.
+  Complexity: L
 
 - [ ] P3 — R-132: Surface Android 17 app memory limits
   Why: Android 17 added a shell-reachable memory-limiter surface that no desktop ADB tool exposes, and it explains otherwise-inscrutable app kills.

@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 
 import tailwindConfig from "../../tailwind.config";
+import {
+  compositeColor,
+  contrastRatio,
+  parseCssColor,
+  resolveRenderedColors,
+} from "./contrast";
 
 describe("accessible color tokens", () => {
   it("keeps muted normal text at WCAG AA contrast on elevated surfaces", () => {
@@ -12,23 +18,31 @@ describe("accessible color tokens", () => {
       );
     }
   });
-});
 
-function contrastRatio(foreground: string, background: string): number {
-  const foregroundLuminance = relativeLuminance(foreground);
-  const backgroundLuminance = relativeLuminance(background);
-  const lightest = Math.max(foregroundLuminance, backgroundLuminance);
-  const darkest = Math.min(foregroundLuminance, backgroundLuminance);
-  return (lightest + 0.05) / (darkest + 0.05);
-}
-
-function relativeLuminance(hex: string): number {
-  const channels = hex
-    .slice(1)
-    .match(/.{2}/g)!
-    .map((channel) => Number.parseInt(channel, 16) / 255)
-    .map((channel) =>
-      channel <= 0.03928 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4,
+  it("composites translucent rendered surfaces before measuring contrast", () => {
+    const rendered = resolveRenderedColors("rgb(255 255 255 / 0.72)", [
+      "rgb(255 255 255 / 0.08)",
+      "rgb(8 15 22)",
+    ]);
+    expect(rendered.background.alpha).toBe(1);
+    expect(contrastRatio(rendered.foreground, rendered.background)).toBeCloseTo(
+      8.89,
+      2,
     );
-  return channels[0]! * 0.2126 + channels[1]! * 0.7152 + channels[2]! * 0.0722;
-}
+  });
+
+  it("parses browser rgb forms and composites alpha deterministically", () => {
+    expect(parseCssColor("rgba(255, 255, 255, 0.5)")).toEqual({
+      red: 255,
+      green: 255,
+      blue: 255,
+      alpha: 0.5,
+    });
+    expect(
+      compositeColor(
+        parseCssColor("rgb(255 255 255 / 0.5)"),
+        parseCssColor("#000000"),
+      ),
+    ).toEqual({ red: 127.5, green: 127.5, blue: 127.5, alpha: 1 });
+  });
+});
