@@ -157,7 +157,6 @@ export default function FastbootRoute() {
     <>
       <PaneHeader
         title={t("fastboot.title")}
-        milestone="R-052"
         description={t("fastboot.description")}
         meta={
           <div className="flex flex-wrap items-center gap-2">

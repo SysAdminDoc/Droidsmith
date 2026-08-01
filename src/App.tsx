@@ -916,7 +916,6 @@ function NavStub({
       <NavIcon id={item.id} active={active} />
       <span className="min-w-0 flex-1">
         <span className="font-medium">{label}</span>
-        <span className="sr-only">{item.milestone}</span>
         <span id={`${item.id}-description`} className="sr-only">
           {description}
         </span>

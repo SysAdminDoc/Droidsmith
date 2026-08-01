@@ -167,7 +167,6 @@ export default function DevicesRoute() {
     <>
       <PaneHeader
         title={t("devices.title")}
-        milestone="R-012"
         description={t("devices.description")}
         actions={
           <DeviceHeaderActions

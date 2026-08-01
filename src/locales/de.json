@@ -1788,7 +1788,6 @@
     "loading": "Lade…",
     "refresh": "Aktualisieren",
     "load": "Laden",
-    "roadmap": "Roadmap {{milestone}}",
     "tauriIpcRequired": "Tauri-IPC erforderlich",
     "checkAgain": "Erneut prüfen",
     "retryScan": "Scan wiederholen",

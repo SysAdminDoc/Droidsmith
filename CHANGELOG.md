@@ -71,6 +71,13 @@ each milestone tag.
 
 ### Fixed
 
+- **Screen readers no longer announce internal roadmap identifiers.** Pane
+  headers and navigation keep their user-facing route name and description,
+  while milestone metadata remains available only to source-level ordering
+  tests. The obsolete localization key and hidden badge were removed, and the
+  rendered-route smoke now snapshots the accessibility tree for every workspace
+  and rejects any `R-NNN` identifier that reaches an accessible name. (IMP-108)
+
 - **Malformed bundled policy data now fails the build, not first use.** The Rust
   build script parses `platform-tools-policy.json`, requires schema 1 and its
   typed core fields, and tracks the asset for rebuilds before the runtime can be

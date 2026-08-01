@@ -175,7 +175,6 @@ export default function DeviceSettingsRoute() {
     <div>
       <PaneHeader
         title={t("tuning.title")}
-        milestone="R-082"
         description={t("tuning.description")}
         meta={
           <div className="flex flex-wrap items-center gap-2">

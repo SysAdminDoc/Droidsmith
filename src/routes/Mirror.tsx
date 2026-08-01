@@ -453,7 +453,6 @@ export default function MirrorRoute() {
     <>
       <PaneHeader
         title={t("mirror.title")}
-        milestone="R-040"
         description={t("mirror.description")}
         meta={
           <div className="flex flex-wrap items-center gap-2">

@@ -77,7 +77,6 @@ export default function ApkAnalyzerRoute() {
     <>
       <PaneHeader
         title={t("apk.title")}
-        milestone="R-097 · R-107"
         description={t("apk.description")}
         actions={
           <div className="flex flex-wrap gap-2">

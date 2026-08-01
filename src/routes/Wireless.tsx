@@ -321,7 +321,6 @@ export default function WirelessRoute() {
     <>
       <PaneHeader
         title={t("wireless.title")}
-        milestone="R-015"
         description={t("wireless.description")}
         actions={
           <Button

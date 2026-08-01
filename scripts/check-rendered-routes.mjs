@@ -101,6 +101,12 @@ async function runAccessibilityAuditFlow(browser) {
       .first()
       .click();
     await page.getByRole("heading", { name: route, exact: true }).waitFor();
+    const accessibilityTree = await page.locator("body").ariaSnapshot();
+    if (/\bR-\d{3}\b/u.test(accessibilityTree)) {
+      throw new Error(
+        `${route} exposed an internal roadmap id:\n${accessibilityTree}`,
+      );
+    }
     await assertAxeClean(page, `${route} route`);
     await assertContrastClean(page, `${route} route`);
   }

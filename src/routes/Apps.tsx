@@ -1316,7 +1316,6 @@ export default function AppsRoute() {
     <>
       <PaneHeader
         title={t("apps.title")}
-        milestone="R-020"
         description={t("apps.description")}
         actions={
           selectedDevice ? (

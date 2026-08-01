@@ -396,7 +396,6 @@ export default function ConsoleRoute() {
       )}
       <PaneHeader
         title={t("console.title")}
-        milestone="R-050"
         description={t("console.description")}
         meta={
           <div className="flex flex-wrap items-center gap-2">

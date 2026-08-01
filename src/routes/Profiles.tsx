@@ -374,7 +374,6 @@ export default function ProfilesRoute() {
     <div>
       <PaneHeader
         title={t("profiles.title")}
-        milestone="R-034"
         description={t("profiles.description")}
         meta={
           <div className="flex flex-wrap items-center gap-2">

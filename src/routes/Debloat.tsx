@@ -722,7 +722,6 @@ export default function DebloatRoute() {
     <>
       <PaneHeader
         title={t("debloat.title")}
-        milestone="R-033"
         description={t("debloat.description")}
         meta={
           <div className="flex flex-wrap items-center gap-2">

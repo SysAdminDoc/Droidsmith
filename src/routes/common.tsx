@@ -14,13 +14,11 @@ import {
 
 export function PaneHeader({
   title,
-  milestone,
   description,
   actions,
   meta,
 }: {
   title: string;
-  milestone: string;
   description: string;
   actions?: ReactNode;
   meta?: ReactNode;
@@ -33,7 +31,6 @@ export function PaneHeader({
             <h2 className="text-[1.55rem] font-semibold leading-8 tracking-[-0.025em] text-anvil-50">
               {title}
             </h2>
-            <MilestoneBadge milestone={milestone} />
             {meta && <div>{meta}</div>}
           </div>
           <p className="sr-only">{description}</p>
@@ -229,12 +226,6 @@ export function Badge({
       {children}
     </span>
   );
-}
-
-export function MilestoneBadge({ milestone }: { milestone: string }) {
-  const { t } = useTranslation();
-
-  return <span className="sr-only">{t("common.roadmap", { milestone })}</span>;
 }
 
 const transportLabels: Record<DeviceTransportKind, string> = {

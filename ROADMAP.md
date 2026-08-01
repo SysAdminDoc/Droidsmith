@@ -91,13 +91,6 @@ R-119 / IMP-95.
 
 ### P3
 
-- [ ] P3 — IMP-108: Stop announcing internal roadmap IDs to screen readers
-  Why: every pane header exposes an internal tracker ID to assistive technology only — meaningless to users, invisible to sighted readers, and pure noise on every route change.
-  Evidence: `src/routes/common.tsx:234` renders `MilestoneBadge` as `<span className="sr-only">{t("common.roadmap", {milestone})}</span>`; `src/locales/en.json:1755` is `"roadmap": "Roadmap {{milestone}}"`; `NAV_ITEMS` in `src/App.tsx` carries `milestone: "R-012"` and so on for all 11 routes.
-  Touches: `src/routes/common.tsx`, `src/App.tsx`, `src/locales/*.json`, `scripts/check-rendered-routes.mjs`.
-  Acceptance: pane headers announce the route name and description only; the milestone metadata either leaves `NAV_ITEMS` or stops reaching the accessibility tree; the rendered-route smoke asserts no roadmap identifier appears in any accessible name.
-  Complexity: S
-
 - [ ] P3 — R-130: Report accurate per-app storage from PackageManager
   Why: accurate app sizes are a sponsor-gated feature in the closest commercial competitor and are available from a single documented command.
   Evidence: `pm get-package-storage-stats [--user] <PKG>` is present in AOSP `PackageManagerShellCommand.java`; ADB AppControl 1.8.6 gates "accurate app sizes (A8+)" behind its paid tier.

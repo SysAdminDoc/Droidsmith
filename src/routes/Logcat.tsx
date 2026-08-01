@@ -456,7 +456,6 @@ export default function LogcatRoute() {
     <>
       <PaneHeader
         title={t("logcat.title")}
-        milestone="R-051"
         description={t("logcat.description")}
         meta={
           <div className="flex flex-wrap items-center gap-2">

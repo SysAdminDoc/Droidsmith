@@ -1788,7 +1788,6 @@
     "loading": "Загрузка…",
     "refresh": "Обновить",
     "load": "Загрузить",
-    "roadmap": "Дорожная карта {{milestone}}",
     "tauriIpcRequired": "Требуется Tauri IPC",
     "checkAgain": "Проверить снова",
     "retryScan": "Повторить сканирование",

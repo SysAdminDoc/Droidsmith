@@ -1788,7 +1788,6 @@
     "loading": "正在加载…",
     "refresh": "刷新",
     "load": "加载",
-    "roadmap": "路线图 {{milestone}}",
     "tauriIpcRequired": "需要 Tauri IPC",
     "checkAgain": "再次检查",
     "retryScan": "重试扫描",
