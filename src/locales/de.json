@@ -1134,6 +1134,8 @@
     "alwaysOnTop": "Immer im Vordergrund",
     "noControl": "Nur ansehen (keine Steuerung)",
     "noWindow": "Kein Fenster (nur Steuerung/Aufnahme)",
+    "ignoreEncoderConstraints": "Gemeldete Encoder-Größenlimits ignorieren",
+    "ignoreEncoderConstraintsRisk": "Umgeht die vom Gerät gemeldeten Größen- und Ausrichtungslimits. Nur verwenden, wenn korrekte Einstellungen wegen falscher gemeldeter Limits scheitern.",
     "maxFps": "Max. FPS",
     "maxFpsPlaceholder": "Unbegrenzt",
     "title": "Spiegeln",
@@ -1186,6 +1188,9 @@
     "negotiatedCapabilities_many": "scrcpy {{version}} · {{count}} ausgehandelte Video-Codecs",
     "negotiatedCapabilities_other": "scrcpy {{version}} · {{count}} ausgehandelte Video-Codecs",
     "launchFailed": "Spiegelungsstart fehlgeschlagen",
+    "encoderConstraintRecoveryTitle": "Gemeldete Encoder-Grenzen könnten falsch sein",
+    "encoderConstraintRecoveryBody": "scrcpy ist beim Anwenden der Video-Größenlimits fehlgeschlagen. Dieser geprüfte Versuch behält alle Einstellungen und das Aufnahmeziel bei und ergänzt nur:",
+    "retryWithEncoderConstraintOverride": "Mit Umgehung erneut versuchen",
     "recordingSavedTo": "Aufnahme gespeichert unter {{path}}",
     "staleSessionCleanupFailed": "Das Gerät wechselte nach dem Start von scrcpy. Schließen Sie das getrennte scrcpy-Fenster manuell: {{message}}",
     "sessionRunning": "Spiegelungssitzung läuft",
@@ -1206,6 +1211,10 @@
       "device_disconnected": {
         "title": "Gerät während der Spiegelung getrennt",
         "body": "Verbinden und autorisieren Sie dasselbe Gerät erneut, dann starten Sie eine neue Sitzung."
+      },
+      "encoder_constraint_failed": {
+        "title": "Gerät hat die begrenzte Videogröße abgelehnt",
+        "body": "Der Encoder ist fehlgeschlagen, während scrcpy die gemeldeten Größen- oder Ausrichtungslimits des Geräts angewendet hat."
       },
       "encoder_failed": {
         "title": "Geräte-Video-Encoder fehlgeschlagen",

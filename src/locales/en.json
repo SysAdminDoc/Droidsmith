@@ -1134,6 +1134,8 @@
     "alwaysOnTop": "Always on top",
     "noControl": "View only (no control)",
     "noWindow": "No window (control/record only)",
+    "ignoreEncoderConstraints": "Ignore reported encoder size limits",
+    "ignoreEncoderConstraintsRisk": "Bypasses device-reported size and alignment limits. Use only when correct settings fail because those reported limits are wrong.",
     "maxFps": "Max FPS",
     "maxFpsPlaceholder": "Unlimited",
     "title": "Mirror",
@@ -1186,6 +1188,9 @@
     "negotiatedCapabilities_many": "scrcpy {{version}} · {{count}} negotiated video codecs",
     "negotiatedCapabilities_other": "scrcpy {{version}} · {{count}} negotiated video codecs",
     "launchFailed": "Mirror launch failed",
+    "encoderConstraintRecoveryTitle": "Reported encoder limits may be wrong",
+    "encoderConstraintRecoveryBody": "scrcpy failed while applying video size constraints. This reviewed retry preserves every setting and the recording destination, and adds only:",
+    "retryWithEncoderConstraintOverride": "Retry with override",
     "recordingSavedTo": "Recording saved to {{path}}",
     "staleSessionCleanupFailed": "The device changed after scrcpy launched. Close the detached scrcpy window manually: {{message}}",
     "sessionRunning": "Mirror session running",
@@ -1206,6 +1211,10 @@
       "device_disconnected": {
         "title": "Device disconnected during mirroring",
         "body": "Reconnect and authorize the same device, then start a new session."
+      },
+      "encoder_constraint_failed": {
+        "title": "Device rejected the constrained video size",
+        "body": "The encoder failed while scrcpy applied the device's reported size or alignment limits."
       },
       "encoder_failed": {
         "title": "Device video encoder failed",

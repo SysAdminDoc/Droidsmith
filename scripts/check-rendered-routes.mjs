@@ -946,7 +946,7 @@ async function runDesktopFlow(browser) {
 
   await page.getByRole("button", { name: /Mirror/ }).click();
   await page.getByRole("heading", { name: "Mirror", exact: true }).waitFor();
-  await page.getByText("scrcpy 4.0", { exact: true }).waitFor();
+  await page.getByText("scrcpy 4.1", { exact: true }).waitFor();
   // R-088: the expanded scrcpy flag surface is present.
   await page
     .getByRole("checkbox", { name: "View only (no control)" })
@@ -987,9 +987,32 @@ async function runDesktopFlow(browser) {
   await page.getByText("Mirror session ended", { exact: true }).waitFor();
   await page.getByRole("button", { name: "Launch mirror" }).click();
   await page
-    .getByText("Device video encoder failed", { exact: true })
+    .getByText("Device rejected the constrained video size", { exact: true })
     .waitFor();
   await page.getByText(/MediaCodec encoder failed to initialize/).waitFor();
+  const encoderConstraintRecovery = page.getByText(
+    "Reported encoder limits may be wrong",
+    { exact: true },
+  );
+  await encoderConstraintRecovery.waitFor();
+  await page
+    .getByText("--ignore-video-encoder-constraints", { exact: true })
+    .waitFor();
+  await encoderConstraintRecovery.scrollIntoViewIfNeeded();
+  await assertNoHorizontalOverflow(
+    page,
+    "desktop Mirror encoder-constraint recovery",
+  );
+  await page.screenshot({
+    path: path.join(
+      screenshotDir,
+      "desktop-mirror-encoder-constraint-recovery.png",
+    ),
+    fullPage: false,
+  });
+  await page.getByRole("button", { name: "Retry with override" }).click();
+  await page.getByText("Mirror session running", { exact: true }).waitFor();
+  await page.getByText(/--ignore-video-encoder-constraints/).waitFor();
 
   await page.getByRole("button", { name: "Settings", exact: true }).click();
   await page.getByLabel("Language", { exact: true }).selectOption("ru");
@@ -3716,7 +3739,7 @@ async function installTauriMock(
         if (cmd === "scrcpy_capabilities") {
           return {
             path: "C:/Tools/scrcpy.exe",
-            version: "4.0",
+            version: "4.1",
             available_video_codecs: ["h264", "h265"],
             video_encoders: [
               {
@@ -3739,11 +3762,21 @@ async function installTauriMock(
             supports_camera: true,
             supports_start_app: true,
             supports_no_window: true,
+            supports_ignore_video_encoder_constraints: true,
           };
         }
         if (cmd === "launch_scrcpy") {
+          const reviewedRetry = args.retrySessionId === 301;
+          const invalidInitial =
+            !reviewedRetry &&
+            args.path_grant !== "123e4567-e89b-42d3-a456-426614174009";
+          const invalidRetry =
+            reviewedRetry &&
+            (args.path_grant !== null ||
+              args.request.ignore_video_encoder_constraints !== true);
           if (
-            args.path_grant !== "123e4567-e89b-42d3-a456-426614174009" ||
+            invalidInitial ||
+            invalidRetry ||
             "record_path" in args.request ||
             args.request.video_codec !== "h265" ||
             args.request.video_encoder !== "c2.vendor.hevc.encoder"
@@ -3764,6 +3797,7 @@ async function installTauriMock(
               "--video-encoder=c2.vendor.hevc.encoder",
               "--record",
               "C:/Users/QA/Desktop/droidsmith-recording-2026-07-15.mp4",
+              ...(reviewedRetry ? ["--ignore-video-encoder-constraints"] : []),
             ],
             started_at: "2026-07-15T11:00:00Z",
             state: "running",
@@ -3773,7 +3807,7 @@ async function installTauriMock(
           };
         }
         if (cmd === "scrcpy_session_status") {
-          if (scrcpyLaunches >= 2) {
+          if (scrcpyLaunches === 2) {
             return {
               id: args.session_id,
               serial: "QA123",
@@ -3787,9 +3821,9 @@ async function installTauriMock(
               started_at: "2026-07-15T11:01:00Z",
               state: "exited",
               exit_code: 1,
-              exit_reason: "encoder_failed",
+              exit_reason: "encoder_constraint_failed",
               stderr_tail:
-                "[server] ERROR: MediaCodec encoder failed to initialize",
+                "[server] ERROR: MediaCodec encoder failed to initialize for video size 1920x1080",
             };
           }
           return {

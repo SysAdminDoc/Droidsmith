@@ -1270,6 +1270,8 @@
     "alwaysOnTop": "Siempre visible",
     "noControl": "Solo ver (sin control)",
     "noWindow": "Sin ventana (solo control/grabación)",
+    "ignoreEncoderConstraints": "Ignorar los límites de tamaño informados por el codificador",
+    "ignoreEncoderConstraintsRisk": "Omite los límites de tamaño y alineación informados por el dispositivo. Úsalo solo si una configuración correcta falla porque esos límites son erróneos.",
     "maxFps": "FPS máx.",
     "maxFpsPlaceholder": "Sin límite",
     "bitRate": "Tasa de bits de video",
@@ -1288,6 +1290,10 @@
       "device_disconnected": {
         "body": "Reconecta y autoriza el mismo dispositivo, luego inicia una nueva sesión.",
         "title": "El dispositivo se desconectó durante el espejado"
+      },
+      "encoder_constraint_failed": {
+        "body": "El codificador falló mientras scrcpy aplicaba los límites de tamaño o alineación informados por el dispositivo.",
+        "title": "El dispositivo rechazó el tamaño de video limitado"
       },
       "encoder_failed": {
         "body": "Elige otro codificador reportado o h264, reduce el tamaño máximo y reintenta.",
@@ -1324,6 +1330,9 @@
     "keyboardUhid": "UHID",
     "launch": "Iniciar espejo",
     "launchFailed": "El inicio del espejo falló",
+    "encoderConstraintRecoveryTitle": "Los límites informados del codificador pueden ser erróneos",
+    "encoderConstraintRecoveryBody": "scrcpy falló al aplicar los límites de tamaño de video. Este reintento revisado conserva todos los ajustes y el destino de grabación, y solo añade:",
+    "retryWithEncoderConstraintOverride": "Reintentar con la omisión",
     "launching": "Iniciando…",
     "maxSize": "Tamaño máximo (px)",
     "negotiatedCapabilities_few": "scrcpy {{version}} · {{count}} códecs de video negociados",

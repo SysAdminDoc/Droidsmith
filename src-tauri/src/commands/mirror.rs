@@ -51,6 +51,7 @@ pub async fn launch_scrcpy(
     request: crate::scrcpy::LaunchScrcpyRequest,
     grants: tauri::State<'_, PathGrantStore>,
     path_grant: Option<String>,
+    retry_session_id: Option<u64>,
 ) -> Result<crate::scrcpy::ScrcpySession, CommandError> {
     validate_serial_arg(&request.serial)?;
     if request.target.serial != request.serial {
@@ -101,6 +102,7 @@ pub async fn launch_scrcpy(
         &scrcpy_path,
         request,
         record_path.as_deref(),
+        retry_session_id,
         iso_now(),
         &capabilities,
     )

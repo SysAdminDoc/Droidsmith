@@ -131,7 +131,7 @@
     list_running_services: [["target", "package"], []],
     take_screenshot: [["target", "path_grant"], []],
     scrcpy_capabilities: [["target"], []],
-    launch_scrcpy: [["request"], ["path_grant"]],
+    launch_scrcpy: [["request"], ["path_grant", "retrySessionId"]],
     stop_scrcpy: [["session_id"], []],
     start_gnirehtet: [["target"], []],
     find_gnirehtet_session: [["target"], []],
@@ -420,17 +420,37 @@
         [
           "serial",
           "target",
-          "no_audio",
-          "turn_screen_off",
-          "stay_awake",
-          "show_touches",
-        ],
-        [
           "max_size",
           "bit_rate",
+          "no_audio",
           "keyboard_mode",
           "video_codec",
           "video_encoder",
+          "turn_screen_off",
+          "stay_awake",
+          "show_touches",
+          "flex_display",
+          "keep_active",
+        ],
+        [
+          "max_fps",
+          "fullscreen",
+          "always_on_top",
+          "no_control",
+          "crop",
+          "display_orientation",
+          "screen_off_timeout",
+          "audio_codec",
+          "new_display",
+          "audio_source",
+          "video_source",
+          "camera_facing",
+          "camera_size",
+          "display_ime_policy",
+          "no_vd_destroy_content",
+          "start_app",
+          "no_window",
+          "ignore_video_encoder_constraints",
         ],
         "scrcpy_request",
       );
@@ -441,8 +461,18 @@
         "turn_screen_off",
         "stay_awake",
         "show_touches",
+        "flex_display",
+        "keep_active",
+        "fullscreen",
+        "always_on_top",
+        "no_control",
+        "no_vd_destroy_content",
+        "no_window",
+        "ignore_video_encoder_constraints",
       ]) {
-        if (typeof request[flag] !== "boolean") reject("scrcpy_flag");
+        if (hasOwn(request, flag) && typeof request[flag] !== "boolean") {
+          reject("scrcpy_flag");
+        }
       }
       if (request.serial !== request.target.serial) reject("scrcpy_target");
       if (
@@ -476,7 +506,28 @@
         "stayAwake",
         "showTouches",
       ],
-      [],
+      [
+        "flexDisplay",
+        "keepActive",
+        "maxFps",
+        "fullscreen",
+        "alwaysOnTop",
+        "noControl",
+        "crop",
+        "displayOrientation",
+        "screenOffTimeout",
+        "audioCodec",
+        "newDisplay",
+        "audioSource",
+        "videoSource",
+        "cameraFacing",
+        "cameraSize",
+        "displayImePolicy",
+        "noVdDestroyContent",
+        "startApp",
+        "noWindow",
+        "ignoreVideoEncoderConstraints",
+      ],
       "settings_mirror_preset",
     );
     if (
@@ -515,8 +566,25 @@
       "turnScreenOff",
       "stayAwake",
       "showTouches",
+      "flexDisplay",
+      "keepActive",
+      "fullscreen",
+      "alwaysOnTop",
+      "noControl",
+      "noVdDestroyContent",
+      "noWindow",
+      "ignoreVideoEncoderConstraints",
     ]) {
-      if (typeof preset[key] !== "boolean") reject(`settings_${key}`);
+      if (hasOwn(preset, key) && typeof preset[key] !== "boolean") {
+        reject(`settings_${key}`);
+      }
+    }
+    if (
+      hasOwn(preset, "startApp") &&
+      preset.startApp !== "" &&
+      !/^[A-Za-z0-9_][A-Za-z0-9_.-]{0,254}$/u.test(preset.startApp)
+    ) {
+      reject("settings_start_app");
     }
   }
 
@@ -884,6 +952,15 @@
       ["pair_wireless", "connect_wireless", "launch_scrcpy"].includes(command)
     ) {
       validateRequest(command, payload.request);
+    }
+    if (command === "launch_scrcpy" && payload.retrySessionId != null) {
+      ensureInteger(payload.retrySessionId, "scrcpy_retry_session", 1);
+      if (
+        payload.path_grant != null ||
+        payload.request.ignore_video_encoder_constraints !== true
+      ) {
+        reject("scrcpy_retry_review");
+      }
     }
     if (command === "apply_action" && !isRecord(payload.plan))
       reject("action_plan");

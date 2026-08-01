@@ -119,6 +119,12 @@ pub struct MirrorPreset {
     pub display_ime_policy: String,
     #[serde(default)]
     pub no_vd_destroy_content: bool,
+    #[serde(default)]
+    pub start_app: String,
+    #[serde(default)]
+    pub no_window: bool,
+    #[serde(default)]
+    pub ignore_video_encoder_constraints: bool,
 }
 
 fn default_video_source() -> String {
@@ -170,6 +176,9 @@ impl Default for MirrorPreset {
             camera_size: String::new(),
             display_ime_policy: String::new(),
             no_vd_destroy_content: false,
+            start_app: String::new(),
+            no_window: false,
+            ignore_video_encoder_constraints: false,
         }
     }
 }
@@ -1570,6 +1579,11 @@ fn validate_preset(preset: &MirrorPreset) -> Result<(), SettingsError> {
             "mirror videoEncoder is invalid".to_string(),
         ));
     }
+    if !preset.start_app.is_empty() && !crate::adb::valid_package_name(&preset.start_app) {
+        return Err(SettingsError::Invalid(
+            "mirror startApp is not a valid package name".to_string(),
+        ));
+    }
     // An empty maxFps means "unset"; a set value is 1-3 ASCII digits (fps caps
     // never exceed a few hundred).
     if !preset.max_fps.is_empty() && !valid_numeric_setting(&preset.max_fps, 3) {
@@ -1716,6 +1730,9 @@ fn normalize_legacy_preset(value: LegacyMirrorPreset) -> MirrorPreset {
         camera_size: defaults.camera_size,
         display_ime_policy: defaults.display_ime_policy,
         no_vd_destroy_content: defaults.no_vd_destroy_content,
+        start_app: defaults.start_app,
+        no_window: defaults.no_window,
+        ignore_video_encoder_constraints: defaults.ignore_video_encoder_constraints,
     }
 }
 
@@ -1943,6 +1960,9 @@ mod tests {
         initialize(&dir, LegacySettingsImport::default()).unwrap();
         let preset = MirrorPreset {
             bit_rate: "16M".to_string(),
+            start_app: "com.example.app".to_string(),
+            no_window: true,
+            ignore_video_encoder_constraints: true,
             ..MirrorPreset::default()
         };
         set_mirror_preset(&dir, "device-a", preset.clone()).unwrap();

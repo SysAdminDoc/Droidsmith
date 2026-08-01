@@ -1134,6 +1134,8 @@
     "alwaysOnTop": "始终置顶",
     "noControl": "仅查看（无控制）",
     "noWindow": "无窗口（仅控制/录制）",
+    "ignoreEncoderConstraints": "忽略设备报告的编码器尺寸限制",
+    "ignoreEncoderConstraintsRisk": "绕过设备报告的尺寸和对齐限制。仅当正确设置因设备报告错误而失败时使用。",
     "maxFps": "最大帧率",
     "maxFpsPlaceholder": "不限制",
     "title": "镜像",
@@ -1186,6 +1188,9 @@
     "negotiatedCapabilities_many": "scrcpy {{version}} · {{count}} 个协商的视频编解码器",
     "negotiatedCapabilities_other": "scrcpy {{version}} · {{count}} 个协商的视频编解码器",
     "launchFailed": "镜像启动失败",
+    "encoderConstraintRecoveryTitle": "设备报告的编码器限制可能不正确",
+    "encoderConstraintRecoveryBody": "scrcpy 在应用视频尺寸限制时失败。此审核后重试会保留所有设置和录制目标，仅添加：",
+    "retryWithEncoderConstraintOverride": "使用覆盖选项重试",
     "recordingSavedTo": "录制已保存至 {{path}}",
     "staleSessionCleanupFailed": "scrcpy 启动后设备已更改。请手动关闭已分离的 scrcpy 窗口：{{message}}",
     "sessionRunning": "镜像会话运行中",
@@ -1206,6 +1211,10 @@
       "device_disconnected": {
         "title": "镜像期间设备断开连接",
         "body": "重新连接并授权同一设备，然后启动新会话。"
+      },
+      "encoder_constraint_failed": {
+        "title": "设备拒绝了受限的视频尺寸",
+        "body": "scrcpy 应用设备报告的尺寸或对齐限制时，编码器失败。"
       },
       "encoder_failed": {
         "title": "设备视频编码器失败",

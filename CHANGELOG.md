@@ -16,6 +16,14 @@ each milestone tag.
 
 ### Added
 
+- **Reviewed scrcpy encoder-constraint recovery.** scrcpy 4.1+ capability
+  negotiation now exposes its device-constraint override only after an
+  encoder-size failure or an explicitly saved per-device preset. The retry
+  preserves the exact failed arguments and backend-retained recording
+  destination, adds only `--ignore-video-encoder-constraints`, and never runs
+  automatically. Constraint failures, risk copy, and recovery controls are
+  localized across all five languages; IPC isolation now validates the complete
+  advanced Mirror request and preset contract. (R-118)
 - **Versioned ADB/OEM transcript regression corpus.** Sanitized schema-v1
   fixtures now drive full fake-ADB workflows for the supported Platform Tools
   floor, current stable, and canary across AOSP, Samsung/One UI, and

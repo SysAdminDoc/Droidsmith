@@ -44,6 +44,8 @@ export type MirrorPreset = {
   startApp: string;
   /** scrcpy `--no-window`: control/record without a mirror window. */
   noWindow: boolean;
+  /** Explicit scrcpy 4.1+ workaround for incorrect device encoder limits. */
+  ignoreVideoEncoderConstraints: boolean;
 };
 
 export type DisplayImePolicy = "" | "local" | "hide" | "fallback";
@@ -87,6 +89,7 @@ export const DEFAULT_MIRROR_PRESET: MirrorPreset = {
   noVdDestroyContent: false,
   startApp: "",
   noWindow: false,
+  ignoreVideoEncoderConstraints: false,
 };
 
 /**
@@ -227,6 +230,10 @@ export function normalizePreset(value: Partial<MirrorPreset>): MirrorPreset {
       typeof value.noWindow === "boolean"
         ? value.noWindow
         : DEFAULT_MIRROR_PRESET.noWindow,
+    ignoreVideoEncoderConstraints:
+      typeof value.ignoreVideoEncoderConstraints === "boolean"
+        ? value.ignoreVideoEncoderConstraints
+        : DEFAULT_MIRROR_PRESET.ignoreVideoEncoderConstraints,
   };
 }
 

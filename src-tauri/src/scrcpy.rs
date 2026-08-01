@@ -72,6 +72,11 @@ pub struct LaunchScrcpyRequest {
     /// (scrcpy 3.2+).
     #[serde(default)]
     pub no_window: bool,
+    /// `--ignore-video-encoder-constraints` bypasses device-reported size and
+    /// alignment constraints (scrcpy 4.1+). It is never inferred or enabled by
+    /// the backend; the renderer must submit an explicit reviewed request.
+    #[serde(default)]
+    pub ignore_video_encoder_constraints: bool,
 }
 
 #[derive(specta::Type, Debug, Clone, Serialize, PartialEq, Eq)]
@@ -109,6 +114,8 @@ pub struct ScrcpyCapabilities {
     /// `--no-window` (control/record without a mirror window) landed in
     /// scrcpy 3.2.
     pub supports_no_window: bool,
+    /// `--ignore-video-encoder-constraints` landed in scrcpy 4.1.
+    pub supports_ignore_video_encoder_constraints: bool,
 }
 
 #[derive(specta::Type, Debug, Clone, Serialize, PartialEq, Eq)]
@@ -138,6 +145,7 @@ pub enum ScrcpyExitReason {
     UserStopped,
     UnsupportedOption,
     DeviceDisconnected,
+    EncoderConstraintFailed,
     EncoderFailed,
     PermissionDenied,
     AdbFailed,
@@ -293,6 +301,7 @@ pub fn capabilities(
         supports_no_vd_destroy_content: version_gte(&version, 3, 1),
         supports_start_app: version_gte(&version, 3, 0),
         supports_no_window: version_gte(&version, 3, 2),
+        supports_ignore_video_encoder_constraints: version_gte(&version, 4, 1),
         version,
         available_video_codecs,
         video_encoders,
@@ -316,10 +325,36 @@ pub fn launch(
     scrcpy_path: &Path,
     request: LaunchScrcpyRequest,
     record_path: Option<&Path>,
+    retry_session_id: Option<u64>,
     started_at: String,
     capabilities: &ScrcpyCapabilities,
 ) -> Result<ScrcpySession, String> {
-    let args = build_args(&request, record_path, capabilities)?;
+    if retry_session_id.is_some() && record_path.is_some() {
+        return Err(
+            "a reviewed scrcpy retry cannot replace its backend-retained recording destination"
+                .to_string(),
+        );
+    }
+    let retry = retry_session_id
+        .map(|session_id| encoder_constraint_retry_context(session_id, &request.serial))
+        .transpose()?;
+    if retry.is_some() && !request.ignore_video_encoder_constraints {
+        return Err(
+            "a reviewed encoder-constraint retry requires the explicit override".to_string(),
+        );
+    }
+    let effective_record_path = retry
+        .as_ref()
+        .and_then(|context| context.record_path.as_deref())
+        .or(record_path);
+    let args = build_args(&request, effective_record_path, capabilities)?;
+    if let Some(context) = retry.as_ref() {
+        if !retry_settings_match(&context.args, &args) {
+            return Err(
+                "reviewed scrcpy retry settings differ from the failed session".to_string(),
+            );
+        }
+    }
     let mut command = Command::new(scrcpy_path);
     command
         .args(&args)
@@ -357,11 +392,60 @@ pub fn launch(
             session: session.clone(),
             child,
             stderr,
-            record_path: record_path.map(Path::to_path_buf),
+            record_path: effective_record_path.map(Path::to_path_buf),
             recording_claimed: false,
         },
     );
     Ok(session)
+}
+
+fn retry_settings_match(source_args: &[String], retry_args: &[String]) -> bool {
+    retry_args
+        .iter()
+        .filter(|arg| arg.as_str() != "--ignore-video-encoder-constraints")
+        .eq(source_args.iter())
+}
+
+#[derive(Debug)]
+struct EncoderConstraintRetryContext {
+    args: Vec<String>,
+    record_path: Option<PathBuf>,
+}
+
+fn encoder_constraint_retry_context(
+    session_id: u64,
+    serial: &str,
+) -> Result<EncoderConstraintRetryContext, String> {
+    let mut guard = sessions()
+        .lock()
+        .map_err(|_| "scrcpy session supervisor lock poisoned".to_string())?;
+    let managed = guard
+        .get_mut(&session_id)
+        .ok_or_else(|| format!("scrcpy retry source session {session_id} is not tracked"))?;
+    refresh_status(managed)?;
+    if managed.session.state != ScrcpySessionState::Exited
+        || managed.session.exit_reason != Some(ScrcpyExitReason::EncoderConstraintFailed)
+    {
+        return Err(
+            "scrcpy retry source did not end with a recognized encoder-size constraint failure"
+                .to_string(),
+        );
+    }
+    if managed.session.serial != serial {
+        return Err("scrcpy retry source belongs to a different device".to_string());
+    }
+    if managed
+        .session
+        .args
+        .iter()
+        .any(|arg| arg == "--ignore-video-encoder-constraints")
+    {
+        return Err("scrcpy retry source already used the encoder-constraint override".to_string());
+    }
+    Ok(EncoderConstraintRetryContext {
+        args: managed.session.args.clone(),
+        record_path: managed.record_path.clone(),
+    })
 }
 
 pub fn status(session_id: u64) -> Result<ScrcpySession, String> {
@@ -879,6 +963,14 @@ pub fn build_args(
         }
         args.push("--no-vd-destroy-content".to_string());
     }
+    if request.ignore_video_encoder_constraints {
+        if !capabilities.supports_ignore_video_encoder_constraints {
+            return Err(
+                "ignoring video encoder constraints requires scrcpy 4.1 or later".to_string(),
+            );
+        }
+        args.push("--ignore-video-encoder-constraints".to_string());
+    }
     Ok(args)
 }
 
@@ -1017,6 +1109,8 @@ fn classify_exit_reason(code: Option<i32>, stderr: &str) -> ScrcpyExitReason {
         || lower.contains("permission denied")
     {
         ScrcpyExitReason::PermissionDenied
+    } else if is_encoder_constraint_failure(&lower) {
+        ScrcpyExitReason::EncoderConstraintFailed
     } else if lower.contains("mediacodec")
         || (lower.contains("encoder") && (lower.contains("error") || lower.contains("failed")))
     {
@@ -1028,6 +1122,24 @@ fn classify_exit_reason(code: Option<i32>, stderr: &str) -> ScrcpyExitReason {
     } else {
         ScrcpyExitReason::ProcessExited
     }
+}
+
+fn is_encoder_constraint_failure(stderr: &str) -> bool {
+    let encoder_failure = stderr.contains("mediacodec")
+        || stderr.contains("video encoder")
+        || stderr.contains("encoder failed")
+        || stderr.contains("encoding error");
+    let size_context = [
+        "alignment",
+        "constraint",
+        "height",
+        "resolution",
+        "size",
+        "width",
+    ]
+    .iter()
+    .any(|marker| stderr.contains(marker));
+    encoder_failure && size_context
 }
 
 fn version_gte(version: &str, major: u32, minor: u32) -> bool {
@@ -1056,8 +1168,8 @@ fn probe_failure_text(output: &ProbeOutput) -> String {
 mod tests {
     use super::{
         build_args, classify_exit_reason, parse_tool_video_codecs, parse_version,
-        parse_video_encoders, LaunchScrcpyRequest, ScrcpyCapabilities, ScrcpyExitReason,
-        ScrcpyVideoEncoder,
+        parse_video_encoders, retry_settings_match, LaunchScrcpyRequest, ScrcpyCapabilities,
+        ScrcpyExitReason, ScrcpyVideoEncoder,
     };
     use crate::adb::DeviceTarget;
     use std::path::Path;
@@ -1104,6 +1216,7 @@ mod tests {
             no_vd_destroy_content: false,
             start_app: None,
             no_window: false,
+            ignore_video_encoder_constraints: false,
         }
     }
 
@@ -1128,6 +1241,7 @@ mod tests {
             supports_no_vd_destroy_content: true,
             supports_start_app: true,
             supports_no_window: true,
+            supports_ignore_video_encoder_constraints: false,
         }
     }
 
@@ -1202,6 +1316,13 @@ mod tests {
     #[test]
     fn classifies_actionable_exit_reasons_from_bounded_stderr() {
         assert_eq!(
+            classify_exit_reason(
+                Some(1),
+                "[server] ERROR: MediaCodec rejected video encoder size 2448x1072 (alignment 16)"
+            ),
+            ScrcpyExitReason::EncoderConstraintFailed
+        );
+        assert_eq!(
             classify_exit_reason(Some(1), "[server] ERROR: MediaCodec encoder failed"),
             ScrcpyExitReason::EncoderFailed
         );
@@ -1213,6 +1334,39 @@ mod tests {
             classify_exit_reason(None, "terminated"),
             ScrcpyExitReason::Signaled
         );
+    }
+
+    #[test]
+    fn emits_and_gates_reviewed_encoder_constraint_override() {
+        let mut req = request();
+        req.ignore_video_encoder_constraints = true;
+        let mut current = capabilities();
+        current.version = "4.1".to_string();
+        current.supports_ignore_video_encoder_constraints = true;
+        let args = build_args(&req, None, &current).unwrap();
+        assert_eq!(
+            args.last().map(String::as_str),
+            Some("--ignore-video-encoder-constraints")
+        );
+
+        let error = build_args(&req, None, &capabilities()).unwrap_err();
+        assert!(error.contains("scrcpy 4.1"));
+    }
+
+    #[test]
+    fn reviewed_retry_changes_only_the_constraint_flag() {
+        let source = vec![
+            "-s".to_string(),
+            "DEVICE123".to_string(),
+            "--max-size".to_string(),
+            "1280".to_string(),
+        ];
+        let mut reviewed = source.clone();
+        reviewed.push("--ignore-video-encoder-constraints".to_string());
+        assert!(retry_settings_match(&source, &reviewed));
+
+        reviewed.insert(2, "--max-fps=60".to_string());
+        assert!(!retry_settings_match(&source, &reviewed));
     }
 
     #[test]

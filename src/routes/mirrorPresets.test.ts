@@ -42,6 +42,19 @@ describe("mirror presets", () => {
     ).toMatchObject({ videoCodec: "h264", videoEncoder: "" });
   });
 
+  it("keeps the encoder-constraint override off unless explicitly persisted", () => {
+    expect(normalizePreset({}).ignoreVideoEncoderConstraints).toBe(false);
+    expect(
+      normalizePreset({ ignoreVideoEncoderConstraints: true })
+        .ignoreVideoEncoderConstraints,
+    ).toBe(true);
+    expect(
+      normalizePreset({
+        ignoreVideoEncoderConstraints: "yes" as never,
+      }).ignoreVideoEncoderConstraints,
+    ).toBe(false);
+  });
+
   it("drops legacy renderer-authored recording paths", () => {
     const migrated = normalizePreset({
       recording: true,

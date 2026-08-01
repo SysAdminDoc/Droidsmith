@@ -466,6 +466,26 @@ test("accepts only a one-shot grant for optional scrcpy recording", () => {
     turn_screen_off: false,
     stay_awake: true,
     show_touches: false,
+    flex_display: false,
+    keep_active: false,
+    max_fps: 60,
+    fullscreen: false,
+    always_on_top: false,
+    no_control: false,
+    crop: null,
+    display_orientation: null,
+    screen_off_timeout: null,
+    audio_codec: null,
+    new_display: null,
+    audio_source: null,
+    video_source: null,
+    camera_facing: null,
+    camera_size: null,
+    display_ime_policy: null,
+    no_vd_destroy_content: false,
+    start_app: "com.example.app",
+    no_window: false,
+    ignore_video_encoder_constraints: false,
   };
   const valid = message("launch_scrcpy", { request, path_grant: pathGrant });
   assert.equal(hook(valid), valid);
@@ -481,6 +501,100 @@ test("accepts only a one-shot grant for optional scrcpy recording", () => {
     hook(
       message("launch_scrcpy", {
         request: { ...request, record_path: "C:/arbitrary/output.mp4" },
+      }),
+    ).cmd,
+    blockedCommand,
+  );
+});
+
+test("requires an explicit isolated scrcpy encoder-constraint retry", () => {
+  const request = {
+    serial: target.serial,
+    target,
+    max_size: 1280,
+    bit_rate: "8M",
+    no_audio: false,
+    keyboard_mode: "uhid",
+    video_codec: "h264",
+    video_encoder: null,
+    turn_screen_off: false,
+    stay_awake: true,
+    show_touches: false,
+    flex_display: false,
+    keep_active: false,
+    ignore_video_encoder_constraints: true,
+  };
+  const reviewed = message("launch_scrcpy", {
+    request,
+    path_grant: null,
+    retrySessionId: 7,
+  });
+  assert.equal(hook(reviewed), reviewed);
+  assert.equal(
+    hook(
+      message("launch_scrcpy", {
+        request: { ...request, ignore_video_encoder_constraints: false },
+        path_grant: null,
+        retrySessionId: 7,
+      }),
+    ).cmd,
+    blockedCommand,
+  );
+  assert.equal(
+    hook(
+      message("launch_scrcpy", {
+        request,
+        path_grant: pathGrant,
+        retrySessionId: 7,
+      }),
+    ).cmd,
+    blockedCommand,
+  );
+});
+
+test("accepts the complete persisted mirror preset contract", () => {
+  const preset = {
+    maxSize: "1280",
+    bitRate: "8M",
+    noAudio: false,
+    recording: false,
+    keyboardMode: "uhid",
+    videoCodec: "h264",
+    videoEncoder: "",
+    turnScreenOff: false,
+    stayAwake: true,
+    showTouches: false,
+    flexDisplay: false,
+    keepActive: false,
+    maxFps: "60",
+    fullscreen: false,
+    alwaysOnTop: false,
+    noControl: false,
+    crop: "",
+    displayOrientation: "",
+    screenOffTimeout: "",
+    audioCodec: "default",
+    newDisplay: "",
+    audioSource: "output",
+    videoSource: "display",
+    cameraFacing: "back",
+    cameraSize: "",
+    displayImePolicy: "",
+    noVdDestroyContent: false,
+    startApp: "com.example.app",
+    noWindow: false,
+    ignoreVideoEncoderConstraints: true,
+  };
+  const valid = message("set_settings_mirror_preset", {
+    deviceIdentity: target.serial,
+    preset,
+  });
+  assert.equal(hook(valid), valid);
+  assert.equal(
+    hook(
+      message("set_settings_mirror_preset", {
+        deviceIdentity: target.serial,
+        preset: { ...preset, startApp: "--no-window" },
       }),
     ).cmd,
     blockedCommand,

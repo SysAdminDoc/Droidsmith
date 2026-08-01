@@ -970,6 +970,7 @@ export async function callScrcpyCapabilities(
 export async function callLaunchScrcpy(
   opts: LaunchScrcpyOptions,
   pathGrant?: string,
+  retrySessionId?: number,
 ): Promise<ScrcpySession> {
   const request: LaunchScrcpyRequest = {
     ...opts,
@@ -979,7 +980,11 @@ export async function callLaunchScrcpy(
     video_codec: opts.video_codec ?? null,
     video_encoder: opts.video_encoder ?? null,
   };
-  return commands.launchScrcpy(request, pathGrant ?? null);
+  return commands.launchScrcpy(
+    request,
+    pathGrant ?? null,
+    retrySessionId ?? null,
+  );
 }
 
 export async function callScrcpySessionStatus(

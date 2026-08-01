@@ -839,10 +839,12 @@ export const commands = {
   async launchScrcpy(
     request: LaunchScrcpyRequest,
     pathGrant: string | null,
+    retrySessionId: number | null,
   ): Promise<ScrcpySession> {
     return await TAURI_INVOKE("launch_scrcpy", {
       request,
       path_grant: pathGrant,
+      retrySessionId,
     });
   },
   async scrcpySessionStatus(sessionId: number): Promise<ScrcpySession> {
@@ -1950,6 +1952,12 @@ export type LaunchScrcpyRequest = {
    * (scrcpy 3.2+).
    */
   no_window?: boolean;
+  /**
+   * `--ignore-video-encoder-constraints` bypasses device-reported size and
+   * alignment constraints (scrcpy 4.1+). It is never inferred or enabled by
+   * the backend; the renderer must submit an explicit reviewed request.
+   */
+  ignore_video_encoder_constraints?: boolean;
 };
 export type LayoutAuditFinding = {
   id: string;
@@ -2094,6 +2102,9 @@ export type MirrorPreset = {
   cameraSize?: string;
   displayImePolicy?: string;
   noVdDestroyContent?: boolean;
+  startApp?: string;
+  noWindow?: boolean;
+  ignoreVideoEncoderConstraints?: boolean;
 };
 export type Mitigation =
   /**
@@ -2641,11 +2652,16 @@ export type ScrcpyCapabilities = {
    * scrcpy 3.2.
    */
   supports_no_window: boolean;
+  /**
+   * `--ignore-video-encoder-constraints` landed in scrcpy 4.1.
+   */
+  supports_ignore_video_encoder_constraints: boolean;
 };
 export type ScrcpyExitReason =
   | "user_stopped"
   | "unsupported_option"
   | "device_disconnected"
+  | "encoder_constraint_failed"
   | "encoder_failed"
   | "permission_denied"
   | "adb_failed"

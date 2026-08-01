@@ -35,6 +35,10 @@ import {
   type KeyboardMode,
   type MirrorPreset,
 } from "./mirrorPresets";
+import {
+  canRetryEncoderConstraints,
+  IGNORE_ENCODER_CONSTRAINTS_FLAG,
+} from "./mirrorRecovery";
 
 import {
   Badge,
@@ -319,100 +323,114 @@ export default function MirrorRoute() {
     }
   }, [presetOperation, selectedTarget, t]);
 
-  const launchMirror = useCallback(async () => {
-    if (
-      !selectedTarget ||
-      !authorizedTarget ||
-      scrcpyState.kind !== "found" ||
-      capabilityState.kind !== "ready"
-    )
-      return;
-    const lease = sessionOperation.begin();
-    setSession({ kind: "launching" });
-    try {
-      const recordingGrant = preset.recording
-        ? await callSelectHostPath(
-            "scrcpy_record_save",
-            `droidsmith-recording-${new Date().toISOString().slice(0, 10)}.mp4`,
-          )
-        : null;
-      if (!lease.isCurrent()) return;
-      if (preset.recording && !recordingGrant) {
-        setSession({ kind: "idle" });
+  const launchMirror = useCallback(
+    async (retrySessionId?: number) => {
+      if (
+        !selectedTarget ||
+        !authorizedTarget ||
+        scrcpyState.kind !== "found" ||
+        capabilityState.kind !== "ready"
+      )
         return;
-      }
-      setRecordingPath(recordingGrant?.local_path ?? null);
-      const next = await callLaunchScrcpy(
-        {
-          serial: selectedTarget.serial,
-          target: authorizedTarget,
-          max_size: parsePositiveInt(preset.maxSize),
-          bit_rate: preset.bitRate.trim() || null,
-          no_audio: preset.noAudio,
-          keyboard_mode: preset.keyboardMode,
-          video_codec: preset.videoCodec,
-          video_encoder: preset.videoEncoder || null,
-          turn_screen_off: preset.turnScreenOff,
-          stay_awake: preset.stayAwake,
-          show_touches: preset.showTouches,
-          flex_display: preset.flexDisplay,
-          keep_active: preset.keepActive,
-          max_fps: parsePositiveInt(preset.maxFps),
-          fullscreen: preset.fullscreen,
-          always_on_top: preset.alwaysOnTop,
-          no_control: preset.noControl,
-          crop: preset.crop.trim() || null,
-          display_orientation: preset.displayOrientation || null,
-          screen_off_timeout: parsePositiveInt(preset.screenOffTimeout),
-          audio_codec:
-            preset.audioCodec === "default" ? null : preset.audioCodec,
-          new_display: preset.newDisplay.trim() || null,
-          audio_source:
-            preset.audioSource === "output" ? null : preset.audioSource,
-          video_source: preset.videoSource === "camera" ? "camera" : null,
-          camera_facing:
-            preset.videoSource === "camera" ? preset.cameraFacing : null,
-          camera_size:
-            preset.videoSource === "camera" && preset.cameraSize.trim()
-              ? preset.cameraSize.trim()
-              : null,
-          display_ime_policy: preset.displayImePolicy || null,
-          no_vd_destroy_content: preset.noVdDestroyContent,
-          start_app: preset.startApp.trim() || null,
-          no_window: preset.noWindow,
-        },
-        recordingGrant?.id,
-      );
-      if (!lease.isCurrent()) {
-        // The backend validated and launched the original immutable target,
-        // but that session no longer belongs to the visible selection. Stop it
-        // immediately so a late response cannot leave an untracked window or
-        // recording running for the previous device.
-        try {
-          await callStopScrcpy(next.id);
-        } catch {
-          // The visible target owns a different lifecycle; never surface a
-          // stale cleanup failure over its session state.
+      const lease = sessionOperation.begin();
+      setSession({ kind: "launching" });
+      try {
+        const recordingGrant =
+          preset.recording && retrySessionId === undefined
+            ? await callSelectHostPath(
+                "scrcpy_record_save",
+                `droidsmith-recording-${new Date().toISOString().slice(0, 10)}.mp4`,
+              )
+            : null;
+        if (!lease.isCurrent()) return;
+        if (
+          retrySessionId === undefined &&
+          preset.recording &&
+          !recordingGrant
+        ) {
+          setSession({ kind: "idle" });
+          return;
         }
-        return;
+        if (retrySessionId === undefined) {
+          setRecordingPath(recordingGrant?.local_path ?? null);
+        }
+        const next = await callLaunchScrcpy(
+          {
+            serial: selectedTarget.serial,
+            target: authorizedTarget,
+            max_size: parsePositiveInt(preset.maxSize),
+            bit_rate: preset.bitRate.trim() || null,
+            no_audio: preset.noAudio,
+            keyboard_mode: preset.keyboardMode,
+            video_codec: preset.videoCodec,
+            video_encoder: preset.videoEncoder || null,
+            turn_screen_off: preset.turnScreenOff,
+            stay_awake: preset.stayAwake,
+            show_touches: preset.showTouches,
+            flex_display: preset.flexDisplay,
+            keep_active: preset.keepActive,
+            max_fps: parsePositiveInt(preset.maxFps),
+            fullscreen: preset.fullscreen,
+            always_on_top: preset.alwaysOnTop,
+            no_control: preset.noControl,
+            crop: preset.crop.trim() || null,
+            display_orientation: preset.displayOrientation || null,
+            screen_off_timeout: parsePositiveInt(preset.screenOffTimeout),
+            audio_codec:
+              preset.audioCodec === "default" ? null : preset.audioCodec,
+            new_display: preset.newDisplay.trim() || null,
+            audio_source:
+              preset.audioSource === "output" ? null : preset.audioSource,
+            video_source: preset.videoSource === "camera" ? "camera" : null,
+            camera_facing:
+              preset.videoSource === "camera" ? preset.cameraFacing : null,
+            camera_size:
+              preset.videoSource === "camera" && preset.cameraSize.trim()
+                ? preset.cameraSize.trim()
+                : null,
+            display_ime_policy: preset.displayImePolicy || null,
+            no_vd_destroy_content: preset.noVdDestroyContent,
+            start_app: preset.startApp.trim() || null,
+            no_window: preset.noWindow,
+            ignore_video_encoder_constraints:
+              retrySessionId !== undefined ||
+              preset.ignoreVideoEncoderConstraints,
+          },
+          recordingGrant?.id,
+          retrySessionId,
+        );
+        if (!lease.isCurrent()) {
+          // The backend validated and launched the original immutable target,
+          // but that session no longer belongs to the visible selection. Stop it
+          // immediately so a late response cannot leave an untracked window or
+          // recording running for the previous device.
+          try {
+            await callStopScrcpy(next.id);
+          } catch {
+            // The visible target owns a different lifecycle; never surface a
+            // stale cleanup failure over its session state.
+          }
+          return;
+        }
+        lease.commit(() => setSession({ kind: "running", session: next }));
+      } catch (e) {
+        lease.commit(() =>
+          setSession({
+            kind: "error",
+            message: errorMessage(e),
+          }),
+        );
       }
-      lease.commit(() => setSession({ kind: "running", session: next }));
-    } catch (e) {
-      lease.commit(() =>
-        setSession({
-          kind: "error",
-          message: errorMessage(e),
-        }),
-      );
-    }
-  }, [
-    authorizedTarget,
-    capabilityState.kind,
-    selectedTarget,
-    scrcpyState,
-    preset,
-    sessionOperation,
-  ]);
+    },
+    [
+      authorizedTarget,
+      capabilityState.kind,
+      selectedTarget,
+      scrcpyState,
+      preset,
+      sessionOperation,
+    ],
+  );
 
   const stopMirror = useCallback(async () => {
     if (session.kind !== "running") return;
@@ -1169,7 +1187,30 @@ export default function MirrorRoute() {
                         label={t("mirror.noWindow")}
                       />
                     )}
+                  {capabilityState.kind === "ready" &&
+                    capabilityState.value
+                      .supports_ignore_video_encoder_constraints && (
+                      <Toggle
+                        checked={preset.ignoreVideoEncoderConstraints}
+                        onChange={(checked) =>
+                          setPreset((previous) => ({
+                            ...previous,
+                            ignoreVideoEncoderConstraints: checked,
+                          }))
+                        }
+                        label={t("mirror.ignoreEncoderConstraints")}
+                      />
+                    )}
                 </div>
+
+                {preset.ignoreVideoEncoderConstraints && (
+                  <p
+                    className="mt-3 text-sm leading-5 text-amber-100"
+                    role="status"
+                  >
+                    {t("mirror.ignoreEncoderConstraintsRisk")}
+                  </p>
+                )}
 
                 {capabilityState.kind === "ready" &&
                   capabilityState.value.supports_display_ime_policy && (
@@ -1259,6 +1300,31 @@ export default function MirrorRoute() {
                 }
               />
             )}
+
+            {session.kind === "ended" &&
+              capabilityState.kind === "ready" &&
+              canRetryEncoderConstraints(
+                session.session,
+                capabilityState.value,
+              ) && (
+                <StatePanel
+                  title={t("mirror.encoderConstraintRecoveryTitle")}
+                  tone="warning"
+                  actions={
+                    <Button
+                      type="button"
+                      onClick={() => void launchMirror(session.session.id)}
+                    >
+                      {t("mirror.retryWithEncoderConstraintOverride")}
+                    </Button>
+                  }
+                >
+                  <p>{t("mirror.encoderConstraintRecoveryBody")}</p>
+                  <code className="mt-2 block font-mono text-xs text-amber-100">
+                    {IGNORE_ENCODER_CONSTRAINTS_FLAG}
+                  </code>
+                </StatePanel>
+              )}
 
             {session.kind === "ended" && recordingPath && (
               <div className="flex flex-wrap items-center gap-3">
