@@ -1192,6 +1192,10 @@
     "probingCapabilitiesBody": "Droidsmith 正在读取 scrcpy 版本和所选设备报告的视频编码器，然后启用启动。",
     "capabilityProbeFailed": "scrcpy 能力检查失败",
     "capabilityProbeLimited": "编码器发现受限",
+    "security": {
+      "title": "主机风险：此 scrcpy 版本存在已知漏洞",
+      "body": "scrcpy {{version}} 受 {{advisories}} 影响，这是一个内存安全缺陷，恶意或已被入侵的设备可借助镜像连接攻击这台计算机。请将 PATH 中的 scrcpy 更新到 {{floor}} 或更高版本。若继续，Droidsmith 仍会启动它。"
+    },
     "negotiatedCapabilities_one": "scrcpy {{version}} · {{count}} 个协商的视频编解码器",
     "negotiatedCapabilities_few": "scrcpy {{version}} · {{count}} 个协商的视频编解码器",
     "negotiatedCapabilities_many": "scrcpy {{version}} · {{count}} 个协商的视频编解码器",

@@ -972,6 +972,12 @@ async function runDesktopFlow(browser) {
 
   await page.getByRole("button", { name: /Mirror/ }).click();
   await page.getByRole("heading", { name: "Mirror", exact: true }).waitFor();
+  // R-121: a supported scrcpy must not raise the host-risk advisory.
+  if (await page.getByText("Host risk").first().isVisible()) {
+    throw new Error(
+      "Mirror raised the scrcpy host-risk advisory for a supported version",
+    );
+  }
   await page.getByText("scrcpy 4.1", { exact: true }).waitFor();
   // R-088: the expanded scrcpy flag surface is present.
   await page
@@ -3778,6 +3784,22 @@ async function installTauriMock(
           return {
             path: "C:/Tools/scrcpy.exe",
             version: "4.1",
+            // 4.1 is above the CVE-2025-34449 floor, so the host-risk panel
+            // must stay hidden here.
+            security: {
+              status: "supported",
+              advisories: [],
+              security_floor_version: "3.3.4",
+              source_url: null,
+            },
+            // 4.1 is above the CVE-2025-34449 floor, so the host-risk panel
+            // must stay hidden on the happy path.
+            security: {
+              status: "supported",
+              advisories: [],
+              security_floor_version: "3.3.4",
+              source_url: null,
+            },
             available_video_codecs: ["h264", "h265"],
             video_encoders: [
               {

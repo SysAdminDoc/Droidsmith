@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "reviewedOn": "2026-07-31",
+  "securityFloorVersion": "3.3.4",
+  "sourceUrl": "https://nvd.nist.gov/vuln/detail/CVE-2025-34449",
+  "rationale": "scrcpy 3.3.4 fixes CVE-2025-34449, a global buffer overflow in sc_device_msg_deserialize reachable from device-controlled UHID_OUTPUT messages. The attack direction is device-to-host, which is exactly Droidsmith's threat model when it supervises a host scrcpy binary against an untrusted device. scrcpy's own release notes describe the change only as \"Fix UHID_OUTPUT message parsing\", the project publishes no GitHub security advisory, and NVD does not index it under the keyword scrcpy, so no dependency scanner will surface it and the floor has to be tracked here by hand.",
+  "advisories": [
+    {
+      "id": "CVE-2025-34449",
+      "belowVersion": "3.3.4",
+      "summary": "Global buffer overflow in sc_device_msg_deserialize lets a malicious or compromised device corrupt memory in the desktop host.",
+      "sourceUrl": "https://nvd.nist.gov/vuln/detail/CVE-2025-34449"
+    }
+  ]
+}

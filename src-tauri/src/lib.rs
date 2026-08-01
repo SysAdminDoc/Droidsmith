@@ -33,6 +33,7 @@ pub mod quirks;
 pub mod recovery_baseline;
 mod remote_files;
 mod scrcpy;
+mod scrcpy_policy;
 pub mod settings;
 mod support_bundle;
 pub mod time;

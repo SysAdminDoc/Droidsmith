@@ -586,6 +586,29 @@ export default function MirrorRoute() {
                 </StatePanel>
               )}
 
+            {/* Advisory only: a known-vulnerable scrcpy is never blocked from
+                launching, but the host risk is stated before the user points it
+                at a device. */}
+            {capabilityState.kind === "ready" &&
+              capabilityState.value.security.status === "known_vulnerable" && (
+                <StatePanel title={t("mirror.security.title")} tone="warning">
+                  <p>
+                    {t("mirror.security.body", {
+                      version: capabilityState.value.version,
+                      advisories:
+                        capabilityState.value.security.advisories.join(", "),
+                      floor:
+                        capabilityState.value.security.security_floor_version,
+                    })}
+                  </p>
+                  {capabilityState.value.security.source_url && (
+                    <p className="mt-2 break-all font-mono text-xs text-anvil-300">
+                      {capabilityState.value.security.source_url}
+                    </p>
+                  )}
+                </StatePanel>
+              )}
+
             {selectedTarget && (
               <Card className="p-4">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">

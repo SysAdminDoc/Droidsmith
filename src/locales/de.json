@@ -1192,6 +1192,10 @@
     "probingCapabilitiesBody": "Droidsmith liest die scrcpy-Version und die gemeldeten Video-Encoder des ausgewählten Geräts, bevor der Start aktiviert wird.",
     "capabilityProbeFailed": "scrcpy-Fähigkeitsprüfung fehlgeschlagen",
     "capabilityProbeLimited": "Encoder-Erkennung ist eingeschränkt",
+    "security": {
+      "title": "Host-Risiko: Diese scrcpy-Version ist bekannt verwundbar",
+      "body": "scrcpy {{version}} ist von {{advisories}} betroffen – einer Speichersicherheitslücke, über die ein bösartiges oder kompromittiertes Gerät diesen Computer über die Mirror-Verbindung angreifen kann. Aktualisieren Sie das scrcpy in Ihrem PATH auf {{floor}} oder neuer. Droidsmith startet es dennoch, wenn Sie fortfahren."
+    },
     "negotiatedCapabilities_one": "scrcpy {{version}} · {{count}} ausgehandelter Video-Codec",
     "negotiatedCapabilities_few": "scrcpy {{version}} · {{count}} ausgehandelte Video-Codecs",
     "negotiatedCapabilities_many": "scrcpy {{version}} · {{count}} ausgehandelte Video-Codecs",

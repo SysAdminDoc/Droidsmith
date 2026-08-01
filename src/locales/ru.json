@@ -1192,6 +1192,10 @@
     "probingCapabilitiesBody": "Перед запуском Droidsmith определяет версию scrcpy и видеокодировщики, заявленные выбранным устройством.",
     "capabilityProbeFailed": "Не удалось проверить возможности scrcpy",
     "capabilityProbeLimited": "Поиск кодировщиков ограничен",
+    "security": {
+      "title": "Риск для хоста: эта версия scrcpy содержит известную уязвимость",
+      "body": "scrcpy {{version}} подвержена {{advisories}} — уязвимости безопасности памяти, через которую вредоносное или скомпрометированное устройство может атаковать этот компьютер по каналу зеркалирования. Обновите scrcpy в вашем PATH до {{floor}} или новее. Droidsmith всё равно запустит его, если вы продолжите."
+    },
     "negotiatedCapabilities_one": "scrcpy {{version}} · согласован {{count}} видеокодек",
     "negotiatedCapabilities_few": "scrcpy {{version}} · согласовано {{count}} видеокодека",
     "negotiatedCapabilities_many": "scrcpy {{version}} · согласовано видеокодеков: {{count}}",

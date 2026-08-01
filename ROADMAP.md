@@ -55,13 +55,6 @@ R-119 / IMP-95.
   Acceptance: persisted identity mixes the build fingerprint (or an equivalent stable device attribute) with the serial; two fake devices sharing a serial but differing in fingerprint get distinct journals, settings scopes, and baseline identities; existing single-device data migrates in place with no loss and the legacy path stays readable; a blank serial does not produce a shared or empty-named store.
   Complexity: M
 
-- [ ] P1 — R-121: Add a scrcpy known-vulnerable version policy
-  Why: Droidsmith supervises a host scrcpy binary, and scrcpy ≤3.3.3 has a memory-safety bug in which a malicious *device* attacks the desktop *host* — exactly Droidsmith's threat model. No scanner will ever flag it.
-  Evidence: CVE-2025-34449 (2025-12-18), global buffer overflow in `sc_device_msg_deserialize`, fixed in 3.3.4 (commit `3e40b24`, issue #6415); the scrcpy release notes describe it only as "Fix UHID_OUTPUT message parsing" and the repo's GitHub advisory list is empty. `src-tauri/src/scrcpy.rs` gates on capability only; `platform-tools-policy.json` already models `knownBadRules`.
-  Touches: new `scrcpy-policy.json`, `src-tauri/src/scrcpy.rs`, `scripts/check-release-policy.mjs`, `src/routes/Mirror.tsx`, `src/locales/*.json`, tests.
-  Acceptance: a reviewed policy file mirrors the platform-tools policy shape with a `3.3.4` security floor and a cited rationale/URL; a detected scrcpy below the floor surfaces a localized host-risk warning naming the CVE, never blocks newer versions, and reports `unknown` when the version cannot be parsed; the release gate rejects drift between the policy, the Rust constant, and the documentation.
-  Complexity: M
-
 - [ ] P1 — IMP-101: Raise the Rust MSRV from 1.81 to 1.90
   Why: the floor is a scheduled wall set by an upstream project, and it is actively costing security posture rather than only convenience.
   Evidence: Tauri merged an MSRV bump to 1.90 on `dev` (PR #13221, 2026-07-02) with a stated "latest − 3" policy, so the next Tauri minor hard-blocks; `src-tauri/Cargo.toml` comments name the floor as the reason for `proptest = "=1.8.0"`, and `.cargo/audit.toml` names it as the reason RUSTSEC-2024-0436 (`paste`, unmaintained) is permanently suppressed; `specta = "=2.0.0-rc.22"` and `schemars = "=1.2.1"` are pinned for the same reason.

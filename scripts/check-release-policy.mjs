@@ -131,6 +131,7 @@ function validatePolicy() {
   validateDependencySecurityFloors(policy.dependencySecurityFloors);
   validateTrackedDocumentationPolicyFiles(policy.trackedDocumentation);
   validatePlatformToolsPolicy();
+  validateScrcpyPolicy();
   validateLanguageContract();
   validateSubprocessCaptureContract();
   validateAutomationPolicy();
@@ -763,6 +764,79 @@ function validateVersionParity() {
     "README.md badge": badgeVersion,
   };
   validateVersionValues(versions);
+}
+
+function validateScrcpyPolicy() {
+  const policy = readJson(path.join(repoRoot, "scrcpy-policy.json"));
+  const rustSource = fs.readFileSync(
+    path.join(repoRoot, "src-tauri", "src", "scrcpy_policy.rs"),
+    "utf8",
+  );
+  validateScrcpyPolicyDocument(policy, rustSource);
+}
+
+// scrcpy publishes no GitHub security advisory for CVE-2025-34449 and NVD does
+// not index it under the project name, so nothing automated tracks this floor.
+// The gate is the only thing keeping the policy, the Rust module, and the
+// documented rationale from drifting apart.
+export function validateScrcpyPolicyDocument(policy, rustSource) {
+  assert(
+    policy?.schemaVersion === 1,
+    "scrcpy-policy.json schemaVersion must be 1",
+  );
+  assertAbsoluteDate("scrcpy policy reviewedOn", policy.reviewedOn);
+  assertSemver("scrcpy security floor", policy.securityFloorVersion);
+  assert(
+    typeof policy.rationale === "string" &&
+      policy.rationale.trim().length >= 40,
+    "scrcpy-policy.json rationale is too short",
+  );
+  assert(
+    typeof policy.sourceUrl === "string" &&
+      policy.sourceUrl.startsWith("https://"),
+    "scrcpy-policy.json needs an https source URL",
+  );
+  assert(
+    Array.isArray(policy.advisories) && policy.advisories.length > 0,
+    "scrcpy-policy.json must list at least one advisory",
+  );
+  let highestFloor = "0.0.0";
+  for (const advisory of policy.advisories) {
+    assert(
+      typeof advisory.id === "string" && /^(?:CVE|GHSA)-/u.test(advisory.id),
+      "scrcpy advisory id must be a CVE or GHSA identifier",
+    );
+    assertSemver(`${advisory.id} belowVersion`, advisory.belowVersion);
+    assert(
+      typeof advisory.summary === "string" &&
+        advisory.summary.trim().length >= 20,
+      `${advisory.id} summary is too short`,
+    );
+    assert(
+      typeof advisory.sourceUrl === "string" &&
+        advisory.sourceUrl.startsWith("https://"),
+      `${advisory.id} needs an https source URL`,
+    );
+    if (compareVersions(advisory.belowVersion, highestFloor) > 0) {
+      highestFloor = advisory.belowVersion;
+    }
+  }
+  assert(
+    policy.securityFloorVersion === highestFloor,
+    `scrcpy securityFloorVersion must equal the highest advisory floor (${highestFloor})`,
+  );
+  // The Rust module reads the JSON at compile time; keep its documented floor
+  // and the advisory it cites from drifting away from the policy.
+  assert(
+    rustSource.includes(policy.securityFloorVersion),
+    "src-tauri/src/scrcpy_policy.rs no longer references the policy security floor",
+  );
+  for (const advisory of policy.advisories) {
+    assert(
+      rustSource.includes(advisory.id),
+      `src-tauri/src/scrcpy_policy.rs no longer references ${advisory.id}`,
+    );
+  }
 }
 
 function validateDependencySecurityFloors(floors) {

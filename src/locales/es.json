@@ -1279,6 +1279,10 @@
     "bitRate": "Tasa de bits de video",
     "capabilityProbeFailed": "La verificación de capacidades de scrcpy falló",
     "capabilityProbeLimited": "El descubrimiento de codificadores es limitado",
+    "security": {
+      "title": "Riesgo para el host: esta versión de scrcpy es vulnerable conocida",
+      "body": "scrcpy {{version}} está afectada por {{advisories}}, un fallo de seguridad de memoria que un dispositivo malicioso o comprometido puede usar para atacar este equipo a través de la conexión de duplicación. Actualice el scrcpy de su PATH a {{floor}} o posterior. Droidsmith lo iniciará igualmente si continúa."
+    },
     "description": "Configura y lanza sesiones supervisadas de scrcpy.",
     "desktopRequiredBody": "Las sesiones de espejo se ejecutan dentro del entorno Tauri.",
     "disableAudio": "Deshabilitar audio",

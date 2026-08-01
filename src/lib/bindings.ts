@@ -2636,6 +2636,11 @@ export type SavedResult = {
 export type ScrcpyCapabilities = {
   path: string;
   version: string;
+  /**
+   * Advisory host-risk assessment for the detected binary. Never blocks a
+   * launch; see `crate::scrcpy_policy`.
+   */
+  security: ScrcpySecurityAssessment;
   available_video_codecs: string[];
   video_encoders: ScrcpyVideoEncoder[];
   probe_warning: string | null;
@@ -2689,6 +2694,31 @@ export type ScrcpyExitReason =
   | "adb_failed"
   | "signaled"
   | "process_exited";
+export type ScrcpySecurityAssessment = {
+  status: ScrcpySecurityStatus;
+  /**
+   * Advisory identifiers the detected version is below, e.g. `CVE-2025-34449`.
+   */
+  advisories: string[];
+  /**
+   * First version carrying every fix in this policy.
+   */
+  security_floor_version: string;
+  source_url: string | null;
+};
+export type ScrcpySecurityStatus =
+  /**
+   * The version could not be parsed, or the bundled policy is unusable.
+   */
+  | "unknown"
+  /**
+   * At or above every known floor.
+   */
+  | "supported"
+  /**
+   * Below at least one advisory floor.
+   */
+  | "known_vulnerable";
 export type ScrcpySession = {
   id: number;
   serial: string;

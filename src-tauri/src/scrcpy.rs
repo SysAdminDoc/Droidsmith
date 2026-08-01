@@ -90,6 +90,9 @@ pub struct ScrcpyVideoEncoder {
 pub struct ScrcpyCapabilities {
     pub path: String,
     pub version: String,
+    /// Advisory host-risk assessment for the detected binary. Never blocks a
+    /// launch; see `crate::scrcpy_policy`.
+    pub security: crate::scrcpy_policy::ScrcpySecurityAssessment,
     pub available_video_codecs: Vec<String>,
     pub video_encoders: Vec<ScrcpyVideoEncoder>,
     pub probe_warning: Option<String>,
@@ -302,6 +305,7 @@ pub fn capabilities(
         supports_start_app: version_gte(&version, 3, 0),
         supports_no_window: version_gte(&version, 3, 2),
         supports_ignore_video_encoder_constraints: version_gte(&version, 4, 1),
+        security: crate::scrcpy_policy::assess(&version),
         version,
         available_video_codecs,
         video_encoders,
@@ -1223,6 +1227,7 @@ mod tests {
     fn capabilities() -> ScrcpyCapabilities {
         ScrcpyCapabilities {
             path: "scrcpy".to_string(),
+            security: crate::scrcpy_policy::assess("4.0"),
             version: "4.0".to_string(),
             available_video_codecs: vec!["h264".to_string(), "h265".to_string()],
             video_encoders: vec![ScrcpyVideoEncoder {

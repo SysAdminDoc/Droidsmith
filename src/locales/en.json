@@ -1192,6 +1192,10 @@
     "probingCapabilitiesBody": "Droidsmith is reading the scrcpy version and the selected device's reported video encoders before enabling launch.",
     "capabilityProbeFailed": "scrcpy capability check failed",
     "capabilityProbeLimited": "Encoder discovery is limited",
+    "security": {
+      "title": "Host risk: this scrcpy version is known vulnerable",
+      "body": "scrcpy {{version}} is affected by {{advisories}}, a memory-safety flaw a malicious or compromised device can use to attack this computer through the mirror connection. Update the scrcpy on your PATH to {{floor}} or newer. Droidsmith will still launch it if you continue."
+    },
     "negotiatedCapabilities_one": "scrcpy {{version}} · {{count}} negotiated video codec",
     "negotiatedCapabilities_few": "scrcpy {{version}} · {{count}} negotiated video codecs",
     "negotiatedCapabilities_many": "scrcpy {{version}} · {{count}} negotiated video codecs",

@@ -7,6 +7,7 @@ import {
   validateAutomationFiles,
   validateDependencyFloor,
   validateRendererBundleManifest,
+  validateScrcpyPolicyDocument,
   validateExpiry,
   validatePlatformToolsDocumentation,
   validateTrackedDocumentation,
@@ -420,4 +421,74 @@ test("cargo dependency requirements are read from both inline and table form", (
   assert.equal(readCargoDependencyRequirement(manifest, "tauri-build"), "2.6");
   assert.equal(readCargoDependencyRequirement(manifest, "serde_json"), "1");
   assert.equal(readCargoDependencyRequirement(manifest, "absent"), undefined);
+});
+
+const scrcpyPolicy = {
+  schemaVersion: 1,
+  reviewedOn: "2026-07-31",
+  securityFloorVersion: "3.3.4",
+  sourceUrl: "https://nvd.nist.gov/vuln/detail/CVE-2025-34449",
+  rationale:
+    "scrcpy 3.3.4 fixes a device-to-host buffer overflow that no dependency scanner surfaces.",
+  advisories: [
+    {
+      id: "CVE-2025-34449",
+      belowVersion: "3.3.4",
+      summary:
+        "Global buffer overflow in sc_device_msg_deserialize reachable from device messages.",
+      sourceUrl: "https://nvd.nist.gov/vuln/detail/CVE-2025-34449",
+    },
+  ],
+};
+const scrcpyRust = `const FLOOR: &str = "3.3.4"; // CVE-2025-34449`;
+
+test("scrcpy policy accepts a coherent document", () => {
+  assert.doesNotThrow(() =>
+    validateScrcpyPolicyDocument(scrcpyPolicy, scrcpyRust),
+  );
+});
+
+test("scrcpy policy rejects a floor that drifts from its advisories", () => {
+  assert.throws(
+    () =>
+      validateScrcpyPolicyDocument(
+        { ...scrcpyPolicy, securityFloorVersion: "3.3.3" },
+        scrcpyRust,
+      ),
+    /highest advisory floor/u,
+  );
+});
+
+test("scrcpy policy rejects drift between the document and the Rust module", () => {
+  assert.throws(
+    () =>
+      validateScrcpyPolicyDocument(
+        scrcpyPolicy,
+        `const FLOOR: &str = "3.3.4";`,
+      ),
+    /no longer references CVE-2025-34449/u,
+  );
+  assert.throws(
+    () =>
+      validateScrcpyPolicyDocument(
+        scrcpyPolicy,
+        `// CVE-2025-34449 without the floor`,
+      ),
+    /no longer references the policy security floor/u,
+  );
+});
+
+test("scrcpy policy requires sourced, identified advisories", () => {
+  for (const advisory of [
+    { ...scrcpyPolicy.advisories[0], id: "bug-123" },
+    { ...scrcpyPolicy.advisories[0], sourceUrl: "http://insecure.example" },
+    { ...scrcpyPolicy.advisories[0], summary: "too short" },
+  ]) {
+    assert.throws(() =>
+      validateScrcpyPolicyDocument(
+        { ...scrcpyPolicy, advisories: [advisory] },
+        scrcpyRust,
+      ),
+    );
+  }
 });

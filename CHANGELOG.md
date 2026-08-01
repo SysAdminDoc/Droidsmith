@@ -25,6 +25,23 @@ each milestone tag.
   the markdown version table so a range containing `||` can be checked at all.
   (IMP-100)
 
+### Added
+
+- **Known-vulnerable version policy for the host scrcpy binary.** Droidsmith
+  launches and supervises whatever `scrcpy` is on the host, and CVE-2025-34449
+  (fixed in 3.3.4) is a global buffer overflow in `sc_device_msg_deserialize`
+  that a malicious or compromised *device* can use to attack the desktop *host*
+  — the one direction that matters when the tool is pointed at an untrusted
+  device. scrcpy's release notes describe the fix only as "Fix UHID_OUTPUT
+  message parsing", the project publishes no GitHub security advisory, and NVD
+  does not index it under the keyword scrcpy, so no dependency scanner will ever
+  surface it. A new reviewed `scrcpy-policy.json` records the 3.3.4 floor, the
+  advisory, and its source; Mirror raises a localized host-risk panel naming the
+  CVE when the detected binary is below it. The policy never blocks a launch and
+  never blocks a newer version, and an unparseable version — or an unparseable
+  policy — reports `unknown` rather than a clean result. The release gate
+  rejects drift between the policy document and the Rust module. (R-121)
+
 ### Fixed
 
 - **Picked up the Tauri isolation-pattern fix.** Droidsmith runs the isolation
