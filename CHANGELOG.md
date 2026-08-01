@@ -14,6 +14,17 @@ completion.
 Working batches live here. Sections collapse into a versioned release on
 each milestone tag.
 
+### Changed
+
+- **Moved off the end-of-life Node runtime.** Node 20 reached end of life on
+  2026-04-30, but `package.json` still declared `>=20.19.0` and all three CI
+  jobs pinned `20.19.0`, so a green build no longer meant "tested on a supported
+  runtime". The engines floor is now `^22.12.0 || >=24.0.0`, CI runs on Node 24
+  (Active LTS), `@types/node` follows, and the README prerequisites and
+  supported-version rows match. The release gate now escapes `|` when deriving
+  the markdown version table so a range containing `||` can be checked at all.
+  (IMP-100)
+
 ### Fixed
 
 - **Host Doctor no longer asserts an mDNS backend it cannot know.**

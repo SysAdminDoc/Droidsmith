@@ -62,13 +62,6 @@ R-119 / IMP-95.
   Acceptance: a reviewed policy file mirrors the platform-tools policy shape with a `3.3.4` security floor and a cited rationale/URL; a detected scrcpy below the floor surfaces a localized host-risk warning naming the CVE, never blocks newer versions, and reports `unknown` when the version cannot be parsed; the release gate rejects drift between the policy, the Rust constant, and the documentation.
   Complexity: M
 
-- [ ] P1 — IMP-100: Move off the end-of-life Node 20 runtime
-  Why: the project declares and gates on a runtime that reached EOL on 2026-04-30, so CI green no longer means "tested on a supported runtime".
-  Evidence: `package.json` `"node": ">=20.19.0"`; `.github/workflows/ci.yml` pins `node-version: 20.19.0` in all three jobs; nodejs/Release `schedule.json` gives Node 20 EOL 2026-04-30, Node 24 Active LTS until 2026-10-20.
-  Touches: `package.json`, `.github/workflows/ci.yml`, `README.md` supported-versions table, `scripts/check-release-policy.mjs`.
-  Acceptance: the engines floor becomes `^22.12.0 || >=24.0.0`; CI runs on a supported LTS; the README supported-versions row and the release gate's derived check agree with the manifest; `npm ci && npm run release:check` passes on the new floor.
-  Complexity: S
-
 - [ ] P1 — IMP-101: Raise the Rust MSRV from 1.81 to 1.90
   Why: the floor is a scheduled wall set by an upstream project, and it is actively costing security posture rather than only convenience.
   Evidence: Tauri merged an MSRV bump to 1.90 on `dev` (PR #13221, 2026-07-02) with a stated "latest − 3" policy, so the next Tauri minor hard-blocks; `src-tauri/Cargo.toml` comments name the floor as the reason for `proptest = "=1.8.0"`, and `.cargo/audit.toml` names it as the reason RUSTSEC-2024-0436 (`paste`, unmaintained) is permanently suppressed; `specta = "=2.0.0-rc.22"` and `schemars = "=1.2.1"` are pinned for the same reason.

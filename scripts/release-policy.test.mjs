@@ -106,7 +106,7 @@ test("release versions must all exist and match", () => {
 
 const documentationExpectations = {
   appVersion: "0.9.12",
-  nodeRange: ">=20.19.0",
+  nodeRange: "^22.12.0 || >=24.0.0",
   rustRange: ">=1.81",
   tauriMajor: "2.x",
   platformToolsRecommended: "37.0.0",
@@ -120,7 +120,7 @@ const documentationFixture = {
   "README.md": `
 [asset](docs/screenshot.png)
 | Droidsmith source/manifests | \`0.9.12\` |
-| Node.js | \`>=20.19.0\` |
+| Node.js | \`^22.12.0 \\|\\| >=24.0.0\` |
 | Rust | \`>=1.81\` |
 | Tauri | \`2.x\` |
 | Android SDK Platform Tools | \`37.0.0\` recommended; warn below \`36.0.2\` |
@@ -192,7 +192,7 @@ test("tracked documentation enforces truth, live links, and version rows", () =>
 
   for (const currentValue of [
     "0.9.12",
-    ">=20.19.0",
+    String.raw`^22.12.0 \|\| >=24.0.0`,
     ">=1.81",
     "2.x",
     "37.0.0",

@@ -234,7 +234,7 @@ export function validateTrackedDocumentation(
 
   const versionRows = [
     `| Droidsmith source/manifests | \`${expectations.appVersion}\` |`,
-    `| Node.js | \`${expectations.nodeRange}\` |`,
+    `| Node.js | \`${escapeTableCell(expectations.nodeRange)}\` |`,
     `| Rust | \`${expectations.rustRange}\` |`,
     `| Tauri | \`${expectations.tauriMajor}\` |`,
     `| Android SDK Platform Tools | \`${expectations.platformToolsRecommended}\` recommended; warn below \`${expectations.platformToolsWarningBelow}\` |`,
@@ -840,6 +840,12 @@ export function readCargoDependencyRequirement(manifest, crate) {
     new RegExp(`^${crate}\\s*=\\s*\\{([^}]*)\\}`, "mu"),
   );
   return table?.[1].match(/version\s*=\s*"([^"]+)"/u)?.[1];
+}
+
+/** A literal `|` closes a markdown table cell, so semver ranges that use `||`
+ * are escaped in the README and must be escaped here to match. */
+function escapeTableCell(value) {
+  return String(value).replaceAll("|", String.raw`\|`);
 }
 
 export function validateVersionValues(versions) {
