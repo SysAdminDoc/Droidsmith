@@ -3,16 +3,19 @@ import qrcode from "qrcode-generator";
 import { useTranslation } from "react-i18next";
 
 import { formatDateTime } from "../lib/i18n";
+import { useAuthorizedDevices } from "../lib/useAuthorizedDevices";
 import {
   errorMessage,
   callConnectWireless,
   callForgetWirelessEndpoint,
+  callListWirelessDebuggingRisks,
   callListWirelessHistory,
   callListWirelessServices,
   callPairWireless,
   callSetWirelessAutoReconnect,
   inTauri,
   type ListWirelessServicesResult,
+  type WirelessDeviceRisk,
   type WirelessAdbService,
   WirelessCommandFailure,
   type WirelessCommandResult,
@@ -33,6 +36,12 @@ import {
   TableHeaderCell,
   TransportBadge,
 } from "./common";
+import {
+  requiresWirelessRiskAck,
+  unpatchedWirelessDevices,
+  wirelessRiskAckKey,
+  WIRELESS_AUTH_BYPASS_PATCH_FLOOR,
+} from "./wirelessRisk";
 
 type ServicesState =
   | { kind: "loading" }
@@ -54,6 +63,11 @@ export default function WirelessRoute() {
   const [actionState, setActionState] = useState<ActionState>({ kind: "idle" });
   const [history, setHistory] = useState<WirelessHistorySnapshot | null>(null);
   const autoReconnectDone = useRef(false);
+  const { authorizedDevices } = useAuthorizedDevices();
+  const [risks, setRisks] = useState<WirelessDeviceRisk[]>([]);
+  const [riskAcknowledgedFor, setRiskAcknowledgedFor] = useState<string | null>(
+    null,
+  );
   const [qrName, setQrName] = useState(() => `Droidsmith-${randomToken(5)}`);
   const [qrCode, setQrCode] = useState(() => randomPairingCode());
   const [manualHost, setManualHost] = useState("");
@@ -112,6 +126,50 @@ export default function WirelessRoute() {
     await loadServices();
     await loadHistory();
   }, [loadHistory, loadServices]);
+
+  // Identity of the connected set, so the advisory refetches when devices come
+  // and go but not on every unrelated store update.
+  const authorizedIdentity = useMemo(
+    () =>
+      authorizedDevices
+        .map(
+          (device) =>
+            `${device.serial}:${device.transport_id ?? ""}:${device.connection_generation ?? ""}`,
+        )
+        .join(" "),
+    [authorizedDevices],
+  );
+
+  // CVE-2026-0073 advisory. The backend enumerates and classifies in one call
+  // so a device disappearing mid-sweep cannot land a stale partial result here.
+  useEffect(() => {
+    if (!inTauri()) {
+      setRisks([]);
+      return;
+    }
+    let disposed = false;
+    void (async () => {
+      try {
+        const value = await callListWirelessDebuggingRisks();
+        if (!disposed) setRisks(value);
+      } catch {
+        // Advisory only: a probe failure must never block the pairing surface.
+        if (!disposed) setRisks([]);
+      }
+    })();
+    return () => {
+      disposed = true;
+    };
+  }, [authorizedIdentity]);
+
+  const flaggedDevices = useMemo(
+    () => unpatchedWirelessDevices(risks),
+    [risks],
+  );
+  const riskAckRequired = requiresWirelessRiskAck(
+    flaggedDevices,
+    riskAcknowledgedFor,
+  );
 
   useEffect(() => {
     void loadServices();
@@ -280,6 +338,59 @@ export default function WirelessRoute() {
         meta={<WirelessHeaderMeta state={servicesState} />}
       />
 
+      {flaggedDevices.length > 0 && (
+        <section
+          className="mt-4 rounded-lg border border-signal-amber/40 bg-signal-amber/[0.07] p-4"
+          role="alert"
+          aria-labelledby="wireless-risk-title"
+        >
+          <h2
+            id="wireless-risk-title"
+            className="text-sm font-semibold text-signal-amber"
+          >
+            {t("wireless.risk.title")}
+          </h2>
+          <p className="mt-2 text-sm leading-6 text-anvil-200">
+            {t("wireless.risk.body", {
+              floor: WIRELESS_AUTH_BYPASS_PATCH_FLOOR,
+            })}
+          </p>
+          <ul className="mt-3 space-y-1">
+            {flaggedDevices.map((device) => (
+              <li key={device.serial} className="text-sm text-anvil-200">
+                <span className="font-medium text-anvil-50">
+                  {device.label}
+                </span>
+                <span className="text-anvil-300">
+                  {" — "}
+                  {t("wireless.risk.patchLevel", {
+                    patch: device.securityPatch ?? t("common.unknown"),
+                  })}
+                </span>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-3 text-sm leading-6 text-anvil-200">
+            {t("wireless.risk.mitigation")}
+          </p>
+          <label className="mt-3 flex items-start gap-2 text-sm text-anvil-100">
+            <input
+              type="checkbox"
+              className="mt-0.5"
+              checked={!riskAckRequired}
+              onChange={(event) =>
+                setRiskAcknowledgedFor(
+                  event.target.checked
+                    ? wirelessRiskAckKey(flaggedDevices)
+                    : null,
+                )
+              }
+            />
+            <span>{t("wireless.risk.acknowledge")}</span>
+          </label>
+        </section>
+      )}
+
       <section className="mt-4 grid max-w-none gap-3 xl:grid-cols-[minmax(320px,0.85fr)_minmax(0,1.15fr)]">
         <Card className="p-5">
           <div className="flex flex-col gap-5 lg:flex-row xl:flex-col 2xl:flex-row">
@@ -363,7 +474,11 @@ export default function WirelessRoute() {
               <Button
                 type="button"
                 onClick={() => void pairManual()}
-                disabled={!manualPairValid || actionState.kind === "busy"}
+                disabled={
+                  !manualPairValid ||
+                  actionState.kind === "busy" ||
+                  riskAckRequired
+                }
                 variant="primary"
                 className="mt-4"
               >
@@ -407,7 +522,11 @@ export default function WirelessRoute() {
               <Button
                 type="button"
                 onClick={() => void connectManual()}
-                disabled={!manualConnectValid || actionState.kind === "busy"}
+                disabled={
+                  !manualConnectValid ||
+                  actionState.kind === "busy" ||
+                  riskAckRequired
+                }
                 variant="primary"
                 className="mt-4"
               >
@@ -426,7 +545,7 @@ export default function WirelessRoute() {
         <section className="mt-4 max-w-7xl">
           <HistoryPanel
             history={history}
-            busy={actionState.kind === "busy"}
+            busy={actionState.kind === "busy" || riskAckRequired}
             onReconnect={(endpoint) => void reconnectEndpoint(endpoint)}
             onForget={(endpoint) => void forgetEndpoint(endpoint)}
             onToggleAuto={(enabled) => void toggleAutoReconnect(enabled)}
@@ -440,7 +559,7 @@ export default function WirelessRoute() {
           onRefresh={() => void loadServices()}
           onPair={(service) => void pairService(service)}
           onConnect={(service) => void connectService(service)}
-          busy={actionState.kind === "busy"}
+          busy={actionState.kind === "busy" || riskAckRequired}
         />
       </section>
     </>

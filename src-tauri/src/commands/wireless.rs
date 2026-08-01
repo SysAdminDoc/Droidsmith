@@ -30,6 +30,33 @@ pub fn list_wireless_services() -> Result<ListWirelessServicesResult, adb::Trans
     })
 }
 
+/// CVE-2026-0073 advisory for every connected, authorized device.
+///
+/// Enumerating in Rust keeps this to one round trip and avoids fanning
+/// per-device target-bound calls out of the renderer, where a device that
+/// disappears mid-sweep would produce a stale completion. A device that cannot
+/// be read is simply omitted; the renderer treats absence as "no verdict".
+#[tauri::command]
+#[specta::specta]
+pub fn list_wireless_debugging_risks() -> Result<Vec<adb::WirelessDeviceRisk>, adb::TransportError>
+{
+    let resolution = adb::locate_adb();
+    let Some(path) = resolution.path.as_ref() else {
+        return Ok(Vec::new());
+    };
+    let transport = adb::ShellTransport::new(path);
+    let mut risks = Vec::new();
+    for device in transport.list_devices()? {
+        if device.state != adb::DeviceState::Device {
+            continue;
+        }
+        if let Ok(risk) = adb::get_wireless_debugging_risk(&transport, &device.target()) {
+            risks.push(risk);
+        }
+    }
+    Ok(risks)
+}
+
 #[tauri::command]
 #[specta::specta]
 pub fn pair_wireless(

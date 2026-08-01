@@ -31,6 +31,7 @@ pub mod health;
 pub mod packages;
 pub mod parsers;
 pub mod resolver;
+pub mod security_patch;
 pub mod transport;
 pub mod users;
 pub mod version_policy;
@@ -40,10 +41,12 @@ pub mod wireless;
 // Items in `actions` are reached via `crate::adb::actions::*` so no
 // short alias is needed here.
 pub use device::{
-    attach_transport_provenance, observe_connection_generations, Device, DeviceTarget,
+    attach_transport_provenance, observe_connection_generations, Device, DeviceState, DeviceTarget,
     DeviceTransportKind,
 };
-pub use device_info::{get_device_info, DeviceInfo};
+pub use device_info::{
+    get_device_info, get_wireless_debugging_risk, DeviceInfo, WirelessDeviceRisk,
+};
 pub use device_settings::{
     command_preview, put_argv, read_device_settings, spec_key, spec_namespace, validate_write,
     DeviceSetting, DeviceSettingChange,
@@ -53,6 +56,7 @@ pub use packages::{
     PackageArchiveCapability, PackageFilter, PackageListing,
 };
 pub use resolver::{locate_adb, AdbResolution};
+pub use security_patch::{classify_wireless_debugging_risk, WirelessDebuggingRisk};
 pub use transport::{
     validate_device_target, AdbTransport, OutputStream, ShellTransport, TransportError,
 };

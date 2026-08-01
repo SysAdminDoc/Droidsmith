@@ -322,6 +322,7 @@
     "hwSerial": "硬件序列号",
     "buildFingerprint": "构建指纹",
     "securityPatch": "安全补丁",
+    "wirelessRiskShort": "无线调试受 CVE-2026-0073 影响",
     "wifiIp": "Wi-Fi IP",
     "battery": "电池",
     "storageData": "存储（/data）",
@@ -612,6 +613,13 @@
   "wireless": {
     "title": "无线",
     "description": "通过 Wi-Fi 配对和连接 Android 设备。",
+    "risk": {
+      "title": "检测到未修补的设备 — 无线调试存在风险",
+      "body": "CVE-2026-0073 允许附近的攻击者绕过无线 ADB 身份验证，并以 shell 用户身份执行命令，且设备上不会出现任何提示。该问题已在 {{floor}} 的 Android 安全补丁中修复。以下已连接设备报告的补丁级别更早：",
+      "patchLevel": "安全补丁 {{patch}}",
+      "mitigation": "USB 调试不受影响。请在这些设备上优先使用 USB 数据线，或在配对前更新它们。配对会在设备上植入 Droidsmith 主机密钥，而这正是此攻击所依赖的条件之一。",
+      "acknowledge": "我了解风险，仍要继续通过 Wi-Fi 连接。"
+    },
     "scanMdns": "扫描 mDNS",
     "scanning": "正在扫描…",
     "scanningMdns": "正在扫描 mDNS",

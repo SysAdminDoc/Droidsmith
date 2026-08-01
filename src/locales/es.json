@@ -838,6 +838,7 @@
     "scanning": "Escaneando…",
     "scanningBridge": "Escaneando puente",
     "securityPatch": "Parche de seguridad",
+    "wirelessRiskShort": "depuración inalámbrica afectada por CVE-2026-0073",
     "selectDeviceLabel": "Seleccionar {{device}}",
     "selectHint": "Selecciona un dispositivo para ver su panel. Revisa el estado y el transporte antes de ejecutar cualquier acción.",
     "serial": "Serie",
@@ -1715,6 +1716,13 @@
     "connect": "Conectar",
     "connecting": "Conectando",
     "description": "Empareja y conecta dispositivos Android a través de Wi-Fi.",
+    "risk": {
+      "title": "Dispositivo sin parche detectado: la depuración inalámbrica es arriesgada",
+      "body": "CVE-2026-0073 permite que un atacante cercano eluda la autenticación de ADB inalámbrico y ejecute comandos como usuario shell, sin ninguna confirmación en el dispositivo. Se corrige con el parche de seguridad de Android del {{floor}}. Estos dispositivos conectados informan un nivel de parche anterior:",
+      "patchLevel": "parche de seguridad {{patch}}",
+      "mitigation": "La depuración por USB no se ve afectada. Use preferentemente un cable USB en estos dispositivos o actualícelos antes de emparejar. El emparejamiento instala una clave de host de Droidsmith en el dispositivo, una de las condiciones de las que depende este ataque.",
+      "acknowledge": "Entiendo el riesgo y quiero continuar por Wi-Fi de todos modos."
+    },
     "desktopRequiredBody": "Los comandos ADB inalámbricos se ejecutan dentro del entorno Tauri.",
     "discoveredServices": "Servicios inalámbricos descubiertos",
     "discoveredServicesBody": "Los servicios de emparejamiento usan el código QR de arriba; los servicios de conexión conectan dispositivos ya emparejados.",

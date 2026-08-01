@@ -307,6 +307,17 @@ export const commands = {
   async listWirelessServices(): Promise<ListWirelessServicesResult> {
     return await TAURI_INVOKE("list_wireless_services");
   },
+  /**
+   * CVE-2026-0073 advisory for every connected, authorized device.
+   *
+   * Enumerating in Rust keeps this to one round trip and avoids fanning
+   * per-device target-bound calls out of the renderer, where a device that
+   * disappears mid-sweep would produce a stale completion. A device that cannot
+   * be read is simply omitted; the renderer treats absence as "no verdict".
+   */
+  async listWirelessDebuggingRisks(): Promise<WirelessDeviceRisk[]> {
+    return await TAURI_INVOKE("list_wireless_debugging_risks");
+  },
   async pairWireless(
     request: WirelessPairRequest,
   ): Promise<WirelessCommandResult> {
@@ -1506,6 +1517,11 @@ export type DeviceInfo = {
   sdk_level: string | null;
   build_fingerprint: string | null;
   security_patch: string | null;
+  /**
+   * CVE-2026-0073 wireless-debugging exposure derived from the patch level
+   * and SDK. Advisory only — it never blocks an operation.
+   */
+  wireless_debugging_risk: WirelessDebuggingRisk;
   hardware_serial: string | null;
   battery: BatteryInfo | null;
   storage: StorageInfo | null;
@@ -2849,6 +2865,33 @@ export type WirelessConnectRequest = {
    * only source of `tls_wifi` provenance.
    */
   legacy_tcp?: boolean;
+};
+export type WirelessDebuggingRisk =
+  /**
+   * The patch level is missing, malformed, or the build sits outside the
+   * advisory's stated Android range. Neither verdict is claimed.
+   */
+  | "unknown"
+  /**
+   * Android 14-16 build whose patch level predates the fix.
+   */
+  | "auth_bypass_unpatched"
+  /**
+   * Patch level is at or after the fix.
+   */
+  | "patched";
+/**
+ * CVE-2026-0073 exposure for one device, using a single `getprop` call.
+ *
+ * Deliberately narrower than [`get_device_info`]: the wireless workspace needs
+ * this for every connected device, and the full dashboard query also runs
+ * `dumpsys battery`, `df`, and thermal probes per device.
+ */
+export type WirelessDeviceRisk = {
+  serial: string;
+  model: string | null;
+  security_patch: string | null;
+  risk: WirelessDebuggingRisk;
 };
 /**
  * A previously connected wireless ADB endpoint. Only the host/port (and an

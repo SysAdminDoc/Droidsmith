@@ -91,6 +91,7 @@ import {
   type WipeResult,
   type WirelessCommandResult,
   type WirelessConnectRequest,
+  type WirelessDeviceRisk,
   type WirelessEndpoint,
   type WirelessFailureDiagnostics,
   type WirelessFailureHintCode,
@@ -497,6 +498,12 @@ export async function callWipeDiagnostics(
 
 export async function callListWirelessServices(): Promise<ListWirelessServicesResult> {
   return commands.listWirelessServices();
+}
+
+export async function callListWirelessDebuggingRisks(): Promise<
+  WirelessDeviceRisk[]
+> {
+  return commands.listWirelessDebuggingRisks();
 }
 
 export async function callPairWireless(

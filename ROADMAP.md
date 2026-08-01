@@ -46,13 +46,6 @@ R-119 / IMP-95.
 
 ### P0
 
-- [ ] P0 — R-120: Gate wireless debugging on the device security-patch level
-  Why: Droidsmith's own pairing flow plants an RSA host key in the device trust store, which is a stated precondition of CVE-2026-0073 — an adbd mutual-auth bypass giving remote shell-user code execution with no user interaction.
-  Evidence: AOSP bulletin 2026-05-01 (CVSS 8.8, Critical, Android 14/15/16); `EVP_PKEY_cmp` `-1` treated as truthy in `adbd_tls_verify_cert`; `ro.build.version.security_patch` is already parsed at `src-tauri/src/adb/device_info.rs:117` but only rendered as a neutral field at `src/routes/devices/DeviceDetail.tsx:179`.
-  Touches: `src-tauri/src/adb/device_info.rs`, `src-tauri/src/adb/wireless.rs`, `src/routes/Wireless.tsx`, `src/routes/devices/DeviceDetail.tsx`, `src/locales/*.json`, Rust + rendered-route tests.
-  Acceptance: patch levels below `2026-05-01` surface an explicit, localized risk explanation before pairing or connecting over TCP, name USB as the safe alternative, and require acknowledgement; an unparseable or absent patch level reports `unknown` and never fabricates a verdict; USB flows are unaffected; fake-tool fixtures cover below/at/above/absent.
-  Complexity: M
-
 ### P1
 
 - [ ] P1 — IMP-98: Stop surfacing the stale `mdns_backend` field

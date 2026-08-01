@@ -17,6 +17,7 @@
     "list_devices",
     "preview_diagnostics",
     "list_wireless_services",
+    "list_wireless_debugging_risks",
     "list_wireless_history",
     "get_device_info",
     "list_packages",

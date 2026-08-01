@@ -179,7 +179,11 @@ export function DeviceDetail({
         {info.security_patch && (
           <InfoField
             label={t("devices.securityPatch")}
-            value={info.security_patch}
+            value={
+              info.wireless_debugging_risk === "auth_bypass_unpatched"
+                ? `${info.security_patch} — ${t("devices.wirelessRiskShort")}`
+                : info.security_patch
+            }
           />
         )}
         {info.wifi_ip && (

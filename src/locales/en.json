@@ -322,6 +322,7 @@
     "hwSerial": "HW Serial",
     "buildFingerprint": "Build fingerprint",
     "securityPatch": "Security patch",
+    "wirelessRiskShort": "wireless debugging affected by CVE-2026-0073",
     "wifiIp": "Wi-Fi IP",
     "battery": "Battery",
     "storageData": "Storage (/data)",
@@ -612,6 +613,13 @@
   "wireless": {
     "title": "Wireless",
     "description": "Pair and connect Android devices over Wi-Fi.",
+    "risk": {
+      "title": "Unpatched device detected — wireless debugging is risky",
+      "body": "CVE-2026-0073 lets a nearby attacker bypass wireless ADB authentication and run commands as the shell user, with no prompt on the device. It is fixed by the {{floor}} Android security patch. These connected devices report an earlier patch level:",
+      "patchLevel": "security patch {{patch}}",
+      "mitigation": "USB debugging is not affected. Prefer a USB cable on these devices, or update them before pairing. Pairing plants a Droidsmith host key on the device, which is one of the conditions this attack relies on.",
+      "acknowledge": "I understand the risk and want to continue over Wi-Fi anyway."
+    },
     "scanMdns": "Scan mDNS",
     "scanning": "Scanning…",
     "scanningMdns": "Scanning mDNS",

@@ -6,6 +6,7 @@
 use serde::Serialize;
 
 use crate::adb::device::DeviceTarget;
+use crate::adb::security_patch::{classify_wireless_debugging_risk, WirelessDebuggingRisk};
 use crate::adb::transport::{AdbTransport, TransportError};
 
 #[derive(specta::Type, Debug, Clone, Serialize)]
@@ -17,6 +18,9 @@ pub struct DeviceInfo {
     pub sdk_level: Option<String>,
     pub build_fingerprint: Option<String>,
     pub security_patch: Option<String>,
+    /// CVE-2026-0073 wireless-debugging exposure derived from the patch level
+    /// and SDK. Advisory only — it never blocks an operation.
+    pub wireless_debugging_risk: WirelessDebuggingRisk,
     pub hardware_serial: Option<String>,
     pub battery: Option<BatteryInfo>,
     pub storage: Option<StorageInfo>,
@@ -69,6 +73,34 @@ pub struct ThermalZone {
     pub status: Option<String>,
 }
 
+/// CVE-2026-0073 exposure for one device, using a single `getprop` call.
+///
+/// Deliberately narrower than [`get_device_info`]: the wireless workspace needs
+/// this for every connected device, and the full dashboard query also runs
+/// `dumpsys battery`, `df`, and thermal probes per device.
+#[derive(specta::Type, Debug, Clone, Serialize)]
+pub struct WirelessDeviceRisk {
+    pub serial: String,
+    pub model: Option<String>,
+    pub security_patch: Option<String>,
+    pub risk: WirelessDebuggingRisk,
+}
+
+pub fn get_wireless_debugging_risk(
+    transport: &dyn AdbTransport,
+    target: &DeviceTarget,
+) -> Result<WirelessDeviceRisk, TransportError> {
+    let props = fetch_properties(transport, target)?;
+    let security_patch = get_prop(&props, "ro.build.version.security_patch");
+    let sdk_level = get_prop(&props, "ro.build.version.sdk");
+    Ok(WirelessDeviceRisk {
+        serial: target.serial.clone(),
+        model: get_prop(&props, "ro.product.model"),
+        risk: classify_wireless_debugging_risk(security_patch.as_deref(), sdk_level.as_deref()),
+        security_patch,
+    })
+}
+
 pub fn get_device_info(
     transport: &dyn AdbTransport,
     target: &DeviceTarget,
@@ -107,14 +139,20 @@ pub fn get_device_info(
         .or_else(|| get_prop(&props, "wifi.interface.ip"))
         .filter(|ip| !ip.is_empty());
 
+    let sdk_level = get_prop(&props, "ro.build.version.sdk");
+    let security_patch = get_prop(&props, "ro.build.version.security_patch");
+    let wireless_debugging_risk =
+        classify_wireless_debugging_risk(security_patch.as_deref(), sdk_level.as_deref());
+
     Ok(DeviceInfo {
         serial: target.serial.clone(),
         model: get_prop(&props, "ro.product.model"),
         manufacturer: get_prop(&props, "ro.product.manufacturer"),
         android_version: get_prop(&props, "ro.build.version.release"),
-        sdk_level: get_prop(&props, "ro.build.version.sdk"),
+        sdk_level,
         build_fingerprint: get_prop(&props, "ro.build.fingerprint"),
-        security_patch: get_prop(&props, "ro.build.version.security_patch"),
+        security_patch,
+        wireless_debugging_risk,
         hardware_serial: get_prop(&props, "ro.serialno"),
         battery,
         storage,

@@ -322,6 +322,7 @@
     "hwSerial": "HW-Seriennummer",
     "buildFingerprint": "Build-Fingerabdruck",
     "securityPatch": "Sicherheitspatch",
+    "wirelessRiskShort": "WLAN-Debugging von CVE-2026-0073 betroffen",
     "wifiIp": "Wi-Fi-IP",
     "battery": "Akku",
     "storageData": "Speicher (/data)",
@@ -612,6 +613,13 @@
   "wireless": {
     "title": "Drahtlos",
     "description": "Android-Geräte über Wi-Fi koppeln und verbinden.",
+    "risk": {
+      "title": "Ungepatchtes Gerät erkannt – Wireless-Debugging ist riskant",
+      "body": "CVE-2026-0073 erlaubt es Angreifern in der Nähe, die WLAN-ADB-Authentifizierung zu umgehen und Befehle als Shell-Benutzer auszuführen, ohne Rückfrage auf dem Gerät. Der Android-Sicherheitspatch vom {{floor}} behebt dies. Diese verbundenen Geräte melden einen älteren Patch-Stand:",
+      "patchLevel": "Sicherheitspatch {{patch}}",
+      "mitigation": "USB-Debugging ist nicht betroffen. Verwenden Sie auf diesen Geräten bevorzugt ein USB-Kabel oder aktualisieren Sie sie vor dem Koppeln. Beim Koppeln wird ein Droidsmith-Hostschlüssel auf dem Gerät hinterlegt – eine der Voraussetzungen für diesen Angriff.",
+      "acknowledge": "Ich verstehe das Risiko und möchte trotzdem über WLAN fortfahren."
+    },
     "scanMdns": "mDNS scannen",
     "scanning": "Scanne…",
     "scanningMdns": "Scanne mDNS",

@@ -897,15 +897,41 @@ async function runDesktopFlow(browser) {
 
   await page.getByRole("button", { name: /Wireless/ }).click();
   await page.getByRole("heading", { name: "Wireless", exact: true }).waitFor();
+
+  // CVE-2026-0073 gate: the unpatched device from the mock must name itself and
+  // its patch level, and must hold the wireless actions closed until the risk
+  // is explicitly acknowledged.
+  const wirelessRisk = page.getByRole("alert").filter({
+    hasText: "Unpatched device detected",
+  });
+  await wirelessRisk.waitFor();
+  await wirelessRisk.getByText("Pixel Test", { exact: true }).waitFor();
+  await wirelessRisk
+    .getByText("security patch 2026-04-01", { exact: false })
+    .waitFor();
   const wirelessConnectPanel = page
     .getByRole("heading", { name: "Paired endpoint", exact: true })
     .locator("..")
     .locator("..");
   await wirelessConnectPanel.getByLabel("Host").fill("pixel.local");
   await wirelessConnectPanel.getByLabel("Port").fill("38899");
-  await wirelessConnectPanel
-    .getByRole("button", { name: "Connect", exact: true })
-    .click();
+  const wirelessConnectButton = wirelessConnectPanel.getByRole("button", {
+    name: "Connect",
+    exact: true,
+  });
+  if (await wirelessConnectButton.isEnabled()) {
+    throw new Error(
+      "Wireless connect was available before the CVE-2026-0073 risk was acknowledged",
+    );
+  }
+  await wirelessRisk.getByRole("checkbox").check();
+  if (!(await wirelessConnectButton.isEnabled())) {
+    throw new Error(
+      "Acknowledging the CVE-2026-0073 risk did not release the wireless actions",
+    );
+  }
+  await assertNoHorizontalOverflow(page, "desktop Wireless risk advisory");
+  await wirelessConnectButton.click();
   await page
     .getByText("An active VPN or tunnel may be blocking the device route", {
       exact: true,
@@ -2243,6 +2269,18 @@ async function installTauriMock(
             adb_path: "C:/Android/platform-tools/adb.exe",
             services: [],
           };
+        }
+        if (cmd === "list_wireless_debugging_risks") {
+          // CVE-2026-0073: one unpatched device so the advisory renders and
+          // the pair/connect gate is armed.
+          return [
+            {
+              serial: "EMULATOR5554",
+              model: "Pixel Test",
+              security_patch: "2026-04-01",
+              risk: "auth_bypass_unpatched",
+            },
+          ];
         }
         if (cmd === "connect_wireless") {
           throw {

@@ -16,6 +16,20 @@ each milestone tag.
 
 ### Security
 
+- **Wireless debugging now warns before pairing an unpatched device.**
+  CVE-2026-0073 is an `adbd` mutual-auth bypass — `adbd_tls_verify_cert` treated
+  the `-1` "different key types" return of `EVP_PKEY_cmp` as truthy — that gives
+  an adjacent attacker code execution as the shell user with no prompt on the
+  device. Droidsmith's own pairing plants a host key in the device trust store,
+  so the Wireless workspace now classifies every connected device from
+  `ro.build.version.security_patch` and `ro.build.version.sdk`, names any build
+  below the 2026-05-01 patch level, points at USB as the unaffected path, and
+  holds pairing, connecting, and reconnecting closed until the risk is
+  acknowledged. The acknowledgement is scoped to the exact flagged set, so a
+  different unpatched device re-arms it. A missing, malformed, or
+  outside-the-advisory-range value reports `unknown` and is never presented as
+  either verdict, and the probe is advisory-only — a failure to read it never
+  blocks the pairing surface. (R-120)
 - **Declared a Tauri security floor instead of relying on the lockfile.**
   `tauri` now requires `2.11.1` and `tauri-build` requires `2.6`, so the fix for
   CVE-2026-42184 / GHSA-7gmj-67g7-phm9 — where `is_local_url` used

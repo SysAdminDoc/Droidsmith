@@ -42,6 +42,7 @@ macro_rules! droidsmith_commands {
             list_device_settings,
             put_device_setting,
             list_wireless_services,
+            list_wireless_debugging_risks,
             pair_wireless,
             connect_wireless,
             list_wireless_history,
