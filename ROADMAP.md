@@ -46,15 +46,6 @@ R-119 / IMP-95.
 
 ### P0
 
-### P1
-
-- [ ] P1 — R-122: Prove reinstall feasibility before permitting uninstall-for-user
-  Why: Droidsmith records package provenance around the mutation, but nothing proves `pm install-existing` will succeed *before* the irreversible step — which is the exact moment users need the answer.
-  Evidence: UAD-NG #559 ("warn if reinstalling an app isn't possible", unmet); the bootloop corpus (#1069 user half-bricked with no backup, #1400, #1311) shows the failure is always discovered too late; Droidsmith's `RestoreExistingForUser` path already knows how to verify retention (`src-tauri/src/adb/actions.rs`).
-  Touches: `src-tauri/src/adb/actions.rs`, `src-tauri/src/adb/packages.rs`, `src-tauri/src/commands/plans.rs`, `src/routes/apps/PackageTable.tsx`, `src/routes/debloat/ApplyReview.tsx`, `src/locales/*.json`, fake-tool fixtures.
-  Acceptance: every uninstall-for-user plan carries an explicit recoverable / not-recoverable / unknown verdict derived from proven APK retention for that Android user, shown in the review screen and the debloat batch summary before apply; `unknown` is never presented as recoverable; the verdict is written into the journal row so later undo decisions use the pre-mutation evidence; fixtures cover retained system, `/data/app` user app, and OEM-ambiguous states.
-  Complexity: M
-
 ### P2
 
 - [ ] P2 — R-123: Add a reversible action tier below disable and uninstall

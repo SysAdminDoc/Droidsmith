@@ -19,6 +19,7 @@
     "src/routes/Apps.tsx": [
       "callApplyAction",
       "callApplyActionBatch",
+      "callAssessUninstallRecovery",
       "callBackupPackage",
       "callExportPackageApks",
       "callExportRecoveryBaseline",

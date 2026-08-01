@@ -914,6 +914,18 @@
       "grant_permission": "Berechtigung gewähren",
       "revoke_permission": "Berechtigung widerrufen",
       "shell": "Geprüfte Shell-Mutation"
+    },
+    "recovery": {
+      "recoverable": "Umkehrbar: kann wiederhergestellt werden",
+      "notRecoverable": "Kann nicht rückgängig gemacht werden",
+      "unknown": "Umkehrbarkeit nicht nachgewiesen",
+      "reason": {
+        "platformApkRetained": "Android behält die Systemkopie dieser App, daher kann Droidsmith sie für diesen Benutzer neu installieren.",
+        "onlyCopyUserInstalled": "Die einzige Kopie dieser App liegt im Benutzerspeicher. Eine Deinstallation entfernt sie endgültig.",
+        "notInstalledForUser": "Diese App ist für den ausgewählten Android-Benutzer nicht installiert, es gibt nichts wiederherzustellen.",
+        "conflictingEvidence": "Das Gerät lieferte widersprüchliche Angaben zum Speicherort dieser App. Als nicht wiederherstellbar behandeln.",
+        "probeFailed": "Das Gerät hat die Prüfung nicht beantwortet, eine Neuinstallation kann nicht zugesichert werden."
+      }
     }
   },
   "debloat": {

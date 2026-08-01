@@ -496,6 +496,26 @@ export const commands = {
   async planActionBatch(requests: ActionRequest[]): Promise<BatchActionPlan> {
     return await TAURI_INVOKE("plan_action_batch", { requests });
   },
+  /**
+   * Answer "can I get this back?" for every package in a proposed
+   * uninstall-for-user set, before any of them is touched.
+   *
+   * The whole set is enumerated here rather than one call per package from the
+   * renderer: a fan-out of N target-bound calls is the stale-completion shape
+   * the target lifecycle contract exists to prevent, and a partial answer to
+   * this question is worse than none.
+   */
+  async assessUninstallRecovery(
+    target: DeviceTarget,
+    userId: number,
+    packages: string[],
+  ): Promise<UninstallRecoveryAssessment[]> {
+    return await TAURI_INVOKE("assess_uninstall_recovery", {
+      target,
+      userId,
+      packages,
+    });
+  },
   async planShellAction(
     request: PlanShellActionRequest,
   ): Promise<ShellActionPlan> {
@@ -2414,6 +2434,14 @@ export type PlannedAction = {
    * Snapshot captured immediately before the durable write-ahead intent.
    */
   before_state?: string;
+  /**
+   * Backend-derived proof, captured before the mutation, of whether an
+   * uninstall-for-user can be undone. Only ever populated for
+   * [`ActionKind::UninstallForUser`]; the renderer cannot supply it, and a
+   * later undo decision reads this pre-mutation evidence rather than
+   * re-deriving it from a device that has already changed.
+   */
+  recovery?: UninstallRecoveryEvidence | null;
 };
 export type PlannedPack = {
   pack_id: string;
@@ -2864,6 +2892,49 @@ export type ThermalZone = {
    * Throttling status label from `mStatus` (`None`, `Light`, `Severe`, ...).
    */
   status: string | null;
+};
+/**
+ * Can `pm uninstall --user N` be undone for this package?
+ *
+ * This is the question users need answered *before* the irreversible step,
+ * not after. `pm install-existing` only works when PackageManager still holds
+ * the APK on a read-only partition; for a package that only ever lived in
+ * `/data/app`, uninstall-for-user is final.
+ */
+export type UninstallRecoverability =
+  /**
+   * PackageManager reports the package as a system package for this user,
+   * so the platform APK survives the uninstall and `install-existing`
+   * restores it.
+   */
+  | "recoverable"
+  /**
+   * The package is installed for this user and is not a system package.
+   * Uninstalling removes the only copy of the APK.
+   */
+  | "not_recoverable"
+  /**
+   * The device did not give an answer this can be derived from. Never
+   * presented as recoverable.
+   */
+  | "unknown";
+export type UninstallRecoveryAssessment = {
+  package: string;
+  evidence: UninstallRecoveryEvidence;
+};
+export type UninstallRecoveryEvidence = {
+  verdict: UninstallRecoverability;
+  /**
+   * Stable code naming the evidence the verdict rests on, so the UI can
+   * explain *why* rather than only *what*.
+   */
+  reason_code: string;
+  /**
+   * APK path PackageManager reported, when it reported one. Retained for
+   * support bundles: it is the single most useful datum when a verdict is
+   * disputed.
+   */
+  apk_path: string | null;
 };
 export type UserScope = "unspecified" | "owner" | "current" | "any";
 export type VideoCodec = "h264" | "h265" | "av1" | "vp8" | "vp9";

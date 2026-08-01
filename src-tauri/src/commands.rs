@@ -313,6 +313,18 @@ fn execute_journaled(
     if plan.before_state.is_empty() {
         plan.before_state = actions::capture_state(transport, &plan.request);
     }
+    // R-122: prove reinstall feasibility while the package still exists. After
+    // the uninstall the evidence is gone, so an undo decision made later would
+    // have nothing to read. The renderer cannot supply this — it is derived
+    // here, on the same validated transport that performs the mutation.
+    if plan.request.kind == actions::ActionKind::UninstallForUser {
+        plan.recovery = Some(adb::packages::assess_uninstall_recovery(
+            transport,
+            &plan.request.target,
+            plan.request.user_id,
+            &plan.request.package,
+        ));
+    }
     let started_at = iso_now();
     let entry = journal
         .execute(plan, undoes, &started_at, |plan| {

@@ -33,6 +33,44 @@ pub fn plan_action(
     Ok(actions::plan(request))
 }
 
+#[derive(specta::Type, Debug, Clone, Serialize)]
+pub struct UninstallRecoveryAssessment {
+    pub package: String,
+    pub evidence: adb::packages::UninstallRecoveryEvidence,
+}
+
+/// Answer "can I get this back?" for every package in a proposed
+/// uninstall-for-user set, before any of them is touched.
+///
+/// The whole set is enumerated here rather than one call per package from the
+/// renderer: a fan-out of N target-bound calls is the stale-completion shape
+/// the target lifecycle contract exists to prevent, and a partial answer to
+/// this question is worse than none.
+#[tauri::command]
+#[specta::specta]
+pub fn assess_uninstall_recovery(
+    target: adb::DeviceTarget,
+    #[allow(non_snake_case)] userId: u32,
+    packages: Vec<String>,
+) -> Result<Vec<UninstallRecoveryAssessment>, CommandError> {
+    if packages.is_empty() || packages.len() > MAX_ACTION_BATCH_ITEMS {
+        return Err(CommandError {
+            code: "invalid_recovery_assessment",
+            message: format!("assess between 1 and {MAX_ACTION_BATCH_ITEMS} packages at a time"),
+        });
+    }
+    let transport = validated_transport(&target)?;
+    Ok(packages
+        .into_iter()
+        .map(|package| UninstallRecoveryAssessment {
+            evidence: adb::packages::assess_uninstall_recovery(
+                &transport, &target, userId, &package,
+            ),
+            package,
+        })
+        .collect())
+}
+
 /// Build one reviewed, reversible package-action plan for multiple packages.
 /// Every item is bound to the same immutable device target, Android user, and
 /// action kind; destructive or conditionally-reversible kinds stay on the

@@ -32,6 +32,20 @@ each milestone tag.
   otherwise, it is a Specta dependency present on the current release line and
   no floor change retires it. That note has been corrected. (IMP-101)
 
+### Added
+
+- **Uninstall-for-user now states whether it can be undone, before you commit.**
+  Droidsmith recorded package provenance around the mutation, but nothing
+  proved `pm install-existing` would succeed *beforehand* — which is the moment
+  the answer matters. The review dialog now carries an explicit reversible /
+  cannot-be-undone / unproven verdict derived from PackageManager's system flag
+  for that Android user, and the verdict is written into the journal intent so
+  a later undo decision reads pre-mutation evidence rather than a device that
+  has already changed. The system flag is used rather than the APK path
+  because an *updated* system app reports a `/data/app` path while still being
+  restorable; classifying on the path would have warned users off a reversible
+  action. An unproven verdict is never presented as reversible. (R-122)
+
 ### Fixed
 
 - **Devices reporting the same serial no longer share persisted state.** The

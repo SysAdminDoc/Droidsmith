@@ -914,6 +914,18 @@
       "grant_permission": "授予权限",
       "revoke_permission": "撤销权限",
       "shell": "经审查的 shell 变更"
+    },
+    "recovery": {
+      "recoverable": "可逆：可以恢复",
+      "notRecoverable": "无法撤销",
+      "unknown": "可逆性未经证实",
+      "reason": {
+        "platformApkRetained": "Android 保留了此应用的系统副本，因此 Droidsmith 可以为该用户重新安装它。",
+        "onlyCopyUserInstalled": "此应用的唯一副本位于用户存储中。卸载后将永久删除。",
+        "notInstalledForUser": "此应用未为所选 Android 用户安装，因此没有可恢复的内容。",
+        "conflictingEvidence": "设备对该应用的存储位置给出了相互矛盾的信息。请视为不可恢复。",
+        "probeFailed": "设备未响应该检查，因此无法保证可以重新安装。"
+      }
     }
   },
   "debloat": {

@@ -245,7 +245,19 @@
     "userCurrent": "actual",
     "userDiscoveryFailed": "La detección de usuarios de Android falló",
     "userLabel": "Usuario",
-    "viaInstaller": "vía {{installer}}"
+    "viaInstaller": "vía {{installer}}",
+    "recovery": {
+      "recoverable": "Reversible: se puede restaurar",
+      "notRecoverable": "No se puede deshacer",
+      "unknown": "Reversibilidad no comprobada",
+      "reason": {
+        "platformApkRetained": "Android conserva la copia de plataforma de esta aplicación, por lo que Droidsmith puede reinstalarla para este usuario.",
+        "onlyCopyUserInstalled": "La única copia de esta aplicación está en el almacenamiento del usuario. Desinstalarla la elimina definitivamente.",
+        "notInstalledForUser": "Esta aplicación no está instalada para el usuario de Android seleccionado, así que no hay nada que restaurar.",
+        "conflictingEvidence": "El dispositivo dio respuestas contradictorias sobre dónde se almacena esta aplicación. Trátala como no recuperable.",
+        "probeFailed": "El dispositivo no respondió a la comprobación, por lo que no se puede prometer la reinstalación."
+      }
+    }
   },
   "bugreport": {
     "acknowledge": "Entiendo el contenido probable y quiero guardar este informe sensible localmente.",

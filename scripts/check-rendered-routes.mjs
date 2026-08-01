@@ -703,6 +703,25 @@ async function runDesktopFlow(browser) {
   }
   await page.evaluate(() => window.__DROIDSMITH_MOCK_ARCHIVE_API__(35));
 
+  // R-122: the uninstall review must state, before the user commits, whether
+  // the package can be brought back. The fixture is user-installed, so the
+  // answer is that it cannot.
+  await restoredPackageRow
+    .getByLabel("Actions: com.example.app", { exact: true })
+    .click();
+  await page.getByRole("menuitem", { name: "Uninstall" }).click();
+  const recoveryPanel = page.getByTestId("uninstall-recovery");
+  await recoveryPanel.getByText("Cannot be undone").waitFor();
+  await recoveryPanel
+    .getByText(/The only copy of this app lives in user storage/)
+    .waitFor();
+  if ((await recoveryPanel.getAttribute("data-recovery-tone")) !== "danger") {
+    throw new Error("an unrecoverable uninstall was not presented as danger");
+  }
+  await assertNoHorizontalOverflow(page, "desktop uninstall recovery review");
+  await page.getByRole("button", { name: "Cancel" }).click();
+  await recoveryPanel.waitFor({ state: "detached" });
+
   await page.getByRole("button", { name: /Profiles/ }).click();
   await page.getByRole("heading", { name: "Profiles", exact: true }).waitFor();
   await page.getByLabel("Name", { exact: true }).fill("QA profile");
@@ -3209,6 +3228,18 @@ async function installTauriMock(
         }
         if (cmd === "plan_action") {
           return planFor(args.request);
+        }
+        if (cmd === "assess_uninstall_recovery") {
+          // R-122: the backend answers for the whole set in one call. The
+          // fixture package is user-installed, so uninstalling it is final.
+          return args.packages.map((packageName) => ({
+            package: packageName,
+            evidence: {
+              verdict: "not_recoverable",
+              reason_code: "only_copy_is_user_installed",
+              apk_path: `/data/app/~~a==/${packageName}-b==/base.apk`,
+            },
+          }));
         }
         if (cmd === "plan_shell_action") {
           window.__DROIDSMITH_LAST_PRIVILEGED_TARGET__ = args.request.target;

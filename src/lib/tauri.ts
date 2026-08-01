@@ -66,6 +66,8 @@ import {
   type PlannedPack as GeneratedPlannedPack,
   type ProcessInfo,
   type RunningService,
+  type UninstallRecoveryAssessment,
+  type UninstallRecoveryEvidence,
   type Profile,
   type ProfilePreview,
   type RecoveryBaselineDiff as GeneratedRecoveryBaselineDiff,
@@ -134,6 +136,7 @@ export type ActionRequest = Omit<
 export type PlannedAction = Omit<GeneratedPlannedAction, "request"> & {
   request: ActionRequest;
 };
+export type { UninstallRecoveryAssessment, UninstallRecoveryEvidence };
 export type AppliedAction = Omit<
   GeneratedAppliedAction,
   "plan" | "before_state" | "after_state"
@@ -759,6 +762,16 @@ export async function callInspectRecoveryBaseline(
 ): Promise<RecoveryBaselineDiff> {
   return rendererRecord(
     await commands.inspectRecoveryBaseline(target, pathGrant),
+  );
+}
+
+export async function callAssessUninstallRecovery(
+  target: DeviceTarget,
+  userId: number,
+  packages: string[],
+): Promise<UninstallRecoveryAssessment[]> {
+  return rendererRecord(
+    await commands.assessUninstallRecovery(target, userId, packages),
   );
 }
 

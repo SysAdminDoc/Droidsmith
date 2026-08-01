@@ -914,6 +914,18 @@
       "grant_permission": "Grant permission",
       "revoke_permission": "Revoke permission",
       "shell": "Reviewed shell mutation"
+    },
+    "recovery": {
+      "recoverable": "Reversible: this can be restored",
+      "notRecoverable": "Cannot be undone",
+      "unknown": "Reversibility unproven",
+      "reason": {
+        "platformApkRetained": "Android keeps this app's platform copy, so Droidsmith can reinstall it for this user.",
+        "onlyCopyUserInstalled": "The only copy of this app lives in user storage. Uninstalling removes it for good.",
+        "notInstalledForUser": "This app is not installed for the selected Android user, so there is nothing to restore.",
+        "conflictingEvidence": "The device gave contradictory answers about where this app is stored. Treat it as unrecoverable.",
+        "probeFailed": "The device did not answer the check, so reinstalling cannot be promised."
+      }
     }
   },
   "debloat": {

@@ -10,6 +10,7 @@ import type {
   PackageBackupPreflight,
   PlannedAction,
   RecoveryBaselineDiff,
+  UninstallRecoveryEvidence,
 } from "../../lib/tauri";
 
 export type PackagesState =
@@ -24,7 +25,12 @@ export type PackagesState =
 
 export type ActionState =
   | { kind: "idle" }
-  | { kind: "confirming"; plan: PlannedAction }
+  | {
+      kind: "confirming";
+      plan: PlannedAction;
+      /** Pre-mutation reinstall feasibility; only set for uninstall-for-user. */
+      recovery?: UninstallRecoveryEvidence | null;
+    }
   | { kind: "applying"; plan: PlannedAction }
   | { kind: "confirming_batch"; plan: BatchActionPlan }
   | { kind: "applying_batch"; plan: BatchActionPlan }

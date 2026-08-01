@@ -289,6 +289,13 @@ pub struct PlannedAction {
     /// Snapshot captured immediately before the durable write-ahead intent.
     #[serde(default)]
     pub before_state: String,
+    /// Backend-derived proof, captured before the mutation, of whether an
+    /// uninstall-for-user can be undone. Only ever populated for
+    /// [`ActionKind::UninstallForUser`]; the renderer cannot supply it, and a
+    /// later undo decision reads this pre-mutation evidence rather than
+    /// re-deriving it from a device that has already changed.
+    #[serde(default)]
+    pub recovery: Option<crate::adb::packages::UninstallRecoveryEvidence>,
 }
 
 /// Applied action — the journal record. `stdout`/`stderr` are kept so
@@ -330,6 +337,7 @@ pub fn plan(mut request: ActionRequest) -> PlannedAction {
             request,
             incident_id,
             before_state: String::new(),
+            recovery: None,
         };
     }
     let args = synth_args(&request);
@@ -340,6 +348,7 @@ pub fn plan(mut request: ActionRequest) -> PlannedAction {
         description,
         incident_id,
         before_state: String::new(),
+        recovery: None,
     }
 }
 

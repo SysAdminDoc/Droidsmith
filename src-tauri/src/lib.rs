@@ -42,22 +42,22 @@ pub mod upgrade;
 
 use commands::{
     analyze_apk, apply_action, apply_action_batch, apply_device_control,
-    apply_remote_file_mutation, apply_settings_import, backup_package, cancel_operation,
-    capture_bugreport, capture_layout, capture_perfetto_trace, connect_wireless, disconnect_device,
-    explain_failure, export_device_pack, export_package_apks, export_recovery_baseline,
-    export_settings, extract_apk, fastboot_getvar, find_gnirehtet_session,
-    forget_wireless_endpoint, get_device_info, get_package_metadata, get_settings_mirror_preset,
-    gnirehtet_session_status, grant_dropped_path, has_settings_import_backup, heartbeat,
-    import_pack, initialize_settings, inspect_profile, inspect_recovery_baseline, install_apk,
-    journal_list, journal_undo, journal_undo_batch, launch_scrcpy, list_device_settings,
-    list_devices, list_fastboot_devices, list_logcat_queries, list_network_connections,
-    list_packages, list_packs, list_permissions, list_processes, list_remote_files,
-    list_running_services, list_users, list_wireless_debugging_risks, list_wireless_history,
-    list_wireless_services, locate_fastboot, locate_gnirehtet, locate_scrcpy,
-    observe_device_fingerprint, open_artifact_with, pair_wireless, perfetto_capabilities,
-    plan_action, plan_action_batch, plan_pack, plan_remote_file_mutation, plan_shell_action,
-    preflight_package_backup, preview_diagnostics, preview_settings_import, pull_file, push_file,
-    put_device_setting, recover_adb, remove_imported_pack, reset_settings,
+    apply_remote_file_mutation, apply_settings_import, assess_uninstall_recovery, backup_package,
+    cancel_operation, capture_bugreport, capture_layout, capture_perfetto_trace, connect_wireless,
+    disconnect_device, explain_failure, export_device_pack, export_package_apks,
+    export_recovery_baseline, export_settings, extract_apk, fastboot_getvar,
+    find_gnirehtet_session, forget_wireless_endpoint, get_device_info, get_package_metadata,
+    get_settings_mirror_preset, gnirehtet_session_status, grant_dropped_path,
+    has_settings_import_backup, heartbeat, import_pack, initialize_settings, inspect_profile,
+    inspect_recovery_baseline, install_apk, journal_list, journal_undo, journal_undo_batch,
+    launch_scrcpy, list_device_settings, list_devices, list_fastboot_devices, list_logcat_queries,
+    list_network_connections, list_packages, list_packs, list_permissions, list_processes,
+    list_remote_files, list_running_services, list_users, list_wireless_debugging_risks,
+    list_wireless_history, list_wireless_services, locate_fastboot, locate_gnirehtet,
+    locate_scrcpy, observe_device_fingerprint, open_artifact_with, pair_wireless,
+    perfetto_capabilities, plan_action, plan_action_batch, plan_pack, plan_remote_file_mutation,
+    plan_shell_action, preflight_package_backup, preview_diagnostics, preview_settings_import,
+    pull_file, push_file, put_device_setting, recover_adb, remove_imported_pack, reset_settings,
     reset_settings_mirror_preset, restore_settings_import_backup, reveal_diagnostics_directory,
     reveal_in_folder, run_host_doctor, save_diagnostics, save_layout_export, save_logcat_export,
     save_logcat_queries, save_profile, scrcpy_capabilities, scrcpy_session_status,
@@ -96,9 +96,10 @@ pub fn export_typescript_bindings(path: &std::path::Path) -> Result<(), String> 
 }
 
 fn normalize_compatible_specta_output(raw: String) -> Result<String, String> {
-    // rc.21 is the final Tauri Specta v2 release compatible with Droidsmith's
-    // Rust 1.81 floor. Normalize two exporter bugs fixed on the Rust-2024 line:
+    // Normalize two exporter bugs on the pinned tauri-specta rc.21 line:
     // reserved command parameters and unused event scaffolding for zero events.
+    // The pin is a bindings-stability decision, not an MSRV one - see the
+    // rationale on the specta dependencies in Cargo.toml.
     let types_marker = "/** user-defined types **/";
     let globals_marker = "/** tauri-specta globals **/";
     let types_at = raw

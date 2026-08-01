@@ -62,6 +62,7 @@ macro_rules! droidsmith_commands {
             plan_pack,
             plan_action,
             plan_action_batch,
+            assess_uninstall_recovery,
             plan_shell_action,
             apply_action,
             apply_action_batch,

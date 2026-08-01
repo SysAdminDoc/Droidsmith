@@ -25,6 +25,7 @@ import {
   callListPackagesWithCapability,
   callListUsers,
   callObserveDeviceFingerprint,
+  callAssessUninstallRecovery,
   callPlanAction,
   callPlanActionBatch,
   callPreflightPackageBackup,
@@ -83,6 +84,7 @@ import type {
   PackagesState,
   RecoveryState,
 } from "./apps/types";
+import { presentRecovery } from "./apps/uninstallRecovery";
 import { useFocusTrap } from "../lib/useFocusTrap";
 import {
   Badge,
@@ -472,7 +474,22 @@ export default function AppsRoute() {
           kind,
           user_id: selectedUser,
         });
-        lease.commit(() => setActionState({ kind: "confirming", plan }));
+        // R-122: uninstall-for-user is the one reviewed action whose inverse
+        // may not exist. Prove it now, while the package is still installed —
+        // after the uninstall there is nothing left to read.
+        const recovery =
+          kind === "uninstall_for_user"
+            ? ((
+                await callAssessUninstallRecovery(
+                  authorizedTarget,
+                  selectedUser,
+                  [pkg],
+                )
+              ).find((entry) => entry.package === pkg)?.evidence ?? null)
+            : null;
+        lease.commit(() =>
+          setActionState({ kind: "confirming", plan, recovery }),
+        );
       } catch (e) {
         lease.commit(() =>
           setActionState({
@@ -1712,6 +1729,8 @@ function ActionOverlay({
     const portableBaselineSupported = plans.every(
       (plan) => !["archive", "request_unarchive"].includes(plan.request.kind),
     );
+    const recovery =
+      state.kind === "confirming" ? presentRecovery(state.recovery) : null;
     return (
       <div
         ref={trapRef}
@@ -1736,6 +1755,18 @@ function ActionOverlay({
           >
             {description}
           </p>
+          {recovery && (
+            <div
+              className="mt-3 rounded-md border border-white/10 bg-white/[0.04] p-3"
+              data-testid="uninstall-recovery"
+              data-recovery-tone={recovery.tone}
+            >
+              <Badge tone={recovery.tone}>{t(recovery.titleKey)}</Badge>
+              <p className="mt-2 text-xs leading-5 text-anvil-200">
+                {t(recovery.detailKey)}
+              </p>
+            </div>
+          )}
           <div className="mt-3 max-h-56 space-y-2 overflow-y-auto rounded-md border border-white/10 bg-white/[0.04] p-3">
             <p className="text-xs font-medium text-anvil-400">
               {plans.length === 1

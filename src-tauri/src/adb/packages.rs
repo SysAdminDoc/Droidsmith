@@ -68,6 +68,135 @@ pub enum PackagePresence {
     Missing,
 }
 
+/// Can `pm uninstall --user N` be undone for this package?
+///
+/// This is the question users need answered *before* the irreversible step,
+/// not after. `pm install-existing` only works when PackageManager still holds
+/// the APK on a read-only partition; for a package that only ever lived in
+/// `/data/app`, uninstall-for-user is final.
+#[derive(specta::Type, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum UninstallRecoverability {
+    /// PackageManager reports the package as a system package for this user,
+    /// so the platform APK survives the uninstall and `install-existing`
+    /// restores it.
+    Recoverable,
+    /// The package is installed for this user and is not a system package.
+    /// Uninstalling removes the only copy of the APK.
+    NotRecoverable,
+    /// The device did not give an answer this can be derived from. Never
+    /// presented as recoverable.
+    Unknown,
+}
+
+#[derive(specta::Type, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct UninstallRecoveryEvidence {
+    pub verdict: UninstallRecoverability,
+    /// Stable code naming the evidence the verdict rests on, so the UI can
+    /// explain *why* rather than only *what*.
+    pub reason_code: String,
+    /// APK path PackageManager reported, when it reported one. Retained for
+    /// support bundles: it is the single most useful datum when a verdict is
+    /// disputed.
+    pub apk_path: Option<String>,
+}
+
+impl UninstallRecoveryEvidence {
+    fn new(verdict: UninstallRecoverability, reason_code: &str, apk_path: Option<String>) -> Self {
+        Self {
+            verdict,
+            reason_code: reason_code.to_string(),
+            apk_path,
+        }
+    }
+
+    pub fn unknown(reason_code: &str) -> Self {
+        Self::new(UninstallRecoverability::Unknown, reason_code, None)
+    }
+}
+
+/// Prove — before the mutation — whether uninstalling `package` for `user_id`
+/// can be undone.
+///
+/// The authority is `pm list packages -s`, which filters on
+/// `ApplicationInfo.FLAG_SYSTEM`. That flag matters more than the APK path:
+/// an *updated* system app reports a `/data/app` path while still carrying the
+/// flag, and uninstalling it for a user falls back to the platform APK rather
+/// than removing it. Classifying on the path alone — which is all
+/// [`AppPackage::system`] can do — would call those packages unrecoverable and
+/// scare users away from a reversible action.
+///
+/// Every failure mode returns `Unknown`. A probe that cannot answer must not
+/// produce a verdict, because the cost of a wrong `Recoverable` is a package
+/// the user can never get back.
+pub fn assess_uninstall_recovery(
+    t: &dyn AdbTransport,
+    target: &DeviceTarget,
+    user_id: u32,
+    package: &str,
+) -> UninstallRecoveryEvidence {
+    if !valid_package_name(package) {
+        return UninstallRecoveryEvidence::unknown("invalid_package_name");
+    }
+    let user = user_id.to_string();
+
+    let installed = match t.shell_target(
+        target,
+        &["pm", "list", "packages", "--user", &user, "-f", package],
+    ) {
+        Ok(raw) => parse_pm_list(&raw, true)
+            .into_iter()
+            .find(|entry| entry.package == package),
+        Err(_) => return UninstallRecoveryEvidence::unknown("probe_failed"),
+    };
+    let Some(installed) = installed else {
+        // Nothing to uninstall for this user, so there is no verdict to give.
+        return UninstallRecoveryEvidence::unknown("package_not_installed_for_user");
+    };
+    let apk_path = installed.apk_path.clone();
+
+    let system = match t.shell_target(
+        target,
+        &[
+            "pm", "list", "packages", "--user", &user, "-s", "-f", package,
+        ],
+    ) {
+        Ok(raw) => parse_pm_list(&raw, true)
+            .into_iter()
+            .any(|entry| entry.package == package),
+        Err(_) => {
+            return UninstallRecoveryEvidence::new(
+                UninstallRecoverability::Unknown,
+                "system_flag_probe_failed",
+                apk_path,
+            )
+        }
+    };
+
+    if system {
+        return UninstallRecoveryEvidence::new(
+            UninstallRecoverability::Recoverable,
+            "platform_apk_retained",
+            apk_path,
+        );
+    }
+    // Not flagged system. If the APK also sits on a read-only partition the
+    // two signals disagree, which is not a state this can adjudicate — some
+    // OEM builds stage packages in unusual places. Say so instead of guessing.
+    if apk_path.as_deref().is_some_and(is_system_path) {
+        return UninstallRecoveryEvidence::new(
+            UninstallRecoverability::Unknown,
+            "system_flag_conflicts_with_apk_path",
+            apk_path,
+        );
+    }
+    UninstallRecoveryEvidence::new(
+        UninstallRecoverability::NotRecoverable,
+        "only_copy_is_user_installed",
+        apk_path,
+    )
+}
+
 impl AppPackage {
     /// Convenience filter: matches Android's "Show system" toggle in
     /// the Settings → Apps screen. Kept ahead of the renderer-side
@@ -808,6 +937,119 @@ package:/system/app/FacebookStub/FacebookStub.apk=com.facebook.appmanager uid:10
             inspect_package_presence(&mock, &target(), 10, "com.system.old").unwrap(),
             PackagePresence::Retained { system: true }
         );
+    }
+
+    fn recovery_mock(
+        listing: Result<String, TransportError>,
+        system_listing: Option<Result<String, TransportError>>,
+    ) -> MockTransport {
+        let mock = MockTransport::new();
+        mock.expect_shell(
+            "abc",
+            &[
+                "pm",
+                "list",
+                "packages",
+                "--user",
+                "0",
+                "-f",
+                "com.example.app",
+            ],
+            listing,
+        );
+        if let Some(system_listing) = system_listing {
+            mock.expect_shell(
+                "abc",
+                &[
+                    "pm",
+                    "list",
+                    "packages",
+                    "--user",
+                    "0",
+                    "-s",
+                    "-f",
+                    "com.example.app",
+                ],
+                system_listing,
+            );
+        }
+        mock
+    }
+
+    #[test]
+    fn an_updated_system_app_is_recoverable_despite_its_data_apk_path() {
+        // The trap R-122 exists to close: an updated system app reports a
+        // /data/app path, so path-based classification calls it a user app and
+        // would warn that uninstalling is final. FLAG_SYSTEM says otherwise,
+        // and install-existing does restore it.
+        let mock = recovery_mock(
+            Ok("package:/data/app/~~a==/com.example.app-b==/base.apk=com.example.app\n".into()),
+            Some(Ok(
+                "package:/data/app/~~a==/com.example.app-b==/base.apk=com.example.app\n".into(),
+            )),
+        );
+        let evidence = assess_uninstall_recovery(&mock, &target(), 0, "com.example.app");
+        assert_eq!(evidence.verdict, UninstallRecoverability::Recoverable);
+        assert_eq!(evidence.reason_code, "platform_apk_retained");
+        assert!(evidence
+            .apk_path
+            .as_deref()
+            .unwrap()
+            .starts_with("/data/app"));
+    }
+
+    #[test]
+    fn a_user_installed_package_is_reported_as_not_recoverable() {
+        let mock = recovery_mock(
+            Ok("package:/data/app/~~a==/com.example.app-b==/base.apk=com.example.app\n".into()),
+            Some(Ok(String::new())),
+        );
+        let evidence = assess_uninstall_recovery(&mock, &target(), 0, "com.example.app");
+        assert_eq!(evidence.verdict, UninstallRecoverability::NotRecoverable);
+        assert_eq!(evidence.reason_code, "only_copy_is_user_installed");
+    }
+
+    #[test]
+    fn every_unanswerable_probe_reports_unknown_rather_than_recoverable() {
+        let cases: Vec<(&str, MockTransport)> = vec![
+            (
+                "probe_failed",
+                recovery_mock(Err(TransportError::Parse("adb died".into())), None),
+            ),
+            (
+                "package_not_installed_for_user",
+                recovery_mock(Ok(String::new()), None),
+            ),
+            (
+                "system_flag_probe_failed",
+                recovery_mock(
+                    Ok("package:/system/app/A/A.apk=com.example.app\n".into()),
+                    Some(Err(TransportError::Parse("adb died".into()))),
+                ),
+            ),
+            (
+                // A read-only APK path with no FLAG_SYSTEM is contradictory
+                // evidence, not a licence to guess either way.
+                "system_flag_conflicts_with_apk_path",
+                recovery_mock(
+                    Ok("package:/system/app/A/A.apk=com.example.app\n".into()),
+                    Some(Ok(String::new())),
+                ),
+            ),
+        ];
+        for (expected, mock) in cases {
+            let evidence = assess_uninstall_recovery(&mock, &target(), 0, "com.example.app");
+            assert_eq!(
+                evidence.verdict,
+                UninstallRecoverability::Unknown,
+                "{expected} must not produce a verdict"
+            );
+            assert_eq!(evidence.reason_code, expected);
+        }
+
+        let rejected = assess_uninstall_recovery(&MockTransport::new(), &target(), 0, ".bad");
+        assert_eq!(rejected.verdict, UninstallRecoverability::Unknown);
+        assert_eq!(rejected.reason_code, "invalid_package_name");
     }
 
     #[test]
