@@ -832,7 +832,7 @@ export default function MirrorRoute() {
                   </label>
                   {capabilityState.kind === "ready" &&
                     capabilityState.value.supports_new_display && (
-                      <label className="grid gap-1.5">
+                      <label className="grid gap-1.5 sm:col-span-2">
                         <span className="text-xs font-medium text-anvil-400">
                           {t("mirror.newDisplay")}
                         </span>
@@ -855,7 +855,7 @@ export default function MirrorRoute() {
                     )}
                   {capabilityState.kind === "ready" &&
                     capabilityState.value.supports_start_app && (
-                      <label className="grid gap-1.5">
+                      <label className="grid gap-1.5 sm:col-span-2">
                         <span className="text-xs font-medium text-anvil-400">
                           {t("mirror.startApp")}
                         </span>

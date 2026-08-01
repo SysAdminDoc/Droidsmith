@@ -14,6 +14,18 @@ completion.
 Working batches live here. Sections collapse into a versioned release on
 each milestone tag.
 
+### Changed
+
+- **Consolidated the workspace into a denser technical visual system.** The
+  shared shell, pane headers, section surfaces, controls, status treatments,
+  tables, and terminal workspaces now use one typography, spacing, and color
+  hierarchy. A persistent desktop runtime rail keeps ADB, device, USB, mDNS,
+  and version context visible without repeating status pills inside each
+  route. Console, Logcat, Fastboot, APK Analyzer, and Mirror now use layouts
+  shaped around their actual workflows. The full rendered-route harness is
+  green across all 11 workspaces, settings, diagnostics, onboarding, keyboard
+  flows, non-English locales, narrow widths, and 200% zoom. (IMP-95)
+
 ## [0.9.14] - 2026-08-01
 
 ### Changed

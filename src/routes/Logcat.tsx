@@ -795,83 +795,89 @@ export default function LogcatRoute() {
               </Button>
             </div>
 
-            <QueryManager
-              library={library}
-              history={history}
-              saveName={saveName}
-              saveScope={saveScope}
-              renameId={renameId}
-              renameValue={renameValue}
-              transferOpen={transferOpen}
-              importText={importText}
-              message={queryMessage}
-              onSaveNameChange={setSaveName}
-              onSaveScopeChange={setSaveScope}
-              onSaveCurrent={() => void saveCurrent()}
-              onApply={applyQuery}
-              onDuplicate={(scope, preset) =>
-                void duplicateQuery(scope, preset)
-              }
-              onDelete={(scope, id) => void deleteQuery(scope, id)}
-              onMove={(scope, index, delta) =>
-                void moveQuery(scope, index, delta)
-              }
-              onStartRename={(id, name) => {
-                setRenameId(id);
-                setRenameValue(name);
-              }}
-              onRenameValueChange={setRenameValue}
-              onCommitRename={(scope, id) => void commitRename(scope, id)}
-              onCancelRename={() => setRenameId(null)}
-              onToggleTransfer={() =>
-                transferOpen ? setTransferOpen(false) : exportQueries()
-              }
-              onImportTextChange={setImportText}
-              onImport={() => void importQueries()}
-            />
+            <div className="grid min-w-0 gap-3 xl:grid-cols-[minmax(0,1fr)_20rem] xl:items-start">
+              <div className="min-w-0 space-y-3 xl:order-2">
+                <QueryManager
+                  library={library}
+                  history={history}
+                  saveName={saveName}
+                  saveScope={saveScope}
+                  renameId={renameId}
+                  renameValue={renameValue}
+                  transferOpen={transferOpen}
+                  importText={importText}
+                  message={queryMessage}
+                  onSaveNameChange={setSaveName}
+                  onSaveScopeChange={setSaveScope}
+                  onSaveCurrent={() => void saveCurrent()}
+                  onApply={applyQuery}
+                  onDuplicate={(scope, preset) =>
+                    void duplicateQuery(scope, preset)
+                  }
+                  onDelete={(scope, id) => void deleteQuery(scope, id)}
+                  onMove={(scope, index, delta) =>
+                    void moveQuery(scope, index, delta)
+                  }
+                  onStartRename={(id, name) => {
+                    setRenameId(id);
+                    setRenameValue(name);
+                  }}
+                  onRenameValueChange={setRenameValue}
+                  onCommitRename={(scope, id) => void commitRename(scope, id)}
+                  onCancelRename={() => setRenameId(null)}
+                  onToggleTransfer={() =>
+                    transferOpen ? setTransferOpen(false) : exportQueries()
+                  }
+                  onImportTextChange={setImportText}
+                  onImport={() => void importQueries()}
+                />
+              </div>
 
-            {streamError && (
-              <StatePanel title={t("logcat.streamFailed")} tone="danger">
-                <p>{streamError}</p>
-              </StatePanel>
-            )}
-            {exportMessage && (
-              <p role="status" className="text-xs text-anvil-300">
-                {exportMessage}
-              </p>
-            )}
-
-            <Card className="overflow-hidden p-0">
-              <div
-                ref={outputRef}
-                className="h-[32rem] overflow-y-auto bg-surface-terminal p-3 font-mono text-sm leading-6"
-                role="log"
-                aria-live="off"
-                aria-label={t("logcat.outputLabel")}
-              >
-                {filteredLines.length === 0 && !tailing && (
-                  <p className="text-anvil-600">{t("logcat.startHint")}</p>
+              <div className="min-w-0 space-y-3 xl:order-1">
+                {streamError && (
+                  <StatePanel title={t("logcat.streamFailed")} tone="danger">
+                    <p>{streamError}</p>
+                  </StatePanel>
                 )}
-                {filteredLines.length === 0 && tailing && (
-                  <p className="text-anvil-600 animate-pulse">
-                    {t("logcat.waiting")}
+                {exportMessage && (
+                  <p role="status" className="text-xs text-anvil-300">
+                    {exportMessage}
                   </p>
                 )}
-                {filteredLines.map((line, i) => (
-                  <div key={i} className={logLineColor(line.level)}>
-                    {line.raw}
+
+                <Card className="overflow-hidden p-0">
+                  <div
+                    ref={outputRef}
+                    className="h-[36rem] overflow-y-auto bg-surface-terminal p-3 font-mono text-sm leading-6"
+                    role="log"
+                    aria-live="off"
+                    aria-label={t("logcat.outputLabel")}
+                  >
+                    {filteredLines.length === 0 && !tailing && (
+                      <p className="text-anvil-600">{t("logcat.startHint")}</p>
+                    )}
+                    {filteredLines.length === 0 && tailing && (
+                      <p className="text-anvil-600 animate-pulse">
+                        {t("logcat.waiting")}
+                      </p>
+                    )}
+                    {filteredLines.map((line, i) => (
+                      <div key={i} className={logLineColor(line.level)}>
+                        {line.raw}
+                      </div>
+                    ))}
                   </div>
-                ))}
+                  <p
+                    className="sr-only"
+                    role="status"
+                    aria-live="polite"
+                    aria-atomic="true"
+                  >
+                    {announcement}
+                  </p>
+                </Card>
               </div>
-              <p
-                className="sr-only"
-                role="status"
-                aria-live="polite"
-                aria-atomic="true"
-              >
-                {announcement}
-              </p>
-            </Card>
+            </div>
           </>
         )}
       </section>

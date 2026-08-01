@@ -490,92 +490,133 @@ export default function ConsoleRoute() {
         />
 
         {selectedTarget && (
-          <Card className="overflow-hidden p-0">
-            <div
-              ref={outputRef}
-              onScroll={() => {
-                const output = outputRef.current;
-                if (!output) return;
-                stickToOutputBottomRef.current =
-                  output.scrollHeight - output.scrollTop - output.clientHeight <
-                  32;
-              }}
-              aria-busy={running}
-              className="h-[32rem] overflow-y-auto bg-surface-terminal p-4 font-mono text-sm leading-6"
-            >
-              {history.length === 0 && (
-                <p className="text-anvil-600">{t("console.hint")}</p>
-              )}
-              {history.map((entry) => (
-                <div key={entry.id} className="mb-3">
-                  <div className="flex items-center gap-2">
-                    <span className="text-circuit-300">$</span>
-                    <span className="break-all text-anvil-100">
-                      {entry.command}
-                    </span>
+          <div className="grid min-w-0 gap-3 xl:grid-cols-[minmax(0,1fr)_19rem] xl:items-start">
+            <Card className="min-w-0 overflow-hidden p-0">
+              <div
+                ref={outputRef}
+                onScroll={() => {
+                  const output = outputRef.current;
+                  if (!output) return;
+                  stickToOutputBottomRef.current =
+                    output.scrollHeight -
+                      output.scrollTop -
+                      output.clientHeight <
+                    32;
+                }}
+                aria-busy={running}
+                className="h-[36rem] overflow-y-auto bg-surface-terminal p-4 font-mono text-sm leading-6"
+              >
+                {history.length === 0 && (
+                  <p className="text-anvil-600">{t("console.hint")}</p>
+                )}
+                {history.map((entry) => (
+                  <div key={entry.id} className="mb-3">
+                    <div className="flex items-center gap-2">
+                      <span className="text-circuit-300">$</span>
+                      <span className="break-all text-anvil-100">
+                        {entry.command}
+                      </span>
+                    </div>
+                    <pre
+                      className={[
+                        "mt-1 whitespace-pre-wrap",
+                        entry.error ? "text-red-300/80" : "text-anvil-400",
+                      ].join(" ")}
+                    >
+                      {entry.output || t("console.noOutput")}
+                    </pre>
                   </div>
-                  <pre
-                    className={[
-                      "mt-1 whitespace-pre-wrap",
-                      entry.error ? "text-red-300/80" : "text-anvil-400",
-                    ].join(" ")}
-                  >
-                    {entry.output || t("console.noOutput")}
-                  </pre>
-                </div>
-              ))}
-              {running && (
-                <div className="text-anvil-500">
-                  <div className="flex items-center gap-2">
-                    <span className="animate-pulse">
-                      {operationStatus ?? t("console.running")}
-                    </span>
-                    {activeOperationRef.current && (
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="danger"
-                        onClick={() => void cancelRunning()}
-                      >
-                        {t("common.cancel")}
-                      </Button>
+                ))}
+                {running && (
+                  <div className="text-anvil-500">
+                    <div className="flex items-center gap-2">
+                      <span className="animate-pulse">
+                        {operationStatus ?? t("console.running")}
+                      </span>
+                      {activeOperationRef.current && (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="danger"
+                          onClick={() => void cancelRunning()}
+                        >
+                          {t("common.cancel")}
+                        </Button>
+                      )}
+                    </div>
+                    {liveOutput && (
+                      <pre className="mt-1 whitespace-pre-wrap text-anvil-400">
+                        {liveOutput}
+                      </pre>
                     )}
                   </div>
-                  {liveOutput && (
-                    <pre className="mt-1 whitespace-pre-wrap text-anvil-400">
-                      {liveOutput}
-                    </pre>
-                  )}
-                </div>
-              )}
-              <span className="sr-only" role="status" aria-live="polite">
-                {operationStatus ?? (running ? t("console.running") : "")}
-              </span>
-            </div>
-            <div className="flex items-center gap-2 border-t border-white/10 bg-white/[0.02] px-4 py-3">
-              <span className="font-mono text-sm text-circuit-300">$</span>
-              <input
-                ref={inputRef}
-                type="text"
-                value={command}
-                onChange={(e) => setCommand(e.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder={t("console.placeholder")}
-                disabled={running}
-                aria-label={t("console.commandLabel")}
-                className="h-8 flex-1 rounded-sm bg-transparent font-mono text-sm text-anvil-50 outline-none placeholder:text-anvil-600 focus-visible:ring-2 focus-visible:ring-circuit-300/40"
-              />
-              <Button
-                type="button"
-                size="sm"
-                variant="primary"
-                onClick={() => void runCommand()}
-                disabled={running || !command.trim()}
-              >
-                {t("console.run")}
-              </Button>
-            </div>
-          </Card>
+                )}
+                <span className="sr-only" role="status" aria-live="polite">
+                  {operationStatus ?? (running ? t("console.running") : "")}
+                </span>
+              </div>
+              <div className="flex items-center gap-2 border-t border-white/10 bg-white/[0.02] px-4 py-3">
+                <span className="font-mono text-sm text-circuit-300">$</span>
+                <input
+                  ref={inputRef}
+                  type="text"
+                  value={command}
+                  onChange={(e) => setCommand(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  placeholder={t("console.placeholder")}
+                  disabled={running}
+                  aria-label={t("console.commandLabel")}
+                  className="h-8 min-w-0 flex-1 rounded-sm bg-transparent font-mono text-sm text-anvil-50 outline-none placeholder:text-anvil-600 focus-visible:ring-2 focus-visible:ring-circuit-300/40"
+                />
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="primary"
+                  onClick={() => void runCommand()}
+                  disabled={running || !command.trim()}
+                >
+                  {t("console.run")}
+                </Button>
+              </div>
+            </Card>
+
+            <Card className="min-w-0 overflow-hidden p-0">
+              <div className="border-b border-white/10 bg-white/[0.025] px-3 py-2.5">
+                <p className="text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-anvil-400">
+                  {t("console.commandCount", { count: history.length })}
+                </p>
+              </div>
+              <div className="max-h-[36rem] overflow-y-auto p-2">
+                {history.length === 0 ? (
+                  <p className="px-2 py-3 text-xs leading-5 text-anvil-500">
+                    {t("console.hint")}
+                  </p>
+                ) : (
+                  [...history].reverse().map((entry) => (
+                    <button
+                      key={entry.id}
+                      type="button"
+                      title={entry.command}
+                      onClick={() => {
+                        setCommand(entry.command);
+                        requestAnimationFrame(() => inputRef.current?.focus());
+                      }}
+                      className="flex w-full min-w-0 items-center gap-2 border-b border-white/[0.06] px-2 py-2 text-left font-mono text-xs text-anvil-300 transition-colors hover:bg-white/[0.04] hover:text-anvil-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-circuit-300/50"
+                    >
+                      <span
+                        aria-hidden="true"
+                        className={[
+                          "h-1.5 w-1.5 shrink-0 rounded-full",
+                          entry.error ? "bg-red-300" : "bg-mint-300",
+                        ].join(" ")}
+                      />
+                      <span className="truncate">{entry.command}</span>
+                    </button>
+                  ))
+                )}
+              </div>
+            </Card>
+          </div>
         )}
       </section>
     </>

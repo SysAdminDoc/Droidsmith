@@ -109,9 +109,50 @@ export default function ApkAnalyzerRoute() {
 
       <section className="mt-4 max-w-none space-y-3">
         {state.kind === "idle" && (
-          <StatePanel title={t("apk.emptyTitle")} tone="info">
-            <p>{t("apk.emptyBody")}</p>
-          </StatePanel>
+          <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_19rem] lg:items-stretch">
+            <Card className="grid min-h-80 place-items-center p-6 text-center">
+              <div className="max-w-xl">
+                <div className="mx-auto mb-5 grid h-12 w-12 place-items-center border border-circuit-300/35 bg-circuit-300/[0.06] font-mono text-sm font-semibold text-circuit-200">
+                  APK
+                </div>
+                <h2 className="text-lg font-semibold tracking-tight text-anvil-50">
+                  {t("apk.emptyTitle")}
+                </h2>
+                <p className="mt-2 text-sm leading-6 text-anvil-400">
+                  {t("apk.emptyBody")}
+                </p>
+              </div>
+            </Card>
+
+            <Card className="p-0">
+              <div className="border-b border-white/10 px-4 py-3">
+                <p className="text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-anvil-400">
+                  {t("apk.description")}
+                </p>
+              </div>
+              <div className="divide-y divide-white/[0.07]">
+                {[
+                  t("apk.components"),
+                  t("apk.dex"),
+                  t("apk.verification.title"),
+                  t("apk.largestEntries"),
+                ].map((label, index) => (
+                  <div
+                    key={label}
+                    className="flex items-center justify-between gap-3 px-4 py-3"
+                  >
+                    <span className="text-sm text-anvil-200">{label}</span>
+                    <span className="font-mono text-[0.65rem] uppercase tracking-wider text-mint-300">
+                      {String(index + 1).padStart(2, "0")}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              <p className="border-t border-white/10 px-4 py-3 text-xs leading-5 text-anvil-500">
+                {t("apk.diff.localNote")}
+              </p>
+            </Card>
+          </div>
         )}
 
         {state.kind === "error" && (

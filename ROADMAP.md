@@ -17,14 +17,6 @@ instead.
 
 ### P2
 
-- [ ] P2 — IMP-95: Consolidate the workspace visual system
-  Why: All-route captures show excessive separators/outlined controls, undersized secondary text, repeated status pills, and weak grouping—especially in Mirror, Profiles, Logcat, and Tuning.
-  Evidence: `test-results/rendered-routes/design-*.png`; `src/index.css`; `src/routes/common.tsx`; `src/components/`; all 11 route files.
-  Touches: `src/index.css`, `tailwind.config.js`, `src/components/`, `src/routes/common.tsx`, `src/App.tsx`, `src/routes/**/*.tsx`, rendered-route smoke.
-  Acceptance: Shared page-header, section, field-group, status, and action-row primitives define typography and density; borders indicate true containment rather than every row; non-action status defaults to text/icon instead of pills; explanatory copy is shortened; controls retain 44px targets where needed and body text remains WCAG-sized; all 11 workspaces plus settings/diagnostics/onboarding pass keyboard, non-English, narrow-width, and 200%-zoom captures with no clipping.
-  Complexity: L
-  Note (2026-07-31): the `Touches` list above is inaccurate — `src/components/` does not exist and the config is `tailwind.config.ts`, not `.js`. Shared primitives live in `src/routes/common.tsx` (17 exports). Substance unchanged.
-
 - [ ] P2 — R-119: Add resumable fleet execution from a prior report
   Why: Commercial fleets and OSS multi-device tools emphasize batch continuity; Droidsmith emits stable fleet JSON but cannot safely rerun only failed/skipped targets after interruption.
   Evidence: `src-tauri/src/bin/droidsmith_cli.rs`; DeviceFarmer STF; Escrcpy multi-device workflows; commercial fleet/session reporting.

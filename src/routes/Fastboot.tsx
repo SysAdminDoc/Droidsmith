@@ -178,21 +178,75 @@ export default function FastbootRoute() {
 
       <section className="mt-4 max-w-none space-y-3">
         {fbState.kind === "not_found" && (
-          <StatePanel title={t("fastboot.fastbootMissing")} tone="warning">
-            <p>
-              {t("fastboot.installPrefix")} <code>fastboot</code>{" "}
-              {t("fastboot.installSuffix")}
-            </p>
-            <div className="mt-3">
-              <Button
-                type="button"
-                size="sm"
-                onClick={() => void checkFastboot()}
-              >
-                {t("common.checkAgain")}
-              </Button>
+          <div className="space-y-3">
+            <StatePanel title={t("fastboot.fastbootMissing")} tone="warning">
+              <p>
+                {t("fastboot.installPrefix")} <code>fastboot</code>{" "}
+                {t("fastboot.installSuffix")}
+              </p>
+            </StatePanel>
+
+            <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(20rem,0.8fr)]">
+              <Card className="p-0">
+                <div className="border-b border-white/10 px-4 py-3">
+                  <p className="text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-anvil-400">
+                    {t("fastboot.bootloaderDevices")}
+                  </p>
+                </div>
+                <div className="grid min-h-52 place-items-center px-6 py-8 text-center">
+                  <div>
+                    <div className="mx-auto mb-4 grid h-10 w-10 place-items-center border border-amber-300/35 bg-amber-300/[0.06] font-mono text-amber-200">
+                      !
+                    </div>
+                    <p className="text-sm font-semibold text-anvil-100">
+                      {t("fastboot.fastbootMissingShort")}
+                    </p>
+                    <p className="mt-2 max-w-md text-xs leading-5 text-anvil-400">
+                      {t("fastboot.noBootloaderDevices")}{" "}
+                      <code>adb reboot bootloader</code>{" "}
+                      {t("fastboot.noBootloaderDevicesSuffix")}
+                    </p>
+                  </div>
+                </div>
+              </Card>
+
+              <Card className="p-4">
+                <p className="text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-anvil-400">
+                  {t("fastboot.fastbootAt")}
+                </p>
+                <p className="mt-2 border border-white/10 bg-black/20 px-3 py-2 font-mono text-xs text-anvil-500">
+                  —
+                </p>
+                <p className="mt-4 text-xs leading-5 text-anvil-400">
+                  {t("fastboot.installPrefix")} <code>fastboot</code>{" "}
+                  {t("fastboot.installSuffix")}
+                </p>
+                <div className="mt-3 grid gap-2 font-mono text-xs text-anvil-300">
+                  <code className="border border-white/10 bg-black/20 px-3 py-2">
+                    scripts/fetch-platform-tools.ps1
+                  </code>
+                  <code className="border border-white/10 bg-black/20 px-3 py-2">
+                    scripts/fetch-platform-tools.sh
+                  </code>
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  className="mt-4"
+                  onClick={() => void checkFastboot()}
+                >
+                  {t("common.checkAgain")}
+                </Button>
+              </Card>
             </div>
-          </StatePanel>
+
+            <Card className="border-amber-300/20 p-4">
+              <p className="text-xs leading-5 text-amber-100/80">
+                {t("fastboot.safetyWarning")} <code>fastboot</code>{" "}
+                {t("fastboot.safetyWarningSuffix")}
+              </p>
+            </Card>
+          </div>
         )}
 
         {fbState.kind === "found" && (

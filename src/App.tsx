@@ -17,7 +17,11 @@ import {
   inTauri,
   type Heartbeat,
 } from "./lib/tauri";
-import { startDeviceLifecycle, stopDeviceLifecycle } from "./lib/deviceStore";
+import {
+  startDeviceLifecycle,
+  stopDeviceLifecycle,
+  useDeviceStore,
+} from "./lib/deviceStore";
 import { cn } from "./lib/cn";
 import {
   loadDroidsmithLanguage,
@@ -262,25 +266,44 @@ export default function App() {
   }, []);
 
   return (
-    <div className="min-h-full overflow-hidden bg-anvil-950 text-anvil-100 lg:h-full">
+    <div className="min-h-full overflow-hidden bg-anvil-950 text-anvil-100 lg:grid lg:h-full lg:grid-rows-[minmax(0,1fr)_2.15rem]">
       <a
         href="#main-content"
         className="sr-only focus:not-sr-only focus:fixed focus:start-4 focus:top-4 focus:z-50 focus:rounded-md focus:bg-circuit-300 focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:text-anvil-950"
       >
         {t("app.skipToContent")}
       </a>
-      <div className="relative flex min-h-full flex-col lg:h-full lg:flex-row">
+      <div className="relative flex min-h-full min-w-0 flex-col lg:h-full lg:min-h-0 lg:flex-row">
         <aside
           ref={sidebarRef}
-          className="border-b border-white/10 bg-[#0f141a] px-3 py-3 lg:sticky lg:top-0 lg:flex lg:h-screen lg:w-[13.5rem] lg:shrink-0 lg:flex-col lg:overflow-y-auto lg:border-b-0 lg:border-e lg:px-3 lg:py-4"
+          className="border-b border-white/10 bg-[#07111a] px-3 py-3 lg:sticky lg:top-0 lg:flex lg:h-full lg:w-[15.5rem] lg:shrink-0 lg:flex-col lg:overflow-y-auto lg:border-b-0 lg:border-e lg:border-white/[0.13] lg:px-3 lg:py-3"
           aria-label={t("app.sidebarLabel")}
         >
-          <div className="flex items-start justify-between gap-4 lg:block">
+          <div className="flex items-center justify-between gap-4 border-b border-white/[0.08] pb-3">
             <Brand state={hb} />
+            <button
+              type="button"
+              className="grid h-9 w-9 shrink-0 place-items-center rounded-[0.2rem] text-anvil-400 transition hover:bg-white/[0.06] hover:text-anvil-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-circuit-300"
+              aria-label={t("palette.title")}
+              title={`${t("palette.title")} (Ctrl+K)`}
+              onClick={() => palette.setOpen(true)}
+            >
+              <svg
+                viewBox="0 0 24 24"
+                className="h-5 w-5"
+                fill="none"
+                stroke="currentColor"
+                strokeLinecap="round"
+                strokeWidth="1.75"
+                aria-hidden="true"
+              >
+                <path d="M5 7h14M5 12h14M5 17h14" />
+              </svg>
+            </button>
           </div>
 
           <nav
-            className="nav-strip mt-3 flex snap-x gap-1.5 overflow-x-auto pb-2 text-sm lg:block lg:space-y-0.5 lg:overflow-visible lg:pb-0"
+            className="nav-strip mt-2 flex snap-x gap-1.5 overflow-x-auto pb-2 text-sm lg:block lg:space-y-0.5 lg:overflow-visible lg:pb-0"
             aria-label={t("app.primaryNav")}
           >
             {NAV_ITEMS.map((item) => (
@@ -296,7 +319,7 @@ export default function App() {
             ))}
           </nav>
 
-          <div className="mt-3 lg:mt-auto lg:border-t lg:border-white/10 lg:pt-3">
+          <div className="mt-3 lg:mt-auto lg:border-t lg:border-white/[0.1] lg:pt-2">
             <ShellActions
               onOpenSettings={() => setShowSettings(true)}
               onOpenGuide={() => setShowOnboarding(true)}
@@ -310,13 +333,14 @@ export default function App() {
           id="main-content"
           tabIndex={-1}
           aria-label={t(activeItem.labelKey)}
-          className="min-w-0 flex-1 overflow-auto px-4 py-4 outline-none sm:px-5 lg:h-full lg:px-6 lg:py-4 xl:px-7"
+          className="technical-canvas min-w-0 flex-1 overflow-auto px-3 py-3 outline-none sm:px-4 lg:h-full lg:px-4 lg:py-3 xl:px-5"
         >
-          <div className="mx-auto max-w-[88rem]">
+          <div className="mx-auto max-w-[96rem]">
             <LazyRoute item={activeItem} />
           </div>
         </main>
       </div>
+      <RuntimeRail state={hb} />
       <div
         className="sr-only"
         role="status"
@@ -406,12 +430,14 @@ function LazyRoute({ item }: { item: NavItem }) {
   );
 
   return (
-    <RouteAttempt
-      key={`${item.id}:${attempt}`}
-      item={item}
-      failure={failure}
-      loading={loading}
-    />
+    <div className="route-frame" data-route={item.id}>
+      <RouteAttempt
+        key={`${item.id}:${attempt}`}
+        item={item}
+        failure={failure}
+        loading={loading}
+      />
+    </div>
   );
 }
 
@@ -633,6 +659,77 @@ function AboutRuntime({
   );
 }
 
+function RuntimeRail({ state }: { state: LoadState }) {
+  const { t } = useTranslation();
+  const devicesState = useDeviceStore((store) => store.devicesState);
+  const health = useDeviceStore((store) => store.health);
+  const deviceCount =
+    devicesState.kind === "ok" ? devicesState.value.devices.length : 0;
+  const adbResolved =
+    devicesState.kind === "ok" && devicesState.value.adb_resolved;
+  const statusLabel =
+    devicesState.kind === "no_tauri"
+      ? t("runtime.browserPreview")
+      : devicesState.kind === "loading"
+        ? t("runtime.checking")
+        : adbResolved
+          ? `${t("devices.adbReady")} · ${t("runtime.desktop")}`
+          : t("devices.adbMissing");
+
+  return (
+    <footer
+      className="runtime-rail hidden min-w-0 items-center border-t border-white/[0.13] bg-[#061019] px-4 text-[0.72rem] text-anvil-400 lg:flex"
+      aria-label={t("runtime.desktop")}
+    >
+      <span className="flex items-center gap-2 text-anvil-200">
+        <span
+          className={cn(
+            "h-2 w-2 rounded-full",
+            adbResolved ? "bg-emerald-300" : "bg-amber-300",
+          )}
+          aria-hidden="true"
+        />
+        {statusLabel}
+      </span>
+      <RuntimeDivider />
+      <span>{t("common.deviceCount", { count: deviceCount })}</span>
+      {health?.client_version && (
+        <>
+          <RuntimeDivider />
+          <span>
+            {t("devices.health.client")} {health.client_version}
+          </span>
+        </>
+      )}
+      {health?.usb_backend && (
+        <>
+          <RuntimeDivider />
+          <span>
+            {t("devices.health.usbBackend")}: {health.usb_backend}
+          </span>
+        </>
+      )}
+      {health?.mdns_enabled != null && (
+        <>
+          <RuntimeDivider />
+          <span>
+            {t("devices.health.mdns")}: {health.mdns_enabled ? "ON" : "OFF"}
+          </span>
+        </>
+      )}
+      <span className="ms-auto text-anvil-500">
+        {state.status === "ok"
+          ? t("app.version", { version: state.value.version })
+          : t("app.name")}
+      </span>
+    </footer>
+  );
+}
+
+function RuntimeDivider() {
+  return <span className="mx-4 h-4 w-px bg-white/[0.14]" aria-hidden="true" />;
+}
+
 function ShellActions({
   className,
   onOpenSettings,
@@ -647,12 +744,12 @@ function ShellActions({
   const { t } = useTranslation();
 
   return (
-    <div className={cn("grid gap-0.5", className)}>
+    <div className={cn("grid gap-0", className)}>
       <Button
         type="button"
         variant="ghost"
         size="sm"
-        className="w-full justify-start px-2"
+        className="w-full justify-start px-2.5"
         onClick={onOpenSettings}
       >
         <SettingsIcon />
@@ -662,7 +759,7 @@ function ShellActions({
         type="button"
         variant="ghost"
         size="sm"
-        className="w-full justify-start px-2"
+        className="w-full justify-start px-2.5"
         onClick={onOpenGuide}
       >
         <HelpIcon />
@@ -672,7 +769,7 @@ function ShellActions({
         type="button"
         variant="ghost"
         size="sm"
-        className="w-full justify-start px-2"
+        className="w-full justify-start px-2.5"
         onClick={onOpenAbout}
       >
         <AboutIcon />
@@ -766,10 +863,10 @@ function Brand({ state }: { state: LoadState }) {
 
   return (
     <div className="min-w-0">
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2.5">
         <LogoMark />
         <div className="min-w-0">
-          <h1 className="truncate text-base font-semibold tracking-tight text-anvil-50">
+          <h1 className="truncate text-[0.98rem] font-semibold tracking-[-0.015em] text-anvil-50">
             {t("app.name")}
           </h1>
           <p className="sr-only">{t("app.tagline")}</p>
@@ -808,12 +905,12 @@ function NavStub({
       aria-current={active ? "page" : undefined}
       aria-describedby={`${item.id}-description`}
       className={cn(
-        "group relative flex min-w-[11.5rem] items-center gap-2.5 rounded-[0.2rem] px-3 py-2 text-start transition duration-150 lg:min-w-0",
+        "group relative flex min-h-10 min-w-[11.5rem] items-center gap-3 rounded-[0.15rem] px-3 py-2 text-start transition duration-150 lg:min-w-0",
         "snap-start",
         "focus:outline-none focus-visible:ring-2 focus-visible:ring-circuit-300 focus-visible:ring-offset-2 focus-visible:ring-offset-anvil-950",
         active
-          ? "bg-white/[0.055] text-anvil-50 before:absolute before:inset-y-1.5 before:start-0 before:w-0.5 before:bg-circuit-300"
-          : "text-anvil-300 hover:bg-white/[0.035] hover:text-anvil-50",
+          ? "bg-circuit-300/[0.09] text-circuit-100 before:absolute before:inset-y-0 before:start-0 before:w-0.5 before:bg-circuit-300"
+          : "text-anvil-300 hover:bg-white/[0.04] hover:text-anvil-50",
       )}
     >
       <NavIcon id={item.id} active={active} />
@@ -833,7 +930,7 @@ function LogoMark() {
     <img
       src={droidsmithLogo}
       alt=""
-      className="h-10 w-10 shrink-0 rounded-lg"
+      className="h-9 w-9 shrink-0 rounded-[0.2rem]"
       aria-hidden="true"
     />
   );
