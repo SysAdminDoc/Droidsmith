@@ -13,6 +13,7 @@ use std::time::Duration;
 use serde::{Deserialize, Serialize};
 
 use crate::adb::actions::pm_failure_marker;
+use crate::adb::device_settings::{read_advanced_protection_mode, AdvancedProtectionMode};
 use crate::adb::{DeviceTarget, DeviceTransportKind, ShellTransport};
 use crate::operations::{self, EventSink, ProcessOutput, RegisteredOperation};
 
@@ -96,6 +97,9 @@ pub struct InstallFailure {
     pub remedy: String,
     pub suggested_override: Option<SuggestedInstallOverride>,
     pub raw_output: String,
+    /// Heuristic only: this hidden settings key is not a stable shell API and
+    /// never changes install behavior or proves the cause of a failure.
+    pub advanced_protection_mode: AdvancedProtectionMode,
 }
 
 #[derive(specta::Type, Debug, Clone, Serialize)]
@@ -284,6 +288,9 @@ pub fn install_package(
 
     match execution {
         Ok(mut result) => {
+            if let Some(failure) = result.failure.as_mut() {
+                failure.advanced_protection_mode = read_advanced_protection_mode(transport, target);
+            }
             audit.install_mode = result.install_mode;
             audit.outcome = if result.succeeded {
                 AuditOutcome::Succeeded
@@ -752,6 +759,7 @@ pub fn classify_install_failure(raw: &str) -> InstallFailure {
         remedy: remedy.to_string(),
         suggested_override,
         raw_output: bounded(raw),
+        advanced_protection_mode: AdvancedProtectionMode::Unknown,
     }
 }
 

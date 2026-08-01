@@ -12,12 +12,47 @@ use serde::{Deserialize, Serialize};
 use crate::adb::device::DeviceTarget;
 use crate::adb::transport::{AdbTransport, TransportError};
 
+const ADVANCED_PROTECTION_MODE_KEY: &str = "advanced_protection_mode";
+
 #[derive(specta::Type, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SettingNamespace {
     System,
     Secure,
     Global,
+}
+
+/// Best-effort reading of Android's hidden Advanced Protection setting. The
+/// key is not a stable public shell contract, so every response other than the
+/// exact documented boolean values remains Unknown.
+#[derive(specta::Type, Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AdvancedProtectionMode {
+    Enabled,
+    Disabled,
+    Unknown,
+}
+
+pub fn read_advanced_protection_mode(
+    transport: &dyn AdbTransport,
+    target: &DeviceTarget,
+) -> AdvancedProtectionMode {
+    transport
+        .shell_target(
+            target,
+            &["settings", "get", "secure", ADVANCED_PROTECTION_MODE_KEY],
+        )
+        .map_or(AdvancedProtectionMode::Unknown, |raw| {
+            classify_advanced_protection_mode(&raw)
+        })
+}
+
+fn classify_advanced_protection_mode(raw: &str) -> AdvancedProtectionMode {
+    match raw.trim() {
+        "1" => AdvancedProtectionMode::Enabled,
+        "0" => AdvancedProtectionMode::Disabled,
+        _ => AdvancedProtectionMode::Unknown,
+    }
 }
 
 impl SettingNamespace {
@@ -270,6 +305,24 @@ mod tests {
         assert_eq!(normalize_get("null"), None);
         assert_eq!(normalize_get("  \n"), None);
         assert_eq!(normalize_get("1.0"), Some("1.0".to_string()));
+    }
+
+    #[test]
+    fn advanced_protection_mode_is_strictly_three_state() {
+        assert_eq!(
+            classify_advanced_protection_mode("1\n"),
+            AdvancedProtectionMode::Enabled
+        );
+        assert_eq!(
+            classify_advanced_protection_mode("0\n"),
+            AdvancedProtectionMode::Disabled
+        );
+        for unknown in ["", "null\n", "enabled\n", "2\n"] {
+            assert_eq!(
+                classify_advanced_protection_mode(unknown),
+                AdvancedProtectionMode::Unknown
+            );
+        }
     }
 
     #[test]

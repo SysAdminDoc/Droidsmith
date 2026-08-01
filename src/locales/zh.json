@@ -714,6 +714,7 @@
     "installCode": "失败代码",
     "installRemedy": "修复建议",
     "installNoAutomaticOverride": "Droidsmith 未自动应用重试覆盖。",
+    "installAdvancedProtectionHeuristic": "设备报告高级保护模式已启用。此隐藏键信号只是不稳定的启发式信息：它可能有助于解释安装失败，但不能证明原因，也没有阻止本次尝试。",
     "installAudit": "审计记录：{{id}}",
     "installReviewOverride": "审查受保护的覆盖",
     "installOverrideTitle": "确认不安全的安装覆盖",
@@ -1568,6 +1569,14 @@
     "privacy": "隐私和副作用约定",
     "officialGuidance": "打开官方指南",
     "findings": {
+      "advanced_protection_mode": {
+        "title": "高级保护模式可能会限制调试",
+        "summary": "一台已连接设备通过不稳定的隐藏设置键报告高级保护模式已启用。此启发式信息可能有助于解释安装或连接失败，但不能证明原因，也不会阻止任何操作。",
+        "remediation": {
+          "0": "在设备上查看 Android 高级保护的限制。",
+          "1": "除非设备所有者明确接受安全权衡，否则请保持该模式启用；使用其余诊断信息确认实际失败原因。"
+        }
+      },
       "usb_mdns_backend_toggles": {
         "title": "USB 和 mDNS 后端排障开关",
         "summary": "platform-tools 37.0.1 更改了默认的 USB 和 mDNS 后端。如果有线设备未被检测到或无线发现失败，通过这些环境变量切换后端可能有帮助。",

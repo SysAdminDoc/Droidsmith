@@ -16,6 +16,7 @@ use std::{fs, path::Path};
 use serde::Serialize;
 
 use crate::adb::device::DeviceState;
+use crate::adb::device_settings::{read_advanced_protection_mode, AdvancedProtectionMode};
 use crate::adb::health::AdbHealth;
 use crate::adb::version_policy::{
     PlatformToolsAssessment, PlatformToolsReason, PlatformToolsStatus,
@@ -26,6 +27,8 @@ const DEVICE_SETUP_URL: &str = "https://developer.android.com/studio/run/device"
 const OEM_DRIVER_URL: &str = "https://developer.android.com/studio/run/oem-usb";
 const PLATFORM_TOOLS_URL: &str = "https://developer.android.com/tools/releases/platform-tools";
 const ADB_URL: &str = "https://developer.android.com/tools/adb";
+const ADVANCED_PROTECTION_URL: &str =
+    "https://developer.android.com/privacy-and-security/advanced-protection-mode";
 const ANDROID_USB_VENDORS: &[&str] = &[
     "0502", "0bb4", "0fce", "1004", "12d1", "18d1", "19d2", "22b8", "2717", "2a45", "2a70", "2ae5",
     "2d95", "04e8",
@@ -79,6 +82,7 @@ pub struct HostDoctorReport {
     pub platform: &'static str,
     pub adb: HostDoctorAdb,
     pub device_state_counts: BTreeMap<String, u32>,
+    pub advanced_protection_mode: AdvancedProtectionMode,
     pub findings: Vec<HostFinding>,
     pub privacy: Vec<&'static str>,
 }
@@ -98,6 +102,7 @@ struct DoctorSnapshot {
     resolution: adb::AdbResolution,
     query_succeeded: bool,
     device_state_counts: BTreeMap<String, u32>,
+    advanced_protection_mode: AdvancedProtectionMode,
     health: Option<AdbHealth>,
     usb: UsbEvidence,
     environment_overrides: Vec<&'static str>,
@@ -108,14 +113,33 @@ pub fn scan() -> HostDoctorReport {
     let mut query_succeeded = false;
     let mut device_state_counts = BTreeMap::new();
     let mut health = None;
+    let mut advanced_protection_mode = AdvancedProtectionMode::Unknown;
     if let Some(path) = resolution.path.as_ref() {
         let transport = ShellTransport::new(path);
         if let Ok(devices) = transport.list_devices() {
             query_succeeded = true;
-            for device in devices {
+            let mut saw_disabled = false;
+            let mut saw_unknown = false;
+            for device in &devices {
                 *device_state_counts
                     .entry(state_key(&device.state))
                     .or_default() += 1;
+                if device.state.is_actionable() {
+                    match read_advanced_protection_mode(&transport, &device.target()) {
+                        AdvancedProtectionMode::Enabled => {
+                            advanced_protection_mode = AdvancedProtectionMode::Enabled;
+                        }
+                        AdvancedProtectionMode::Disabled => saw_disabled = true,
+                        AdvancedProtectionMode::Unknown => saw_unknown = true,
+                    }
+                }
+            }
+            if advanced_protection_mode != AdvancedProtectionMode::Enabled {
+                advanced_protection_mode = if saw_disabled && !saw_unknown {
+                    AdvancedProtectionMode::Disabled
+                } else {
+                    AdvancedProtectionMode::Unknown
+                };
             }
             health = Some(adb::health::probe(&transport, resolution.version.clone()));
         }
@@ -126,6 +150,7 @@ pub fn scan() -> HostDoctorReport {
         resolution,
         query_succeeded,
         device_state_counts,
+        advanced_protection_mode,
         health,
         usb: probe_usb(),
         environment_overrides: configured_adb_overrides(),
@@ -244,6 +269,24 @@ fn analyze(snapshot: DoctorSnapshot) -> HostDoctorReport {
     add_state_findings(&snapshot, &mut findings);
     add_usb_findings(&snapshot, &mut findings);
 
+    if snapshot.advanced_protection_mode == AdvancedProtectionMode::Enabled {
+        findings.push(finding(
+            "advanced_protection_mode",
+            FindingSeverity::Warning,
+            "Advanced Protection Mode may restrict debugging",
+            "At least one connected device reported Advanced Protection Mode enabled through an unstable hidden settings key. This is a heuristic that may help explain install or connection failures; it is not proof of their cause and never blocks an operation.",
+            vec![
+                "settings get secure advanced_protection_mode returned 1 for an actionable transport (device identity omitted).".to_string(),
+                "Signal stability: hidden and device-unverified.".to_string(),
+            ],
+            vec![
+                "Review Android's Advanced Protection restrictions on the device.",
+                "Keep the mode enabled unless the device owner deliberately accepts the security tradeoff; use the remaining diagnostics to confirm the actual failure cause.",
+            ],
+            ADVANCED_PROTECTION_URL,
+        ));
+    }
+
     if !snapshot.environment_overrides.is_empty() {
         findings.push(finding(
             "server_config_override",
@@ -338,6 +381,7 @@ fn analyze(snapshot: DoctorSnapshot) -> HostDoctorReport {
             compatibility,
         },
         device_state_counts: snapshot.device_state_counts,
+        advanced_protection_mode: snapshot.advanced_protection_mode,
         findings,
         privacy: vec![
             "No driver, udev, service, or ADB server changes were made.",
@@ -857,6 +901,7 @@ mod tests {
             },
             query_succeeded: true,
             device_state_counts: BTreeMap::new(),
+            advanced_protection_mode: AdvancedProtectionMode::Unknown,
             health: Some(AdbHealth {
                 client_version: Some("37.0.0".to_string()),
                 server_version: Some("37.0.0".to_string()),
@@ -866,6 +911,22 @@ mod tests {
             usb: UsbEvidence::default(),
             environment_overrides: Vec::new(),
         }
+    }
+
+    #[test]
+    fn advanced_protection_is_an_explicit_non_causal_heuristic() {
+        let mut input = snapshot("windows");
+        input.advanced_protection_mode = AdvancedProtectionMode::Enabled;
+        let report = analyze(input);
+        let finding = report
+            .findings
+            .iter()
+            .find(|finding| finding.code == "advanced_protection_mode")
+            .unwrap();
+        assert_eq!(finding.severity, FindingSeverity::Warning);
+        assert!(finding.summary.contains("heuristic"));
+        assert!(finding.summary.contains("not proof"));
+        assert!(finding.summary.contains("never blocks"));
     }
 
     #[test]

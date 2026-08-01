@@ -714,6 +714,7 @@
     "installCode": "Fehlercode",
     "installRemedy": "Abhilfe",
     "installNoAutomaticOverride": "Droidsmith hat nicht automatisch eine Wiederholungsüberschreibung angewendet.",
+    "installAdvancedProtectionHeuristic": "Der erweiterte Schutzmodus wird als aktiviert gemeldet. Dieses Signal eines verborgenen Schlüssels ist nur eine instabile Heuristik: Es kann den Installationsfehler erklären, beweist die Ursache aber nicht und hat diesen Versuch nicht blockiert.",
     "installAudit": "Audit-Eintrag: {{id}}",
     "installReviewOverride": "Geschützte Überschreibung prüfen",
     "installOverrideTitle": "Unsichere Installationsüberschreibung bestätigen",
@@ -1568,6 +1569,14 @@
     "privacy": "Datenschutz- und Nebenwirkungsvertrag",
     "officialGuidance": "Offizielle Anleitung öffnen",
     "findings": {
+      "advanced_protection_mode": {
+        "title": "Der erweiterte Schutzmodus kann das Debugging einschränken",
+        "summary": "Ein verbundenes Gerät meldete den erweiterten Schutzmodus über einen instabilen verborgenen Einstellungsschlüssel als aktiviert. Diese Heuristik kann Installations- oder Verbindungsfehler erklären, beweist deren Ursache aber nicht und blockiert keine Aktion.",
+        "remediation": {
+          "0": "Prüfen Sie die Einschränkungen des erweiterten Android-Schutzes auf dem Gerät.",
+          "1": "Lassen Sie den Modus aktiviert, sofern der Gerätebesitzer den Sicherheitskompromiss nicht bewusst akzeptiert, und bestätigen Sie die tatsächliche Ursache mit den übrigen Diagnosen."
+        }
+      },
       "usb_mdns_backend_toggles": {
         "title": "USB- und mDNS-Backend-Fehlerbehebungsschalter",
         "summary": "platform-tools 37.0.1 hat die Standard-USB- und mDNS-Backends geändert. Wird ein kabelgebundenes Gerät nicht erkannt oder schlägt die drahtlose Erkennung fehl, kann ein Backend-Wechsel über diese Umgebungsvariablen helfen.",

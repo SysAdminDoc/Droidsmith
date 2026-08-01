@@ -714,6 +714,7 @@
     "installCode": "Failure code",
     "installRemedy": "Remedy",
     "installNoAutomaticOverride": "Droidsmith did not apply a retry override automatically.",
+    "installAdvancedProtectionHeuristic": "Advanced Protection Mode is reported enabled. This hidden-key signal is an unstable heuristic: it may explain the install failure, but does not prove the cause and did not block this attempt.",
     "installAudit": "Audit record: {{id}}",
     "installReviewOverride": "Review guarded override",
     "installOverrideTitle": "Confirm an unsafe install override",
@@ -1568,6 +1569,14 @@
     "privacy": "Privacy and side-effect contract",
     "officialGuidance": "Open official guidance",
     "findings": {
+      "advanced_protection_mode": {
+        "title": "Advanced Protection Mode may restrict debugging",
+        "summary": "A connected device reported Advanced Protection Mode enabled through an unstable hidden settings key. This heuristic may help explain install or connection failures; it is not proof of their cause and never blocks an operation.",
+        "remediation": {
+          "0": "Review Android's Advanced Protection restrictions on the device.",
+          "1": "Keep the mode enabled unless the device owner deliberately accepts the security tradeoff; use the remaining diagnostics to confirm the actual failure cause."
+        }
+      },
       "usb_mdns_backend_toggles": {
         "title": "USB and mDNS backend troubleshooting toggles",
         "summary": "platform-tools 37.0.1 changed the default USB and mDNS backends. If a wired device is not detected or wireless discovery fails, switching backends via these environment variables can help.",

@@ -46,6 +46,17 @@ each milestone tag.
   through the contract. The test requires exact nine-family parity and confirms
   malformed file rows remain visible with `parse_error`. (IMP-107)
 
+- **Advanced Protection Mode is now an explicit, fail-unknown heuristic.** On
+  actionable devices Droidsmith reads the AOSP hidden secure-settings key and
+  accepts only exact `1` and `0` responses; command failures, absent keys,
+  blanks, `null`, and every unparseable value remain Unknown. An enabled result
+  adds localized, non-causal guidance to failed installs and Host Doctor's
+  connection findings, with an official Android guidance link, but never
+  changes an operation or applies a block. Unit fixtures cover enabled,
+  disabled, absent/empty, and malformed responses, while the remaining
+  physical-device verification stays documented in the local blocked roadmap.
+  (R-127)
+
 ### Changed
 
 - **Consolidated the workspace into a denser technical visual system.** The

@@ -1179,6 +1179,12 @@ export type AdbResolution = {
   version: string | null;
   compatibility: PlatformToolsAssessment;
 };
+/**
+ * Best-effort reading of Android's hidden Advanced Protection setting. The
+ * key is not a stable public shell contract, so every response other than the
+ * exact documented boolean values remains Unknown.
+ */
+export type AdvancedProtectionMode = "enabled" | "disabled" | "unknown";
 export type AndroidUser = {
   /**
    * Numeric user id passed to `pm --user`.
@@ -1793,6 +1799,7 @@ export type HostDoctorReport = {
   platform: string;
   adb: HostDoctorAdb;
   device_state_counts: Partial<{ [key in string]: number }>;
+  advanced_protection_mode: AdvancedProtectionMode;
   findings: HostFinding[];
   privacy: string[];
 };
@@ -1869,6 +1876,11 @@ export type InstallFailure = {
   remedy: string;
   suggested_override: SuggestedInstallOverride | null;
   raw_output: string;
+  /**
+   * Heuristic only: this hidden settings key is not a stable shell API and
+   * never changes install behavior or proves the cause of a failure.
+   */
+  advanced_protection_mode: AdvancedProtectionMode;
 };
 /**
  * The install strategy actually used, recorded in the operation audit so a

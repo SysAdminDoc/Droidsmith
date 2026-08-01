@@ -121,6 +121,7 @@
     "installModeIncremental": "Instalado incrementalmente — comenzó antes de que se transfirieran todos los bytes.",
     "installModeIncrementalUnsupported": "La instalación incremental no estaba disponible aquí; se instaló normalmente.",
     "installNoAutomaticOverride": "Droidsmith no aplicó una anulación de reintento automáticamente.",
+    "installAdvancedProtectionHeuristic": "El modo de protección avanzada aparece activado. Esta señal de una clave oculta es una heurística inestable: puede ayudar a explicar el fallo de instalación, pero no demuestra la causa ni bloqueó este intento.",
     "installOverrideAudit": "Solo este reintento recibe la anulación. La bandera exacta y esta confirmación explícita se escriben en el diario local de auditoría de instalaciones.",
     "installOverrideTitle": "Confirmar una anulación de instalación insegura",
     "installPackage": "Instalar paquete",
@@ -982,6 +983,14 @@
     "description": "Verifica ADB, USB, controladores y requisitos previos del host sin cambiar nada.",
     "failed": "El doctor de conexión falló",
     "findings": {
+      "advanced_protection_mode": {
+        "title": "El modo de protección avanzada puede restringir la depuración",
+        "summary": "Un dispositivo conectado indicó que el modo de protección avanzada está activado mediante una clave de configuración oculta e inestable. Esta heurística puede ayudar a explicar fallos de instalación o conexión, pero no demuestra su causa ni bloquea operaciones.",
+        "remediation": {
+          "0": "Revisa en el dispositivo las restricciones de la protección avanzada de Android.",
+          "1": "Mantén el modo activado salvo que el propietario acepte deliberadamente el compromiso de seguridad; usa el resto del diagnóstico para confirmar la causa real."
+        }
+      },
       "usb_mdns_backend_toggles": {
         "title": "Conmutadores de resolución de problemas de backend USB y mDNS",
         "summary": "platform-tools 37.0.1 cambió los backends USB y mDNS predeterminados. Si no se detecta un dispositivo por cable o falla el descubrimiento inalámbrico, cambiar de backend con estas variables de entorno puede ayudar.",

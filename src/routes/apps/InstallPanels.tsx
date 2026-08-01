@@ -125,6 +125,11 @@ export function InstallStatePanel({
           <p className="mt-3 text-xs text-anvil-400">
             {t("apps.installNoAutomaticOverride")}
           </p>
+          {failure.advanced_protection_mode === "enabled" && (
+            <p className="mt-3 rounded-md border border-amber-300/25 bg-amber-300/[0.08] p-3 text-xs leading-5 text-amber-100">
+              {t("apps.installAdvancedProtectionHeuristic")}
+            </p>
+          )}
           <pre className="mt-3 max-h-48 overflow-auto whitespace-pre-wrap rounded-md border border-white/10 bg-black/30 p-3 font-mono text-xs leading-5 text-anvil-200">
             {failure.raw_output}
           </pre>

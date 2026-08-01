@@ -75,13 +75,6 @@ R-119 / IMP-95.
   Acceptance: a reviewed pre-OTA plan restores every recoverable package to its baseline state and reports exactly which packages cannot be restored before the user updates; after an OTA the drift review pairs with a re-apply plan derived from the same baseline, requires a dry-run diff, and never replays actions against packages whose post-OTA state already matches; the CLI exposes the same plan/apply pair with stable exit codes; irreversible packages are named explicitly at both ends.
   Complexity: L
 
-- [ ] P2 — R-127: Detect Advanced Protection Mode as an explicit heuristic
-  Why: when AAPM restricts debugging the device simply stops responding, and an opaque failure is the worst outcome for the user; a sourced key now exists where the blocked note assumed only guesswork was possible.
-  Evidence: AOSP `Settings.java` defines `Settings.Secure.ADVANCED_PROTECTION_MODE = "advanced_protection_mode"`; adb shell holds `READ_SECURE_SETTINGS`. The key is `@hide` and unexercised on a device, so this modifies — not clears — the R-092 remainder blocker in Roadmap_Blocked.md.
-  Touches: `src-tauri/src/adb/device_settings.rs`, `src-tauri/src/host_diagnostics.rs`, `src-tauri/src/install.rs`, `src/routes/HostDoctor.tsx`, `src/locales/*.json`, `Roadmap_Blocked.md`, fake-tool fixtures.
-  Acceptance: the state is read via `settings get secure advanced_protection_mode` and classified as enabled / disabled / **unknown**, with `unknown` the default for any absent, empty, or unparseable value; an enabled result adds an explanatory note to install and connection failures but never blocks an operation or asserts a cause on its own; the UI states that the signal is a heuristic on an unstable key; fixtures cover all four response shapes. Update the R-092 blocker note to record that a candidate signal now exists but remains device-unverified.
-  Complexity: M
-
 - [ ] P2 — R-128: Add filter-based profile predicates as schema v3
   Why: profiles are ordered lists of concrete package actions, so they are effectively device-specific — which limits fleet `run` and the planned `--retry-from` to fleets of identical devices.
   Evidence: AppManager 4.1.0 (2026-06-29) ships filter-based profiles resolving predicates at run time with boolean expressions over `&`, `|`, and parentheses; Droidsmith already has versioned schemas with explicit review-and-migrate paths (`contribution-schema-policy.json`, profile v1→v2).

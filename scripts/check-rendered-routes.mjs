@@ -465,6 +465,9 @@ async function runDesktopFlow(browser) {
       /Existing operations remain available unless a known-bad release is detected/,
     )
     .waitFor();
+  await page
+    .getByText(/unstable hidden settings key.*never blocks an operation/)
+    .waitFor();
 
   for (const route of ["Devices", "Apps", "Debloat", "Profiles", "Console"]) {
     await page.getByRole("button", { name: new RegExp(route) }).click();
@@ -651,6 +654,7 @@ async function runDesktopFlow(browser) {
   await page
     .getByText("INSTALL_FAILED_VERSION_DOWNGRADE", { exact: true })
     .waitFor();
+  await page.getByText(/hidden-key signal is an unstable heuristic/).waitFor();
   await page.getByRole("button", { name: "Review guarded override" }).click();
   await page
     .getByRole("alertdialog", { name: "Confirm an unsafe install override" })
@@ -2511,7 +2515,26 @@ async function installTauriMock(
               compatibility: platformToolsPolicy,
             },
             device_state_counts: { device: 1 },
+            advanced_protection_mode: "enabled",
             findings: [
+              {
+                code: "advanced_protection_mode",
+                severity: "warning",
+                title: "Advanced Protection Mode may restrict debugging",
+                summary:
+                  "A connected device reported Advanced Protection Mode enabled through an unstable hidden settings key. This heuristic may help explain install or connection failures; it is not proof of their cause and never blocks an operation.",
+                evidence: [
+                  "settings get secure advanced_protection_mode returned 1",
+                ],
+                remediation: [
+                  "Review Android's Advanced Protection restrictions on the device.",
+                  "Use the remaining diagnostics to confirm the actual failure cause.",
+                ],
+                official_url:
+                  "https://developer.android.com/privacy-and-security/advanced-protection-mode",
+                summary_key: null,
+                summary_params: [],
+              },
               {
                 code: "adb_ready",
                 severity: "info",
@@ -3334,6 +3357,7 @@ async function installTauriMock(
                 suggested_override: "allow_downgrade",
                 raw_output:
                   "Failure [INSTALL_FAILED_VERSION_DOWNGRADE: Downgrade detected]",
+                advanced_protection_mode: "enabled",
               },
               audit_id: args.operation_id,
               retry_path_grant: "123e4567-e89b-42d3-a456-426614174003",
