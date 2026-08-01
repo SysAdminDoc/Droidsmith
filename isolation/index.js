@@ -42,6 +42,7 @@
     "list_fastboot_devices",
     "fastboot_getvar",
     "explain_failure",
+    "explain_package_hazards",
     "has_settings_import_backup",
     "perfetto_capabilities",
   ]);

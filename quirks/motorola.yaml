@@ -1,0 +1,20 @@
+version: "1"
+quirks:
+  - id: motorola-moto-feature-hub
+    title: "Motorola: removing Moto removes the feature customization hub"
+    matches:
+      manufacturer: ["Motorola"]
+      rom: ["motorola/"]
+      package_id: ["com.motorola.moto"]
+    explanation: |
+      Evidence basis: Motorola's public Play listing describes this package as
+      the hub for Moto Actions, Moto Display, and other interaction features.
+      This is documented feature loss, not a bootloop report.
+
+      Observed on: near-stock Motorola builds carrying the exact package. The
+      public listing names no single firmware revision; other packages and
+      non-Motorola fingerprints remain Unknown.
+    mitigation:
+      kind: documentation
+      url: "https://play.google.com/store/apps/details?id=com.motorola.moto"
+      note: "Review which Moto features you use before disabling the hub."

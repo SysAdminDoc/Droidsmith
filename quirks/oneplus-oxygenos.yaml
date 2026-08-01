@@ -1,0 +1,20 @@
+version: "1"
+quirks:
+  - id: oxygenos-16-oplus-cosa-refresh-rate
+    title: "OxygenOS 16: removing App Enhancement Services can reduce game refresh rates"
+    matches:
+      manufacturer: ["OnePlus"]
+      rom: ["oneplus/"]
+      package_id: ["com.oplus.cosa"]
+    explanation: |
+      Evidence basis: the pinned public UAD-NG package record reports that this
+      service drives Game Center detection and fixed high-refresh-rate handling;
+      without it, observed games and streaming apps fell from 120 Hz.
+
+      Observed on: OxygenOS 16. The source does not name a model/build token, so
+      this rule is limited to OnePlus fingerprints plus the exact package and
+      makes no claim about another ColorOS-family package.
+    mitigation:
+      kind: documentation
+      url: "https://github.com/Universal-Debloater-Alliance/universal-android-debloater-next-generation/blob/ef94066d650f2169a62b3b4f886b8ddbeb7b360f/resources/assets/uad_lists.json"
+      note: "Keep the service when fixed high refresh rate or Game Center detection matters."

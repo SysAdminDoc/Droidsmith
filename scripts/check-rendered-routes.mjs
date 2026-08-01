@@ -920,6 +920,14 @@ async function runDesktopFlow(browser) {
   await debloatReview
     .getByText(/PackageManager reports android\.uid\.system/)
     .waitFor();
+  // R-124: predictive vendor hazards are visible before the user confirms.
+  await debloatReview.getByText("Observed package hazards").waitFor();
+  await debloatReview
+    .getByText("QA firmware reports launcher breakage", { exact: true })
+    .waitFor();
+  await debloatReview
+    .getByRole("link", { name: "Open public evidence" })
+    .waitFor();
   // R-112: the review surfaces packages that are running services right now.
   await debloatReview.getByText("Some selected apps are running now").waitFor();
   await debloatReview.getByText("com.example.app", { exact: true }).waitFor();
@@ -3673,6 +3681,29 @@ async function installTauriMock(
             };
           }
           return null;
+        }
+        if (cmd === "explain_package_hazards") {
+          if (!(args.req?.package_ids ?? []).includes("com.example.app"))
+            return [];
+          return [
+            {
+              id: "qa-package-hazard",
+              title: "QA firmware reports launcher breakage",
+              explanation:
+                "Evidence basis: sanitized QA report.\nObserved on: QA vendor build 3.",
+              matches: {
+                error_contains: [],
+                manufacturer: ["Google"],
+                rom: ["google/"],
+                package_id: ["com.example.app"],
+              },
+              mitigation: {
+                kind: "documentation",
+                url: "https://github.com/Universal-Debloater-Alliance/universal-android-debloater-next-generation/issues/1150",
+                note: "Keep the package on the observed build.",
+              },
+            },
+          ];
         }
         if (cmd === "apply_action") {
           const request = args.plan.request;

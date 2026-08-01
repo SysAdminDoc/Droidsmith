@@ -253,6 +253,14 @@ pub struct ExplainFailureRequest {
     pub raw_error: Option<String>,
 }
 
+/// Bounded request for predictive package hazards shown before a debloat apply.
+#[derive(specta::Type, Debug, serde::Deserialize)]
+pub struct ExplainPackageHazardsRequest {
+    pub manufacturer: Option<String>,
+    pub rom: Option<String>,
+    pub package_ids: Vec<String>,
+}
+
 /// Load quirks from the bundled resource directory and match against the
 /// failure context.
 /// Returns `Some(quirk)` if a rule applies, `None` if the raw error
@@ -279,4 +287,51 @@ pub fn explain_failure(
         raw_error: req.raw_error.as_deref(),
     };
     Ok(quirks::explain(&quirks_list, &ctx).cloned())
+}
+
+/// Match selected packages against evidence-backed, pre-apply quirk rules.
+/// Loading and matching are batched so opening a large review never performs
+/// one resource-directory scan per selected package.
+#[tauri::command]
+#[specta::specta]
+pub fn explain_package_hazards(
+    app: tauri::AppHandle,
+    req: ExplainPackageHazardsRequest,
+) -> Result<Vec<Quirk>, CommandError> {
+    const MAX_PACKAGES: usize = 256;
+    if req.package_ids.len() > MAX_PACKAGES {
+        return Err(CommandError {
+            code: "too_many_packages",
+            message: format!("package hazard review accepts at most {MAX_PACKAGES} packages"),
+        });
+    }
+    if let Some(package_id) = req
+        .package_ids
+        .iter()
+        .find(|package_id| !crate::adb::packages::valid_package_name(package_id))
+    {
+        return Err(CommandError {
+            code: "invalid_package",
+            message: format!("invalid package id {package_id:?}"),
+        });
+    }
+
+    let resource_dir = app.path().resource_dir().map_err(|error| CommandError {
+        code: "no_resource_dir",
+        message: error.to_string(),
+    })?;
+    let quirks_list =
+        quirks::load_dir(&resource_dir.join("quirks")).map_err(|error| CommandError {
+            code: "quirks_load_failed",
+            message: error.to_string(),
+        })?;
+    Ok(quirks::package_hazards(
+        &quirks_list,
+        req.manufacturer.as_deref(),
+        req.rom.as_deref(),
+        &req.package_ids,
+    )
+    .into_iter()
+    .cloned()
+    .collect())
 }

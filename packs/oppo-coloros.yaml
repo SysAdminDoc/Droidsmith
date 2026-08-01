@@ -71,10 +71,11 @@ packages:
     labels: ["oppo", "cosmetic"]
 
   - id: com.coloros.weather2
-    removal: recommended
+    removal: unsafe
     description: >
-      ColorOS Weather. Built-in weather app. Third-party weather apps
-      provide better accuracy.
+      ColorOS Weather. A Realme X3 SuperZoom report links removing this exact
+      package to a looping UI after theme/layout changes. Other models remain
+      unverified; prefer keeping it unless recovery is proven.
     labels: ["oppo", "utility"]
 
   - id: com.oplus.kids

@@ -1,0 +1,20 @@
+version: "1"
+quirks:
+  - id: fire-tv-amazon-appstore-breaks-drawer
+    title: "Fire TV: removing Amazon Appstore can break the app drawer"
+    matches:
+      manufacturer: ["Amazon"]
+      rom: ["sheldon", "mantis", "firetv"]
+      package_id: ["com.amazon.venezia"]
+    explanation: |
+      Evidence basis: a reviewed UAD-NG change moved this package to Advanced
+      after a Fire TV report that its removal breaks the app drawer unless an
+      alternative launcher is already present.
+
+      Observed on: Amazon Fire TV builds (common sheldon/mantis fingerprints).
+      Fire tablets and unlisted Fire TV fingerprints remain Unknown and do not
+      match this rule.
+    mitigation:
+      kind: documentation
+      url: "https://github.com/Universal-Debloater-Alliance/universal-android-debloater-next-generation/pull/1097"
+      note: "Keep the Appstore or install and verify an alternative launcher first."

@@ -1,0 +1,36 @@
+version: "1"
+quirks:
+  - id: pixel-family-link-google-vpn
+    title: "Pixel: removing Family Link supervision can break VPN by Google"
+    matches:
+      manufacturer: ["Google"]
+      rom: ["google/"]
+      package_id: ["com.google.android.gms.supervision"]
+    explanation: |
+      Evidence basis: a public device report links removal of this exact
+      Android 13+ supervision package to VPN by Google rejecting the account
+      with "This account cannot use VPN."
+
+      Observed on: Google Pixel stock builds. The report does not name an exact
+      model or build number, so non-Pixel fingerprints remain Unknown.
+    mitigation:
+      kind: documentation
+      url: "https://github.com/Universal-Debloater-Alliance/universal-android-debloater-next-generation/issues/1096"
+      note: "Keep the supervision package when using VPN by Google."
+
+  - id: pixel-google-app-circle-to-search
+    title: "Pixel: disabling the Google app removes Circle to Search"
+    matches:
+      manufacturer: ["Google"]
+      rom: ["google/"]
+      package_id: ["com.google.android.googlequicksearchbox"]
+    explanation: |
+      Evidence basis: the pinned public UAD-NG package record documents the
+      Google app as a dependency of Circle to Search and voice search.
+
+      Observed on: stock Pixel builds carrying the exact package. Custom ROMs
+      and other search packages remain Unknown.
+    mitigation:
+      kind: documentation
+      url: "https://github.com/Universal-Debloater-Alliance/universal-android-debloater-next-generation/blob/ef94066d650f2169a62b3b4f886b8ddbeb7b360f/resources/assets/uad_lists.json"
+      note: "Keep the Google app if Circle to Search or voice search is required."

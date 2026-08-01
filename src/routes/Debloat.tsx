@@ -874,6 +874,7 @@ export default function DebloatRoute() {
                 assessment={wizard.assessment}
                 selected={wizard.selected}
                 target={authorizedTarget}
+                deviceContext={deviceContext}
                 onCancel={() => setApplyReviewOpen(false)}
                 onConfirm={() => void applyPack()}
               />

@@ -993,6 +993,16 @@ export const commands = {
     return await TAURI_INVOKE("explain_failure", { req });
   },
   /**
+   * Match selected packages against evidence-backed, pre-apply quirk rules.
+   * Loading and matching are batched so opening a large review never performs
+   * one resource-directory scan per selected package.
+   */
+  async explainPackageHazards(
+    req: ExplainPackageHazardsRequest,
+  ): Promise<Quirk[]> {
+    return await TAURI_INVOKE("explain_package_hazards", { req });
+  },
+  /**
    * Locate the fastboot binary on the system.
    */
   async locateFastboot(): Promise<string | null> {
@@ -1693,6 +1703,14 @@ export type ExplainFailureRequest = {
   rom: string | null;
   package_id: string | null;
   raw_error: string | null;
+};
+/**
+ * Bounded request for predictive package hazards shown before a debloat apply.
+ */
+export type ExplainPackageHazardsRequest = {
+  manufacturer: string | null;
+  rom: string | null;
+  package_ids: string[];
 };
 export type ExportMode = "apk_export" | "legacy_data";
 export type ExportedArtifact = {

@@ -6,6 +6,25 @@
 
 version: "1"
 quirks:
+  - id: hyperos-2-circle-to-search-soft-brick
+    title: "HyperOS 2.0: Circle to Search overlay removal can soft-brick the UI"
+    matches:
+      manufacturer: ["Xiaomi", "Redmi", "POCO"]
+      rom: ["OS2.0", "hyperos/2.0"]
+      package_id: ["com.android.overlay.circletosearch"]
+    explanation: |
+      Evidence basis: a public UAD-NG device report classifies this exact
+      package as Unsafe after all apps began crashing and the UI could no
+      longer launch anything.
+
+      Observed on: Xiaomi HyperOS 2.0. The report does not establish the same
+      outcome on MIUI, HyperOS 1, or another OEM, so those combinations remain
+      Unknown and do not match this rule.
+    mitigation:
+      kind: documentation
+      url: "https://github.com/Universal-Debloater-Alliance/universal-android-debloater-next-generation/issues/1150"
+      note: "Keep the overlay installed on the observed HyperOS 2.0 scope."
+
   - id: hyperos-pm-disable-blocked
     title: "Xiaomi HyperOS blocks `pm disable-user` for many system apps"
     matches:

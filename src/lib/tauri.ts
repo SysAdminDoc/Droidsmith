@@ -19,6 +19,7 @@ import {
   type Device,
   type DeviceInfo,
   type ExplainFailureRequest,
+  type ExplainPackageHazardsRequest,
   type FingerprintObservation,
   type Quirk,
   type DeviceSetting,
@@ -652,6 +653,14 @@ export async function callExplainFailure(
   req: ExplainFailureRequest,
 ): Promise<Quirk | null> {
   return commands.explainFailure(req);
+}
+
+/** Match selected packages against bundled predictive hazard rules in one
+ * bounded resource scan. Error-dependent failure rules cannot match here. */
+export async function callExplainPackageHazards(
+  req: ExplainPackageHazardsRequest,
+): Promise<Quirk[]> {
+  return commands.explainPackageHazards(req);
 }
 
 export async function callListDeviceSettings(

@@ -1,0 +1,19 @@
+version: "1"
+quirks:
+  - id: realme-x3-weather-loop
+    title: "Realme X3 SuperZoom: removing ColorOS Weather can loop the UI"
+    matches:
+      manufacturer: ["Realme"]
+      rom: ["RMX2086"]
+      package_id: ["com.coloros.weather2"]
+    explanation: |
+      Evidence basis: a public Realme X3 SuperZoom device report reproduced a
+      screen on/off loop after removing this package and then changing layout
+      or theme settings; reinstalling the package recovered the UI.
+
+      Observed on: Realme X3 SuperZoom (RMX2086). OPPO devices, other Realme
+      models, and other weather packages remain Unknown.
+    mitigation:
+      kind: documentation
+      url: "https://github.com/0x192/universal-android-debloater/issues/211"
+      note: "Keep this package on the observed model; the separate weather service was not implicated."

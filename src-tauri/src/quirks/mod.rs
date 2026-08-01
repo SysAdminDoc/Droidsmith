@@ -280,8 +280,10 @@ pub fn lint_document(document: &QuirkDocument) -> Vec<String> {
                     }
                 }
                 Mitigation::Documentation { url, note } => {
-                    if url.trim().is_empty() {
-                        issues.push(format!("{label}: mitigation.url is empty"));
+                    if !url.starts_with("https://") {
+                        issues.push(format!(
+                            "{label}: mitigation.url must be a public https URL"
+                        ));
                     }
                     if note.trim().is_empty() {
                         issues.push(format!("{label}: mitigation.note is empty"));
@@ -309,6 +311,34 @@ fn lint_non_empty_values(issues: &mut Vec<String>, label: &str, field: &str, val
 /// nothing matches — callers should fall back to the raw error string.
 pub fn explain<'a>(quirks: &'a [Quirk], ctx: &DeviceContext<'_>) -> Option<&'a Quirk> {
     quirks.iter().find(|q| matches_one(q, ctx))
+}
+
+/// Match pre-apply package hazards without a failure string. One best-match
+/// rule is returned per package and rule ids are deduplicated, preserving the
+/// reviewed file order. Rules that require `error_contains` cannot match this
+/// path, so post-failure workarounds never masquerade as predictive evidence.
+pub fn package_hazards<'a>(
+    quirks: &'a [Quirk],
+    manufacturer: Option<&str>,
+    rom: Option<&str>,
+    package_ids: &[String],
+) -> Vec<&'a Quirk> {
+    let mut seen = std::collections::HashSet::new();
+    package_ids
+        .iter()
+        .filter_map(|package_id| {
+            explain(
+                quirks,
+                &DeviceContext {
+                    manufacturer,
+                    rom,
+                    package_id: Some(package_id),
+                    raw_error: None,
+                },
+            )
+        })
+        .filter(|quirk| seen.insert(quirk.id.as_str()))
+        .collect()
 }
 
 fn matches_one(q: &Quirk, ctx: &DeviceContext<'_>) -> bool {
@@ -441,6 +471,40 @@ mod tests {
             raw_error: Some("not allowed"),
         };
         assert!(explain(&quirks, &ctx).is_none());
+    }
+
+    #[test]
+    fn package_hazards_match_without_leaking_failure_only_rules() {
+        let predictive = Quirk {
+            id: "observed-package-hazard".into(),
+            title: "Observed package hazard".into(),
+            matches: QuirkMatch {
+                manufacturer: vec!["Google".into()],
+                rom: vec!["google/".into()],
+                package_id: vec!["com.example.hazard".into()],
+                ..QuirkMatch::default()
+            },
+            explanation: "Evidence basis: report.\nObserved on: Pixel.".into(),
+            mitigation: None,
+        };
+        let quirks = vec![hyperos_quirk(), predictive];
+        let selected = vec!["com.example.hazard".into(), "com.example.other".into()];
+        let matched = package_hazards(
+            &quirks,
+            Some("Google"),
+            Some("google/shiba/shiba:16/build"),
+            &selected,
+        );
+        assert_eq!(matched.len(), 1);
+        assert_eq!(matched[0].id, "observed-package-hazard");
+
+        assert!(package_hazards(
+            &quirks,
+            Some("Samsung"),
+            Some("samsung/e3q/e3q:16/build"),
+            &selected,
+        )
+        .is_empty());
     }
 
     #[test]
@@ -609,5 +673,72 @@ quirks:
         assert!(issues
             .iter()
             .any(|i| i.contains("matches has no constraints")));
+    }
+
+    #[test]
+    fn bundled_predictive_rules_cover_every_pack_vendor_with_evidence_scope() {
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .unwrap()
+            .join("quirks");
+        let quirks = load_dir(&dir).unwrap();
+        let predictive: Vec<_> = quirks
+            .iter()
+            .filter(|quirk| quirk.matches.error_contains.is_empty())
+            .collect();
+        assert!(predictive.len() >= 9);
+
+        let covered: std::collections::HashSet<_> = predictive
+            .iter()
+            .flat_map(|quirk| quirk.matches.manufacturer.iter())
+            .map(|manufacturer| manufacturer.to_ascii_lowercase())
+            .collect();
+        for vendor in [
+            "amazon", "google", "motorola", "nothing", "oneplus", "oppo", "realme", "samsung",
+            "xiaomi",
+        ] {
+            assert!(
+                covered.contains(vendor),
+                "missing predictive rule for {vendor}"
+            );
+        }
+
+        for quirk in predictive {
+            assert!(
+                !quirk.matches.package_id.is_empty(),
+                "{} lacks package scope",
+                quirk.id
+            );
+            assert!(
+                !quirk.matches.manufacturer.is_empty(),
+                "{} lacks manufacturer scope",
+                quirk.id
+            );
+            assert!(
+                !quirk.matches.rom.is_empty(),
+                "{} lacks ROM/build scope",
+                quirk.id
+            );
+            assert!(
+                quirk.explanation.contains("Evidence basis:"),
+                "{} lacks evidence basis",
+                quirk.id
+            );
+            assert!(
+                quirk.explanation.contains("Observed on:"),
+                "{} lacks observed scope",
+                quirk.id
+            );
+            match &quirk.mitigation {
+                Some(Mitigation::Documentation { url, .. }) => {
+                    assert!(
+                        url.starts_with("https://"),
+                        "{} has no public source",
+                        quirk.id
+                    );
+                }
+                _ => panic!("{} must expose a documentation source", quirk.id),
+            }
+        }
     }
 }

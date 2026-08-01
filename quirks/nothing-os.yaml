@@ -1,0 +1,19 @@
+version: "1"
+quirks:
+  - id: nothing-smartcenter-accessory-controls
+    title: "Nothing OS: Smart Center provides Nothing accessory controls"
+    matches:
+      manufacturer: ["Nothing"]
+      rom: ["nothing/"]
+      package_id: ["com.nothing.smartcenter"]
+    explanation: |
+      Evidence basis: Nothing's public app listing identifies this package as
+      Nothing X, the control surface for Nothing audio accessories. Removal is
+      expected to remove those controls; no system-stability failure is claimed.
+
+      Observed on: Nothing OS fingerprints carrying the exact package. CMF,
+      custom-ROM, and unrelated package combinations remain Unknown.
+    mitigation:
+      kind: documentation
+      url: "https://play.google.com/store/apps/details?id=com.nothing.smartcenter"
+      note: "Keep this package when using Nothing earbuds or their device controls."

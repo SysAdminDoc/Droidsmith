@@ -104,6 +104,7 @@ macro_rules! droidsmith_commands {
             journal_undo,
             journal_undo_batch,
             explain_failure,
+            explain_package_hazards,
             locate_fastboot,
             list_fastboot_devices,
             fastboot_getvar,

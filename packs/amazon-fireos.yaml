@@ -37,10 +37,11 @@ packages:
     labels: ["amazon", "gaming"]
 
   - id: com.amazon.venezia
-    removal: recommended
+    removal: advanced
     description: >
-      Amazon Appstore. Amazon's app marketplace. Can be removed if you
-      use Play Store (sideloaded) instead.
+      Amazon Appstore. Amazon's app marketplace. Removing it has been reported
+      to break the Fire TV app drawer unless an alternative launcher is ready.
+      Fire tablets are not covered by that report.
     labels: ["amazon", "store"]
 
   - id: com.amazon.kindle

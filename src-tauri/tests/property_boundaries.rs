@@ -144,7 +144,10 @@ fn versioned_transcript_corpus_is_deterministic_and_fail_closed() {
         serde_json::from_slice(&fs::read(root.join("corpus.json")).unwrap()).unwrap();
     assert_eq!(corpus["schemaVersion"], 1);
     let cases = corpus["cases"].as_array().unwrap();
-    assert_eq!(cases.len(), 3);
+    // IMP-107 requires exact transcript parity with the nine shipped vendor
+    // pack families; keep the property corpus from silently testing only the
+    // original AOSP/Samsung/Xiaomi subset.
+    assert_eq!(cases.len(), 9);
 
     for relative_path in cases {
         let case: serde_json::Value =

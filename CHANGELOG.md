@@ -16,6 +16,20 @@ each milestone tag.
 
 ### Added
 
+- **Vendor quirk warnings now cover every shipped pack family before apply.**
+  Nine schema-v1 resources add package-, manufacturer-, and ROM/build-scoped
+  observations for Amazon, Google Pixel, Motorola, Nothing, OnePlus, OPPO,
+  Realme, Samsung, and Xiaomi, each with a public evidence URL, explicit
+  observed scope, and Unknown behavior outside that scope. A bounded native
+  query loads the corpus once for the selected batch; the final Debloat review
+  names affected packages and links the evidence before confirmation, while
+  error-text-only workaround rules remain confined to post-failure diagnosis.
+  Corpus tests require vendor parity, evidence wording, HTTPS sources, and
+  non-empty package/manufacturer/ROM matchers without changing schema 1. The
+  Fire TV Appstore and Realme X3 Weather reports also raise the corresponding
+  pack entries to safer review tiers. This records attributed behavior rather
+  than importing the separately blocked UAD-NG list. (R-124)
+
 - **Release provenance now has an offline, dependency-free foundation.** A
   deterministic generator merges npm's production lock graph with Cargo's
   runtime/build graph into a parseable CycloneDX 1.6 SBOM and writes a SHA-256

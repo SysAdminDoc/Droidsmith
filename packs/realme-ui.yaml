@@ -83,10 +83,11 @@ packages:
     labels: ["realme", "cloud"]
 
   - id: com.coloros.weather2
-    removal: advanced
+    removal: unsafe
     description: >
-      ColorOS Weather. Removing disables the built-in weather app
-      and its widget. Third-party weather apps are unaffected.
+      ColorOS Weather. On a Realme X3 SuperZoom, removing this exact package
+      caused a looping UI after theme/layout changes. Other Realme models are
+      unverified; keep it unless you have a tested recovery path.
     labels: ["realme", "utility"]
 
   - id: com.coloros.note
