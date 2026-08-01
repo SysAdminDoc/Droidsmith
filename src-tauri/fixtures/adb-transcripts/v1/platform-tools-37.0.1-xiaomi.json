@@ -4,6 +4,10 @@
   "platformToolsVersion": "37.0.1",
   "deviceFamily": "xiaomi-hyperos",
   "sanitized": true,
+  "provenance": {
+    "kind": "synthesized",
+    "basis": "Sanitized parser-contract fixture derived from documented ADB output grammar; no retained device capture supports a device-behavior claim."
+  },
   "commands": [
     {
       "argv": ["devices", "-l"],
@@ -117,6 +121,12 @@
       "stderr": ""
     },
     {
+      "argv": ["-t", "303", "shell", "ls", "-la", "/sdcard"],
+      "exitCode": 0,
+      "stdout": "-rw-rw---- 1 u0_a123 media_rw 1536 2026-06-28 12:31 HyperOS.txt\nmalformed hyperos file row\n",
+      "stderr": ""
+    },
+    {
       "argv": ["mdns", "services"],
       "exitCode": 0,
       "stdout": "List of discovered mdns services\nadb-xiaomi-connect _adb-tls-connect._tcp [2001:db8::30]:40123\nadb-xiaomi-bad _adb-tls-connect._tcp 203.0.113.30:0\n",
@@ -136,6 +146,7 @@
     "currentUser": 0,
     "mdnsServiceCount": 1,
     "unknownDeviceCount": 1,
-    "enrichedFallbackUsed": false
+    "enrichedFallbackUsed": false,
+    "parseErrorCount": 1
   }
 }

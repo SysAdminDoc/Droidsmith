@@ -4,6 +4,10 @@
   "platformToolsVersion": "37.0.0",
   "deviceFamily": "samsung-oneui",
   "sanitized": true,
+  "provenance": {
+    "kind": "synthesized",
+    "basis": "Sanitized parser-contract fixture derived from documented ADB output grammar; no retained device capture supports a device-behavior claim."
+  },
   "commands": [
     {
       "argv": ["devices", "-l"],
@@ -168,6 +172,12 @@
       "stderr": ""
     },
     {
+      "argv": ["-t", "202", "shell", "ls", "-la", "/sdcard"],
+      "exitCode": 0,
+      "stdout": "drwxr-xr-x 2 root root 4096 Jan 1 2026 Samsung\nmalformed oneui file row\n",
+      "stderr": ""
+    },
+    {
       "argv": ["mdns", "services"],
       "exitCode": 0,
       "stdout": "List of discovered mdns services\nadb-samsung-connect _adb-tls-connect._tcp samsung37.local:38899\nnoise without enough columns\n",
@@ -187,6 +197,7 @@
     "currentUser": 10,
     "mdnsServiceCount": 1,
     "unknownDeviceCount": 1,
-    "enrichedFallbackUsed": true
+    "enrichedFallbackUsed": true,
+    "parseErrorCount": 1
   }
 }

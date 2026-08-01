@@ -61,13 +61,6 @@ R-119 / IMP-95.
   Acceptance: a unit-tested generator emits a merged CycloneDX SBOM covering runtime npm and cargo dependencies plus a `SHA256SUMS` file, deterministically and without network access or a built bundle; the release gate validates the SBOM parses and matches the lockfiles; README documents the verification steps; minisign signing and `cargo auditable` remain out of scope and stay in Roadmap_Blocked.md under R-110.
   Complexity: M
 
-- [ ] P2 — IMP-107: Extend the ADB transcript corpus to every vendor that ships a pack
-  Why: the corpus covers three OEM/version combinations while nine vendor packs exist, and parser variance is the second-most-repeated fix theme in the project's history.
-  Evidence: `src-tauri/fixtures/adb-transcripts/v1/` holds AOSP 36.0.2, Samsung 37.0.0, and Xiaomi 37.0.1 only; `packs/` ships Pixel, OnePlus, Oppo, Realme, Motorola, Nothing, and Amazon FireOS with no matching fixtures; recurring parser fixes include wrapped `df` rows, bracketed `getprop`, bracketed IPv6 mDNS, and `ls` row variance.
-  Touches: `src-tauri/fixtures/adb-transcripts/v1/`, `src-tauri/tests/fake_tool_contract.rs`, `src-tauri/src/adb/parsers.rs`, `src-tauri/src/adb/device_info.rs`.
-  Acceptance: each packed vendor has a sanitized schema-v1 transcript exercising device listing, package enumeration, properties, storage, users, and services; every fixture is marked with its provenance and whether values are observed or synthesized; malformed and unknown rows still surface visible `parse_error` entries rather than being dropped; the corpus manifest stays version-gated at `"1"`.
-  Complexity: M
-
 - [ ] P2 — R-125: Consume the structured ADB device-tracking channel
   Why: the app regex-parses `adb devices -l`, which cannot express connection states or link speed that AOSP already publishes as structured data — and this retires the premise of the blocked R-101 note.
   Evidence: AOSP `services.cpp` exposes `host:track-devices-proto-binary` / `-proto-text`; `proto/adb_host.proto` defines `Device{serial, state, bus_address, product, model, device, connection_type, negotiated_speed, max_speed, transport_id}` and a `ConnectionState` including `DETACHED`, `RESCUE`, `NOPERMISSION`; Roadmap_Blocked.md R-101 correctly notes `server-status` has no USB-speed field — the speed lives on the per-device message instead. Needs live validation: the service names are verified from AOSP source, but the host `adb` CLI surface for reaching them at the supported versions is not — probe before building.

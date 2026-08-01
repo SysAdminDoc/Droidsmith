@@ -3,6 +3,12 @@
   "cases": [
     "platform-tools-36.0.2-aosp.json",
     "platform-tools-37.0.0-samsung.json",
-    "platform-tools-37.0.1-xiaomi.json"
+    "platform-tools-37.0.1-xiaomi.json",
+    "platform-tools-37.0.1-oneplus.json",
+    "platform-tools-37.0.1-oppo.json",
+    "platform-tools-37.0.1-realme.json",
+    "platform-tools-37.0.1-motorola.json",
+    "platform-tools-37.0.1-nothing.json",
+    "platform-tools-37.0.1-amazon.json"
   ]
 }

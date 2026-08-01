@@ -7,7 +7,7 @@ use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
 use droidsmith_lib::adb::device::{observe_connection_generations, Device, DeviceState};
-use droidsmith_lib::adb::parsers::parse_running_services;
+use droidsmith_lib::adb::parsers::{parse_ls_output, parse_running_services};
 use droidsmith_lib::adb::{
     get_device_info, list_mdns_services, list_packages_with_capability, list_users,
     validate_device_target, AdbTransport, OutputStream, PackageFilter, ShellTransport,
@@ -233,8 +233,16 @@ struct TranscriptCase {
     platform_tools_version: String,
     device_family: String,
     sanitized: bool,
+    provenance: TranscriptProvenance,
     commands: Vec<TranscriptCommand>,
     expectations: TranscriptExpectations,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct TranscriptProvenance {
+    kind: String,
+    basis: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -262,6 +270,7 @@ struct TranscriptExpectations {
     mdns_service_count: usize,
     unknown_device_count: usize,
     enriched_fallback_used: bool,
+    parse_error_count: usize,
 }
 
 fn adb_transcript_corpus_exercises_complete_workflows() {
@@ -277,7 +286,19 @@ fn adb_transcript_corpus_exercises_complete_workflows() {
     let corpus: TranscriptCorpus =
         serde_json::from_slice(&fs::read(corpus_root.join("corpus.json")).unwrap()).unwrap();
     assert_eq!(corpus.schema_version, 1);
-    assert_eq!(corpus.cases.len(), 3);
+    assert_eq!(corpus.cases.len(), 9);
+    let expected_families = [
+        "amazon-fireos",
+        "aosp",
+        "motorola",
+        "nothing-os",
+        "oneplus-oxygenos",
+        "oppo-coloros",
+        "realme-ui",
+        "samsung-oneui",
+        "xiaomi-hyperos",
+    ];
+    let mut covered_families = Vec::new();
 
     for relative_case in corpus.cases {
         let case_path = corpus_root.join(relative_case);
@@ -285,15 +306,22 @@ fn adb_transcript_corpus_exercises_complete_workflows() {
         assert_eq!(case.schema_version, 1, "{}", case.id);
         assert!(case.sanitized, "{}", case.id);
         assert!(
+            ["observed", "synthesized"].contains(&case.provenance.kind.as_str()),
+            "{}",
+            case.id
+        );
+        assert!(case.provenance.basis.trim().len() >= 40, "{}", case.id);
+        assert!(
             ["36.0.2", "37.0.0", "37.0.1"].contains(&case.platform_tools_version.as_str()),
             "{}",
             case.id
         );
         assert!(
-            ["aosp", "samsung-oneui", "xiaomi-hyperos"].contains(&case.device_family.as_str()),
+            expected_families.contains(&case.device_family.as_str()),
             "{}",
             case.id
         );
+        covered_families.push(case.device_family.clone());
 
         let run_dir = test_dir(&format!("corpus-{}", case.id));
         let record_path = run_dir.join("invocations.jsonl");
@@ -381,6 +409,18 @@ fn adb_transcript_corpus_exercises_complete_workflows() {
             "{}",
             case.id
         );
+        let file_output = transport
+            .shell_target(&target, &["ls", "-la", "/sdcard"])
+            .unwrap();
+        assert_eq!(
+            parse_ls_output(&file_output)
+                .iter()
+                .filter(|entry| entry.parse_error.is_some())
+                .count(),
+            case.expectations.parse_error_count,
+            "{}",
+            case.id
+        );
         assert_eq!(
             list_mdns_services(&transport).unwrap().len(),
             case.expectations.mdns_service_count,
@@ -407,6 +447,8 @@ fn adb_transcript_corpus_exercises_complete_workflows() {
         std::env::remove_var("DROIDSMITH_ADB_CORPUS_RECORD");
         fs::remove_dir_all(run_dir).unwrap();
     }
+    covered_families.sort();
+    assert_eq!(covered_families, expected_families);
 }
 
 struct FixedTransport {

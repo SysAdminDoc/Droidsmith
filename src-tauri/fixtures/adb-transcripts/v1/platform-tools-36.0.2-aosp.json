@@ -4,6 +4,10 @@
   "platformToolsVersion": "36.0.2",
   "deviceFamily": "aosp",
   "sanitized": true,
+  "provenance": {
+    "kind": "synthesized",
+    "basis": "Sanitized parser-contract fixture derived from documented ADB output grammar; no retained device capture supports a device-behavior claim."
+  },
   "commands": [
     {
       "argv": ["devices", "-l"],
@@ -117,6 +121,12 @@
       "stderr": ""
     },
     {
+      "argv": ["-t", "101", "shell", "ls", "-la", "/sdcard"],
+      "exitCode": 0,
+      "stdout": "drwxrwx--- 2 root sdcard_rw 4096 2026-06-28 12:30 Download\nmalformed aosp file row\n",
+      "stderr": ""
+    },
+    {
       "argv": ["mdns", "services"],
       "exitCode": 0,
       "stdout": "List of discovered mdns services\nadb-aosp-pair _adb-tls-pairing._tcp 192.0.2.10:37001\nadb-aosp-connect _adb-tls-connect._tcp aosp36.local:37002\nmalformed _adb-tls-connect._tcp missing-port\n",
@@ -136,6 +146,7 @@
     "currentUser": 0,
     "mdnsServiceCount": 2,
     "unknownDeviceCount": 1,
-    "enrichedFallbackUsed": false
+    "enrichedFallbackUsed": false,
+    "parseErrorCount": 1
   }
 }

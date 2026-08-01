@@ -1,0 +1,214 @@
+{
+  "schemaVersion": 1,
+  "id": "platform-tools-37.0.1-realme",
+  "platformToolsVersion": "37.0.1",
+  "deviceFamily": "realme-ui",
+  "sanitized": true,
+  "provenance": {
+    "kind": "synthesized",
+    "basis": "Sanitized synthetic fixture derived from documented ADB command formats and vendor build-property conventions; it is parser coverage, not a device-behavior claim."
+  },
+  "commands": [
+    {
+      "argv": [
+        "devices",
+        "-l"
+      ],
+      "exitCode": 0,
+      "stdout": "List of devices attached\nREALME371USB device usb:1-1 product:bale model:RMX3851 device:bale transport_id:606\nREALME371USBUNKNOWN vendor_state product:bale model:Unknown device:bale transport_id:696\nmalformed device row\n",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "-t",
+        "606",
+        "shell",
+        "getprop"
+      ],
+      "exitCode": 0,
+      "stdout": "[ro.product.model]: [RMX3851]\n[ro.product.manufacturer]: [realme]\n[ro.build.version.release]: [15]\n[ro.build.version.sdk]: [35]\n[ro.build.fingerprint]: [realme/bale/bale:15/SYNTHETIC/000001:user/release-keys]\n[ro.build.version.security_patch]: [2026-07-01]\n[ro.serialno]: [SANITIZED-REALME-UI]\n[dhcp.wlan0.ipaddress]: [192.0.2.66]\nmalformed property row\n",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "-t",
+        "606",
+        "shell",
+        "dumpsys",
+        "battery"
+      ],
+      "exitCode": 0,
+      "stdout": "Current Battery Service state:\n  status: 2\n  health: 2\n  level: 72\n  temperature: 301\n  voltage: 4210\n",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "-t",
+        "606",
+        "shell",
+        "df",
+        "-k"
+      ],
+      "exitCode": 0,
+      "stdout": "Filesystem 1K-blocks Used Available Use% Mounted on\n/dev/block/mapper/userdata\n  128000000 64000000 64000000 50% /data\n/dev/block/dm-0 5000000 4500000 500000 90% /system\nmalformed storage row\n",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "-t",
+        "606",
+        "shell",
+        "dumpsys",
+        "thermalservice"
+      ],
+      "exitCode": 0,
+      "stdout": "Current temperatures from HAL:\n  Temperature{mValue=32.1, mType=3, mName=CPU, mStatus=0}\n",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "-t",
+        "606",
+        "shell",
+        "getprop",
+        "ro.build.version.sdk"
+      ],
+      "exitCode": 0,
+      "stdout": "35\n",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "-t",
+        "606",
+        "shell",
+        "pm",
+        "list",
+        "packages",
+        "--user",
+        "0",
+        "-e",
+        "-f",
+        "-U",
+        "-i"
+      ],
+      "exitCode": 0,
+      "stdout": "package:/system/priv-app/VendorSystem/VendorSystem.apk=com.realme.systemui uid:1000 installer=com.android.vending\n",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "-t",
+        "606",
+        "shell",
+        "pm",
+        "list",
+        "packages",
+        "--user",
+        "0",
+        "-d",
+        "-f",
+        "-U",
+        "-i"
+      ],
+      "exitCode": 0,
+      "stdout": "package:/data/app/com.example.disabled/base.apk=com.example.disabled uid:10123 installer=com.android.vending\n",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "-t",
+        "606",
+        "shell",
+        "pm",
+        "list",
+        "packages",
+        "--user",
+        "0",
+        "-u",
+        "-f",
+        "-U",
+        "-i"
+      ],
+      "exitCode": 0,
+      "stdout": "package:/system/priv-app/VendorSystem/VendorSystem.apk=com.realme.systemui uid:1000 installer=com.android.vending\npackage:/data/app/com.example.disabled/base.apk=com.example.disabled uid:10123 installer=com.android.vending\n",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "-t",
+        "606",
+        "shell",
+        "pm",
+        "list",
+        "users"
+      ],
+      "exitCode": 0,
+      "stdout": "Users:\n  UserInfo{0:Owner:c13} running (current)\n  malformed user row\n",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "-t",
+        "606",
+        "shell",
+        "am",
+        "get-current-user"
+      ],
+      "exitCode": 0,
+      "stdout": "0\n",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "-t",
+        "606",
+        "shell",
+        "dumpsys",
+        "activity",
+        "services"
+      ],
+      "exitCode": 0,
+      "stdout": "ACTIVITY MANAGER SERVICES\n  * ServiceRecord{aaa u0 com.realme.systemui/.CoreService}\n  * ServiceRecord{bbb u0 com.example.disabled/.SyncService}\n  * malformed service record\n",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "-t",
+        "606",
+        "shell",
+        "ls",
+        "-la",
+        "/sdcard"
+      ],
+      "exitCode": 0,
+      "stdout": "drwxrwx--- 2 root sdcard_rw 4096 2026-07-01 12:00 realme-ui\nmalformed realme-ui file row\n",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "mdns",
+        "services"
+      ],
+      "exitCode": 0,
+      "stdout": "List of discovered mdns services\nadb-realme-ui _adb-tls-connect._tcp 192.0.2.66:37123\nmalformed _adb-tls-connect._tcp missing-port\n",
+      "stderr": ""
+    }
+  ],
+  "expectations": {
+    "serial": "REALME371USB",
+    "model": "RMX3851",
+    "transportId": 606,
+    "manufacturer": "realme",
+    "packageCount": 2,
+    "enrichedPackageMetadata": true,
+    "storagePartitionCount": 2,
+    "serviceCount": 2,
+    "userCount": 1,
+    "currentUser": 0,
+    "mdnsServiceCount": 1,
+    "unknownDeviceCount": 1,
+    "enrichedFallbackUsed": false,
+    "parseErrorCount": 1
+  }
+}

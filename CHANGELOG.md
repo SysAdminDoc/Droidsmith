@@ -36,6 +36,16 @@ each milestone tag.
   clears the automation blocker on the light-theme work, now tracked as
   IMP-112 in the active roadmap. (IMP-105)
 
+- **The fake-ADB transcript corpus now covers every shipped vendor pack.** Six
+  sanitized schema-v1 cases add OnePlus/OxygenOS, Oppo/ColorOS, Realme UI,
+  Motorola, Nothing OS, and Amazon FireOS to the existing AOSP/Pixel, Samsung,
+  and Xiaomi coverage. Every case exercises device discovery, properties,
+  storage, enriched package enumeration, users, services, remote-file parsing,
+  and mDNS; records explicit synthesized provenance so fixtures cannot be
+  mistaken for device-behavior evidence; and carries malformed and unknown rows
+  through the contract. The test requires exact nine-family parity and confirms
+  malformed file rows remain visible with `parse_error`. (IMP-107)
+
 ### Changed
 
 - **Consolidated the workspace into a denser technical visual system.** The
