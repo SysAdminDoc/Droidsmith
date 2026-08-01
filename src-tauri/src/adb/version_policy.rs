@@ -77,6 +77,9 @@ struct KnownBadRule {
 fn policy() -> &'static PlatformToolsPolicy {
     static POLICY: OnceLock<PlatformToolsPolicy> = OnceLock::new();
     POLICY.get_or_init(|| {
+        // build.rs parses this exact include and validates schema 1 before the
+        // crate can compile. Keep the invariant here as defense in depth for
+        // non-Cargo tooling that might evaluate the module independently.
         let parsed: PlatformToolsPolicy = serde_json::from_str(POLICY_JSON)
             .expect("platform-tools-policy.json must match the Rust policy schema");
         assert_eq!(

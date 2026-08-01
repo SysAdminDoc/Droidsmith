@@ -563,9 +563,10 @@ pub fn plan_pack(
         .iter()
         .filter(|entry| selected.contains(&entry.id))
     {
-        let support = status_by_id
-            .get(entry.id.as_str())
-            .expect("assessment covers every pack entry");
+        let Some(support) = status_by_id.get(entry.id.as_str()) else {
+            skipped.push(missing_pack_assessment(entry));
+            continue;
+        };
         if support.status != crate::packs::PackEntryStatus::Ready {
             skipped.push((*support).clone());
             continue;
@@ -598,4 +599,37 @@ pub fn plan_pack(
         plans,
         skipped,
     })
+}
+
+fn missing_pack_assessment(entry: &crate::packs::PackEntry) -> crate::packs::PackEntryAssessment {
+    crate::packs::PackEntryAssessment {
+        id: entry.id.clone(),
+        status: crate::packs::PackEntryStatus::Unsupported,
+        detail: Some(
+            "pack assessment omitted this entry; the action was skipped safely".to_string(),
+        ),
+        effective_removal: entry.removal,
+        shared_system_uid: false,
+    }
+}
+
+#[cfg(test)]
+mod invariant_tests {
+    use super::*;
+
+    #[test]
+    fn a_missing_pack_assessment_becomes_an_explicit_skip() {
+        let entry = crate::packs::PackEntry {
+            id: "com.example.missing".to_string(),
+            description: "fixture".to_string(),
+            removal: crate::packs::RemovalLevel::Recommended,
+            labels: Vec::new(),
+            depends_on: Vec::new(),
+            needed_by: Vec::new(),
+        };
+        let skipped = missing_pack_assessment(&entry);
+        assert_eq!(skipped.id, entry.id);
+        assert_eq!(skipped.status, crate::packs::PackEntryStatus::Unsupported);
+        assert!(skipped.detail.unwrap().contains("skipped safely"));
+    }
 }

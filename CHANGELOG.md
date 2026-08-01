@@ -71,6 +71,14 @@ each milestone tag.
 
 ### Fixed
 
+- **Malformed bundled policy data now fails the build, not first use.** The Rust
+  build script parses `platform-tools-policy.json`, requires schema 1 and its
+  typed core fields, and tracks the asset for rebuilds before the runtime can be
+  compiled. The runtime invariant remains as documented defense in depth. A
+  separate pack-planning invariant no longer panics if an assessment row is
+  absent: it emits an Unsupported skip with an explicit safe-skip reason, with
+  a regression test for that degraded path. (IMP-109)
+
 - **Shared-system-UID packages can no longer enter a debloat batch silently.**
   Existing package enumeration now recognizes `android.uid.system` for owner
   and secondary Android users and raises matching entries to Unsafe regardless

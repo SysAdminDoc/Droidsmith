@@ -98,13 +98,6 @@ R-119 / IMP-95.
   Acceptance: pane headers announce the route name and description only; the milestone metadata either leaves `NAV_ITEMS` or stops reaching the accessibility tree; the rendered-route smoke asserts no roadmap identifier appears in any accessible name.
   Complexity: S
 
-- [ ] P3 — IMP-109: Validate the bundled platform-tools policy at build time
-  Why: a malformed edit to a bundled policy asset becomes a runtime panic on first use instead of a build failure.
-  Evidence: `src-tauri/src/adb/version_policy.rs:81` calls `.expect("platform-tools-policy.json must match the Rust policy schema")` on an `include_str!` asset and asserts `schema_version`; `src-tauri/src/commands/packs.rs:564` has the same shape for `expect("assessment covers every pack entry")`.
-  Touches: `src-tauri/build.rs`, `src-tauri/src/adb/version_policy.rs`, `src-tauri/src/commands/packs.rs`.
-  Acceptance: the policy asset is parsed and schema-checked in `build.rs` so a malformed file fails compilation; the runtime path either keeps the now-unreachable invariant with a comment justifying it or degrades to a documented default; the packs assessment invariant returns a skip with a reported reason instead of panicking.
-  Complexity: S
-
 - [ ] P3 — R-130: Report accurate per-app storage from PackageManager
   Why: accurate app sizes are a sponsor-gated feature in the closest commercial competitor and are available from a single documented command.
   Evidence: `pm get-package-storage-stats [--user] <PKG>` is present in AOSP `PackageManagerShellCommand.java`; ADB AppControl 1.8.6 gates "accurate app sizes (A8+)" behind its paid tier.
