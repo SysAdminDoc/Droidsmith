@@ -233,7 +233,14 @@
     "recoveryExportedReady": "Línea base exportada. Esta acción revisada aún no se ha ejecutado.",
     "recoveryExporting": "Exportando línea base…",
     "recoveryFailed": "La línea base de recuperación falló",
-    "recoveryInspect": "Inspeccionar línea base de recuperación",
+    "recoveryRestoreOpen": "Restaurar antes de actualizar…",
+    "recoveryReapplyOpen": "Volver a aplicar tras actualizar…",
+    "recoveryDirection": {
+      "restore": "Restauración previa a la actualización: cada paquete recuperable vuelve al estado que registró la línea base.",
+      "reapply": "Reaplicación posterior a la actualización: las acciones registradas se vuelven a aplicar solo a los paquetes que la actualización revirtió."
+    },
+    "recoveryIrreversibleTitle": "{{count}} paquetes que esta línea base no puede recuperar",
+    "recoveryIrreversibleBody": "La línea base portátil registra solo el estado de activación, de modo que sobrevive a la actualización que cambia la huella de compilación. Estos paquetes cambiaron algo que no contiene, en ambos extremos del ciclo.",
     "recoveryInspecting": "Comparando línea base con el dispositivo en vivo…",
     "recoveryLiveState": "Estado en vivo",
     "recoveryMatching": "{{count}} ya coinciden",

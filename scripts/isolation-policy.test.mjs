@@ -656,9 +656,18 @@ test("allows bounded recovery baseline export and read-only inspection", () => {
   const inspectMessage = message("inspect_recovery_baseline", {
     target,
     path_grant: pathGrant,
+    round_trip: "reapply",
   });
   assert.equal(hook(exportMessage), exportMessage);
   assert.equal(hook(inspectMessage), inspectMessage);
+
+  // The OTA round-trip direction decides which way the reviewed plans point,
+  // so it is a required part of the payload rather than an optional hint.
+  const directionless = message("inspect_recovery_baseline", {
+    target,
+    path_grant: pathGrant,
+  });
+  assert.equal(hook(directionless).cmd, blockedCommand);
 
   const invalid = message("export_recovery_baseline", {
     target,

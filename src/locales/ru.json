@@ -828,7 +828,14 @@
     "batchClear": "Очистить выбор",
     "batchCompleted": "Пакет применён: успешно {{succeeded}}, с ошибками {{failed}}.",
     "batchUndoCompleted": "Отмена пакета: возвращено {{succeeded}}, с ошибками {{failed}}.",
-    "recoveryInspect": "Проверить baseline восстановления",
+    "recoveryRestoreOpen": "Восстановить перед обновлением…",
+    "recoveryReapplyOpen": "Применить снова после обновления…",
+    "recoveryDirection": {
+      "restore": "Восстановление до обновления: каждый восстановимый пакет возвращается в состояние, записанное в baseline.",
+      "reapply": "Повторное применение после обновления: записанные действия применяются только к пакетам, которые обновление откатило."
+    },
+    "recoveryIrreversibleTitle": "Пакетов, которые этот baseline не восстановит: {{count}}",
+    "recoveryIrreversibleBody": "Переносимый baseline записывает только состояние включения — именно поэтому он переживает обновление, меняющее отпечаток сборки. Эти пакеты изменили то, чего в нём нет — на обоих концах цикла.",
     "recoveryExportBeforeApply": "Экспорт baseline до изменения",
     "recoveryExporting": "Экспорт baseline…",
     "recoveryExportedReady": "Baseline экспортирован. Проверенное действие еще не выполнено.",

@@ -16,6 +16,22 @@ each milestone tag.
 
 ### Added
 
+- **The pre-OTA / post-OTA round trip is now a guided pair rather than a manual
+  ritual.** A recovery baseline diff takes an explicit direction: restoring
+  walks every recoverable package back to the state the baseline recorded,
+  re-applying walks forward to the state the recorded actions produced. The
+  direction cannot be inferred — right after an update, a reverted package and
+  a never-changed one look identical — so Apps offers both halves as separate
+  entry points and the CLI gains `baseline-apply --direction restore|reapply`
+  with the usual `--dry-run` / `--apply` pair and exit codes. Neither direction
+  plans anything against a package already in the wanted state, so nothing is
+  applied twice, and apply always recomputes the diff live rather than trusting
+  a plan. Packages the portable baseline cannot recover — it records enable
+  state only, which is what lets it survive the fingerprint change — are now
+  named explicitly and identically at both ends instead of being folded into
+  the skipped rows. A baseline from another device identity is refused rather
+  than applied as an empty plan. (R-126)
+
 - **Saved fleet reports now render in the app.** A third Profiles tab opens a
   `run --all-devices --json` report read-only and shows per-device outcome,
   failure reason or skip cause, and every planned action with its result —

@@ -681,12 +681,44 @@ async function runDesktopFlow(browser) {
     fullPage: false,
   });
 
-  await page.getByRole("button", { name: "Inspect recovery baseline" }).click();
+  // R-126, first half: before the update, restore every recoverable package
+  // to the state the baseline recorded, and name what cannot come back.
+  await page.getByRole("button", { name: "Restore before update…" }).click();
   await page.getByText("Read-only recovery diff", { exact: true }).waitFor();
   await page.getByText("Build changed / OTA drift", { exact: true }).waitFor();
   await page.getByText("Skipped safely", { exact: true }).waitFor();
+  await page
+    .getByText(
+      "Pre-update restore: every recoverable package returns to the state the baseline recorded.",
+      { exact: true },
+    )
+    .waitFor();
+  await page
+    .getByText("1 packages this baseline cannot recover", { exact: true })
+    .waitFor();
+  await page.getByText(/com\.example\.wiped/).waitFor();
   await page.getByRole("button", { name: "Apply 1 reviewed actions" }).click();
   await page.getByText("Applied: 1; failed: 0.", { exact: true }).waitFor();
+  await page
+    .getByRole("button", { name: "Close recovery baseline", exact: true })
+    .click();
+
+  // R-126, second half: after the update, the same baseline plans the opposite
+  // direction, and the irreversible list is identical at both ends.
+  await page.getByRole("button", { name: "Re-apply after update…" }).click();
+  await page
+    .getByText(
+      "Post-update re-apply: the recorded actions are re-applied only to packages the update reverted.",
+      { exact: true },
+    )
+    .waitFor();
+  await page
+    .getByText("1 packages this baseline cannot recover", { exact: true })
+    .waitFor();
+  await page
+    .getByText("Drifted (reverted by update)", { exact: true })
+    .waitFor();
+  await assertNoHorizontalOverflow(page, "desktop OTA re-apply review");
   await page
     .getByRole("button", { name: "Close recovery baseline", exact: true })
     .click();
@@ -3255,11 +3287,15 @@ async function installTauriMock(
           };
         }
         if (cmd === "inspect_recovery_baseline") {
+          // The two halves of the OTA round trip plan opposite actions
+          // against the same device, which is why the direction is an input
+          // rather than something the backend infers.
+          const reapply = args.round_trip === "reapply";
           const recoveryPlan = planFor({
             serial: "QA123",
             target: args.target,
             package: "com.example.app",
-            kind: "enable",
+            kind: reapply ? "disable" : "enable",
             user_id: 0,
             pack_context: null,
             context: {
@@ -3297,9 +3333,14 @@ async function installTauriMock(
                 live_present: true,
                 live_enabled: false,
                 requested_action: "disable",
-                status: "ready",
-                reason_code: null,
-                reason: "review this canonical enable-state recovery action",
+                // Same live device, opposite readings: restoring sees a
+                // package to re-enable, re-applying sees one the update
+                // reverted.
+                status: reapply ? "drifted" : "ready",
+                reason_code: reapply ? "post_change_reverted" : null,
+                reason: reapply
+                  ? "package state was reverted, likely by a system update"
+                  : "review this canonical enable-state recovery action",
               },
               {
                 package: "com.example.removed",
@@ -3313,7 +3354,16 @@ async function installTauriMock(
                 reason: "package is absent from the live Android user",
               },
             ],
+            round_trip: reapply ? "reapply" : "restore",
             plans: [recoveryPlan],
+            irreversible: [
+              {
+                package: "com.example.wiped",
+                requested_action: "clear_data",
+                reason:
+                  "app data was cleared; the baseline records no data to restore",
+              },
+            ],
           };
         }
         if (cmd === "save_profile") {

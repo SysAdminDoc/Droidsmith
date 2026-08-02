@@ -81,7 +81,7 @@
       ["target", "userId", "actions", "pack", "path_grant"],
       [],
     ],
-    inspect_recovery_baseline: [["target", "path_grant"], []],
+    inspect_recovery_baseline: [["target", "path_grant", "round_trip"], []],
     inspect_profile: [["target", "path_grant"], []],
     inspect_fleet_report: [["path_grant"], []],
     save_profile: [["path_grant", "profile"], []],

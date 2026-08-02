@@ -29,13 +29,6 @@ R-119 / IMP-95.
 
 ### P2
 
-- [ ] P2 — R-126: Add a guided pre-OTA restore and post-OTA re-apply round trip
-  Why: debloated devices break on OTA updates, and the accepted community workflow — restore everything, update, re-debloat — is entirely manual today.
-  Evidence: XDA guidance ("Do not install OTA update on a debloated phone, as you will face boot loops") and recovery threads; Droidsmith already has read-only OTA drift review, portable recovery baselines, and profiles, so only the orchestration is missing.
-  Touches: `src-tauri/src/recovery_baseline.rs`, `src-tauri/src/upgrade.rs`, `src-tauri/src/profile.rs`, `src/routes/Apps.tsx`, `src/routes/apps/RecoveryBaselinePanel.tsx`, `src-tauri/src/bin/droidsmith_cli.rs`, `src/locales/*.json`, tests.
-  Acceptance: a reviewed pre-OTA plan restores every recoverable package to its baseline state and reports exactly which packages cannot be restored before the user updates; after an OTA the drift review pairs with a re-apply plan derived from the same baseline, requires a dry-run diff, and never replays actions against packages whose post-OTA state already matches; the CLI exposes the same plan/apply pair with stable exit codes; irreversible packages are named explicitly at both ends.
-  Complexity: L
-
 - [ ] P2 — R-128: Add filter-based profile predicates as schema v3
   Why: profiles are ordered lists of concrete package actions, so they are effectively device-specific — which limits fleet `run` and the planned `--retry-from` to fleets of identical devices.
   Evidence: AppManager 4.1.0 (2026-06-29) ships filter-based profiles resolving predicates at run time with boolean expressions over `&`, `|`, and parentheses; Droidsmith already has versioned schemas with explicit review-and-migrate paths (`contribution-schema-policy.json`, profile v1→v2).

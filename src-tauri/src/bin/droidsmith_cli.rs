@@ -38,7 +38,7 @@ use droidsmith_lib::fleet_report::{
 };
 use droidsmith_lib::journal;
 use droidsmith_lib::profile;
-use droidsmith_lib::recovery_baseline::{self, BaselineActionInput};
+use droidsmith_lib::recovery_baseline::{self, BaselineActionInput, BaselineRoundTrip};
 
 /// Exit code for a resume the operator has to review before it can proceed.
 /// Distinct from `2` so a batch runner can tell "you passed the wrong flags"
@@ -58,6 +58,7 @@ fn main() -> ExitCode {
         "migrate-v1" => cmd_migrate_v1(&argv[1..]),
         "baseline-export" => cmd_baseline_export(&argv[1..]),
         "baseline-inspect" => cmd_baseline_inspect(&argv[1..]),
+        "baseline-apply" => cmd_baseline_apply(&argv[1..]),
         "-h" | "--help" | "help" => {
             print_help();
             ExitCode::SUCCESS
@@ -78,11 +79,19 @@ fn print_help() {
          droidsmith-cli run <profile.yaml> (--device <serial> | --all-devices | --retry-from <report.json>) [--dry-run|--apply] [--json] [--allow-unsafe-transport] [--accept-drift]\n  \
          droidsmith-cli migrate-v1 <profile-v1.yaml> --output <profile-v2.yaml> [--json]\n  \
          droidsmith-cli baseline-export <profile.yaml> (--device <serial> --output <file.json> | --all-devices --output <dir>) [--allow-unsafe-transport]\n  \
-         droidsmith-cli baseline-inspect <file.json> (--device <serial> | --all-devices) [--json] [--allow-unsafe-transport]\n\n\
+         droidsmith-cli baseline-inspect <file.json> (--device <serial> | --all-devices) [--direction restore|reapply] [--json] [--allow-unsafe-transport]\n  \
+         droidsmith-cli baseline-apply <file.json> --device <serial> --direction restore|reapply (--dry-run|--apply) [--json] [--allow-unsafe-transport]\n\n\
          --all-devices fans the operation over every connected, authorized device.\n  \
          Unauthorized/offline devices and unauthenticated TCP transports (without\n  \
          --allow-unsafe-transport) are skipped, not aborted; the exit code is 1 if any\n  \
          device was skipped or failed.\n\n\
+         The OTA round trip is two directions over one baseline: --direction restore\n  \
+         walks every recoverable package back to its baseline state before you update,\n  \
+         and --direction reapply re-applies the recorded actions to the packages the\n  \
+         update reverted. baseline-apply always recomputes the diff live and executes\n  \
+         only what that diff marks ready, so a package already in the wanted state is\n  \
+         never acted on twice. Packages the portable baseline cannot restore are named\n  \
+         explicitly in both directions.\n\n\
          --retry-from resumes an interrupted `run --all-devices --json` report: only\n  \
          devices the report left failed or skipped are selected, and actions the report\n  \
          proves applied are never replayed. Drift in the profile, the action set, the\n  \
@@ -179,6 +188,16 @@ fn cmd_migrate_v1(argv: &[String]) -> ExitCode {
     ExitCode::SUCCESS
 }
 
+/// Which baseline subcommand a shared argument parse belongs to. The three
+/// differ only in which flags they accept, so they share one parser rather
+/// than three near-identical ones.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum BaselineCommand {
+    Export,
+    Inspect,
+    Apply,
+}
+
 #[derive(Debug)]
 struct BaselineArgs {
     input_path: PathBuf,
@@ -188,9 +207,25 @@ struct BaselineArgs {
     output_path: Option<PathBuf>,
     json: bool,
     allow_unsafe_transport: bool,
+    /// Which half of the OTA round trip to plan. Meaningless for export.
+    round_trip: BaselineRoundTrip,
+    /// `Some(true)` to execute, `Some(false)` for a dry-run diff. Only
+    /// `baseline-apply` carries it.
+    apply: Option<bool>,
 }
 
-fn parse_baseline_args(argv: &[String], export: bool) -> Result<BaselineArgs, String> {
+fn parse_round_trip(value: &str) -> Result<BaselineRoundTrip, String> {
+    match value {
+        "restore" => Ok(BaselineRoundTrip::Restore),
+        "reapply" => Ok(BaselineRoundTrip::Reapply),
+        other => Err(format!(
+            "unknown --direction {other:?}; pass restore (pre-OTA) or reapply (post-OTA)"
+        )),
+    }
+}
+
+fn parse_baseline_args(argv: &[String], command: BaselineCommand) -> Result<BaselineArgs, String> {
+    let export = command == BaselineCommand::Export;
     if argv.is_empty() {
         return Err("missing input file".to_string());
     }
@@ -200,6 +235,8 @@ fn parse_baseline_args(argv: &[String], export: bool) -> Result<BaselineArgs, St
     let mut output_path = None;
     let mut json = false;
     let mut allow_unsafe_transport = false;
+    let mut round_trip = BaselineRoundTrip::Restore;
+    let mut apply: Option<bool> = None;
     let mut i = 1;
     while i < argv.len() {
         match argv[i].as_str() {
@@ -218,11 +255,44 @@ fn parse_baseline_args(argv: &[String], export: bool) -> Result<BaselineArgs, St
                 }
                 output_path = Some(PathBuf::from(&argv[i]));
             }
+            "--direction" if !export => {
+                i += 1;
+                if i >= argv.len() {
+                    return Err("--direction requires restore or reapply".to_string());
+                }
+                round_trip = parse_round_trip(&argv[i])?;
+            }
+            "--dry-run" if command == BaselineCommand::Apply => {
+                if apply.is_some() {
+                    return Err("pass exactly one of --dry-run or --apply".to_string());
+                }
+                apply = Some(false);
+            }
+            "--apply" if command == BaselineCommand::Apply => {
+                if apply.is_some() {
+                    return Err("pass exactly one of --dry-run or --apply".to_string());
+                }
+                apply = Some(true);
+            }
             "--json" if !export => json = true,
             "--allow-unsafe-transport" => allow_unsafe_transport = true,
             other => return Err(format!("unknown flag: {other}")),
         }
         i += 1;
+    }
+    if command == BaselineCommand::Apply {
+        // A baseline is bound to one device identity, so fanning an apply over
+        // a fleet would mean every device but one refusing on identity. Say so
+        // instead of pretending it is supported.
+        if all_devices {
+            return Err(
+                "baseline-apply targets one device; a baseline is bound to a single device identity"
+                    .to_string(),
+            );
+        }
+        if apply.is_none() {
+            return Err("pass exactly one of --dry-run or --apply".to_string());
+        }
     }
     let serial = resolve_device_selector(serial, all_devices)?;
     if export && output_path.is_none() {
@@ -239,6 +309,8 @@ fn parse_baseline_args(argv: &[String], export: bool) -> Result<BaselineArgs, St
         output_path,
         json,
         allow_unsafe_transport,
+        round_trip,
+        apply,
     })
 }
 
@@ -317,7 +389,7 @@ fn build_baseline_for_target(
 }
 
 fn cmd_baseline_export(argv: &[String]) -> ExitCode {
-    let args = match parse_baseline_args(argv, true) {
+    let args = match parse_baseline_args(argv, BaselineCommand::Export) {
         Ok(args) => args,
         Err(error) => {
             eprintln!("[droidsmith-cli] {error}");
@@ -560,6 +632,7 @@ fn inspect_baseline_for_target(
     baseline: recovery_baseline::RecoveryBaseline,
     target: &DeviceTarget,
     serial: &str,
+    round_trip: BaselineRoundTrip,
 ) -> Result<recovery_baseline::RecoveryBaselineDiff, DeviceErrorOutput> {
     let err = |code: &str, message: String| DeviceErrorOutput {
         device_serial: serial.to_string(),
@@ -579,13 +652,14 @@ fn inspect_baseline_for_target(
     } else {
         Vec::new()
     };
-    recovery_baseline::inspect(baseline, target, &users, &packages)
+    recovery_baseline::inspect_round_trip(baseline, target, &users, &packages, round_trip)
         .map_err(|error| err("baseline_invalid", error.to_string()))
 }
 
 fn print_inspect_diff(diff: &recovery_baseline::RecoveryBaselineDiff) {
     println!(
-        "Device identity: {}\nBuild fingerprint: {}\nAndroid user {}: {}\nRecovery actions ready: {}",
+        "Direction: {}\nDevice identity: {}\nBuild fingerprint: {}\nAndroid user {}: {}\nActions ready: {}",
+        diff.round_trip.label(),
         if diff.compatibility.device_identity_matches { "match" } else { "MISMATCH" },
         if diff.compatibility.build_fingerprint_matches { "match" } else { "changed" },
         diff.baseline.android_user,
@@ -595,10 +669,25 @@ fn print_inspect_diff(diff: &recovery_baseline::RecoveryBaselineDiff) {
     for row in &diff.rows {
         println!("  {:?}\t{}\t{}", row.status, row.package, row.reason);
     }
+    if !diff.irreversible.is_empty() {
+        // Named at both ends of the round trip: before the update so the
+        // operator knows what will not come back, and after it so the same
+        // list is not silently absent from the re-apply.
+        println!(
+            "\nNot recoverable from this baseline ({}):",
+            diff.irreversible.len()
+        );
+        for entry in &diff.irreversible {
+            println!(
+                "  {}\t{:?}\t{}",
+                entry.package, entry.requested_action, entry.reason
+            );
+        }
+    }
 }
 
 fn cmd_baseline_inspect(argv: &[String]) -> ExitCode {
-    let args = match parse_baseline_args(argv, false) {
+    let args = match parse_baseline_args(argv, BaselineCommand::Inspect) {
         Ok(args) => args,
         Err(error) => {
             eprintln!("[droidsmith-cli] {error}");
@@ -623,6 +712,229 @@ fn cmd_baseline_inspect(argv: &[String]) -> ExitCode {
     }
 }
 
+#[derive(Serialize)]
+struct BaselineApplyOutput {
+    schema_version: u32,
+    command: &'static str,
+    mode: &'static str,
+    direction: BaselineRoundTrip,
+    device_serial: String,
+    android_user: u32,
+    compatible: bool,
+    /// Every package the live diff refused, with the reason it gave.
+    skipped: Vec<BaselineSkippedOutput>,
+    irreversible: Vec<recovery_baseline::BaselineIrreversible>,
+    plans: Vec<RunPlanOutput>,
+    results: Vec<RunApplyOutput>,
+    success: bool,
+}
+
+#[derive(Serialize)]
+struct BaselineSkippedOutput {
+    package: String,
+    reason_code: Option<String>,
+    reason: String,
+}
+
+/// Plan or execute one half of the OTA round trip against a single device.
+///
+/// The diff is always recomputed against the live device inside this command,
+/// and only the plans that diff produced are ever executed. That is what makes
+/// "requires a dry-run diff" structural rather than procedural: there is no
+/// path from a stale plan to a mutation, and a package already in the wanted
+/// state produces no plan, so it cannot be acted on twice.
+fn cmd_baseline_apply(argv: &[String]) -> ExitCode {
+    let args = match parse_baseline_args(argv, BaselineCommand::Apply) {
+        Ok(args) => args,
+        Err(error) => {
+            eprintln!("[droidsmith-cli] {error}");
+            print_help();
+            return ExitCode::from(2);
+        }
+    };
+    let apply = args.apply.expect("required by the parser");
+    let baseline = match recovery_baseline::load(&args.input_path) {
+        Ok(baseline) => baseline,
+        Err(error) => {
+            eprintln!("[droidsmith-cli] {error}");
+            return ExitCode::from(2);
+        }
+    };
+    let Some(transport) = resolve_or_fail() else {
+        return ExitCode::from(3);
+    };
+    let serial = args
+        .serial
+        .as_deref()
+        .expect("baseline-apply always carries a serial");
+    let mut target = match target_for_serial(&transport, serial) {
+        Ok(target) => target,
+        Err(error) => {
+            eprintln!("[droidsmith-cli] {error}");
+            return ExitCode::from(1);
+        }
+    };
+    if let Err(error) = authorize_cli_transport(&mut target, args.allow_unsafe_transport) {
+        eprintln!("[droidsmith-cli] {error}");
+        return ExitCode::from(2);
+    }
+    let android_user = baseline.android_user;
+    let diff =
+        match inspect_baseline_for_target(&transport, baseline, &target, serial, args.round_trip) {
+            Ok(diff) => diff,
+            Err(error) => {
+                eprintln!("[droidsmith-cli] {}", error.message);
+                return ExitCode::from(1);
+            }
+        };
+
+    let compatible =
+        diff.compatibility.device_identity_matches && diff.compatibility.android_user_available;
+    if !compatible {
+        // Refuse loudly rather than executing an empty plan and reporting
+        // success: an identity mismatch means this baseline is not this
+        // device's, which is the one mistake this surface must never make
+        // quietly.
+        let message = if diff.compatibility.device_identity_matches {
+            format!("baseline Android user {android_user} is not available on this device")
+        } else {
+            "this baseline belongs to a different device identity".to_string()
+        };
+        eprintln!("[droidsmith-cli] {message}");
+        return ExitCode::from(1);
+    }
+
+    // The diff plans enable-state changes without probing each package's
+    // current state; `run` does probe, and the JSON shape is shared, so fill
+    // it here rather than emitting an empty field that reads as "unknown".
+    let mut diff = diff;
+    for plan in &mut diff.plans {
+        plan.before_state = actions::capture_state(&transport, &plan.request);
+    }
+    let plan_output = diff
+        .plans
+        .iter()
+        .enumerate()
+        .map(|(index, plan)| RunPlanOutput {
+            index: index + 1,
+            package: plan.request.package.clone(),
+            action: plan.request.kind,
+            user_id: plan.request.user_id,
+            before_state: plan.before_state.clone(),
+            description: plan.description.clone(),
+            adb_args: plan
+                .request
+                .target
+                .adb_selector()
+                .into_iter()
+                .chain(["shell".to_string()])
+                .chain(plan.args.clone())
+                .collect(),
+        })
+        .collect::<Vec<_>>();
+    let skipped = diff
+        .rows
+        .iter()
+        .filter(|row| row.status == recovery_baseline::BaselineDiffStatus::Skipped)
+        .map(|row| BaselineSkippedOutput {
+            package: row.package.clone(),
+            reason_code: row.reason_code.map(str::to_string),
+            reason: row.reason.clone(),
+        })
+        .collect::<Vec<_>>();
+
+    if !args.json {
+        print_inspect_diff(&diff);
+    }
+
+    let mut results = Vec::new();
+    let mut success = true;
+    if apply {
+        let journal_dir = match journal::default_journal_dir() {
+            Ok(dir) => dir,
+            Err(error) => {
+                eprintln!("[droidsmith-cli] {error}");
+                return ExitCode::from(1);
+            }
+        };
+        let identity = DeviceIdentity::from_target(&target);
+        for (index, plan) in diff.plans.into_iter().enumerate() {
+            let package = plan.request.package.clone();
+            let kind = plan.request.kind;
+            let now = iso_now();
+            let outcome = journal::with_journal(&journal_dir, &identity, |journal| {
+                journal.execute(plan, None, &now, |plan| {
+                    actions::apply(&transport, plan, &iso_now())
+                })
+            });
+            match outcome {
+                Ok(_) => {
+                    if !args.json {
+                        println!("  [{:>2}] ok", index + 1);
+                    }
+                    results.push(RunApplyOutput {
+                        index: index + 1,
+                        package,
+                        action: kind,
+                        status: ActionStatus::Applied,
+                        error: None,
+                    });
+                }
+                Err(journal::ExecuteError::Operation(error)) => {
+                    success = false;
+                    if !args.json {
+                        eprintln!("  [{:>2}] FAILED: {error}", index + 1);
+                    }
+                    results.push(RunApplyOutput {
+                        index: index + 1,
+                        package,
+                        action: kind,
+                        status: ActionStatus::Failed,
+                        error: Some(error.to_string()),
+                    });
+                }
+                Err(journal::ExecuteError::Journal(error)) => {
+                    eprintln!("[droidsmith-cli] journal write failed: {error}");
+                    return ExitCode::from(1);
+                }
+            }
+        }
+    } else if !args.json {
+        println!("\n(dry-run; read-only diff captured; nothing was changed)");
+    }
+
+    let output = BaselineApplyOutput {
+        schema_version: 1,
+        command: "baseline-apply",
+        mode: if apply { "apply" } else { "dry_run" },
+        direction: args.round_trip,
+        device_serial: serial.to_string(),
+        android_user,
+        compatible,
+        skipped,
+        irreversible: diff.irreversible,
+        plans: plan_output,
+        results,
+        success,
+    };
+    if args.json {
+        println!(
+            "{}",
+            serde_json::to_string(&output).expect("serializable result")
+        );
+    } else if apply && success {
+        println!(
+            "\nAll {} action(s) applied successfully.",
+            output.plans.len()
+        );
+    }
+    if output.success {
+        ExitCode::SUCCESS
+    } else {
+        ExitCode::from(1)
+    }
+}
+
 fn baseline_inspect_single(
     transport: &ShellTransport,
     baseline: recovery_baseline::RecoveryBaseline,
@@ -643,13 +955,14 @@ fn baseline_inspect_single(
         eprintln!("[droidsmith-cli] {error}");
         return ExitCode::from(2);
     }
-    let diff = match inspect_baseline_for_target(transport, baseline, &target, serial) {
-        Ok(diff) => diff,
-        Err(error) => {
-            eprintln!("[droidsmith-cli] {}", error.message);
-            return ExitCode::from(1);
-        }
-    };
+    let diff =
+        match inspect_baseline_for_target(transport, baseline, &target, serial, args.round_trip) {
+            Ok(diff) => diff,
+            Err(error) => {
+                eprintln!("[droidsmith-cli] {}", error.message);
+                return ExitCode::from(1);
+            }
+        };
     if args.json {
         match serde_json::to_string_pretty(&diff) {
             Ok(json) => println!("{json}"),
@@ -718,7 +1031,13 @@ fn baseline_inspect_fleet(
                     }));
                     continue;
                 }
-                match inspect_baseline_for_target(transport, baseline.clone(), &target, &serial) {
+                match inspect_baseline_for_target(
+                    transport,
+                    baseline.clone(),
+                    &target,
+                    &serial,
+                    args.round_trip,
+                ) {
                     Ok(diff) => {
                         if !args.json {
                             println!("=== {serial} ===");
@@ -1914,12 +2233,15 @@ mod tests {
     #[test]
     fn baseline_export_all_devices_requires_output_directory() {
         // Missing --output with --all-devices reports the directory guidance.
-        let error =
-            parse_baseline_args(&strings(&["profile.yaml", "--all-devices"]), true).unwrap_err();
+        let error = parse_baseline_args(
+            &strings(&["profile.yaml", "--all-devices"]),
+            BaselineCommand::Export,
+        )
+        .unwrap_err();
         assert!(error.contains("directory"), "got: {error}");
         let args = parse_baseline_args(
             &strings(&["profile.yaml", "--all-devices", "--output", "out"]),
-            true,
+            BaselineCommand::Export,
         )
         .unwrap();
         assert!(args.all_devices);
@@ -2169,11 +2491,12 @@ mod tests {
 
     #[test]
     fn baseline_export_requires_device_and_output() {
-        assert!(
-            parse_baseline_args(&strings(&["profile.yaml", "--device", "abc"]), true)
-                .unwrap_err()
-                .contains("--output")
-        );
+        assert!(parse_baseline_args(
+            &strings(&["profile.yaml", "--device", "abc"]),
+            BaselineCommand::Export
+        )
+        .unwrap_err()
+        .contains("--output"));
         let args = parse_baseline_args(
             &strings(&[
                 "profile.yaml",
@@ -2182,7 +2505,7 @@ mod tests {
                 "--output",
                 "baseline.json",
             ]),
-            true,
+            BaselineCommand::Export,
         )
         .unwrap();
         assert_eq!(args.output_path, Some(PathBuf::from("baseline.json")));
@@ -2199,7 +2522,7 @@ mod tests {
                 "--json",
                 "--allow-unsafe-transport",
             ]),
-            false,
+            BaselineCommand::Inspect,
         )
         .unwrap();
         assert!(args.json);
@@ -2207,7 +2530,7 @@ mod tests {
         assert!(args.output_path.is_none());
         assert!(parse_baseline_args(
             &strings(&["baseline.json", "--device", "abc", "--output", "x"]),
-            false,
+            BaselineCommand::Inspect,
         )
         .is_err());
     }

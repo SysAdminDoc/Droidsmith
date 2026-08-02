@@ -88,6 +88,9 @@ export function RecoveryBaselinePanel({
               date: diff.baseline.exported_at,
             })}
           </p>
+          <p className="mt-1 text-xs text-anvil-300">
+            {t(`apps.recoveryDirection.${diff.round_trip}`)}
+          </p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Badge
@@ -169,6 +172,29 @@ export function RecoveryBaselinePanel({
           </tbody>
         </table>
       </div>
+      {diff.irreversible.length > 0 && (
+        /* Named at both ends of the round trip: before the update so the
+           operator knows what will not come back, and after it so the same
+           list is not silently missing from the re-apply. */
+        <div className="border-t border-white/10 p-5">
+          <h4 className="text-sm font-semibold text-amber-200">
+            {t("apps.recoveryIrreversibleTitle", {
+              count: diff.irreversible.length,
+            })}
+          </h4>
+          <p className="mt-1 text-xs text-anvil-400">
+            {t("apps.recoveryIrreversibleBody")}
+          </p>
+          <ul className="mt-2 space-y-1 text-xs text-anvil-300">
+            {diff.irreversible.map((entry) => (
+              <li key={entry.package}>
+                <code className="font-mono">{entry.package}</code> —{" "}
+                {entry.reason}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
       <div className="flex flex-wrap justify-end gap-2 border-t border-white/10 p-4">
         {state.kind === "result" && (
           <p className="me-auto text-xs text-anvil-300">

@@ -126,6 +126,7 @@ fn normalize_compatible_specta_output(raw: String) -> Result<String, String> {
         ("pathGrant", "path_grant"),
         ("privacyConfirmed", "privacy_confirmed"),
         ("remotePath", "remote_path"),
+        ("roundTrip", "round_trip"),
         ("sessionId", "session_id"),
         ("entryId", "entry_id"),
         ("packageName", "package"),

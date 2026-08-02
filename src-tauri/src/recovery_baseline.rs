@@ -75,12 +75,65 @@ pub struct BaselineUndoPlan {
     pub user_id: u32,
 }
 
+/// Which half of the OTA round trip a diff is planning.
+///
+/// The community workflow around a debloated phone is "restore everything,
+/// take the update, re-debloat", and the two halves are not symmetric: one
+/// walks the device back to the state the baseline recorded, the other walks
+/// it forward to the state the recorded actions produced. Inferring the
+/// direction from live state — which is what a single undirected diff has to
+/// do — gets it wrong exactly when it matters, because immediately after an
+/// update a reverted package and a never-changed package look identical.
+///
+/// Choosing the direction makes the plan reviewable: a pre-OTA restore never
+/// contains a re-debloat action, and a post-OTA re-apply never contains an
+/// action that undoes one.
+#[derive(specta::Type, Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum BaselineRoundTrip {
+    /// Pre-OTA: return every recoverable package to its baseline state so the
+    /// update runs against the state the device shipped with.
+    #[default]
+    Restore,
+    /// Post-OTA: re-apply the recorded actions to packages the update
+    /// reverted, and only to those.
+    Reapply,
+}
+
+impl BaselineRoundTrip {
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Restore => "restore to baseline",
+            Self::Reapply => "re-apply recorded actions",
+        }
+    }
+}
+
+/// A package the portable baseline cannot act on in either direction, named
+/// explicitly rather than left as one skipped row among many.
+///
+/// The baseline records enable-state only, by design: it must survive the OTA
+/// that changes the build fingerprint, so it deliberately carries no APK, no
+/// data, and no installer provenance. An action that changed anything else is
+/// therefore outside what it can promise, at both ends of the round trip.
+#[derive(specta::Type, Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct BaselineIrreversible {
+    pub package: String,
+    pub requested_action: ActionKind,
+    pub reason: String,
+}
+
 #[derive(specta::Type, Debug, Clone, Serialize)]
 pub struct RecoveryBaselineDiff {
     pub baseline: RecoveryBaseline,
     pub compatibility: BaselineCompatibility,
+    pub round_trip: BaselineRoundTrip,
     pub rows: Vec<BaselineDiffRow>,
     pub plans: Vec<PlannedAction>,
+    /// Packages neither direction can act on. Populated identically for both
+    /// directions so the operator sees the same list before and after the
+    /// update.
+    pub irreversible: Vec<BaselineIrreversible>,
 }
 
 #[derive(specta::Type, Debug, Clone, PartialEq, Eq, Serialize)]
@@ -294,11 +347,68 @@ pub fn load(path: &Path) -> Result<RecoveryBaseline, RecoveryBaselineError> {
     Ok(baseline)
 }
 
+/// Diff a baseline against a live device for the pre-OTA restore direction.
+///
+/// Kept as the default entry point because restoring is what the recovery
+/// surface has always done; the post-OTA half is reached through
+/// [`inspect_round_trip`].
 pub fn inspect(
     baseline: RecoveryBaseline,
     target: &DeviceTarget,
     users: &[AndroidUser],
     live_packages: &[AppPackage],
+) -> Result<RecoveryBaselineDiff, RecoveryBaselineError> {
+    inspect_round_trip(
+        baseline,
+        target,
+        users,
+        live_packages,
+        BaselineRoundTrip::Restore,
+    )
+}
+
+/// The state a package must be in for one half of the round trip to consider
+/// it done, or `None` when this direction cannot act on it at all.
+///
+/// `Restore` targets the enable state the baseline recorded. `Reapply` targets
+/// the state the recorded action produces — which is why re-applying is total
+/// only for the two enable-state actions; everything else changed something
+/// the baseline never captured.
+fn target_enabled_state(package: &BaselinePackage, round_trip: BaselineRoundTrip) -> Option<bool> {
+    match round_trip {
+        BaselineRoundTrip::Restore => package.enabled,
+        BaselineRoundTrip::Reapply => match package.requested_action {
+            ActionKind::Disable => Some(false),
+            ActionKind::Enable => Some(true),
+            _ => None,
+        },
+    }
+}
+
+/// Why a recorded action is outside the portable baseline's reach, or `None`
+/// when it is an enable-state action the baseline can both undo and redo.
+fn irreversible_reason(kind: ActionKind) -> Option<&'static str> {
+    match kind {
+        ActionKind::Disable | ActionKind::Enable => None,
+        ActionKind::UninstallForUser => Some(
+            "the package was uninstalled for this user; the portable baseline records no APK, so only the same-device Activity journal can offer a reinstall",
+        ),
+        ActionKind::ClearData => {
+            Some("app data was cleared; the baseline records no data to restore")
+        }
+        ActionKind::ForceStop => Some(
+            "force-stop leaves no persistent state, so there is nothing to restore or re-apply",
+        ),
+        _ => Some("the recorded action is not an enable-state change the baseline can reverse"),
+    }
+}
+
+pub fn inspect_round_trip(
+    baseline: RecoveryBaseline,
+    target: &DeviceTarget,
+    users: &[AndroidUser],
+    live_packages: &[AppPackage],
+    round_trip: BaselineRoundTrip,
 ) -> Result<RecoveryBaselineDiff, RecoveryBaselineError> {
     validate(&baseline)?;
     let current_fingerprint = target
@@ -319,9 +429,21 @@ pub fn inspect(
         .collect();
     let mut rows = Vec::with_capacity(baseline.packages.len());
     let mut plans = Vec::new();
+    let mut irreversible = Vec::new();
 
     for package in &baseline.packages {
+        // Named for both directions, not only the one being planned: the
+        // operator has to know before the update what will not come back
+        // after it.
+        if let Some(reason) = irreversible_reason(package.requested_action) {
+            irreversible.push(BaselineIrreversible {
+                package: package.package.clone(),
+                requested_action: package.requested_action,
+                reason: reason.to_string(),
+            });
+        }
         let current = live.get(package.package.as_str()).copied();
+        let wanted = target_enabled_state(package, round_trip);
         let (status, reason_code, reason, plan_kind) = if !identity_matches {
             skipped(
                 "device_identity_mismatch",
@@ -347,37 +469,52 @@ pub fn inspect(
                 "system_class_changed",
                 "package changed between system and user-installed classification",
             )
-        } else if current.map(|entry| entry.enabled) == package.enabled {
-            let action_would_change_enabled = matches!(
-                (package.requested_action, package.enabled),
-                (ActionKind::Disable, Some(true)) | (ActionKind::Enable, Some(false))
-            );
-            if action_would_change_enabled {
-                (
-                    BaselineDiffStatus::Drifted,
-                    Some("post_change_reverted"),
-                    "package state was reverted, likely by a system update".to_string(),
-                    Some(package.requested_action),
-                )
-            } else {
+        } else if let Some(wanted) = wanted {
+            if current.map(|entry| entry.enabled) == Some(wanted) {
+                // The end state is already reached, so this direction has
+                // nothing to do. A re-apply reaching this branch is precisely
+                // the case that must never be replayed.
                 (
                     BaselineDiffStatus::AlreadyMatches,
                     None,
-                    "live package already matches the pre-change baseline".to_string(),
+                    match round_trip {
+                        BaselineRoundTrip::Restore => {
+                            "live package already matches the pre-change baseline".to_string()
+                        }
+                        BaselineRoundTrip::Reapply => {
+                            "live package already reflects the recorded action".to_string()
+                        }
+                    },
                     None,
                 )
+            } else {
+                let kind = if wanted {
+                    ActionKind::Enable
+                } else {
+                    ActionKind::Disable
+                };
+                match round_trip {
+                    BaselineRoundTrip::Restore => (
+                        BaselineDiffStatus::Ready,
+                        None,
+                        "review this canonical enable-state recovery action".to_string(),
+                        Some(kind),
+                    ),
+                    // Post-OTA, a package that no longer reflects its recorded
+                    // action was almost certainly reverted by the update. Say
+                    // so rather than presenting it as routine.
+                    BaselineRoundTrip::Reapply => (
+                        BaselineDiffStatus::Drifted,
+                        Some("post_change_reverted"),
+                        "package state was reverted, likely by a system update".to_string(),
+                        Some(kind),
+                    ),
+                }
             }
         } else {
-            let kind = if package.enabled == Some(true) {
-                ActionKind::Enable
-            } else {
-                ActionKind::Disable
-            };
-            (
-                BaselineDiffStatus::Ready,
-                None,
-                "review this canonical enable-state recovery action".to_string(),
-                Some(kind),
+            skipped(
+                "irreversible_action",
+                "the recorded action changed state the portable baseline does not carry",
             )
         };
         if let Some(kind) = plan_kind {
@@ -416,8 +553,10 @@ pub fn inspect(
             current_build_fingerprint: current_fingerprint,
         },
         baseline,
+        round_trip,
         rows,
         plans,
+        irreversible,
     })
 }
 
@@ -559,6 +698,22 @@ fn validate_text(value: &str, label: &str, max_chars: usize) -> Result<(), Recov
 #[cfg(test)]
 mod tests {
     use super::*;
+    use BaselineDiffStatus::{AlreadyMatches, Drifted, Ready, Skipped};
+
+    fn row<'a>(diff: &'a RecoveryBaselineDiff, package: &str) -> &'a BaselineDiffRow {
+        diff.rows
+            .iter()
+            .find(|row| row.package == package)
+            .unwrap_or_else(|| panic!("diff has no row for {package}"))
+    }
+
+    fn plan_kinds(diff: &RecoveryBaselineDiff, package: &str) -> Vec<ActionKind> {
+        diff.plans
+            .iter()
+            .filter(|plan| plan.request.package == package)
+            .map(|plan| plan.request.kind)
+            .collect()
+    }
 
     fn target(serial: &str, fingerprint: &str) -> DeviceTarget {
         DeviceTarget {
@@ -800,36 +955,126 @@ mod tests {
             "2026-07-18T10:00:00Z".to_string(),
         )
         .unwrap();
-        let diff = inspect(
-            baseline,
-            &target("serial-a", "build/v2"),
+        // Post-OTA device: `held` is still disabled as recorded, `drifted` was
+        // re-enabled by the update. The two directions must read this exact
+        // same device differently — that asymmetry is the whole point of
+        // asking which half of the round trip is being planned.
+        let updated = target("serial-a", "build/v2");
+        let live = [
+            package("com.example.held", false, true),
+            package("com.example.drifted", true, true),
+        ];
+
+        let restore = inspect_round_trip(
+            baseline.clone(),
+            &updated,
             &[user(0)],
-            &[
-                package("com.example.held", false, true),
-                package("com.example.drifted", true, true),
-            ],
+            &live,
+            BaselineRoundTrip::Restore,
         )
         .unwrap();
-        let drifted_row = diff
-            .rows
-            .iter()
-            .find(|row| row.package == "com.example.drifted")
-            .unwrap();
-        assert_eq!(drifted_row.status, BaselineDiffStatus::Drifted);
+        // Restoring walks back to the pre-change state: the still-disabled
+        // package needs enabling, the reverted one is already there.
+        assert_eq!(row(&restore, "com.example.held").status, Ready);
+        assert_eq!(
+            plan_kinds(&restore, "com.example.held"),
+            vec![ActionKind::Enable]
+        );
+        assert_eq!(row(&restore, "com.example.drifted").status, AlreadyMatches);
+        assert!(plan_kinds(&restore, "com.example.drifted").is_empty());
+
+        let reapply = inspect_round_trip(
+            baseline,
+            &updated,
+            &[user(0)],
+            &live,
+            BaselineRoundTrip::Reapply,
+        )
+        .unwrap();
+        // Re-applying walks forward to the recorded action: the reverted
+        // package is re-disabled, and the one that survived the update is
+        // never touched again.
+        let drifted_row = row(&reapply, "com.example.drifted");
+        assert_eq!(drifted_row.status, Drifted);
         assert_eq!(drifted_row.reason_code, Some("post_change_reverted"));
-        let held_row = diff
-            .rows
-            .iter()
-            .find(|row| row.package == "com.example.held")
+        assert_eq!(
+            plan_kinds(&reapply, "com.example.drifted"),
+            vec![ActionKind::Disable]
+        );
+        assert_eq!(row(&reapply, "com.example.held").status, AlreadyMatches);
+        assert!(plan_kinds(&reapply, "com.example.held").is_empty());
+
+        // Neither direction plans anything against a package it already
+        // matches, so a repeated apply is a no-op rather than a replay.
+        assert_eq!(restore.plans.len(), 1);
+        assert_eq!(reapply.plans.len(), 1);
+    }
+
+    #[test]
+    fn a_non_enable_state_action_is_named_irreversible_in_both_directions() {
+        let baseline = build(
+            &target("serial-a", "build/v1"),
+            0,
+            None,
+            &[
+                package("com.example.wiped", true, true),
+                package("com.example.disabled", true, true),
+            ],
+            vec![
+                BaselineActionInput {
+                    package: "com.example.wiped".to_string(),
+                    kind: ActionKind::ClearData,
+                },
+                BaselineActionInput {
+                    package: "com.example.disabled".to_string(),
+                    kind: ActionKind::Disable,
+                },
+            ],
+            "2026-08-01T10:00:00Z".to_string(),
+        )
+        .unwrap();
+        let live = [
+            package("com.example.wiped", true, true),
+            package("com.example.disabled", false, true),
+        ];
+
+        for round_trip in [BaselineRoundTrip::Restore, BaselineRoundTrip::Reapply] {
+            let diff = inspect_round_trip(
+                baseline.clone(),
+                &target("serial-a", "build/v1"),
+                &[user(0)],
+                &live,
+                round_trip,
+            )
             .unwrap();
-        assert_eq!(held_row.status, BaselineDiffStatus::Ready);
-        let drifted_plans: Vec<_> = diff
-            .plans
-            .iter()
-            .filter(|plan| plan.request.package == "com.example.drifted")
-            .collect();
-        assert_eq!(drifted_plans.len(), 1);
-        assert_eq!(drifted_plans[0].request.kind, ActionKind::Disable);
+            // Named at both ends: the operator must know before the update
+            // what the baseline will not bring back after it.
+            assert_eq!(diff.irreversible.len(), 1, "{round_trip:?}");
+            assert_eq!(diff.irreversible[0].package, "com.example.wiped");
+            assert_eq!(diff.irreversible[0].requested_action, ActionKind::ClearData);
+            assert!(
+                diff.irreversible[0].reason.contains("data"),
+                "{:?}",
+                diff.irreversible[0].reason
+            );
+            assert_eq!(diff.round_trip, round_trip);
+            // No direction ever plans an action for it.
+            assert!(plan_kinds(&diff, "com.example.wiped").is_empty());
+        }
+
+        // Re-applying refuses the cleared package explicitly rather than
+        // silently treating its untouched enable state as success.
+        let reapply = inspect_round_trip(
+            baseline,
+            &target("serial-a", "build/v1"),
+            &[user(0)],
+            &live,
+            BaselineRoundTrip::Reapply,
+        )
+        .unwrap();
+        let wiped = row(&reapply, "com.example.wiped");
+        assert_eq!(wiped.status, Skipped);
+        assert_eq!(wiped.reason_code, Some("irreversible_action"));
     }
 
     #[test]

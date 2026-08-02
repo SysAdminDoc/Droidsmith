@@ -15,6 +15,7 @@ import {
   type BatchActionItemResult as GeneratedBatchActionItemResult,
   type BatchActionPlan as GeneratedBatchActionPlan,
   type BatchActionResult as GeneratedBatchActionResult,
+  type BaselineRoundTrip,
   type BugreportCaptureResult,
   type Device,
   type DeviceInfo,
@@ -784,9 +785,10 @@ export async function callExportRecoveryBaseline(
 export async function callInspectRecoveryBaseline(
   target: DeviceTarget,
   pathGrant: string,
+  roundTrip: BaselineRoundTrip,
 ): Promise<RecoveryBaselineDiff> {
   return rendererRecord(
-    await commands.inspectRecoveryBaseline(target, pathGrant),
+    await commands.inspectRecoveryBaseline(target, pathGrant, roundTrip),
   );
 }
 

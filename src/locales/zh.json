@@ -828,7 +828,14 @@
     "batchClear": "清除选择",
     "batchCompleted": "批量操作完成：{{succeeded}} 个成功，{{failed}} 个失败。",
     "batchUndoCompleted": "批量撤销：{{succeeded}} 个已还原，{{failed}} 个失败。",
-    "recoveryInspect": "检查恢复基线",
+    "recoveryRestoreOpen": "更新前恢复…",
+    "recoveryReapplyOpen": "更新后重新应用…",
+    "recoveryDirection": {
+      "restore": "更新前恢复：每个可恢复的包都回到基线记录的状态。",
+      "reapply": "更新后重新应用：记录的操作仅重新应用于被更新回退的包。"
+    },
+    "recoveryIrreversibleTitle": "此基线无法恢复的包：{{count}} 个",
+    "recoveryIrreversibleBody": "可移植基线仅记录启用状态，因此能存活于改变构建指纹的更新。这些包改变了它未携带的内容 — 在往返流程的两端都是如此。",
     "recoveryExportBeforeApply": "导出变更前基线",
     "recoveryExporting": "正在导出基线…",
     "recoveryExportedReady": "基线已导出。此经审查的操作尚未执行。",

@@ -36,6 +36,7 @@ import {
   deviceTarget,
   newOperationId,
   type ActionKind,
+  type BaselineRoundTrip,
   type FingerprintObservation,
   type AndroidUser,
   type AppPackageMetadata,
@@ -1088,7 +1089,14 @@ export default function AppsRoute() {
     }
   }, [actionState, authorizedTarget, recoveryOperation, t]);
 
-  const inspectRecoveryBaseline = useCallback(async () => {
+  /** Open a saved baseline and plan one half of the OTA round trip.
+   *
+   *  The direction is chosen up front rather than switched inside the review,
+   *  because the two halves happen at different times — restore, update,
+   *  re-apply — and because the native read grant is one-shot, so a switch
+   *  would mean re-picking the file anyway. */
+  const inspectRecoveryBaseline = useCallback(
+    async (roundTrip: BaselineRoundTrip) => {
     if (!authorizedTarget) return;
     const lease = recoveryOperation.begin();
     setRecoveryState({
@@ -1105,6 +1113,7 @@ export default function AppsRoute() {
       const diff = await callInspectRecoveryBaseline(
         authorizedTarget,
         selected.id,
+        roundTrip,
       );
       lease.commit(() => setRecoveryState({ kind: "review", diff }));
     } catch (error) {
@@ -1115,7 +1124,9 @@ export default function AppsRoute() {
         }),
       );
     }
-  }, [authorizedTarget, recoveryOperation, t]);
+    },
+    [authorizedTarget, recoveryOperation, t],
+  );
 
   const applyRecoveryBaseline = useCallback(async () => {
     if (recoveryState.kind !== "review") return;
@@ -1333,7 +1344,7 @@ export default function AppsRoute() {
             <div className="flex flex-wrap gap-2">
               <Button
                 type="button"
-                onClick={() => void inspectRecoveryBaseline()}
+                onClick={() => void inspectRecoveryBaseline("restore")}
                 disabled={
                   !authorizedTarget ||
                   recoveryState.kind === "busy" ||
@@ -1341,7 +1352,19 @@ export default function AppsRoute() {
                 }
                 variant="ghost"
               >
-                {t("apps.recoveryInspect")}
+                {t("apps.recoveryRestoreOpen")}
+              </Button>
+              <Button
+                type="button"
+                onClick={() => void inspectRecoveryBaseline("reapply")}
+                disabled={
+                  !authorizedTarget ||
+                  recoveryState.kind === "busy" ||
+                  !usersReady
+                }
+                variant="ghost"
+              >
+                {t("apps.recoveryReapplyOpen")}
               </Button>
               <Button
                 type="button"

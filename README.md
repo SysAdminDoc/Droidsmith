@@ -294,7 +294,6 @@ hashed device identity, build fingerprint, Android user, optional pack revision,
 requested actions, and only the package presence/enabled/system state needed for
 recovery; it excludes the raw serial, APK paths, UIDs, and installer metadata.
 
-Use **Inspect recovery baseline** in Apps after a host reinstall or OTA update.
 Import is read-only: Droidsmith shows identity/build/user compatibility, packages
 already matching, and every skipped mismatch before enabling the separate apply
 button. Only reviewed enable/disable recovery plans use the portable baseline;
@@ -302,13 +301,45 @@ eligible retained-system-app recovery is deliberately limited to the same-device
 Activity journal. User-installed and unverified historical removals are never
 presented as safely undoable.
 
-The headless CLI exposes the same schema and diff engine:
+### The OTA round trip
+
+A debloated device can break on a system update, and the accepted answer is to
+restore everything, update, then re-debloat. Apps exposes both halves of that
+explicitly — **Restore before update…** and **Re-apply after update…** — because
+they are not symmetric and cannot be inferred from live state: immediately after
+an update, a package the update reverted and a package that was never changed
+look identical.
+
+Restoring walks every recoverable package back to the state the baseline
+recorded. Re-applying walks forward to the state the recorded actions produced,
+and only for packages that no longer reflect them — a package already in the
+wanted state produces no plan, so nothing is ever applied twice. Both directions
+name, explicitly and identically, the packages the portable baseline cannot
+recover: it records enable state only (that is what lets it survive the
+fingerprint change), so a cleared-data or uninstalled package is listed as out
+of its reach rather than quietly skipped.
+
+The headless CLI exposes the same schema, diff engine, and both directions:
 
 ```bash
 droidsmith-cli baseline-export profile.yaml --device SERIAL --output baseline.json
 droidsmith-cli baseline-inspect baseline.json --device SERIAL
 droidsmith-cli baseline-inspect baseline.json --device SERIAL --json
+
+# Pre-OTA: review, then restore.
+droidsmith-cli baseline-apply baseline.json --device SERIAL --direction restore --dry-run
+droidsmith-cli baseline-apply baseline.json --device SERIAL --direction restore --apply
+
+# ...take the update, then re-debloat.
+droidsmith-cli baseline-apply baseline.json --device SERIAL --direction reapply --dry-run
+droidsmith-cli baseline-apply baseline.json --device SERIAL --direction reapply --apply
 ```
+
+`baseline-apply` recomputes the diff against the live device every time and
+executes only what that diff marks ready, so there is no path from a stale plan
+to a mutation. It targets one device, because a baseline is bound to a single
+device identity; a baseline from a different device is refused rather than
+applied as an empty plan.
 
 Both baseline commands also accept `--all-devices`. `baseline-inspect
 --all-devices` diffs one baseline against every connected device (read-only),

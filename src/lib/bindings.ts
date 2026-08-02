@@ -586,10 +586,12 @@ export const commands = {
   async inspectRecoveryBaseline(
     target: DeviceTarget,
     pathGrant: string,
+    roundTrip: BaselineRoundTrip,
   ): Promise<RecoveryBaselineDiff> {
     return await TAURI_INVOKE("inspect_recovery_baseline", {
       target,
       path_grant: pathGrant,
+      round_trip: roundTrip,
     });
   },
   async applyDeviceControl(
@@ -1456,6 +1458,20 @@ export type BaselineDiffStatus =
   | "already_matches"
   | "drifted"
   | "skipped";
+/**
+ * A package the portable baseline cannot act on in either direction, named
+ * explicitly rather than left as one skipped row among many.
+ *
+ * The baseline records enable-state only, by design: it must survive the OTA
+ * that changes the build fingerprint, so it deliberately carries no APK, no
+ * data, and no installer provenance. An action that changed anything else is
+ * therefore outside what it can promise, at both ends of the round trip.
+ */
+export type BaselineIrreversible = {
+  package: string;
+  requested_action: ActionKind;
+  reason: string;
+};
 export type BaselinePack = { id: string; revision: number };
 export type BaselinePackage = {
   package: string;
@@ -1465,6 +1481,32 @@ export type BaselinePackage = {
   requested_action: ActionKind;
   undo_plan: BaselineUndoPlan | null;
 };
+/**
+ * Which half of the OTA round trip a diff is planning.
+ *
+ * The community workflow around a debloated phone is "restore everything,
+ * take the update, re-debloat", and the two halves are not symmetric: one
+ * walks the device back to the state the baseline recorded, the other walks
+ * it forward to the state the recorded actions produced. Inferring the
+ * direction from live state — which is what a single undirected diff has to
+ * do — gets it wrong exactly when it matters, because immediately after an
+ * update a reverted package and a never-changed package look identical.
+ *
+ * Choosing the direction makes the plan reviewable: a pre-OTA restore never
+ * contains a re-debloat action, and a post-OTA re-apply never contains an
+ * action that undoes one.
+ */
+export type BaselineRoundTrip =
+  /**
+   * Pre-OTA: return every recoverable package to its baseline state so the
+   * update runs against the state the device shipped with.
+   */
+  | "restore"
+  /**
+   * Post-OTA: re-apply the recorded actions to packages the update
+   * reverted, and only to those.
+   */
+  | "reapply";
 export type BaselineUndoPlan = { kind: ActionKind; user_id: number };
 export type BatchActionItemResult = {
   package: string;
@@ -2791,8 +2833,15 @@ export type RecoveryBaseline = {
 export type RecoveryBaselineDiff = {
   baseline: RecoveryBaseline;
   compatibility: BaselineCompatibility;
+  round_trip: BaselineRoundTrip;
   rows: BaselineDiffRow[];
   plans: PlannedAction[];
+  /**
+   * Packages neither direction can act on. Populated identically for both
+   * directions so the operator sees the same list before and after the
+   * update.
+   */
+  irreversible: BaselineIrreversible[];
 };
 /**
  * How a device is named in a rendered report.

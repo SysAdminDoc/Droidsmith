@@ -217,6 +217,9 @@ pub fn export_recovery_baseline(
 pub fn inspect_recovery_baseline(
     target: adb::DeviceTarget,
     path_grant: String,
+    // `round_trip` selects which half of the OTA round trip to plan: restore
+    // to the baseline before updating, or re-apply the recorded actions after.
+    round_trip: recovery_baseline::BaselineRoundTrip,
     grants: tauri::State<'_, PathGrantStore>,
 ) -> Result<RecoveryBaselineDiff, CommandError> {
     let (transport, _) = privileged_transport(&target)?;
@@ -233,8 +236,8 @@ pub fn inspect_recovery_baseline(
     } else {
         Vec::new()
     };
-    Ok(recovery_baseline::inspect(
-        baseline, &target, &users, &packages,
+    Ok(recovery_baseline::inspect_round_trip(
+        baseline, &target, &users, &packages, round_trip,
     )?)
 }
 

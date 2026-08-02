@@ -828,7 +828,14 @@
     "batchClear": "Clear selection",
     "batchCompleted": "Batch applied: {{succeeded}} succeeded, {{failed}} failed.",
     "batchUndoCompleted": "Batch undo: {{succeeded}} reverted, {{failed}} failed.",
-    "recoveryInspect": "Inspect recovery baseline",
+    "recoveryRestoreOpen": "Restore before update…",
+    "recoveryReapplyOpen": "Re-apply after update…",
+    "recoveryDirection": {
+      "restore": "Pre-update restore: every recoverable package returns to the state the baseline recorded.",
+      "reapply": "Post-update re-apply: the recorded actions are re-applied only to packages the update reverted."
+    },
+    "recoveryIrreversibleTitle": "{{count}} packages this baseline cannot recover",
+    "recoveryIrreversibleBody": "The portable baseline records enable state only, so it survives the update that changes the build fingerprint. These packages changed something it does not carry, at both ends of the round trip.",
     "recoveryExportBeforeApply": "Export pre-change baseline",
     "recoveryExporting": "Exporting baseline…",
     "recoveryExportedReady": "Baseline exported. This reviewed action has not run yet.",

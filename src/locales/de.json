@@ -828,7 +828,14 @@
     "batchClear": "Auswahl aufheben",
     "batchCompleted": "Batch angewendet: {{succeeded}} erfolgreich, {{failed}} fehlgeschlagen.",
     "batchUndoCompleted": "Batch-Rückgängig: {{succeeded}} zurückgesetzt, {{failed}} fehlgeschlagen.",
-    "recoveryInspect": "Wiederherstellungsbasis inspizieren",
+    "recoveryRestoreOpen": "Vor dem Update wiederherstellen…",
+    "recoveryReapplyOpen": "Nach dem Update erneut anwenden…",
+    "recoveryDirection": {
+      "restore": "Wiederherstellung vor dem Update: Jedes wiederherstellbare Paket kehrt in den von der Basis erfassten Zustand zurück.",
+      "reapply": "Erneutes Anwenden nach dem Update: Die erfassten Aktionen werden nur auf Pakete angewendet, die das Update zurückgesetzt hat."
+    },
+    "recoveryIrreversibleTitle": "{{count}} Pakete kann diese Basis nicht wiederherstellen",
+    "recoveryIrreversibleBody": "Die portable Basis erfasst nur den Aktivierungszustand und übersteht damit das Update, das den Build-Fingerabdruck ändert. Diese Pakete haben etwas geändert, das sie nicht enthält — an beiden Enden des Ablaufs.",
     "recoveryExportBeforeApply": "Voränderungsbasis exportieren",
     "recoveryExporting": "Exportiere Basis…",
     "recoveryExportedReady": "Basis exportiert. Diese geprüfte Aktion wurde noch nicht ausgeführt.",
