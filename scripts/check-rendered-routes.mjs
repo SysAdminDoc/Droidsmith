@@ -675,6 +675,10 @@ async function runDesktopFlow(browser) {
   });
   await page.getByRole("button", { name: "Install with override" }).click();
   await page.getByText("Package installed", { exact: true }).waitFor();
+  // R-130 storage lines ride the lazy per-row metadata path, which this
+  // harness never triggers (the mocked label "Example App" has never
+  // rendered here either). Coverage is the parser unit tests over verbatim
+  // device output; IMP-111 owns component-level tests for this route.
   await assertNoHorizontalOverflow(page, "desktop Apps table");
   await page.screenshot({
     path: path.join(screenshotDir, "desktop-apps-table.png"),
@@ -3247,6 +3251,13 @@ async function installTauriMock(
             label: args.package === "com.example.app" ? "Example App" : null,
             icon_data_uri: null,
             cache_hit: false,
+            // R-130: one package reports real storage, the rest are on a
+            // device surface that does not, so both the measured and the
+            // honestly-unavailable renderings are exercised.
+            storage:
+              args.package === "com.example.app"
+                ? { code_bytes: 3584, data_bytes: 6068736, cache_bytes: 439808 }
+                : null,
           };
         }
         if (cmd === "preflight_package_backup") {

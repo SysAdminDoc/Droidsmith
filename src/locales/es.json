@@ -282,6 +282,8 @@
     "userDiscoveryFailed": "La detección de usuarios de Android falló",
     "userLabel": "Usuario",
     "viaInstaller": "vía {{installer}}",
+    "storageBreakdown": "App {{app}} · Datos {{data}} · Caché {{cache}}",
+    "storageUnavailable": "Tamaño no disponible: este dispositivo no informa el almacenamiento por paquete",
     "recovery": {
       "recoverable": "Reversible: se puede restaurar",
       "notRecoverable": "No se puede deshacer",

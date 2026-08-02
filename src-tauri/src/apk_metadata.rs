@@ -45,6 +45,14 @@ pub struct AppPackageMetadata {
     pub label: Option<String>,
     pub icon_data_uri: Option<String>,
     pub cache_hit: bool,
+    /// PackageManager-reported app/data/cache sizes, when the device advertises
+    /// the subcommand. `None` means unavailable, never an estimate.
+    ///
+    /// Deliberately outside the identity cache: the label and icon are
+    /// properties of the APK, so caching them against APK identity is exact,
+    /// but data and cache sizes change constantly while the APK does not. A
+    /// cached size would be stale the moment the user opened the app.
+    pub storage: Option<crate::adb::packages::PackageStorageStats>,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -248,11 +256,16 @@ pub fn load_package_metadata(
         package: package.to_string(),
         apk_path: apk_path.clone(),
     };
-    if let Some(metadata) = metadata_cache()
+    // Read on the same lazy per-row call rather than during enumeration, so a
+    // 500-package inventory still costs zero storage queries until a row asks.
+    let storage = crate::adb::packages::package_storage_stats(transport, target, user_id, package);
+
+    if let Some(mut metadata) = metadata_cache()
         .lock()
         .map_err(|_| MetadataError::State)?
         .get(&key, &identity)
     {
+        metadata.storage = storage;
         return Ok(metadata);
     }
 
@@ -274,12 +287,18 @@ pub fn load_package_metadata(
         label: parsed.label,
         icon_data_uri: parsed.icon_data_uri,
         cache_hit: false,
+        storage: None,
     };
     metadata_cache()
         .lock()
         .map_err(|_| MetadataError::State)?
         .insert(key, identity, metadata.clone());
-    Ok(metadata)
+    // The cached copy stays storage-free; the fresh reading is attached to
+    // the value returned to this caller only.
+    Ok(AppPackageMetadata {
+        storage,
+        ..metadata
+    })
 }
 
 fn parse_base_apk_path(stdout: &str) -> Option<String> {
@@ -876,6 +895,7 @@ mod tests {
                 label: Some("Example".into()),
                 icon_data_uri: None,
                 cache_hit: false,
+                storage: None,
             },
         );
         assert!(cache

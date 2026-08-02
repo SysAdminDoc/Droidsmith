@@ -9,6 +9,7 @@ import {
 import { useTranslation } from "react-i18next";
 
 import { cn } from "../../lib/cn";
+import { formatBytes } from "../../lib/format";
 import {
   type ActionKind,
   type AppPackage,
@@ -431,8 +432,41 @@ function PackageIdentity({
             {t("apps.viaInstaller", { installer: pkg.installer })}
           </p>
         )}
+        <PackageStorageLine metadata={metadata} />
       </div>
     </div>
+  );
+}
+
+/** Per-package storage, on the same lazily-loaded path as the label and icon.
+ *
+ *  Renders nothing until the row's metadata arrives, so sizes never delay the
+ *  row; once it has, a device that does not advertise
+ *  `pm get-package-storage-stats` says so rather than showing an APK-size
+ *  estimate dressed up as a measurement. */
+function PackageStorageLine({
+  metadata,
+}: {
+  metadata: AppPackageMetadata | null | undefined;
+}) {
+  const { t, i18n } = useTranslation();
+  if (!metadata) return null;
+  if (!metadata.storage) {
+    return (
+      <p className="mt-1 text-xs text-anvil-500">
+        {t("apps.storageUnavailable")}
+      </p>
+    );
+  }
+  const { code_bytes, data_bytes, cache_bytes } = metadata.storage;
+  return (
+    <p className="mt-1 text-xs text-anvil-400">
+      {t("apps.storageBreakdown", {
+        app: formatBytes(code_bytes, i18n.language),
+        data: formatBytes(data_bytes, i18n.language),
+        cache: formatBytes(cache_bytes, i18n.language),
+      })}
+    </p>
   );
 }
 

@@ -888,6 +888,8 @@
     "type": "Тип",
     "actions": "Действия",
     "viaInstaller": "через {{installer}}",
+    "storageBreakdown": "Приложение {{app}} · Данные {{data}} · Кэш {{cache}}",
+    "storageUnavailable": "Размер недоступен — это устройство не сообщает размер по пакетам",
     "reviewBeforeApplying": "Проверьте перед применением",
     "actionTier": {
       "suspend": {

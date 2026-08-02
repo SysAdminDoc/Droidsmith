@@ -888,6 +888,8 @@
     "type": "类型",
     "actions": "操作",
     "viaInstaller": "通过 {{installer}}",
+    "storageBreakdown": "应用 {{app}} · 数据 {{data}} · 缓存 {{cache}}",
+    "storageUnavailable": "无法获取大小 — 此设备不报告每个包的存储",
     "reviewBeforeApplying": "应用前审查",
     "actionTier": {
       "suspend": {

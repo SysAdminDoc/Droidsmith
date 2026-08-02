@@ -888,6 +888,8 @@
     "type": "Typ",
     "actions": "Aktionen",
     "viaInstaller": "via {{installer}}",
+    "storageBreakdown": "App {{app}} · Daten {{data}} · Cache {{cache}}",
+    "storageUnavailable": "Größe nicht verfügbar — dieses Gerät meldet keinen Speicher pro Paket",
     "reviewBeforeApplying": "Vor dem Anwenden prüfen",
     "actionTier": {
       "suspend": {

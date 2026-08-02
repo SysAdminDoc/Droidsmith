@@ -16,6 +16,18 @@ each milestone tag.
 
 ### Added
 
+- **Apps reports real per-package storage.** App, data, and cache sizes are
+  read from `pm get-package-storage-stats` on the same lazy per-row metadata
+  path as the label and icon, so a 500-package inventory still costs zero
+  storage queries until a row asks for one. The subcommand is runtime-probed
+  from the device's own `pm help` rather than inferred from API level, and a
+  device that does not advertise it reports the size as unavailable instead of
+  estimating from the APK. Sizes are deliberately excluded from the
+  APK-identity cache — the label and icon are properties of the APK, but data
+  and cache change constantly, so a cached size would be stale the moment the
+  app was opened. A response with none of the expected fields is unavailable,
+  not zero. (R-130)
+
 - **Profiles gain filter predicates as schema v3.** A step can carry a `filter`
   instead of a `package`, resolved against the live inventory at plan time —
   which is what stops a profile from being effectively device-specific, since

@@ -31,13 +31,6 @@ R-119 / IMP-95.
 
 ### P3
 
-- [ ] P3 — R-130: Report accurate per-app storage from PackageManager
-  Why: accurate app sizes are a sponsor-gated feature in the closest commercial competitor and are available from a single documented command.
-  Evidence: `pm get-package-storage-stats [--user] <PKG>` is present in AOSP `PackageManagerShellCommand.java`; ADB AppControl 1.8.6 gates "accurate app sizes (A8+)" behind its paid tier.
-  Touches: `src-tauri/src/adb/packages.rs`, `src-tauri/src/apk_metadata.rs`, `src/routes/apps/PackageTable.tsx`, `src/locales/*.json`, fixtures.
-  Acceptance: app/data/cache sizes are read per package on demand within the existing lazy, bounded, identity-cached metadata path with no full-inventory scan; the command is runtime-probed and the column reports `unavailable` rather than an estimate where unsupported; sizes never block row rendering.
-  Complexity: S
-
 - [ ] P3 — R-131: Resolve marketing device names from build properties
   Why: device lists show codenames, which makes multi-device selection error-prone — and picking the wrong device is the highest-consequence mistake in this app.
   Evidence: DeviceFarmer STF #644 requests exactly this and is unmet; Droidsmith already parses `ro.product.*` in `src-tauri/src/adb/device_info.rs`.

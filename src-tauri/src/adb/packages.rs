@@ -67,6 +67,94 @@ pub struct PackageSubcommandCapability {
 pub struct PackageActionCapabilities {
     pub suspend: PackageSubcommandCapability,
     pub unsuspend: PackageSubcommandCapability,
+    /// `pm get-package-storage-stats`. Probed the same way as the mutating
+    /// subcommands because OEMs drop it just as freely; API level is not an
+    /// authority.
+    pub storage_stats: PackageSubcommandCapability,
+}
+
+/// Per-package storage as PackageManager reports it, in bytes.
+///
+/// Read from `pm get-package-storage-stats`, which is the documented AOSP
+/// surface for this and the only way to get a real number rather than an
+/// estimate from the APK size. Absent on devices that do not advertise the
+/// subcommand, which is why the whole struct is optional upstream: reporting
+/// "unavailable" is correct, guessing is not.
+#[derive(specta::Type, Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub struct PackageStorageStats {
+    /// Installed app code — the APK and its extracted artifacts.
+    pub code_bytes: u64,
+    pub data_bytes: u64,
+    pub cache_bytes: u64,
+}
+
+/// Parse `pm get-package-storage-stats` output.
+///
+/// The command prints `<field>: <n> bytes (<human>)` lines; the human-readable
+/// suffix is deliberately ignored, since it is rounded. Missing fields default
+/// to zero rather than failing the whole read, but a response with none of the
+/// expected fields returns `None` — an empty struct would be indistinguishable
+/// from a package that genuinely occupies nothing.
+pub fn parse_package_storage_stats(stdout: &str) -> Option<PackageStorageStats> {
+    let mut stats = PackageStorageStats {
+        code_bytes: 0,
+        data_bytes: 0,
+        cache_bytes: 0,
+    };
+    let mut seen = false;
+    for line in stdout.lines() {
+        let Some((field, rest)) = line.trim().split_once(':') else {
+            continue;
+        };
+        // `<n> bytes (…)` — take the leading integer and ignore the rest.
+        let Some(value) = rest
+            .split_whitespace()
+            .next()
+            .and_then(|token| token.parse::<u64>().ok())
+        else {
+            continue;
+        };
+        match field.trim() {
+            "code" => {
+                stats.code_bytes = value;
+                seen = true;
+            }
+            "data" => {
+                stats.data_bytes = value;
+                seen = true;
+            }
+            "cache" => {
+                stats.cache_bytes = value;
+                seen = true;
+            }
+            _ => {}
+        }
+    }
+    seen.then_some(stats)
+}
+
+/// Read one package's storage, or `None` when the device does not support the
+/// command or did not answer with usable fields.
+///
+/// Deliberately never falls back to an APK-size estimate: an estimate that
+/// looks like a measurement is worse than an honest gap.
+pub fn package_storage_stats(
+    t: &dyn AdbTransport,
+    target: &DeviceTarget,
+    user_id: u32,
+    package: &str,
+) -> Option<PackageStorageStats> {
+    if !valid_package_name(package) {
+        return None;
+    }
+    let user = user_id.to_string();
+    let output = t
+        .shell_target(
+            target,
+            &["pm", "get-package-storage-stats", "--user", &user, package],
+        )
+        .ok()?;
+    parse_package_storage_stats(&output)
 }
 
 #[derive(specta::Type, Debug, Clone, PartialEq, Eq, Serialize)]
@@ -452,6 +540,10 @@ pub fn package_action_capabilities(
                 },
                 unsuspend: PackageSubcommandCapability {
                     supported: false,
+                    reason: reason.clone(),
+                },
+                storage_stats: PackageSubcommandCapability {
+                    supported: false,
                     reason,
                 },
             }
@@ -480,6 +572,7 @@ pub fn parse_package_action_capabilities(help: &str) -> PackageActionCapabilitie
     PackageActionCapabilities {
         suspend: capability("suspend"),
         unsuspend: capability("unsuspend"),
+        storage_stats: capability("get-package-storage-stats"),
     }
 }
 
@@ -693,6 +786,56 @@ package:/system/app/FacebookStub/FacebookStub.apk=com.facebook.appmanager uid:10
         );
         assert!(both.suspend.supported);
         assert!(both.unsuspend.supported);
+        // Storage stats are probed the same way, and absent by default.
+        assert!(!both.storage_stats.supported);
+        let with_stats = parse_package_action_capabilities(
+            "  get-package-storage-stats [--user <USER_ID>] <PACKAGE>\n",
+        );
+        assert!(with_stats.storage_stats.supported);
+    }
+
+    #[test]
+    fn storage_stats_parse_real_output_and_refuse_to_guess() {
+        // Verbatim from a Samsung SM-S938B on SDK 36.
+        let stats = parse_package_storage_stats(
+            "code: 3584 bytes (3.50 Kb)\n\
+             data: 6068736 bytes (5.79 Mb)\n\
+             cache: 439808 bytes (429.50 Kb)\n\
+             apk: 0 bytes\n\
+             lib: 0 bytes\n",
+        )
+        .expect("real output parses");
+        // The rounded human-readable suffix is ignored; the byte count is the
+        // value, and 5.79 Mb would not round-trip to 6068736.
+        assert_eq!(stats.code_bytes, 3584);
+        assert_eq!(stats.data_bytes, 6_068_736);
+        assert_eq!(stats.cache_bytes, 439_808);
+
+        // A genuinely empty package still reports its fields, so zeroes are a
+        // measurement...
+        let zeroed =
+            parse_package_storage_stats("code: 0 bytes\ndata: 0 bytes\ncache: 0 bytes\n").unwrap();
+        assert_eq!(zeroed.code_bytes, 0);
+
+        // ...but a device that answered with none of them is unavailable, not
+        // zero. Reporting 0 B for "we could not ask" is the exact failure this
+        // guards against.
+        for unusable in [
+            "",
+            "Unknown command: get-package-storage-stats",
+            "Exception occurred while executing 'get-package-storage-stats'",
+            "code: not-a-number bytes",
+        ] {
+            assert!(
+                parse_package_storage_stats(unusable).is_none(),
+                "{unusable:?} must not parse as a measurement"
+            );
+        }
+
+        // Partial output is honoured for the fields that are present.
+        let partial = parse_package_storage_stats("cache: 12 bytes (12.00 B)\n").unwrap();
+        assert_eq!(partial.cache_bytes, 12);
+        assert_eq!(partial.code_bytes, 0);
     }
 
     #[test]

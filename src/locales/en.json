@@ -888,6 +888,8 @@
     "type": "Type",
     "actions": "Actions",
     "viaInstaller": "via {{installer}}",
+    "storageBreakdown": "App {{app}} · Data {{data}} · Cache {{cache}}",
+    "storageUnavailable": "Size unavailable — this device does not report per-package storage",
     "reviewBeforeApplying": "Review before applying",
     "actionTier": {
       "suspend": {

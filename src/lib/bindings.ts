@@ -1401,6 +1401,16 @@ export type AppPackageMetadata = {
   label: string | null;
   icon_data_uri: string | null;
   cache_hit: boolean;
+  /**
+   * PackageManager-reported app/data/cache sizes, when the device advertises
+   * the subcommand. `None` means unavailable, never an estimate.
+   *
+   * Deliberately outside the identity cache: the label and icon are
+   * properties of the APK, so caching them against APK identity is exact,
+   * but data and cache sizes change constantly while the APK does not. A
+   * cached size would be stale the moment the user opened the app.
+   */
+  storage: PackageStorageStats | null;
 };
 /**
  * Applied action — the journal record. `stdout`/`stderr` are kept so
@@ -2608,6 +2618,12 @@ export type PackTargets = {
 export type PackageActionCapabilities = {
   suspend: PackageSubcommandCapability;
   unsuspend: PackageSubcommandCapability;
+  /**
+   * `pm get-package-storage-stats`. Probed the same way as the mutating
+   * subcommands because OEMs drop it just as freely; API level is not an
+   * authority.
+   */
+  storage_stats: PackageSubcommandCapability;
 };
 export type PackageArchiveCapability = {
   supported: boolean;
@@ -2649,6 +2665,23 @@ export type PackageFilter =
 export type PackageListing = {
   packages: AppPackage[];
   archive: PackageArchiveCapability;
+};
+/**
+ * Per-package storage as PackageManager reports it, in bytes.
+ *
+ * Read from `pm get-package-storage-stats`, which is the documented AOSP
+ * surface for this and the only way to get a real number rather than an
+ * estimate from the APK size. Absent on devices that do not advertise the
+ * subcommand, which is why the whole struct is optional upstream: reporting
+ * "unavailable" is correct, guessing is not.
+ */
+export type PackageStorageStats = {
+  /**
+   * Installed app code — the APK and its extracted artifacts.
+   */
+  code_bytes: number;
+  data_bytes: number;
+  cache_bytes: number;
 };
 export type PackageSubcommandCapability = {
   supported: boolean;
