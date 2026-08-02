@@ -29,6 +29,12 @@ pub struct ProfilePreview {
     pub compatibility_issues: Vec<String>,
     pub android_user: Option<u32>,
     pub rows: Vec<ProfilePreviewRow>,
+    /// What each schema-v3 filter step selected from the live inventory,
+    /// including steps that selected nothing.
+    pub filter_matches: Vec<profile::FilterMatch>,
+    /// Packages a filter could not decide, and therefore excluded. Shown, not
+    /// dropped.
+    pub filter_exclusions: Vec<profile::FilterExclusion>,
 }
 
 /// Render a saved fleet run report through a one-shot native read grant.
@@ -66,6 +72,11 @@ pub fn inspect_profile(
     let document = profile::inspect(&path)?;
     let (source_version, profile, migration) = match document {
         profile::ProfileDocument::Current { profile } => (profile.version.clone(), profile, None),
+        // v2: runnable as-is, and the upgrade rides along so the reviewer can
+        // save a v3 copy without re-opening the file through a fresh grant.
+        profile::ProfileDocument::UpgradeAvailable { profile, migration } => {
+            (profile.version.clone(), profile, Some(migration))
+        }
         profile::ProfileDocument::MigrationAvailable { migration } => (
             migration.from_version.clone(),
             migration.profile.clone(),
@@ -98,11 +109,25 @@ pub fn inspect_profile(
             None
         }
     };
-    let rows = if let Some(user_id) = android_user {
+    let (rows, filter_matches, filter_exclusions) = if let Some(user_id) = android_user {
         let packages = adb::list_packages(&transport, &target, adb::PackageFilter::All, user_id)?;
-        profile_preview_rows(&profile, &target, user_id, &packages)
+        // Resolved twice on purpose: `profile_preview_rows` needs the plans,
+        // this needs the selection report, and resolution is pure and cheap
+        // against an inventory already in memory.
+        let resolved = profile::resolve(
+            &profile,
+            &target,
+            user_id,
+            &packages,
+            actions::ConfirmationSource::ProfilePreview,
+        );
+        (
+            profile_preview_rows(&profile, &target, user_id, &packages),
+            resolved.matches,
+            resolved.exclusions,
+        )
     } else {
-        Vec::new()
+        (Vec::new(), Vec::new(), Vec::new())
     };
     Ok(ProfilePreview {
         source_version,
@@ -112,6 +137,8 @@ pub fn inspect_profile(
         compatibility_issues,
         android_user,
         rows,
+        filter_matches,
+        filter_exclusions,
     })
 }
 
@@ -137,18 +164,30 @@ pub(crate) fn profile_preview_rows(
     user_id: u32,
     packages: &[adb::AppPackage],
 ) -> Vec<ProfilePreviewRow> {
-    let requests = profile::requests_for(
+    // Resolve first: a v3 filter step expands into one row per matched
+    // package, so rows are no longer 1:1 with `profile.actions`.
+    let resolved = profile::resolve(
         profile,
         target,
         user_id,
+        packages,
         actions::ConfirmationSource::ProfilePreview,
     );
-    profile
-        .actions
-        .iter()
-        .cloned()
-        .zip(requests.into_iter().map(actions::plan))
-        .map(|(action, plan)| {
+    resolved
+        .requests
+        .into_iter()
+        .map(|resolved| {
+            let source = &profile.actions[resolved.action_index - 1];
+            // Report the action as resolved for this package: the concrete
+            // package it will run against, with the predicate that chose it
+            // still attached so the review shows why.
+            let action = profile::ProfileAction {
+                kind: source.kind,
+                package: resolved.request.package.clone(),
+                filter: resolved.filter.clone(),
+                note: source.note.clone(),
+            };
+            let plan = actions::plan(resolved.request);
             let package = packages
                 .iter()
                 .find(|candidate| candidate.package == action.package);

@@ -8,7 +8,7 @@
     },
     "version": {
       "type": "string",
-      "const": "2"
+      "const": "3"
     },
     "description": {
       "type": "string",
@@ -109,12 +109,18 @@
       ]
     },
     "ProfileAction": {
+      "description": "One step of a profile: either a concrete package, or — from schema v3 — a\npredicate resolved against the live inventory at plan time.\n\nExactly one of the two is set. They are separate fields rather than an\nenum because a v2 document must keep deserializing byte-for-byte, and\nbecause YAML with a tag discriminator is markedly worse to hand-author.",
       "type": "object",
       "properties": {
         "kind": {
           "$ref": "#/$defs/ActionKind"
         },
         "package": {
+          "description": "A concrete package id. Empty when `filter` is set.",
+          "type": "string"
+        },
+        "filter": {
+          "description": "A schema-v3 predicate over package attributes. Empty when `package` is\nset. See [`crate::profile_filter`] for the grammar.",
           "type": "string"
         },
         "note": {
@@ -124,8 +130,7 @@
       },
       "additionalProperties": false,
       "required": [
-        "kind",
-        "package"
+        "kind"
       ]
     },
     "ActionKind": {
@@ -199,5 +204,5 @@
     }
   },
   "$id": "https://github.com/SysAdminDoc/Droidsmith/blob/master/profiles/schema.json",
-  "x-droidsmith-document-version": "2"
+  "x-droidsmith-document-version": "3"
 }

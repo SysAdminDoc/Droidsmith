@@ -16,6 +16,24 @@ each milestone tag.
 
 ### Added
 
+- **Profiles gain filter predicates as schema v3.** A step can carry a `filter`
+  instead of a `package`, resolved against the live inventory at plan time —
+  which is what stops a profile from being effectively device-specific, since
+  the same handset from two carriers does not ship the same bloat. Predicates
+  cover the attributes the inventory already carries (`system`,
+  `user_installed`, `enabled`, `disabled`, `archived`, `installer == "<id>"`,
+  `android_user == <n>`) combined with `&`, `|`, `!`, and parentheses. The
+  grammar is deliberately small and non-backtracking: an LL(1)
+  recursive-descent parser with capped length, nesting depth, and term count,
+  and no regex, because a profile is a file someone can hand you. Evaluation is
+  total and three-valued — a predicate needing an attribute the device did not
+  report is *undecidable*, so the package is excluded and named explicitly
+  rather than silently matched. Both the import diff and the CLI list every
+  package each predicate selected and every one it could not decide before
+  anything is applied. v2 profiles keep loading and running unchanged and
+  separately offer a reviewed upgrade via the new `migrate-v2`; only v1, which
+  is genuinely ambiguous, still requires migration before use. (R-128)
+
 - **The pre-OTA / post-OTA round trip is now a guided pair rather than a manual
   ritual.** A recovery baseline diff takes an explicit direction: restoring
   walks every recoverable package back to the state the baseline recorded,

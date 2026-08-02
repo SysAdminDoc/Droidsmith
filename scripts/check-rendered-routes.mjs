@@ -865,9 +865,27 @@ async function runDesktopFlow(browser) {
   await page.getByRole("button", { name: "Choose profile" }).click();
   await page.getByText("Full dry-run diff", { exact: true }).waitFor();
   await page
-    .getByText("Explicit migration required: v1 to v2", { exact: true })
+    .getByText("Explicit migration required: v1 to v3", { exact: true })
     .waitFor();
   await page.getByText("Already matches", { exact: true }).waitFor();
+  // R-128: a v3 filter step is reviewable only if the review names what it
+  // selected, and separately names what it could not decide.
+  await page
+    .getByText("Filter predicates resolved against this device", {
+      exact: true,
+    })
+    .waitFor();
+  await page
+    .getByText("Matched 1: com.example.carrier", { exact: true })
+    .waitFor();
+  await page
+    .getByText("1 packages excluded — the filter could not be decided", {
+      exact: true,
+    })
+    .waitFor();
+  await page
+    .getByText("this device did not report `installer`", { exact: false })
+    .waitFor();
   await page.getByRole("button", { name: "Save reviewed v2 profile" }).click();
   await page.getByText(/Validated schema v2 profile saved to/).waitFor();
   await assertNoHorizontalOverflow(page, "desktop Profiles diff");
@@ -3508,10 +3526,11 @@ async function installTauriMock(
             },
             user: { mode: "owner", id: null },
             actions: [
-              { kind: "disable", package: "com.example.app", note: "" },
+              { kind: "disable", package: "com.example.app", filter: "", note: "" },
               {
                 kind: "disable",
                 package: "com.example.disabled",
+                filter: "",
                 note: "",
               },
             ],
@@ -3521,7 +3540,7 @@ async function installTauriMock(
             profile: migrated,
             migration: {
               from_version: "1",
-              to_version: "2",
+              to_version: "3",
               profile: migrated,
               warnings: [
                 "Android user 0 was promoted to the profile-level owner constraint.",
@@ -3572,6 +3591,24 @@ async function installTauriMock(
                 expected_state: "disabled",
                 status: "already_matches",
                 reason: "package is already disabled",
+              },
+            ],
+            // R-128: a v3 filter step names every package it selected, and a
+            // package it could not decide is reported rather than dropped.
+            filter_matches: [
+              {
+                action_index: 2,
+                filter: 'system & enabled & installer == "com.vendor.store"',
+                kind: "disable",
+                packages: ["com.example.carrier"],
+              },
+            ],
+            filter_exclusions: [
+              {
+                action_index: 2,
+                filter: 'system & enabled & installer == "com.vendor.store"',
+                package: "com.example.noinstaller",
+                attribute: "installer",
               },
             ],
           };

@@ -55,7 +55,8 @@ fn main() -> ExitCode {
     match argv[0].as_str() {
         "devices" => cmd_devices(&argv[1..]),
         "run" => cmd_run(&argv[1..]),
-        "migrate-v1" => cmd_migrate_v1(&argv[1..]),
+        "migrate-v1" => cmd_migrate(&argv[1..], MigrateFrom::V1),
+        "migrate-v2" => cmd_migrate(&argv[1..], MigrateFrom::V2),
         "baseline-export" => cmd_baseline_export(&argv[1..]),
         "baseline-inspect" => cmd_baseline_inspect(&argv[1..]),
         "baseline-apply" => cmd_baseline_apply(&argv[1..]),
@@ -77,7 +78,8 @@ fn print_help() {
          USAGE\n  \
          droidsmith-cli devices [--json]\n  \
          droidsmith-cli run <profile.yaml> (--device <serial> | --all-devices | --retry-from <report.json>) [--dry-run|--apply] [--json] [--allow-unsafe-transport] [--accept-drift]\n  \
-         droidsmith-cli migrate-v1 <profile-v1.yaml> --output <profile-v2.yaml> [--json]\n  \
+         droidsmith-cli migrate-v1 <profile-v1.yaml> --output <profile-v3.yaml> [--json]\n  \
+         droidsmith-cli migrate-v2 <profile-v2.yaml> --output <profile-v3.yaml> [--json]\n  \
          droidsmith-cli baseline-export <profile.yaml> (--device <serial> --output <file.json> | --all-devices --output <dir>) [--allow-unsafe-transport]\n  \
          droidsmith-cli baseline-inspect <file.json> (--device <serial> | --all-devices) [--direction restore|reapply] [--json] [--allow-unsafe-transport]\n  \
          droidsmith-cli baseline-apply <file.json> --device <serial> --direction restore|reapply (--dry-run|--apply) [--json] [--allow-unsafe-transport]\n\n\
@@ -113,9 +115,37 @@ struct MigrationOutput {
     action_count: usize,
 }
 
-fn cmd_migrate_v1(argv: &[String]) -> ExitCode {
+/// Which legacy schema a `migrate-*` invocation is upgrading from.
+///
+/// v1 must be migrated before it can run at all; v2 runs as-is and this is
+/// purely an offered upgrade. The two share one implementation because the
+/// output contract — a reviewed document written to an explicit path — is the
+/// same either way.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum MigrateFrom {
+    V1,
+    V2,
+}
+
+impl MigrateFrom {
+    fn command(self) -> &'static str {
+        match self {
+            Self::V1 => "migrate-v1",
+            Self::V2 => "migrate-v2",
+        }
+    }
+
+    fn missing_input(self) -> &'static str {
+        match self {
+            Self::V1 => "missing <profile-v1.yaml>",
+            Self::V2 => "missing <profile-v2.yaml>",
+        }
+    }
+}
+
+fn cmd_migrate(argv: &[String], from: MigrateFrom) -> ExitCode {
     if argv.is_empty() {
-        eprintln!("[droidsmith-cli] missing <profile-v1.yaml>");
+        eprintln!("[droidsmith-cli] {}", from.missing_input());
         return ExitCode::from(2);
     }
     let input = PathBuf::from(&argv[0]);
@@ -144,7 +174,10 @@ fn cmd_migrate_v1(argv: &[String]) -> ExitCode {
         eprintln!("[droidsmith-cli] --output <profile-v2.yaml> is required");
         return ExitCode::from(2);
     };
-    let migration = match profile::migrate_v1(&input) {
+    let migration = match match from {
+        MigrateFrom::V1 => profile::migrate_v1(&input),
+        MigrateFrom::V2 => profile::migrate_v2(&input),
+    } {
         Ok(migration) => migration,
         Err(error) => {
             eprintln!("[droidsmith-cli] {error}");
@@ -164,7 +197,7 @@ fn cmd_migrate_v1(argv: &[String]) -> ExitCode {
     }
     let result = MigrationOutput {
         schema_version: 1,
-        command: "migrate-v1",
+        command: from.command(),
         from_version: migration.from_version,
         to_version: migration.to_version,
         output_path: output.display().to_string(),
@@ -1886,13 +1919,24 @@ fn run_profile_on_target(
             return Err(err("retry_drift", drift.join("; ")));
         }
     }
-    let requests = profile::requests_for(
+    // Schema-v3 filter steps resolve against the live inventory, so the
+    // inventory is now part of planning rather than only of review.
+    let inventory = adb::list_packages(transport, target, adb::PackageFilter::All, user_id)
+        .map_err(|error| err("package_probe_failed", error.to_string()))?;
+    let resolved = profile::resolve(
         profile,
         target,
         user_id,
+        &inventory,
         actions::ConfirmationSource::CliApply,
     );
-    let mut plans = requests.into_iter().map(actions::plan).collect::<Vec<_>>();
+    let resolved_matches = resolved.matches;
+    let resolved_exclusions = resolved.exclusions;
+    let mut plans = resolved
+        .requests
+        .into_iter()
+        .map(|resolved| actions::plan(resolved.request))
+        .collect::<Vec<_>>();
     for plan in &mut plans {
         plan.before_state = actions::capture_state(transport, &plan.request);
     }
@@ -1948,6 +1992,19 @@ fn run_profile_on_target(
                 );
             }
         }
+        for matched in &resolved_matches {
+            println!(
+                "  filter [{}] {:?} matched {} package(s): {}",
+                matched.action_index,
+                matched.filter,
+                matched.packages.len(),
+                if matched.packages.is_empty() {
+                    "(none)".to_string()
+                } else {
+                    matched.packages.join(", ")
+                }
+            );
+        }
         for plan in &plan_output {
             println!(
                 "  [{:>2}] {}{} [{}] → adb {}",
@@ -1961,6 +2018,20 @@ fn run_profile_on_target(
                 plan.before_state,
                 plan.adb_args.join(" ")
             );
+        }
+        if !resolved_exclusions.is_empty() {
+            // Reported, never silently dropped: a predicate that could not be
+            // decided must not look like a predicate that did not match.
+            println!(
+                "\nExcluded because a filter could not be resolved ({}):",
+                resolved_exclusions.len()
+            );
+            for exclusion in &resolved_exclusions {
+                println!(
+                    "  {}\tfilter [{}] needs `{}`, which this device did not report",
+                    exclusion.package, exclusion.action_index, exclusion.attribute
+                );
+            }
         }
     }
 
@@ -2062,6 +2133,7 @@ fn run_profile_on_target(
         compatible: true,
         plans: plan_output,
         results,
+        filter_exclusions: resolved_exclusions,
         success,
     })
 }
@@ -2318,6 +2390,7 @@ mod tests {
             actions: vec![profile::ProfileAction {
                 kind: actions::ActionKind::Disable,
                 package: "com.a".into(),
+                filter: String::new(),
                 note: String::new(),
             }],
         }
@@ -2337,6 +2410,7 @@ mod tests {
             compatible: true,
             plans: vec![],
             results: vec![],
+            filter_exclusions: vec![],
             success,
         }
     }

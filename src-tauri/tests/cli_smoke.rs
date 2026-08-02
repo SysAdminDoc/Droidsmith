@@ -69,7 +69,9 @@ fn migrate_v1_succeeds_with_fixture() {
     assert_eq!(code, 0, "stderr: {stderr}");
     let parsed: serde_json::Value = serde_json::from_str(&stdout).expect("valid JSON output");
     assert_eq!(parsed["command"], "migrate-v1");
-    assert_eq!(parsed["to_version"], "2");
+    // v1 migrates straight to the current schema; there is no reason to route
+    // it through an intermediate version that is itself upgradeable.
+    assert_eq!(parsed["to_version"], "3");
     assert!(output.exists());
     std::fs::remove_dir_all(dir).unwrap();
 }

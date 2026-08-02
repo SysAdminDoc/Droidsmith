@@ -31,6 +31,8 @@ mod perfetto;
 mod process_capture;
 mod process_tree;
 pub mod profile;
+/// Public for the CLI, which lints and resolves schema-v3 filter predicates.
+pub mod profile_filter;
 /// Public for the read-only schema-lint binary; runtime callers still use the
 /// same bounded loader and validation path.
 pub mod quirks;

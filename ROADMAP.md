@@ -29,13 +29,6 @@ R-119 / IMP-95.
 
 ### P2
 
-- [ ] P2 — R-128: Add filter-based profile predicates as schema v3
-  Why: profiles are ordered lists of concrete package actions, so they are effectively device-specific — which limits fleet `run` and the planned `--retry-from` to fleets of identical devices.
-  Evidence: AppManager 4.1.0 (2026-06-29) ships filter-based profiles resolving predicates at run time with boolean expressions over `&`, `|`, and parentheses; Droidsmith already has versioned schemas with explicit review-and-migrate paths (`contribution-schema-policy.json`, profile v1→v2).
-  Touches: `src-tauri/src/profile.rs`, `profiles/schema.json`, `src-tauri/src/bin/droidsmith_cli.rs`, `src/routes/Profiles.tsx`, `contribution-schema-policy.json`, `src/locales/*.json`, fixtures and tests.
-  Acceptance: profile schema `"3"` supports predicates over attributes Droidsmith already enumerates (system vs user, enabled state, installer package, Android user, archived state) combined by a bounded, non-backtracking boolean grammar; v2 files migrate explicitly with review, exactly as v1→v2 does, and v2 remains loadable; the import diff resolves predicates against the live device and shows every matched package and planned command before apply; expression evaluation is total — an unresolvable attribute excludes the package and is reported, never silently matched.
-  Complexity: L
-
 ### P3
 
 - [ ] P3 — R-130: Report accurate per-app storage from PackageManager

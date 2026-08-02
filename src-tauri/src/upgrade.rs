@@ -197,13 +197,19 @@ fn validate_installed_fixture(
         let path = checked_fixture_path(active, &expected.path)?;
         let document = crate::profile::inspect(&path)
             .map_err(|error| UpgradeCheckError::Validation(error.to_string()))?;
+        // `Current` here asserts what upgrade preservation actually cares
+        // about: the document still loads and runs without a required
+        // migration. A v2 profile that additionally offers a reviewed upgrade
+        // to v3 still satisfies that — the upgrade is an offer, not a gate.
         let matches = matches!(
             (expected.kind, document),
-            (ProfileKind::Current, ProfileDocument::Current { .. })
-                | (
-                    ProfileKind::MigrationAvailable,
-                    ProfileDocument::MigrationAvailable { .. }
-                )
+            (
+                ProfileKind::Current,
+                ProfileDocument::Current { .. } | ProfileDocument::UpgradeAvailable { .. }
+            ) | (
+                ProfileKind::MigrationAvailable,
+                ProfileDocument::MigrationAvailable { .. }
+            )
         );
         if !matches {
             return Err(UpgradeCheckError::Validation(format!(

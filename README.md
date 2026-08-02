@@ -32,7 +32,8 @@ server/mDNS/Wi-Fi 2.0 health with audited guided recovery, provenance-classified
 USB/TLS/legacy/unknown transports with fail-closed unsafe-TCP acknowledgement,
 read-only host connection diagnostics for ADB/tool/USB/driver/udev state,
 portable pre-change recovery baselines with read-only OTA drift review,
-GUI-authored schema-v2 action profiles with read-only live import diffs,
+GUI-authored schema-v3 action profiles with filter predicates resolved
+against the live device and read-only import diffs,
 native-selected scrcpy recording destinations, fastboot inspection, and an
 offline APK Analyzer that statically inspects a local `.apk` (manifest,
 permissions, DEX/multidex, signature artifacts, size breakdown) with no device
@@ -205,13 +206,53 @@ Droidsmith does not check for or install application updates.
 The **Profiles** workspace builds an ordered YAML profile from supported
 journaled package actions. A profile can target the owner, foreground, or an
 explicit discovered Android user and can optionally constrain the device serial
-prefix, manufacturer, model, and SDK range. Export validates schema v2 and uses
+prefix, manufacturer, model, and SDK range. Export validates schema v3 and uses
 an atomic, native-selected destination.
 
 Import is read-only: Droidsmith validates the schema and live device/user
 constraints, then shows every current-to-expected package state, readiness
 reason, and exact planned ADB command. A v1 file is converted only in memory;
-the user must review and save the v2 document before it can run.
+the user must review and save the migrated document before it can run. A v2
+file loads and runs unchanged, and separately offers a reviewed upgrade to v3.
+
+### Filter predicates (schema v3)
+
+A profile step can carry a `filter` predicate instead of a `package`. Listing
+packages by name makes a profile effectively device-specific — the same handset
+from two carriers does not ship the same bloat — so a predicate lets one profile
+describe intent and resolve it against whatever the device actually has:
+
+```yaml
+actions:
+  - kind: disable
+    package: com.example.known          # a concrete step, exactly as in v2
+  - kind: disable
+    filter: system & disabled & installer == "com.vendor.store"
+```
+
+Attributes are the ones the package inventory already carries: `system`,
+`user_installed`, `enabled`, `disabled`, `archived`, `installer == "<id>"`, and
+`android_user == <n>`. They combine with `&`, `|`, `!`, and parentheses (`&&`
+and `||` are accepted too). The grammar is deliberately small and
+non-backtracking — an LL(1) recursive-descent parser with capped input length,
+nesting depth, and term count, and no regex — because a profile is a file
+someone can hand you.
+
+Evaluation is total and has three outcomes, not two. A predicate that needs an
+attribute the device did not report (`installer` is the one that genuinely
+happens; on a current Samsung handset roughly 480 of 540 packages report none)
+is **undecidable**: the package is excluded and listed explicitly in the review,
+never quietly selected. Both the import diff and `droidsmith-cli run` name every
+package each predicate matched and every package it could not decide, before
+anything is applied.
+
+Schema v2 stays loadable and runnable; only v1 requires a migration, because
+only v1 is genuinely ambiguous. Both upgrades are explicit:
+
+```bash
+droidsmith-cli migrate-v1 old-profile.yaml --output profile-v3.yaml --json
+droidsmith-cli migrate-v2 profile-v2.yaml  --output profile-v3.yaml --json
+```
 
 The CLI uses the same validation and planning code. `--json` emits stable
 machine-readable results, and exit codes are `0` for success, `1` for a failed
@@ -220,9 +261,9 @@ operation or incompatibility, `2` for invalid input, `3` when ADB is absent, and
 
 ```bash
 droidsmith-cli devices --json
-droidsmith-cli migrate-v1 old-profile.yaml --output profile-v2.yaml --json
-droidsmith-cli run profile-v2.yaml --device SERIAL --dry-run --json
-droidsmith-cli run profile-v2.yaml --device SERIAL --apply --json
+droidsmith-cli migrate-v1 old-profile.yaml --output profile-v3.yaml --json
+droidsmith-cli run profile-v3.yaml --device SERIAL --dry-run --json
+droidsmith-cli run profile-v3.yaml --device SERIAL --apply --json
 ```
 
 Pass `--all-devices` instead of `--device SERIAL` to fan a run over every
@@ -233,7 +274,7 @@ unauthenticated TCP transports (without `--allow-unsafe-transport`) are skipped,
 not aborted; the exit code is `1` if any device was skipped or failed.
 
 ```bash
-droidsmith-cli run profile-v2.yaml --all-devices --apply --json
+droidsmith-cli run profile-v3.yaml --all-devices --apply --json
 ```
 
 Legacy or unknown TCP transports additionally require
@@ -247,10 +288,10 @@ proves finished is never touched again, and an action the report proves applied
 is never replayed — it is reported with `status: skipped` instead.
 
 ```bash
-droidsmith-cli run profile-v2.yaml --all-devices --apply --json > fleet.json
+droidsmith-cli run profile-v3.yaml --all-devices --apply --json > fleet.json
 # ...interrupted, or some devices were offline...
-droidsmith-cli run profile-v2.yaml --retry-from fleet.json --dry-run --json
-droidsmith-cli run profile-v2.yaml --retry-from fleet.json --apply --json
+droidsmith-cli run profile-v3.yaml --retry-from fleet.json --dry-run --json
+droidsmith-cli run profile-v3.yaml --retry-from fleet.json --apply --json
 ```
 
 Before selecting anything, the resume re-proves that it is continuing the same

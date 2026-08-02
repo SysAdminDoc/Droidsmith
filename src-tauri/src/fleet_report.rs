@@ -126,6 +126,11 @@ pub struct RunOutput {
     pub compatible: bool,
     pub plans: Vec<RunPlanOutput>,
     pub results: Vec<RunApplyOutput>,
+    /// Packages a schema-v3 filter predicate could not decide, and therefore
+    /// excluded. Additive and defaulted, so a report written before v3
+    /// predicates existed still deserializes.
+    #[serde(default)]
+    pub filter_exclusions: Vec<crate::profile::FilterExclusion>,
     pub success: bool,
 }
 
@@ -784,6 +789,7 @@ mod tests {
                 .map(|(kind, package)| ProfileAction {
                     kind: *kind,
                     package: (*package).to_string(),
+                    filter: String::new(),
                     note: String::new(),
                 })
                 .collect(),
@@ -832,6 +838,7 @@ mod tests {
                     error: None,
                 })
                 .collect(),
+            filter_exclusions: Vec::new(),
             success,
         }))
     }

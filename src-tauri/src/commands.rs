@@ -809,16 +809,19 @@ mod tests {
                 crate::profile::ProfileAction {
                     kind: ActionKind::Disable,
                     package: "com.example.enabled".to_string(),
+                    filter: String::new(),
                     note: String::new(),
                 },
                 crate::profile::ProfileAction {
                     kind: ActionKind::Disable,
                     package: "com.example.disabled".to_string(),
+                    filter: String::new(),
                     note: String::new(),
                 },
                 crate::profile::ProfileAction {
                     kind: ActionKind::Enable,
                     package: "com.example.missing".to_string(),
+                    filter: String::new(),
                     note: String::new(),
                 },
             ],

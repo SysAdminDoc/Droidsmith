@@ -13,10 +13,15 @@ use crate::adb::{
     AndroidUser, DeviceTarget,
 };
 
-pub const PROFILE_SCHEMA_VERSION: &str = "2";
+pub const PROFILE_SCHEMA_VERSION: &str = "3";
+/// v2 stays loadable and runnable: it is a strict subset of v3 (every v2
+/// action is a concrete package), so nothing about it is ambiguous or unsafe.
+/// An explicit reviewed upgrade to v3 is offered, but not required — unlike
+/// v1, whose per-action user ids genuinely could not be interpreted.
+pub const PROFILE_V2_SCHEMA_VERSION: &str = "2";
 pub const LEGACY_PROFILE_SCHEMA_VERSION: &str = "1";
 pub(crate) const PROFILE_SCHEMA_MIGRATION: &str =
-    "profile v1 is inspected and migrated explicitly to v2; review the profile-level Android user target before saving or applying it";
+    "profile v1 is inspected and migrated explicitly to the current schema; review the profile-level Android user target before saving or applying it. v2 loads and runs as-is, and separately offers a reviewed upgrade to v3";
 
 const MAX_PROFILE_BYTES: u64 = 256 * 1024;
 const MAX_PROFILE_ACTIONS: usize = 2_000;
@@ -87,22 +92,54 @@ pub struct ProfileUserTarget {
     pub id: Option<u32>,
 }
 
+/// One step of a profile: either a concrete package, or — from schema v3 — a
+/// predicate resolved against the live inventory at plan time.
+///
+/// Exactly one of the two is set. They are separate fields rather than an
+/// enum because a v2 document must keep deserializing byte-for-byte, and
+/// because YAML with a tag discriminator is markedly worse to hand-author.
 #[derive(
     schemars::JsonSchema, specta::Type, Debug, Clone, PartialEq, Eq, Serialize, Deserialize,
 )]
 #[serde(deny_unknown_fields)]
 pub struct ProfileAction {
     pub kind: ActionKind,
+    /// A concrete package id. Empty when `filter` is set.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
     pub package: String,
+    /// A schema-v3 predicate over package attributes. Empty when `package` is
+    /// set. See [`crate::profile_filter`] for the grammar.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub filter: String,
     #[serde(default)]
     pub note: String,
+}
+
+impl ProfileAction {
+    /// A profile step is filter-driven when it carries a predicate instead of
+    /// a package id.
+    pub fn is_filter(&self) -> bool {
+        !self.filter.is_empty()
+    }
 }
 
 #[derive(specta::Type, Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum ProfileDocument {
-    Current { profile: Profile },
-    MigrationAvailable { migration: ProfileMigration },
+    Current {
+        profile: Profile,
+    },
+    /// Loadable and runnable as-is, with a reviewed upgrade to the current
+    /// schema also available. Only v2 reaches this state.
+    UpgradeAvailable {
+        profile: Profile,
+        migration: ProfileMigration,
+    },
+    /// Not runnable until the migration is reviewed and saved. Only v1
+    /// reaches this state.
+    MigrationAvailable {
+        migration: ProfileMigration,
+    },
 }
 
 #[derive(specta::Type, Debug, Clone, PartialEq, Eq, Serialize)]
@@ -192,25 +229,70 @@ pub fn inspect_text(text: &str, source_path: &Path) -> Result<ProfileDocument, P
             validate(&profile, source_path)?;
             Ok(ProfileDocument::Current { profile })
         }
+        // v2 runs as-is and separately offers a reviewed upgrade. The two are
+        // reported together because the native read grant is one-shot: making
+        // the caller re-open the file to see the upgrade would be worse than
+        // computing both from the bytes already in hand.
+        PROFILE_V2_SCHEMA_VERSION => {
+            let profile: Profile = parse_yaml(text, source_path)?;
+            validate(&profile, source_path)?;
+            let migration = upgrade_v2(&profile);
+            Ok(ProfileDocument::UpgradeAvailable { profile, migration })
+        }
         LEGACY_PROFILE_SCHEMA_VERSION => migrate_v1_text(text, source_path)
             .map(|migration| ProfileDocument::MigrationAvailable { migration }),
         version => Err(ProfileError::Validate {
             path: source_path.to_path_buf(),
             reasons: format!(
-                "unsupported profile version {version:?}; supported: {PROFILE_SCHEMA_VERSION:?}; only v1 has an explicit migration path"
+                "unsupported profile version {version:?}; supported: {PROFILE_SCHEMA_VERSION:?} and {PROFILE_V2_SCHEMA_VERSION:?}; only v1 has an explicit migration path"
             ),
         }),
     }
 }
 
-/// Load only a current profile. Legacy documents must go through `migrate-v1`
-/// (CLI) or the reviewed GUI migration flow before they can be planned.
+/// Load a runnable profile. v3 and v2 both load; v1 must go through
+/// `migrate-v1` (CLI) or the reviewed GUI migration flow first, because its
+/// per-action user ids cannot be interpreted without a decision.
 pub fn load(path: &Path) -> Result<Profile, ProfileError> {
     match inspect(path)? {
         ProfileDocument::Current { profile } => Ok(profile),
+        ProfileDocument::UpgradeAvailable { profile, .. } => Ok(profile),
         ProfileDocument::MigrationAvailable { .. } => Err(ProfileError::Validate {
             path: path.to_path_buf(),
-            reasons: "profile v1 requires explicit migration to v2 before use".to_string(),
+            reasons: "profile v1 requires explicit migration before use".to_string(),
+        }),
+    }
+}
+
+/// Build the reviewed v2 → v3 upgrade for an already-validated v2 profile.
+///
+/// The upgrade is purely a version bump: v2 carries only concrete packages,
+/// which v3 still supports unchanged. It is offered rather than applied so the
+/// saved document is one the user chose, matching how v1 → v2 works.
+pub fn upgrade_v2(profile: &Profile) -> ProfileMigration {
+    let mut upgraded = profile.clone();
+    upgraded.version = PROFILE_SCHEMA_VERSION.to_string();
+    ProfileMigration {
+        from_version: PROFILE_V2_SCHEMA_VERSION.to_string(),
+        to_version: PROFILE_SCHEMA_VERSION.to_string(),
+        profile: upgraded,
+        warnings: vec![
+            "v2 actions are concrete package ids and carry over unchanged; v3 additionally allows filter predicates resolved against the live device"
+                .to_string(),
+        ],
+    }
+}
+
+pub fn migrate_v2(path: &Path) -> Result<ProfileMigration, ProfileError> {
+    match inspect(path)? {
+        ProfileDocument::UpgradeAvailable { migration, .. } => Ok(migration),
+        ProfileDocument::Current { .. } => Err(ProfileError::Validate {
+            path: path.to_path_buf(),
+            reasons: format!("profile is already schema v{PROFILE_SCHEMA_VERSION}"),
+        }),
+        ProfileDocument::MigrationAvailable { .. } => Err(ProfileError::Validate {
+            path: path.to_path_buf(),
+            reasons: "profile is v1; migrate it with migrate-v1 first".to_string(),
         }),
     }
 }
@@ -269,6 +351,7 @@ fn migrate_v1_text(text: &str, path: &Path) -> Result<ProfileMigration, ProfileE
             .map(|action| ProfileAction {
                 kind: action.kind,
                 package: action.package,
+                filter: String::new(),
                 note: action.note,
             })
             .collect(),
@@ -315,10 +398,11 @@ pub fn lint(profile: &Profile) -> Vec<String> {
     if profile.description.len() > MAX_PROFILE_TEXT {
         issues.push(format!("description exceeds {MAX_PROFILE_TEXT} bytes"));
     }
-    if profile.version != PROFILE_SCHEMA_VERSION {
+    let filters_allowed = profile.version == PROFILE_SCHEMA_VERSION;
+    if !filters_allowed && profile.version != PROFILE_V2_SCHEMA_VERSION {
         issues.push(format!(
-            "unsupported profile version {:?} (supported: {:?})",
-            profile.version, PROFILE_SCHEMA_VERSION
+            "unsupported profile version {:?} (supported: {:?}, {:?})",
+            profile.version, PROFILE_SCHEMA_VERSION, PROFILE_V2_SCHEMA_VERSION
         ));
     }
     if profile.actions.is_empty() {
@@ -354,12 +438,38 @@ pub fn lint(profile: &Profile) -> Vec<String> {
                 action.kind
             ));
         }
-        if !crate::adb::packages::valid_package_name(&action.package) {
-            issues.push(format!(
-                "action #{}: invalid package id {:?}",
-                index + 1,
-                action.package
-            ));
+        match (action.package.is_empty(), action.filter.is_empty()) {
+            (true, true) => issues.push(format!(
+                "action #{}: needs either a package id or a filter",
+                index + 1
+            )),
+            (false, false) => issues.push(format!(
+                "action #{}: set either a package id or a filter, not both",
+                index + 1
+            )),
+            (false, true) => {
+                if !crate::adb::packages::valid_package_name(&action.package) {
+                    issues.push(format!(
+                        "action #{}: invalid package id {:?}",
+                        index + 1,
+                        action.package
+                    ));
+                }
+            }
+            (true, false) => {
+                if !filters_allowed {
+                    issues.push(format!(
+                        "action #{}: filters require profile schema v{PROFILE_SCHEMA_VERSION}",
+                        index + 1
+                    ));
+                }
+                // Parse at validation time, not at plan time: an unparseable
+                // predicate is a broken document, and finding that out only
+                // once a device is attached would be far too late.
+                if let Err(error) = crate::profile_filter::parse(&action.filter) {
+                    issues.push(format!("action #{}: invalid filter — {error}", index + 1));
+                }
+            }
         }
         if action.note.len() > MAX_PROFILE_TEXT {
             issues.push(format!("action #{} note is too long", index + 1));
@@ -485,28 +595,134 @@ fn match_required_text(
     }
 }
 
-pub fn requests_for(
+/// What one filter action selected from the live inventory.
+#[derive(specta::Type, Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct FilterMatch {
+    /// 1-based position in `profile.actions`.
+    pub action_index: usize,
+    pub filter: String,
+    pub kind: ActionKind,
+    /// Matched packages, sorted, so the same device and profile always produce
+    /// the same reviewable order.
+    pub packages: Vec<String>,
+}
+
+/// A package a predicate could not decide, and therefore did not select.
+#[derive(specta::Type, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FilterExclusion {
+    pub action_index: usize,
+    pub filter: String,
+    pub package: String,
+    /// The attribute the device did not report.
+    pub attribute: String,
+}
+
+/// One concrete request plus the profile step it came from. A filter step
+/// produces many of these; a concrete step produces exactly one.
+#[derive(specta::Type, Debug, Clone, Serialize)]
+pub struct ResolvedRequest {
+    /// 1-based position in `profile.actions`.
+    pub action_index: usize,
+    /// The predicate that selected this package, empty for a concrete step.
+    pub filter: String,
+    pub request: ActionRequest,
+}
+
+#[derive(specta::Type, Debug, Clone, Default, Serialize)]
+pub struct ResolvedProfile {
+    pub requests: Vec<ResolvedRequest>,
+    /// One entry per filter action, including actions that matched nothing —
+    /// "this predicate selected zero packages" is a reviewable outcome, not an
+    /// absence.
+    pub matches: Vec<FilterMatch>,
+    /// Every package excluded because a predicate could not be decided. Never
+    /// silently dropped.
+    pub exclusions: Vec<FilterExclusion>,
+}
+
+/// Turn a profile into the concrete requests it will run, resolving any v3
+/// filter predicates against the live inventory.
+///
+/// Resolution is total: every package is matched, not matched, or reported as
+/// undecidable. A package whose predicate could not be decided is excluded and
+/// listed in `exclusions` — it never reaches `requests`.
+pub fn resolve(
     profile: &Profile,
     target: &DeviceTarget,
     user_id: u32,
+    inventory: &[crate::adb::packages::AppPackage],
     confirmation_source: ConfirmationSource,
-) -> Vec<ActionRequest> {
-    profile
-        .actions
-        .iter()
-        .map(|action| ActionRequest {
-            serial: target.serial.clone(),
-            target: target.clone(),
-            package: action.package.clone(),
+) -> ResolvedProfile {
+    let mut resolved = ResolvedProfile::default();
+    let request = |package: String, kind: ActionKind| ActionRequest {
+        serial: target.serial.clone(),
+        target: target.clone(),
+        package,
+        kind,
+        user_id,
+        pack_context: None,
+        context: ActionContext {
+            confirmation_source,
+            ..Default::default()
+        },
+    };
+
+    for (index, action) in profile.actions.iter().enumerate() {
+        let action_index = index + 1;
+        if !action.is_filter() {
+            resolved.requests.push(ResolvedRequest {
+                action_index,
+                filter: String::new(),
+                request: request(action.package.clone(), action.kind),
+            });
+            continue;
+        }
+        // `lint` already parsed every filter, so a document that reached here
+        // cannot fail to parse. Treat a parse failure as "selects nothing"
+        // rather than panicking: this is the apply path.
+        let Ok(expr) = crate::profile_filter::parse(&action.filter) else {
+            resolved.matches.push(FilterMatch {
+                action_index,
+                filter: action.filter.clone(),
+                kind: action.kind,
+                packages: Vec::new(),
+            });
+            continue;
+        };
+        let mut packages = Vec::new();
+        for package in inventory {
+            let context = crate::profile_filter::FilterContext {
+                package,
+                android_user: user_id,
+            };
+            match crate::profile_filter::evaluate(&expr, &context) {
+                Ok(true) => packages.push(package.package.clone()),
+                Ok(false) => {}
+                Err(unresolvable) => resolved.exclusions.push(FilterExclusion {
+                    action_index,
+                    filter: action.filter.clone(),
+                    package: package.package.clone(),
+                    attribute: unresolvable.attribute.to_string(),
+                }),
+            }
+        }
+        packages.sort();
+        packages.dedup();
+        for package in &packages {
+            resolved.requests.push(ResolvedRequest {
+                action_index,
+                filter: action.filter.clone(),
+                request: request(package.clone(), action.kind),
+            });
+        }
+        resolved.matches.push(FilterMatch {
+            action_index,
+            filter: action.filter.clone(),
             kind: action.kind,
-            user_id,
-            pack_context: None,
-            context: ActionContext {
-                confirmation_source,
-                ..Default::default()
-            },
-        })
-        .collect()
+            packages,
+        });
+    }
+    resolved
 }
 
 #[cfg(test)]
@@ -545,15 +761,203 @@ actions:
     user: 10
 "#;
 
+    const V3: &str = r#"
+name: Refurb baseline
+version: "3"
+description: Fresh-from-box Pixel baseline
+device:
+  require_manufacturer: Google
+  require_android_min: 30
+user:
+  mode: explicit
+  id: 10
+actions:
+  - kind: disable
+    package: com.google.android.apps.subscriptions.red
+    note: YouTube Premium nag
+  - kind: disable
+    filter: system & enabled & installer == "com.vendor.store"
+    note: carrier preloads, wherever they landed on this handset
+"#;
+
+    /// Both loadable schemas produce a runnable profile; only v1 does not.
+    fn loaded(text: &str) -> Profile {
+        match inspect_text(text, Path::new("profile.yaml")).unwrap() {
+            ProfileDocument::Current { profile } => profile,
+            ProfileDocument::UpgradeAvailable { profile, .. } => profile,
+            ProfileDocument::MigrationAvailable { .. } => {
+                panic!("expected a loadable profile, got a required migration")
+            }
+        }
+    }
+
+    fn inventory(entries: &[(&str, bool, bool, Option<&str>)]) -> Vec<crate::adb::AppPackage> {
+        entries
+            .iter()
+            .map(
+                |(name, system, enabled, installer)| crate::adb::AppPackage {
+                    package: (*name).to_string(),
+                    enabled: *enabled,
+                    system: *system,
+                    apk_path: None,
+                    uid: None,
+                    installer: installer.map(str::to_string),
+                    archived: false,
+                    retained: false,
+                },
+            )
+            .collect()
+    }
+
+    fn test_target() -> DeviceTarget {
+        DeviceTarget {
+            serial: "abc-123".into(),
+            transport_id: Some(4),
+            connection_generation: 5,
+            model: None,
+            product: None,
+            device: None,
+            build_fingerprint: Some("build/test".into()),
+            transport_kind: crate::adb::DeviceTransportKind::Usb,
+            untrusted_transport_override: false,
+        }
+    }
+
     #[test]
     fn v2_parses_and_lints_clean() {
         let document = inspect_text(V2, Path::new("profile.yaml")).unwrap();
-        let ProfileDocument::Current { profile } = document else {
-            panic!("expected current profile");
+        // v2 is still runnable; the v3 upgrade rides along as an offer.
+        let ProfileDocument::UpgradeAvailable { profile, migration } = document else {
+            panic!("expected a loadable v2 profile with an upgrade offer");
         };
         assert_eq!(profile.actions.len(), 2);
         assert_eq!(profile.user.id, Some(10));
         assert!(lint(&profile).is_empty());
+        assert_eq!(migration.from_version, PROFILE_V2_SCHEMA_VERSION);
+        assert_eq!(migration.to_version, PROFILE_SCHEMA_VERSION);
+        // The upgrade changes the version and nothing else: v2 carries only
+        // concrete packages, which v3 still supports unchanged.
+        assert_eq!(migration.profile.actions, profile.actions);
+    }
+
+    #[test]
+    fn v3_filters_resolve_against_the_live_inventory_in_a_stable_order() {
+        let profile = loaded(V3);
+        assert!(lint(&profile).is_empty(), "{:?}", lint(&profile));
+        let live = inventory(&[
+            // Matches: system, enabled, right installer.
+            ("com.vendor.zeta", true, true, Some("com.vendor.store")),
+            ("com.vendor.alpha", true, true, Some("com.vendor.store")),
+            // Misses on each attribute in turn.
+            ("com.vendor.disabled", true, false, Some("com.vendor.store")),
+            ("com.user.app", false, true, Some("com.vendor.store")),
+            ("com.vendor.other", true, true, Some("com.android.vending")),
+            // Undecidable: the device reported no installer.
+            ("com.vendor.unknown", true, true, None),
+            // The concrete action's package, which the filter must not claim.
+            (
+                "com.google.android.apps.subscriptions.red",
+                true,
+                true,
+                Some("com.android.vending"),
+            ),
+        ]);
+        let resolved = resolve(
+            &profile,
+            &test_target(),
+            10,
+            &live,
+            ConfirmationSource::CliApply,
+        );
+
+        let packages: Vec<&str> = resolved
+            .requests
+            .iter()
+            .map(|resolved| resolved.request.package.as_str())
+            .collect();
+        assert_eq!(
+            packages,
+            vec![
+                // The concrete step keeps its position...
+                "com.google.android.apps.subscriptions.red",
+                // ...and the filter step expands in sorted order, so the same
+                // device and profile always review identically.
+                "com.vendor.alpha",
+                "com.vendor.zeta",
+            ]
+        );
+
+        assert_eq!(resolved.matches.len(), 1);
+        assert_eq!(resolved.matches[0].action_index, 2);
+        assert_eq!(
+            resolved.matches[0].packages,
+            vec!["com.vendor.alpha", "com.vendor.zeta"]
+        );
+
+        // Undecidable is excluded and reported, never quietly selected.
+        assert_eq!(resolved.exclusions.len(), 1);
+        assert_eq!(resolved.exclusions[0].package, "com.vendor.unknown");
+        assert_eq!(resolved.exclusions[0].attribute, "installer");
+        assert_eq!(resolved.exclusions[0].action_index, 2);
+        assert!(!packages.contains(&"com.vendor.unknown"));
+    }
+
+    #[test]
+    fn a_filter_that_matches_nothing_is_reported_rather_than_omitted() {
+        let profile = loaded(V3);
+        let resolved = resolve(
+            &profile,
+            &test_target(),
+            10,
+            &inventory(&[("com.user.app", false, true, Some("com.other"))]),
+            ConfirmationSource::CliApply,
+        );
+        // "This predicate selected zero packages" is a reviewable outcome.
+        assert_eq!(resolved.matches.len(), 1);
+        assert!(resolved.matches[0].packages.is_empty());
+        assert_eq!(resolved.requests.len(), 1);
+        assert!(resolved.exclusions.is_empty());
+    }
+
+    #[test]
+    fn filters_are_rejected_by_v2_and_validated_before_a_device_is_involved() {
+        let v2_with_filter = V3.replace("version: \"3\"", "version: \"2\"");
+        let error = inspect_text(&v2_with_filter, Path::new("profile.yaml")).unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("filters require profile schema v3"),
+            "{error}"
+        );
+
+        // A broken predicate is a broken document, caught at validation rather
+        // than once a device is attached.
+        let broken = V3.replace("system & enabled", "system & nonsense");
+        let error = inspect_text(&broken, Path::new("profile.yaml")).unwrap_err();
+        assert!(error.to_string().contains("invalid filter"), "{error}");
+
+        // Neither field, or both, is incoherent.
+        let mut both = loaded(V3);
+        both.actions[1].package = "com.example.one".to_string();
+        assert!(lint(&both).iter().any(|issue| issue.contains("not both")));
+        let mut neither = loaded(V3);
+        neither.actions[1].filter = String::new();
+        assert!(lint(&neither)
+            .iter()
+            .any(|issue| issue.contains("either a package id or a filter")));
+    }
+
+    #[test]
+    fn a_v3_profile_round_trips_with_its_filters_intact() {
+        let profile = loaded(V3);
+        let yaml = serialize(&profile).unwrap();
+        assert!(yaml.contains("filter:"), "{yaml}");
+        // The concrete action must not gain an empty `filter:` key, and the
+        // filter action must not gain an empty `package:` key.
+        assert_eq!(yaml.matches("filter:").count(), 1);
+        assert_eq!(yaml.matches("package:").count(), 1);
+        let reparsed = loaded(&yaml);
+        assert_eq!(reparsed, profile);
     }
 
     #[test]
@@ -580,7 +984,7 @@ actions:
         let ProfileDocument::MigrationAvailable { migration } = document else {
             panic!("expected migration");
         };
-        assert_eq!(migration.profile.version, "2");
+        assert_eq!(migration.profile.version, PROFILE_SCHEMA_VERSION);
         assert_eq!(migration.profile.user.mode, ProfileUserMode::Explicit);
         assert_eq!(migration.profile.user.id, Some(10));
         assert!(migration
@@ -599,10 +1003,7 @@ actions:
 
     #[test]
     fn lint_rejects_incoherent_constraints_and_unsafe_action_kinds() {
-        let mut profile = match inspect_text(V2, Path::new("profile.yaml")).unwrap() {
-            ProfileDocument::Current { profile } => profile,
-            _ => unreachable!(),
-        };
+        let mut profile = loaded(V2);
         profile.device.require_android_min = Some(35);
         profile.device.require_android_max = Some(30);
         profile.user.mode = ProfileUserMode::Owner;
@@ -629,10 +1030,7 @@ actions:
                 current: true,
             },
         ];
-        let mut profile = match inspect_text(V2, Path::new("profile.yaml")).unwrap() {
-            ProfileDocument::Current { profile } => profile,
-            _ => unreachable!(),
-        };
+        let mut profile = loaded(V2);
         assert_eq!(resolve_user(&profile, &users), Ok(10));
         profile.user = ProfileUserTarget::default();
         assert_eq!(resolve_user(&profile, &users), Ok(0));
@@ -642,10 +1040,7 @@ actions:
 
     #[test]
     fn device_constraints_report_every_mismatch() {
-        let profile = match inspect_text(V2, Path::new("profile.yaml")).unwrap() {
-            ProfileDocument::Current { profile } => profile,
-            _ => unreachable!(),
-        };
+        let profile = loaded(V2);
         let issues = device_match_issues(&profile, "XYZ", Some("Samsung"), Some("S24"), Some(29));
         assert_eq!(issues.len(), 2);
         assert!(issues.iter().any(|issue| issue.contains("manufacturer")));
@@ -654,10 +1049,7 @@ actions:
 
     #[test]
     fn requests_bind_one_reviewed_user_and_source() {
-        let profile = match inspect_text(V2, Path::new("profile.yaml")).unwrap() {
-            ProfileDocument::Current { profile } => profile,
-            _ => unreachable!(),
-        };
+        let profile = loaded(V2);
         let target = DeviceTarget {
             serial: "abc-123".into(),
             transport_id: Some(4),
@@ -669,25 +1061,35 @@ actions:
             transport_kind: crate::adb::DeviceTransportKind::Usb,
             untrusted_transport_override: false,
         };
-        let requests = requests_for(&profile, &target, 10, ConfirmationSource::CliApply);
-        assert!(requests.iter().all(|request| request.user_id == 10));
-        assert!(requests
+        let resolved = resolve(&profile, &target, 10, &[], ConfirmationSource::CliApply);
+        assert!(resolved
+            .requests
             .iter()
-            .all(|request| request.context.confirmation_source == ConfirmationSource::CliApply));
+            .all(|resolved| resolved.request.user_id == 10));
+        assert!(resolved.requests.iter().all(|resolved| {
+            resolved.request.context.confirmation_source == ConfirmationSource::CliApply
+        }));
     }
 
     #[test]
     fn serialization_round_trip_is_current_and_deterministic() {
-        let profile = match inspect_text(V2, Path::new("profile.yaml")).unwrap() {
-            ProfileDocument::Current { profile } => profile,
-            _ => unreachable!(),
-        };
+        let profile = loaded(V3);
         let first = serialize(&profile).unwrap();
         let second = serialize(&profile).unwrap();
         assert_eq!(first, second);
         assert!(matches!(
             inspect_text(&first, Path::new("roundtrip.yaml")).unwrap(),
             ProfileDocument::Current { .. }
+        ));
+
+        // A v2 document round-trips just as deterministically, and comes back
+        // as loadable-with-an-upgrade rather than as an error.
+        let v2 = loaded(V2);
+        let encoded = serialize(&v2).unwrap();
+        assert_eq!(encoded, serialize(&v2).unwrap());
+        assert!(matches!(
+            inspect_text(&encoded, Path::new("roundtrip-v2.yaml")).unwrap(),
+            ProfileDocument::UpgradeAvailable { .. }
         ));
     }
 }

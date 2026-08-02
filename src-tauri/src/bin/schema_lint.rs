@@ -113,6 +113,7 @@ fn validate(kind: SchemaKind, path: &Path) -> Result<usize, String> {
         SchemaKind::Profile => profile::inspect(path)
             .map(|document| match document {
                 profile::ProfileDocument::Current { profile } => profile.actions.len(),
+                profile::ProfileDocument::UpgradeAvailable { profile, .. } => profile.actions.len(),
                 profile::ProfileDocument::MigrationAvailable { migration } => {
                     migration.profile.actions.len()
                 }

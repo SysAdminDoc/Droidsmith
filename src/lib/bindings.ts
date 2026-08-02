@@ -1869,6 +1869,34 @@ export type FastbootDevice = {
   product: string | null;
   parse_error?: string | null;
 };
+/**
+ * A package a predicate could not decide, and therefore did not select.
+ */
+export type FilterExclusion = {
+  action_index: number;
+  filter: string;
+  package: string;
+  /**
+   * The attribute the device did not report.
+   */
+  attribute: string;
+};
+/**
+ * What one filter action selected from the live inventory.
+ */
+export type FilterMatch = {
+  /**
+   * 1-based position in `profile.actions`.
+   */
+  action_index: number;
+  filter: string;
+  kind: ActionKind;
+  /**
+   * Matched packages, sorted, so the same device and profile always produce
+   * the same reviewable order.
+   */
+  packages: string[];
+};
 export type FindingSeverity = "info" | "warning" | "error";
 /**
  * Result of observing a device's current build fingerprint against the last
@@ -2737,9 +2765,25 @@ export type Profile = {
   user?: ProfileUserTarget;
   actions: ProfileAction[];
 };
+/**
+ * One step of a profile: either a concrete package, or — from schema v3 — a
+ * predicate resolved against the live inventory at plan time.
+ *
+ * Exactly one of the two is set. They are separate fields rather than an
+ * enum because a v2 document must keep deserializing byte-for-byte, and
+ * because YAML with a tag discriminator is markedly worse to hand-author.
+ */
 export type ProfileAction = {
   kind: ActionKind;
+  /**
+   * A concrete package id. Empty when `filter` is set.
+   */
   package: string;
+  /**
+   * A schema-v3 predicate over package attributes. Empty when `package` is
+   * set. See [`crate::profile_filter`] for the grammar.
+   */
+  filter: string;
   note?: string;
 };
 export type ProfileDeviceMatch = {
@@ -2763,6 +2807,16 @@ export type ProfilePreview = {
   compatibility_issues: string[];
   android_user: number | null;
   rows: ProfilePreviewRow[];
+  /**
+   * What each schema-v3 filter step selected from the live inventory,
+   * including steps that selected nothing.
+   */
+  filter_matches: FilterMatch[];
+  /**
+   * Packages a filter could not decide, and therefore excluded. Shown, not
+   * dropped.
+   */
+  filter_exclusions: FilterExclusion[];
 };
 export type ProfilePreviewRow = {
   action: ProfileAction;

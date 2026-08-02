@@ -307,7 +307,9 @@ export default function ProfilesRoute() {
             (action) => action.package === pkg && action.kind === actionKind,
           ),
       )
-      .map((pkg) => ({ kind: actionKind, package: pkg }));
+      // The authoring surface builds concrete steps; v3 filter predicates are
+      // hand-written into the YAML and resolved at import.
+      .map((pkg) => ({ kind: actionKind, package: pkg, filter: "" }));
     setActions((current) => [...current, ...additions]);
     setSelectedPackages(new Set());
     setNotice(null);
@@ -991,6 +993,56 @@ function ProfileDiff({
             <ul className="mt-2 list-disc space-y-1 ps-5 text-sm text-red-100/90">
               {preview.compatibility_issues.map((issue) => (
                 <li key={issue}>{issue}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+        {preview.filter_matches.length > 0 && (
+          /* A v3 filter step is only reviewable if the review names every
+             package it chose — including when it chose none. */
+          <div className="mt-4 rounded-md border border-white/10 bg-white/[0.02] p-4">
+            <p className="text-sm font-semibold text-anvil-50">
+              {t("profiles.filterMatchesTitle")}
+            </p>
+            <ul className="mt-2 space-y-2 text-sm text-anvil-300">
+              {preview.filter_matches.map((match) => (
+                <li key={match.action_index}>
+                  <code className="font-mono text-xs text-circuit-200">
+                    {match.filter}
+                  </code>
+                  <p className="mt-1 text-xs text-anvil-400">
+                    {match.packages.length === 0
+                      ? t("profiles.filterMatchedNone")
+                      : t("profiles.filterMatchedSome", {
+                          count: match.packages.length,
+                          packages: match.packages.join(", "),
+                        })}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+        {preview.filter_exclusions.length > 0 && (
+          /* Undecidable is not the same as unmatched, so it gets its own
+             block rather than being absent from the review. */
+          <div className="mt-4 rounded-md border border-amber-300/20 bg-amber-300/[0.06] p-4">
+            <p className="text-sm font-semibold text-amber-100">
+              {t("profiles.filterExclusionsTitle", {
+                count: preview.filter_exclusions.length,
+              })}
+            </p>
+            <p className="mt-1 text-xs text-anvil-300">
+              {t("profiles.filterExclusionsBody")}
+            </p>
+            <ul className="mt-2 space-y-1 text-xs text-anvil-300">
+              {preview.filter_exclusions.map((exclusion) => (
+                <li key={`${exclusion.action_index}:${exclusion.package}`}>
+                  <code className="font-mono">{exclusion.package}</code> —{" "}
+                  {t("profiles.filterExclusionReason", {
+                    attribute: exclusion.attribute,
+                  })}
+                </li>
               ))}
             </ul>
           </div>
