@@ -941,7 +941,7 @@ dependencies = [
 
 [[package]]
 name = "droidsmith"
-version = "0.9.14"
+version = "0.9.15"
 dependencies = [
  "base64 0.22.1",
  "libc",
