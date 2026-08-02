@@ -684,8 +684,9 @@ function validatePlatformToolsPolicy() {
 
 export function validatePlatformToolsDocumentation(policy, readme) {
   const expected = `reviewed on ${policy.reviewedOn}, recommends ${policy.recommendedVersion}, and warns (without blocking) below\n${policy.warningBelowVersion}`;
+  const normalizedReadme = readme.replace(/\r\n/gu, "\n");
   assert(
-    readme.includes(expected),
+    normalizedReadme.includes(expected),
     "README Platform Tools policy summary differs from platform-tools-policy.json",
   );
 }

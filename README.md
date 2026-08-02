@@ -4,7 +4,7 @@
 
 <h1 align="center">Droidsmith</h1>
 
-![Version](https://img.shields.io/badge/version-0.9.15-cyan)
+![Version](https://img.shields.io/badge/version-0.9.16-cyan)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Platforms](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-blue)
 
@@ -103,7 +103,7 @@ validation. Detected data entries are not a promise of completeness or future
 restore compatibility; Droidsmith does not present `adb restore` as a reliable
 recovery path.
 
-The source tree and manifests are version `0.9.15`. As checked on 2026-08-01,
+The source tree and manifests are version `0.9.16`. As checked on 2026-08-01,
 the newest downloadable GitHub artifact is the older
 [v0.5.3 release](https://github.com/SysAdminDoc/Droidsmith/releases/tag/v0.5.3),
 published on 2026-07-17; changes after that tag are available from source but
@@ -190,13 +190,13 @@ guidance. The plugin API and marketplace remain deferred.
 
 | Contract | Supported value |
 |---|---|
-| Droidsmith source/manifests | `0.9.15` |
+| Droidsmith source/manifests | `0.9.16` |
 | Node.js | `^22.12.0 \|\| >=24.0.0` |
 | Rust | `>=1.90` |
 | Tauri | `2.x` |
 | Android SDK Platform Tools | `37.0.0` recommended; warn below `36.0.2` |
 | Pack / quirk documents | schema `"1"` / `"1"` |
-| Profile documents | schema `"2"`; v1 has a reviewed import migration |
+| Profile documents | schema `"3"`; v1 has a reviewed import migration |
 
 The release gate derives these rows from the manifests and schema policies, so
 stale documentation fails before packaging. Release artifacts are unsigned and

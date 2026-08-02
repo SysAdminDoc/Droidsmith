@@ -14,6 +14,8 @@ completion.
 Working batches live here. Sections collapse into a versioned release on
 each milestone tag.
 
+## [0.9.16] - 2026-08-01
+
 ### Added
 
 - **Device selection resolves Android codenames offline.** A cited, revisioned
