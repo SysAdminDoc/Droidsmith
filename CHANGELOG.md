@@ -14,6 +14,16 @@ completion.
 Working batches live here. Sections collapse into a versioned release on
 each milestone tag.
 
+## [0.9.17] - 2026-08-02
+
+### Changed
+
+- **The visual system is more compact and deliberate.** Shared navigation,
+  headers, cards, controls, state panels, fields, and tables now use a slim
+  rail, hairline section rules, tighter spacing, restrained corners, and
+  clearer typographic hierarchy across every menu route. A generated design
+  reference is preserved at `docs/mockups/premium-visual-system-2026-08-02.png`.
+
 ## [0.9.16] - 2026-08-01
 
 ### Added
