@@ -288,14 +288,14 @@ export default function App() {
       <div className="relative flex min-h-full min-w-0 flex-col lg:h-full lg:min-h-0 lg:flex-row">
         <aside
           ref={sidebarRef}
-          className="border-b border-white/10 bg-[#07111a] px-3 py-3 lg:sticky lg:top-0 lg:flex lg:h-full lg:w-[15.5rem] lg:shrink-0 lg:flex-col lg:overflow-y-auto lg:border-b-0 lg:border-e lg:border-white/[0.13] lg:px-3 lg:py-3"
+          className="border-b border-white/10 bg-[#07131b] px-2.5 py-2.5 lg:sticky lg:top-0 lg:flex lg:h-full lg:w-[12rem] lg:shrink-0 lg:flex-col lg:overflow-y-auto lg:border-b-0 lg:border-e lg:border-white/[0.13] lg:px-2 lg:py-2.5"
           aria-label={t("app.sidebarLabel")}
         >
-          <div className="flex items-center justify-between gap-4 border-b border-white/[0.08] pb-3">
+          <div className="flex items-center justify-between gap-3 border-b border-white/[0.08] pb-2.5">
             <Brand state={hb} />
             <button
               type="button"
-              className="grid h-9 w-9 shrink-0 place-items-center rounded-[0.2rem] text-anvil-400 transition hover:bg-white/[0.06] hover:text-anvil-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-circuit-300"
+              className="grid h-8 w-8 shrink-0 place-items-center rounded-[0.12rem] text-anvil-400 transition hover:bg-white/[0.06] hover:text-anvil-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-circuit-300"
               aria-label={t("palette.title")}
               title={`${t("palette.title")} (Ctrl+K)`}
               onClick={() => palette.setOpen(true)}
@@ -315,7 +315,7 @@ export default function App() {
           </div>
 
           <nav
-            className="nav-strip mt-2 flex snap-x gap-1.5 overflow-x-auto pb-2 text-sm lg:block lg:space-y-0.5 lg:overflow-visible lg:pb-0"
+            className="nav-strip mt-2 flex snap-x gap-1 overflow-x-auto pb-2 text-sm lg:block lg:space-y-0.5 lg:overflow-visible lg:pb-0"
             aria-label={t("app.primaryNav")}
           >
             {NAV_ITEMS.map((item) => (
@@ -331,7 +331,7 @@ export default function App() {
             ))}
           </nav>
 
-          <div className="mt-3 lg:mt-auto lg:border-t lg:border-white/[0.1] lg:pt-2">
+          <div className="mt-2 lg:mt-auto lg:border-t lg:border-white/[0.1] lg:pt-2">
             <ShellActions
               onOpenSettings={() => setShowSettings(true)}
               onOpenGuide={() => setShowOnboarding(true)}
@@ -349,7 +349,7 @@ export default function App() {
           id="main-content"
           tabIndex={-1}
           aria-label={t(activeItem.labelKey)}
-          className="technical-canvas min-w-0 flex-1 overflow-auto px-3 py-3 outline-none sm:px-4 lg:h-full lg:px-4 lg:py-3 xl:px-5"
+          className="technical-canvas min-w-0 flex-1 overflow-auto px-3 py-2.5 outline-none sm:px-4 lg:h-full lg:px-4 lg:py-2.5 xl:px-5"
         >
           <div className="mx-auto max-w-[96rem]">
             <LazyRoute item={activeItem} />
@@ -959,11 +959,11 @@ function NavStub({
       aria-current={active ? "page" : undefined}
       aria-describedby={`${item.id}-description`}
       className={cn(
-        "group relative flex min-h-10 min-w-[11.5rem] items-center gap-3 rounded-[0.15rem] px-3 py-2 text-start transition duration-150 lg:min-w-0",
+        "group relative flex min-h-9 min-w-[11.5rem] items-center gap-2.5 rounded-none px-2.5 py-1.5 text-start text-[0.7rem] uppercase tracking-[0.08em] transition duration-150 lg:min-w-0",
         "snap-start",
         "focus:outline-none focus-visible:ring-2 focus-visible:ring-circuit-300 focus-visible:ring-offset-2 focus-visible:ring-offset-anvil-950",
         active
-          ? "bg-circuit-300/[0.09] text-circuit-100 before:absolute before:inset-y-0 before:start-0 before:w-0.5 before:bg-circuit-300"
+          ? "bg-circuit-300/[0.08] text-circuit-100 before:absolute before:inset-y-0 before:start-0 before:w-0.5 before:bg-circuit-300"
           : "text-anvil-300 hover:bg-white/[0.04] hover:text-anvil-50",
       )}
     >
@@ -983,7 +983,7 @@ function LogoMark() {
     <img
       src={droidsmithLogo}
       alt=""
-      className="h-9 w-9 shrink-0 rounded-[0.2rem]"
+      className="h-8 w-8 shrink-0 rounded-[0.12rem]"
       aria-hidden="true"
     />
   );

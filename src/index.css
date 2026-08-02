@@ -19,7 +19,7 @@
 
   body {
     @apply bg-anvil-950 font-sans text-anvil-100 antialiased;
-    font-size: 15px;
+    font-size: 14px;
     font-feature-settings:
       "cv02" 1,
       "cv03" 1,
@@ -53,9 +53,7 @@
 
   :root[data-theme="light"] .technical-canvas {
     background-color: #eef2f6;
-    background-image:
-      linear-gradient(rgb(15 23 42 / 0.05) 1px, transparent 1px),
-      linear-gradient(90deg, rgb(15 23 42 / 0.04) 1px, transparent 1px);
+    background-image: none;
   }
 
   button,
@@ -128,11 +126,8 @@
   }
 
   .technical-canvas {
-    background-color: #080f16;
-    background-image:
-      linear-gradient(rgb(255 255 255 / 0.012) 1px, transparent 1px),
-      linear-gradient(90deg, rgb(255 255 255 / 0.009) 1px, transparent 1px);
-    background-size: 36px 36px;
+    background-color: #091219;
+    background-image: none;
   }
 
   .route-frame {
@@ -142,6 +137,32 @@
   .route-frame > header + section,
   .route-frame > header + div + section {
     scroll-margin-top: 1rem;
+  }
+
+  /* Shared visual language: route surfaces use hairlines and shallow corners,
+     not a stack of floating rounded cards. Keep dialogs and status controls
+     free to retain their own shape. */
+  .route-frame [class~="rounded-lg"],
+  .route-frame [class~="rounded-xl"],
+  .route-frame [class~="rounded-2xl"],
+  .route-frame [class~="rounded-3xl"] {
+    border-radius: 0.25rem;
+  }
+
+  .route-frame [class~="border-white/10"] {
+    border-color: rgb(255 255 255 / 0.085);
+  }
+
+  .route-frame table {
+    border-collapse: collapse;
+  }
+
+  .route-frame thead {
+    background-color: rgb(255 255 255 / 0.018);
+  }
+
+  .route-frame :is(input, select, textarea):focus {
+    outline: none;
   }
 
   .runtime-rail {
