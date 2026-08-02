@@ -63,7 +63,7 @@ export function DeviceToolbar({
             }
             value={String(device.transport_id ?? device.serial)}
           >
-            {device.model ?? device.serial}
+            {device.marketing_name ?? device.model ?? device.serial}
           </option>
         ))}
       </FieldSelect>
@@ -174,10 +174,12 @@ export function DeviceTable({
                   <TableCell>
                     <div className="min-w-[13rem]">
                       <p className="font-medium text-anvil-100">
-                        {device.model ?? t("devices.unknownModel")}
+                        {device.marketing_name ??
+                          device.model ??
+                          t("devices.unknownModel")}
                       </p>
                       <p className="mt-1 text-xs text-anvil-400">
-                        {[device.product, device.device]
+                        {[device.product, device.device, device.marketing_name]
                           .filter(Boolean)
                           .join(" / ") || t("devices.noProductMetadata")}
                       </p>

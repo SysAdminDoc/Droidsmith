@@ -1518,6 +1518,7 @@ mod tests {
             model: None,
             product: None,
             device: None,
+            marketing_name: None,
             build_fingerprint: Some("build/test".into()),
             transport_kind: crate::adb::DeviceTransportKind::Usb,
             untrusted_transport_override: false,

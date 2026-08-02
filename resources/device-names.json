@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "source": "https://developers.google.com/android/images",
+  "revision_date": "2026-08-01",
+  "devices": {
+    "oriole": "Pixel 6",
+    "raven": "Pixel 6 Pro",
+    "bluejay": "Pixel 6a",
+    "panther": "Pixel 7",
+    "cheetah": "Pixel 7 Pro",
+    "lynx": "Pixel 7a",
+    "shiba": "Pixel 8",
+    "husky": "Pixel 8 Pro",
+    "akita": "Pixel 8a",
+    "komodo": "Pixel 9 Pro XL",
+    "caiman": "Pixel 9 Pro",
+    "tokay": "Pixel 9",
+    "comet": "Pixel 9 Pro Fold",
+    "felix": "Pixel Fold",
+    "tangorpro": "Pixel Tablet"
+  }
+}

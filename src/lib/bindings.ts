@@ -168,6 +168,10 @@ export const commands = {
   async listDevices(): Promise<ListDevicesResult> {
     return await TAURI_INVOKE("list_devices");
   },
+  /** Read-only Android 17 app memory-limiter status. */
+  async getAppMemoryLimit(target: DeviceTarget): Promise<AppMemoryLimit> {
+    return await TAURI_INVOKE("get_app_memory_limit", { target });
+  },
   /**
    * Maintain one app-wide live device snapshot. The frontend starts this once
    * and all routes subscribe to the renderer's shared external store instead
@@ -1621,6 +1625,8 @@ export type Device = {
    * Optional `device:` field — the kernel device codename.
    */
   device: string | null;
+  /** Offline marketing name resolved from the bundled codename map. */
+  marketing_name: string | null;
   /**
    * USB bus address reported by the structured tracker. Legacy inventory
    * output does not carry this field.
@@ -1666,6 +1672,12 @@ export type Device = {
    * rather than a hardware serial.
    */
   wireless: boolean;
+};
+export type AppMemoryLimit = {
+  sdk_level: number | null;
+  status: string;
+  limit_kb: number | null;
+  detail: string | null;
 };
 export type DeviceConnectionType = "unknown" | "usb" | "socket";
 export type DeviceInfo = {

@@ -45,7 +45,8 @@ pub use device::{
     DeviceState, DeviceTarget, DeviceTransportKind,
 };
 pub use device_info::{
-    get_device_info, get_wireless_debugging_risk, DeviceInfo, WirelessDeviceRisk,
+    get_device_info, get_wireless_debugging_risk, probe_app_memory_limit, AppMemoryLimit,
+    DeviceInfo, WirelessDeviceRisk,
 };
 pub use device_settings::{
     command_preview, put_argv, read_device_settings, spec_key, spec_namespace, validate_write,

@@ -51,7 +51,7 @@ use commands::{
     cancel_operation, capture_bugreport, capture_layout, capture_perfetto_trace, connect_wireless,
     disconnect_device, explain_failure, explain_package_hazards, export_device_pack,
     export_package_apks, export_recovery_baseline, export_settings, extract_apk, fastboot_getvar,
-    find_gnirehtet_session, forget_wireless_endpoint, get_device_info,
+    find_gnirehtet_session, forget_wireless_endpoint, get_app_memory_limit, get_device_info,
     get_package_action_capabilities, get_package_metadata, get_settings_mirror_preset,
     gnirehtet_session_status, grant_dropped_path, has_settings_import_backup, heartbeat,
     import_pack, initialize_settings, inspect_fleet_report, inspect_profile,

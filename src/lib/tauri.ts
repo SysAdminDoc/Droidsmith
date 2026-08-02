@@ -5,6 +5,7 @@ import {
   type ActionContext as GeneratedActionContext,
   type ActionRequest as GeneratedActionRequest,
   type AdbRecoveryResult,
+  type AppMemoryLimit,
   type AndroidUser,
   type AppPackage,
   type AppPackageMetadata,
@@ -439,6 +440,12 @@ export async function callRunHostDoctor(): Promise<HostDoctorReport> {
 
 export async function callListDevices(): Promise<ListDevicesResult> {
   return commands.listDevices();
+}
+
+export async function callGetAppMemoryLimit(
+  target: GeneratedDeviceTarget,
+): Promise<AppMemoryLimit> {
+  return commands.getAppMemoryLimit(target);
 }
 
 export async function callWatchDevices(

@@ -760,6 +760,7 @@ mod tests {
                 model: Some("Pixel".to_string()),
                 product: None,
                 device: None,
+                marketing_name: None,
                 bus_address: None,
                 connection_type: None,
                 negotiated_speed: None,

@@ -122,6 +122,7 @@ fn parse_proto_device(tokens: &[TextProtoToken], cursor: &mut usize) -> Result<D
         model,
         product,
         device: device_name,
+        marketing_name: None,
         bus_address,
         connection_type,
         negotiated_speed,

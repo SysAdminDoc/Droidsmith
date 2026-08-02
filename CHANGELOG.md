@@ -14,6 +14,26 @@ completion.
 Working batches live here. Sections collapse into a versioned release on
 each milestone tag.
 
+### Added
+
+- **Device selection resolves Android codenames offline.** A cited, revisioned
+  resource maps common codenames to marketing names while retaining the raw
+  codename and serial; unknown values remain unchanged. (R-131)
+- **Onboarding follows live readiness.** The tour opens on the current ADB
+  problem, marks probe-backed steps resolved, shows the host platform for the
+  driver step, and keeps the connection doctor beside the live device state.
+  (IMP-110)
+- **High-risk route guards have direct tests.** Apps export review, Mirror
+  encoder recovery, and Debloat queue verification/device-switch safety now
+  run as focused Vitest suites. (IMP-111)
+- **A persisted light theme is available from the shell and settings.** The
+  root theme attribute updates immediately and keeps the existing forced-colors
+  and reduced-motion behavior intact. (IMP-112)
+- **Android 17 memory-limiter status is visible in Process Manager.** SDK 37+
+  devices are probed with the read-only `am memory-limiter` command; older or
+  unsupported devices report an explicit unsupported/unknown state and no
+  mutating forms are exposed. (R-132)
+
 ## [0.9.15] - 2026-08-01
 
 ### Added

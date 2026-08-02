@@ -30,6 +30,19 @@ pub fn list_devices() -> Result<ListDevicesResult, adb::TransportError> {
     collect_devices(&transport, &mut fingerprints)
 }
 
+/// Read the Android 17 app memory limiter status. The probe is intentionally
+/// read-only and reports unsupported/unknown on older or OEM devices.
+#[tauri::command]
+#[specta::specta]
+pub fn get_app_memory_limit(
+    target: adb::DeviceTarget,
+) -> Result<adb::device_info::AppMemoryLimit, CommandError> {
+    let transport = validated_transport(&target)?;
+    Ok(adb::device_info::probe_app_memory_limit(
+        &transport, &target,
+    )?)
+}
+
 pub(crate) fn collect_devices(
     transport: &adb::ShellTransport,
     fingerprint_cache: &mut HashMap<String, String>,
@@ -69,6 +82,10 @@ fn collect_device_snapshot(
                 })
         };
         device.build_fingerprint = fingerprint;
+        device.marketing_name = device
+            .device
+            .as_deref()
+            .and_then(adb::device_info::marketing_name);
     }
     let live_keys: std::collections::HashSet<String> = devices
         .iter()

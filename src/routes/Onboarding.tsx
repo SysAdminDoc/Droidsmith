@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { Badge, Button, Card } from "./common";
+import { useDeviceStore } from "../lib/deviceStore";
 import HostDoctor from "./HostDoctor";
 
 type Step = {
@@ -69,9 +70,45 @@ export default function OnboardingTour({
   onDismiss: () => void;
 }) {
   const { t } = useTranslation();
+  const devicesState = useDeviceStore((store) => store.devicesState);
+  const snapshot = devicesState.kind === "ok" ? devicesState.value : null;
+  const suggestedStep = useMemo(() => {
+    if (!snapshot) return 0;
+    if (!snapshot.adb_resolved) return 2;
+    if (snapshot.devices.some((device) => device.state === "unauthorized")) {
+      return 3;
+    }
+    if (snapshot.devices.length === 0) return 1;
+    return 0;
+  }, [snapshot]);
   const [step, setStep] = useState(0);
+  useEffect(() => {
+    if (step === 0 && suggestedStep > 0) setStep(suggestedStep);
+  }, [step, suggestedStep]);
   const current = STEPS[step]!;
   const isLast = step === STEPS.length - 1;
+  const resolved = [
+    false,
+    Boolean(snapshot?.devices.length),
+    Boolean(snapshot?.adb_resolved),
+    Boolean(
+      snapshot?.devices.some((device) => device.state === "device") &&
+      !snapshot.devices.some((device) => device.state === "unauthorized"),
+    ),
+    Boolean(
+      snapshot?.devices.some((device) => device.transport_kind === "tls_wifi"),
+    ),
+  ];
+  const platform =
+    typeof navigator === "undefined"
+      ? "unknown"
+      : /Mac/u.test(navigator.platform)
+        ? "macOS"
+        : /Linux/u.test(navigator.platform)
+          ? "Linux"
+          : /Win/u.test(navigator.platform)
+            ? "Windows"
+            : "unknown";
 
   return (
     <Card
@@ -110,7 +147,17 @@ export default function OnboardingTour({
       <div className="mt-6">
         <h3 className="text-base font-semibold text-anvil-50">
           {t(current.titleKey)}
+          {resolved[step] && (
+            <Badge tone="success" className="ms-2 align-middle">
+              {t("runtime.resolved")}
+            </Badge>
+          )}
         </h3>
+        {step === 2 && (
+          <p className="mt-1 text-xs text-anvil-500">
+            {t("runtime.os")}: {platform}
+          </p>
+        )}
         <ol className="mt-4 space-y-3">
           {current.contentKeys.map((lineKey, index) => (
             <li
@@ -160,8 +207,63 @@ export default function OnboardingTour({
       </div>
 
       <div className="mt-6 border-t border-white/10 pt-6">
+        <LiveDeviceReadiness />
         <HostDoctor />
       </div>
     </Card>
+  );
+}
+
+function LiveDeviceReadiness() {
+  const { t } = useTranslation();
+  const devicesState = useDeviceStore((store) => store.devicesState);
+  const snapshot = devicesState.kind === "ok" ? devicesState.value : null;
+  const unauthorized =
+    snapshot?.devices.filter(
+      (device) =>
+        device.state === "unauthorized" || device.state === "authorizing",
+    ).length ?? 0;
+  const ready =
+    snapshot?.devices.filter((device) => device.state === "device").length ?? 0;
+  const tone =
+    devicesState.kind === "error" ||
+    (snapshot && !snapshot.adb_resolved) ||
+    (snapshot && snapshot.devices.length === 0)
+      ? "warning"
+      : unauthorized > 0
+        ? "warning"
+        : ready > 0
+          ? "success"
+          : "info";
+  const label =
+    devicesState.kind === "loading"
+      ? t("devices.scanning")
+      : devicesState.kind === "error"
+        ? t("devices.scanFailed")
+        : snapshot && !snapshot.adb_resolved
+          ? t("devices.adbMissing")
+          : unauthorized > 0
+            ? t("devices.authorize")
+            : ready > 0
+              ? t("devices.adbReady")
+              : t("devices.noDevices");
+  return (
+    <div className="mb-4 rounded-md border border-white/10 bg-white/[0.025] p-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-xs font-semibold uppercase tracking-[0.12em] text-anvil-400">
+          {t("devices.connected")}
+        </span>
+        <Badge tone={tone}>{label}</Badge>
+      </div>
+      <p className="mt-2 text-xs leading-5 text-anvil-400">
+        {snapshot && ready > 0
+          ? t("devices.selectHint")
+          : unauthorized > 0
+            ? t("devices.authorizeOneBody", { serial: "…" })
+            : snapshot && snapshot.devices.length > 0
+              ? t("devices.unusableStateBody")
+              : t("devices.noDevicesStep1")}
+      </p>
+    </div>
   );
 }

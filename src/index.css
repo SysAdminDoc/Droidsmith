@@ -7,6 +7,10 @@
     color-scheme: dark;
   }
 
+  :root[data-theme="light"] {
+    color-scheme: light;
+  }
+
   html,
   body,
   #root {
@@ -22,6 +26,36 @@
       "cv04" 1,
       "cv11" 1;
     text-rendering: optimizeLegibility;
+  }
+
+  :root[data-theme="light"] body {
+    background: #f3f6f9;
+    color: #1c2733;
+  }
+
+  :root[data-theme="light"] .bg-anvil-950,
+  :root[data-theme="light"] .bg-anvil-900,
+  :root[data-theme="light"] .bg-surface-dialog {
+    background-color: #f8fafc !important;
+  }
+
+  :root[data-theme="light"] .text-anvil-50,
+  :root[data-theme="light"] .text-anvil-100 {
+    color: #1c2733 !important;
+  }
+
+  :root[data-theme="light"] .text-anvil-200,
+  :root[data-theme="light"] .text-anvil-300,
+  :root[data-theme="light"] .text-anvil-400,
+  :root[data-theme="light"] .text-anvil-500 {
+    color: #526170 !important;
+  }
+
+  :root[data-theme="light"] .technical-canvas {
+    background-color: #eef2f6;
+    background-image:
+      linear-gradient(rgb(15 23 42 / 0.05) 1px, transparent 1px),
+      linear-gradient(90deg, rgb(15 23 42 / 0.04) 1px, transparent 1px);
   }
 
   button,

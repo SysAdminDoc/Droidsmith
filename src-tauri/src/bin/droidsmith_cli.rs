@@ -2254,6 +2254,7 @@ mod tests {
             model: None,
             product: None,
             device: None,
+            marketing_name: None,
             bus_address: None,
             connection_type: None,
             negotiated_speed: None,

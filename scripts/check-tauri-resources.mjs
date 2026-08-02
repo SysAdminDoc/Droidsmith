@@ -26,6 +26,10 @@ const entries = Object.entries(resources).map(([source, target]) => ({
 
 for (const expected of [
   { sourceDir: path.join(repoRoot, "quirks"), target: "quirks/" },
+  {
+    sourceDir: path.join(repoRoot, "resources", "device-names.json"),
+    target: "device-names.json",
+  },
 ]) {
   const match = entries.find(
     (entry) =>
@@ -38,13 +42,27 @@ for (const expected of [
     );
   }
 
-  const yamlFiles = fs
-    .readdirSync(expected.sourceDir)
-    .filter((name) => /\.(ya?ml)$/i.test(name));
-  if (yamlFiles.length === 0) {
-    throw new Error(
-      `${expected.sourceDir} must contain at least one YAML resource`,
-    );
+  if (expected.sourceDir.endsWith("device-names.json")) {
+    const map = JSON.parse(fs.readFileSync(expected.sourceDir, "utf8"));
+    if (
+      map.schema_version !== 1 ||
+      typeof map.source !== "string" ||
+      typeof map.revision_date !== "string" ||
+      !map.devices ||
+      Array.isArray(map.devices) ||
+      Object.values(map.devices).some((name) => typeof name !== "string")
+    ) {
+      throw new Error("resources/device-names.json has an invalid schema");
+    }
+  } else {
+    const yamlFiles = fs
+      .readdirSync(expected.sourceDir)
+      .filter((name) => /\.(ya?ml)$/i.test(name));
+    if (yamlFiles.length === 0) {
+      throw new Error(
+        `${expected.sourceDir} must contain at least one YAML resource`,
+      );
+    }
   }
 }
 

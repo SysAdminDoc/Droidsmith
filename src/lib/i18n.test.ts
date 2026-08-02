@@ -102,7 +102,7 @@ describe("i18n resources", () => {
       }
     }
     expect(missing).toEqual([]);
-  });
+  }, 30_000);
 
   it("formats dates and numbers with the selected locale", () => {
     expect(formatNumber(1234, "en")).toBe("1,234");

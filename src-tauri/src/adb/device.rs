@@ -22,6 +22,10 @@ pub struct Device {
     pub product: Option<String>,
     /// Optional `device:` field — the kernel device codename.
     pub device: Option<String>,
+    /// Offline marketing name resolved from the bundled codename map. `None`
+    /// means the codename was absent or is not mapped; the raw codename is
+    /// always retained in `device`.
+    pub marketing_name: Option<String>,
     /// USB bus address reported by the structured tracker. Legacy inventory
     /// output does not carry this field.
     pub bus_address: Option<String>,
@@ -462,6 +466,7 @@ mod tests {
                 model: None,
                 product: None,
                 device: None,
+                marketing_name: None,
                 bus_address: None,
                 connection_type: None,
                 negotiated_speed: None,

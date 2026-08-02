@@ -5,10 +5,12 @@ import { useFocusTrap } from "../../lib/useFocusTrap";
 import {
   errorMessage,
   callApplyAction,
+  callGetAppMemoryLimit,
   callListProcesses,
   callPlanAction,
   type DeviceTarget,
   type ProcessInfo,
+  type AppMemoryLimit,
 } from "../../lib/tauri";
 import { useTargetOperation } from "../../lib/targetOperation";
 import { Badge, Button, Card, EmptyState, FieldInput } from "../common";
@@ -29,6 +31,7 @@ export function ProcessManager({ target }: { target: DeviceTarget }) {
   const [confirmPackage, setConfirmPackage] = useState<string | null>(null);
   const [stopping, setStopping] = useState<string | null>(null);
   const [stopError, setStopError] = useState<string | null>(null);
+  const [memoryLimit, setMemoryLimit] = useState<AppMemoryLimit | null>(null);
   const confirmTrapRef = useFocusTrap<HTMLDivElement>(confirmPackage !== null);
 
   useEffect(() => {
@@ -38,7 +41,22 @@ export function ProcessManager({ target }: { target: DeviceTarget }) {
     setConfirmPackage(null);
     setStopping(null);
     setStopError(null);
+    setMemoryLimit(null);
   }, [target.connection_generation, target.serial, target.transport_id]);
+
+  useEffect(() => {
+    let active = true;
+    void callGetAppMemoryLimit(target)
+      .then((value) => {
+        if (active) setMemoryLimit(value);
+      })
+      .catch(() => {
+        if (active) setMemoryLimit(null);
+      });
+    return () => {
+      active = false;
+    };
+  }, [target]);
 
   useEffect(() => {
     if (!confirmPackage) return;
@@ -155,6 +173,24 @@ export function ProcessManager({ target }: { target: DeviceTarget }) {
           className="border-b border-red-500/20 bg-red-500/10 px-4 py-3 text-xs text-red-200"
         >
           {stopError}
+        </div>
+      )}
+      {memoryLimit && (
+        <div className="border-b border-white/10 bg-white/[0.02] px-4 py-3 text-xs text-anvil-300">
+          <span className="font-medium text-anvil-100">
+            {t("devices.controls.memoryLimitTitle")}
+          </span>{" "}
+          {memoryLimit.status === "unsupported"
+            ? t("devices.controls.memoryLimitUnsupported")
+            : memoryLimit.status === "available"
+              ? memoryLimit.limit_kb
+                ? t("devices.controls.memoryLimitValue", {
+                    value: formatKb(memoryLimit.limit_kb),
+                  })
+                : t("devices.controls.memoryLimitDetected", {
+                    detail: memoryLimit.detail ?? "",
+                  })
+              : t("devices.controls.memoryLimitUnknown")}
         </div>
       )}
       {confirmPackage && (

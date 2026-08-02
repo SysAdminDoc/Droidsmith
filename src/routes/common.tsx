@@ -183,7 +183,7 @@ export function DevicePicker({
             size="sm"
             onClick={() => onSelect(d)}
           >
-            {d.model ?? d.serial}
+            {d.marketing_name ?? d.model ?? d.serial}
           </Button>
         ))}
       </div>

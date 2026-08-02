@@ -3,11 +3,43 @@
 //! Used by the R-013 device dashboard to show model, Android version,
 //! battery, storage, and network details for a selected device.
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::sync::OnceLock;
 
 use crate::adb::device::DeviceTarget;
 use crate::adb::security_patch::{classify_wireless_debugging_risk, WirelessDebuggingRisk};
 use crate::adb::transport::{AdbTransport, TransportError};
+
+#[derive(Debug, Deserialize)]
+struct DeviceNameMap {
+    schema_version: u32,
+    source: String,
+    revision_date: String,
+    devices: HashMap<String, String>,
+}
+
+fn device_name_map() -> &'static DeviceNameMap {
+    static MAP: OnceLock<DeviceNameMap> = OnceLock::new();
+    MAP.get_or_init(|| {
+        let map: DeviceNameMap =
+            serde_json::from_str(include_str!("../../../../resources/device-names.json"))
+                .expect("bundled device name map must be valid JSON");
+        debug_assert_eq!(map.schema_version, 1);
+        debug_assert!(!map.source.is_empty() && !map.revision_date.is_empty());
+        map
+    })
+}
+
+/// Resolve an Android device codename without network access or guessing.
+/// Unknown names intentionally return `None` so callers can continue to show
+/// the raw codename alongside the serial.
+pub fn marketing_name(codename: &str) -> Option<String> {
+    device_name_map()
+        .devices
+        .get(&codename.trim().to_ascii_lowercase())
+        .cloned()
+}
 
 #[derive(specta::Type, Debug, Clone, Serialize)]
 pub struct DeviceInfo {
@@ -84,6 +116,70 @@ pub struct WirelessDeviceRisk {
     pub model: Option<String>,
     pub security_patch: Option<String>,
     pub risk: WirelessDebuggingRisk,
+}
+
+/// Read-only Android 17 memory-limiter status. Older SDKs are explicitly
+/// marked unsupported; a missing OEM probe is unknown rather than an error.
+#[derive(specta::Type, Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct AppMemoryLimit {
+    pub sdk_level: Option<u32>,
+    pub status: String,
+    pub limit_kb: Option<u64>,
+    pub detail: Option<String>,
+}
+
+pub fn probe_app_memory_limit(
+    transport: &dyn AdbTransport,
+    target: &DeviceTarget,
+) -> Result<AppMemoryLimit, TransportError> {
+    let props = fetch_properties(transport, target)?;
+    let sdk_level = get_prop(&props, "ro.build.version.sdk").and_then(|value| value.parse().ok());
+    if sdk_level.is_none_or(|sdk| sdk < 37) {
+        return Ok(AppMemoryLimit {
+            sdk_level,
+            status: "unsupported".to_string(),
+            limit_kb: None,
+            detail: None,
+        });
+    }
+
+    let output = transport
+        .shell_target(target, &["am", "memory-limiter", "status"])
+        .unwrap_or_default();
+    let trimmed = output.trim();
+    let lower = trimmed.to_ascii_lowercase();
+    let status = if trimmed.is_empty()
+        || lower.contains("unknown command")
+        || lower.contains("not found")
+        || lower.contains("error")
+    {
+        "unknown"
+    } else {
+        "available"
+    };
+    Ok(AppMemoryLimit {
+        sdk_level,
+        status: status.to_string(),
+        limit_kb: parse_memory_limit_kb(trimmed),
+        detail: (!trimmed.is_empty())
+            .then(|| trimmed.lines().next().unwrap_or(trimmed).to_string()),
+    })
+}
+
+fn parse_memory_limit_kb(output: &str) -> Option<u64> {
+    output.split_whitespace().find_map(|token| {
+        let normalized = token.trim_matches(|character: char| !character.is_ascii_alphanumeric());
+        let (number, multiplier) = if let Some(value) = normalized.strip_suffix("KB") {
+            (value, 1u64)
+        } else if let Some(value) = normalized.strip_suffix("MB") {
+            (value, 1024u64)
+        } else if let Some(value) = normalized.strip_suffix("GB") {
+            (value, 1024u64 * 1024)
+        } else {
+            return None;
+        };
+        number.parse::<u64>().ok()?.checked_mul(multiplier)
+    })
 }
 
 pub fn get_wireless_debugging_risk(
@@ -431,6 +527,19 @@ fn thermal_status_label(code: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn marketing_name_map_is_offline_and_conservative() {
+        assert_eq!(marketing_name("husky"), Some("Pixel 8 Pro".to_string()));
+        assert_eq!(marketing_name("future_codename"), None);
+    }
+
+    #[test]
+    fn memory_limit_parser_accepts_reported_units() {
+        assert_eq!(parse_memory_limit_kb("limit: 512MB"), Some(512 * 1024));
+        assert_eq!(parse_memory_limit_kb("max 2048KB"), Some(2048));
+        assert_eq!(parse_memory_limit_kb("enabled"), None);
+    }
 
     #[test]
     fn parse_getprop_extracts_key_value_pairs() {

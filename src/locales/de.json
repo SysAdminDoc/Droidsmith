@@ -1,4 +1,10 @@
 {
+  "theme": {
+    "label": "Design",
+    "light": "Hell",
+    "dark": "Dunkel",
+    "toggle": "Design umschalten"
+  },
   "app": {
     "name": "Droidsmith",
     "tagline": "Android-Gerätewerkstatt",
@@ -425,6 +431,11 @@
       "copyFailed": "Kopieren fehlgeschlagen",
       "colActions": "Aktionen",
       "forceStop": "Beenden erzwingen",
+      "memoryLimitTitle": "Android-17-Speicherlimit",
+      "memoryLimitUnsupported": "für diese Android-Version nicht verfügbar",
+      "memoryLimitValue": "gemeldetes Limit {{value}}",
+      "memoryLimitDetected": "Limiter aktiv ({{detail}})",
+      "memoryLimitUnknown": "Status nicht verfügbar",
       "forceStopping": "Wird beendet…",
       "forceStopFailed": "{{package}} konnte nicht zwangsweise beendet werden.",
       "forceStopConfirmTitle": "App-Beenden erzwingen?",

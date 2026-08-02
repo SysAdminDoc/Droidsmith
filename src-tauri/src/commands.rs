@@ -658,6 +658,7 @@ mod tests {
             model: Some("Pixel".to_string()),
             product: Some("pixel".to_string()),
             device: Some("husky".to_string()),
+            marketing_name: None,
             bus_address: None,
             connection_type: None,
             negotiated_speed: None,

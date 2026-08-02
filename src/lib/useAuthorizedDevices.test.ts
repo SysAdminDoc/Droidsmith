@@ -25,6 +25,7 @@ function device(
     model: null,
     product: null,
     device: null,
+    marketing_name: null,
     bus_address: null,
     connection_type: null,
     negotiated_speed: null,

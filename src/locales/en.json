@@ -1,4 +1,10 @@
 {
+  "theme": {
+    "label": "Theme",
+    "light": "Light",
+    "dark": "Dark",
+    "toggle": "Toggle theme"
+  },
   "app": {
     "name": "Droidsmith",
     "tagline": "Android device workshop",
@@ -425,6 +431,11 @@
       "copyFailed": "Copy failed",
       "colActions": "Actions",
       "forceStop": "Force-stop",
+      "memoryLimitTitle": "Android 17 memory limit",
+      "memoryLimitUnsupported": "not applicable on this Android version",
+      "memoryLimitValue": "reported limit {{value}}",
+      "memoryLimitDetected": "limiter is active ({{detail}})",
+      "memoryLimitUnknown": "status unavailable",
       "forceStopping": "Stopping…",
       "forceStopFailed": "Could not force-stop {{package}}.",
       "forceStopConfirmTitle": "Force-stop app?",

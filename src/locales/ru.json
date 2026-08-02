@@ -1,4 +1,10 @@
 {
+  "theme": {
+    "label": "Тема",
+    "light": "Светлая",
+    "dark": "Тёмная",
+    "toggle": "Сменить тему"
+  },
   "app": {
     "name": "Droidsmith",
     "tagline": "Мастерская Android-устройств",
@@ -425,6 +431,11 @@
       "copyFailed": "Не удалось скопировать",
       "colActions": "Действия",
       "forceStop": "Остановить",
+      "memoryLimitTitle": "Лимит памяти Android 17",
+      "memoryLimitUnsupported": "не поддерживается этой версией Android",
+      "memoryLimitValue": "заявленный лимит {{value}}",
+      "memoryLimitDetected": "лимитер активен ({{detail}})",
+      "memoryLimitUnknown": "статус недоступен",
       "forceStopping": "Остановка…",
       "forceStopFailed": "Не удалось принудительно остановить {{package}}.",
       "forceStopConfirmTitle": "Принудительно остановить приложение?",

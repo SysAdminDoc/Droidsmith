@@ -27,6 +27,7 @@ macro_rules! droidsmith_commands {
             capture_perfetto_trace,
             run_host_doctor,
             list_devices,
+            get_app_memory_limit,
             watch_devices,
             recover_adb,
             select_host_path,

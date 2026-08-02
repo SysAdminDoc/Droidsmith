@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "id": "android17-memory-limiter",
+  "platformToolsVersion": "37.0.1",
+  "deviceFamily": "aosp-android17",
+  "sanitized": true,
+  "provenance": {
+    "kind": "synthesized",
+    "basis": "Read-only am memory-limiter status contract for SDK 37+; values are illustrative and sanitized."
+  },
+  "commands": [
+    {
+      "argv": ["-t", "301", "shell", "getprop"],
+      "exitCode": 0,
+      "stdout": "[ro.build.version.sdk]: [37]\n[ro.product.model]: [Pixel 10]\n",
+      "stderr": ""
+    },
+    {
+      "argv": ["-t", "301", "shell", "am", "memory-limiter", "status"],
+      "exitCode": 0,
+      "stdout": "Memory limiter: enabled\nCurrent app limit: 768MB\n",
+      "stderr": ""
+    }
+  ]
+}

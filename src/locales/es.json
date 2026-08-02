@@ -1,4 +1,10 @@
 {
+  "theme": {
+    "label": "Tema",
+    "light": "Claro",
+    "dark": "Oscuro",
+    "toggle": "Cambiar tema"
+  },
   "app": {
     "about": "Acerca de",
     "aboutDescription": "Un taller de escritorio enfocado para inspeccionar, conectar y administrar dispositivos Android con operaciones ADB rastreables.",
@@ -607,6 +613,11 @@
       "copyFailed": "Error al copiar",
       "colActions": "Acciones",
       "forceStop": "Forzar detención",
+      "memoryLimitTitle": "Límite de memoria de Android 17",
+      "memoryLimitUnsupported": "no aplica en esta versión de Android",
+      "memoryLimitValue": "límite indicado {{value}}",
+      "memoryLimitDetected": "limitador activo ({{detail}})",
+      "memoryLimitUnknown": "estado no disponible",
       "forceStopping": "Deteniendo…",
       "forceStopFailed": "No se pudo forzar la detención de {{package}}.",
       "forceStopConfirmTitle": "¿Forzar la detención de la app?",

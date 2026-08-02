@@ -29,6 +29,12 @@ import {
   SUPPORTED_LANGUAGES,
 } from "./lib/i18n";
 import { setStoredLanguage } from "./lib/settings";
+import {
+  applyTheme,
+  loadStoredTheme,
+  persistTheme,
+  type DroidsmithTheme,
+} from "./lib/theme";
 import { CommandPalette, type PaletteItem } from "./routes/CommandPalette";
 import { useCommandPalette } from "./routes/useCommandPalette";
 import { useFocusTrap } from "./lib/useFocusTrap";
@@ -197,12 +203,18 @@ export default function App() {
   const [showDiagnostics, setShowDiagnostics] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showAbout, setShowAbout] = useState(false);
+  const [theme, setTheme] = useState<DroidsmithTheme>(() => loadStoredTheme());
   const [routeAnnouncement, setRouteAnnouncement] = useState<
     NavItem["id"] | null
   >(null);
   const mainRef = useRef<HTMLElement>(null);
   const sidebarRef = useRef<HTMLElement>(null);
   const palette = useCommandPalette();
+
+  useEffect(() => {
+    applyTheme(theme);
+    persistTheme(theme);
+  }, [theme]);
 
   const paletteItems: PaletteItem[] = useMemo(
     () =>
@@ -324,6 +336,10 @@ export default function App() {
               onOpenSettings={() => setShowSettings(true)}
               onOpenGuide={() => setShowOnboarding(true)}
               onOpenAbout={() => setShowAbout(true)}
+              theme={theme}
+              onToggleTheme={() =>
+                setTheme((current) => (current === "dark" ? "light" : "dark"))
+              }
             />
           </div>
         </aside>
@@ -363,7 +379,13 @@ export default function App() {
         <DiagnosticsCenter onDismiss={() => setShowDiagnostics(false)} />
       )}
       {showSettings && (
-        <SettingsModal onDismiss={() => setShowSettings(false)} />
+        <SettingsModal
+          theme={theme}
+          onToggleTheme={() =>
+            setTheme((current) => (current === "dark" ? "light" : "dark"))
+          }
+          onDismiss={() => setShowSettings(false)}
+        />
       )}
       {showAbout && (
         <AboutModal
@@ -502,7 +524,15 @@ function OnboardingModal({ onDismiss }: { onDismiss: () => void }) {
   );
 }
 
-function SettingsModal({ onDismiss }: { onDismiss: () => void }) {
+function SettingsModal({
+  theme,
+  onToggleTheme,
+  onDismiss,
+}: {
+  theme: DroidsmithTheme;
+  onToggleTheme: () => void;
+  onDismiss: () => void;
+}) {
   const { t } = useTranslation();
   const trapRef = useFocusTrap<HTMLDivElement>();
 
@@ -545,6 +575,15 @@ function SettingsModal({ onDismiss }: { onDismiss: () => void }) {
             {t("language.label")}
           </p>
           <LanguageSelector className="mt-2 max-w-sm" />
+          <button
+            type="button"
+            className="mt-4 flex items-center gap-2 text-xs text-anvil-300 hover:text-anvil-50"
+            onClick={onToggleTheme}
+            aria-label={t("theme.toggle")}
+          >
+            <span className="font-medium">{t("theme.label")}:</span>
+            <span>{t(`theme.${theme}`)}</span>
+          </button>
         </div>
         <div className="pt-5">
           <SettingsDataControls embedded />
@@ -735,11 +774,15 @@ function ShellActions({
   onOpenSettings,
   onOpenGuide,
   onOpenAbout,
+  theme,
+  onToggleTheme,
 }: {
   className?: string;
   onOpenSettings: () => void;
   onOpenGuide: () => void;
   onOpenAbout: () => void;
+  theme: DroidsmithTheme;
+  onToggleTheme: () => void;
 }) {
   const { t } = useTranslation();
 
@@ -754,6 +797,17 @@ function ShellActions({
       >
         <SettingsIcon />
         {t("app.settings")}
+      </Button>
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        className="w-full justify-start px-2.5"
+        onClick={onToggleTheme}
+        aria-label={t("theme.toggle")}
+      >
+        <span aria-hidden="true">{theme === "dark" ? "☼" : "◐"}</span>
+        {t(`theme.${theme === "dark" ? "light" : "dark"}`)}
       </Button>
       <Button
         type="button"

@@ -1,4 +1,10 @@
 {
+  "theme": {
+    "label": "主题",
+    "light": "浅色",
+    "dark": "深色",
+    "toggle": "切换主题"
+  },
   "app": {
     "name": "Droidsmith",
     "tagline": "Android 设备工坊",
@@ -425,6 +431,11 @@
       "copyFailed": "复制失败",
       "colActions": "操作",
       "forceStop": "强制停止",
+      "memoryLimitTitle": "Android 17 应用内存限制",
+      "memoryLimitUnsupported": "此 Android 版本不适用",
+      "memoryLimitValue": "报告限制 {{value}}",
+      "memoryLimitDetected": "限制器已启用（{{detail}}）",
+      "memoryLimitUnknown": "状态不可用",
       "forceStopping": "正在停止…",
       "forceStopFailed": "无法强制停止 {{package}}。",
       "forceStopConfirmTitle": "强制停止应用？",
