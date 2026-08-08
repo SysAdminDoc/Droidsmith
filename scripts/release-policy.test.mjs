@@ -8,6 +8,7 @@ import {
   validateAccessibilityAuditPolicy,
   validateDependencyFloor,
   validateNpmDependencyFloor,
+  validatePackagingInstallerHashes,
   validateRendererBundleManifest,
   validateScrcpyPolicyDocument,
   validateExpiry,
@@ -151,6 +152,31 @@ test("release versions must all exist and match", () => {
       `${source} absence must fail the release gate`,
     );
   }
+});
+
+test("packaging hashes reject placeholders and malformed values", () => {
+  const winget = "InstallerSha256: " + "0".repeat(64);
+  const scoop = JSON.stringify({
+    architecture: { "64bit": { hash: "0".repeat(64) } },
+  });
+  assert.throws(
+    () => validatePackagingInstallerHashes(winget, scoop),
+    /placeholder SHA-256/u,
+  );
+  assert.throws(
+    () =>
+      validatePackagingInstallerHashes(
+        "InstallerSha256: not-a-hash",
+        JSON.stringify({ architecture: { "64bit": { hash: "f".repeat(64) } } }),
+      ),
+    /64-character hexadecimal/u,
+  );
+  assert.doesNotThrow(() =>
+    validatePackagingInstallerHashes(
+      "InstallerSha256: " + "a".repeat(64),
+      JSON.stringify({ architecture: { "64bit": { hash: "b".repeat(64) } } }),
+    ),
+  );
 });
 
 const documentationExpectations = {

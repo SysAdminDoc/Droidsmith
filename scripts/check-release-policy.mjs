@@ -15,6 +15,18 @@ const platformToolsPolicyPath = path.join(
   "platform-tools-policy.json",
 );
 const languageContractPath = path.join(repoRoot, "language-contract.json");
+const wingetManifestPath = path.join(
+  repoRoot,
+  "packaging",
+  "winget",
+  "SysAdminDoc.Droidsmith.yaml",
+);
+const scoopManifestPath = path.join(
+  repoRoot,
+  "packaging",
+  "scoop",
+  "droidsmith.json",
+);
 
 if (path.resolve(argv[1] ?? "") === fileURLToPath(import.meta.url)) {
   main();
@@ -132,11 +144,49 @@ function validatePolicy() {
   validateVersionParity();
   validateDependencySecurityFloors(policy.dependencySecurityFloors);
   validateTrackedDocumentationPolicyFiles(policy.trackedDocumentation);
+  validatePackagingInstallerHashesOnDisk();
   validatePlatformToolsPolicy();
   validateScrcpyPolicy();
   validateLanguageContract();
   validateSubprocessCaptureContract();
   validateAutomationPolicy();
+}
+
+function validatePackagingInstallerHashesOnDisk() {
+  validatePackagingInstallerHashes(
+    fs.readFileSync(wingetManifestPath, "utf8"),
+    fs.readFileSync(scoopManifestPath, "utf8"),
+  );
+}
+
+export function validatePackagingInstallerHashes(wingetText, scoopText) {
+  const wingetHash = /^\s*InstallerSha256:\s*([0-9a-f]{64})\s*$/imu.exec(
+    wingetText,
+  )?.[1];
+  assert(
+    wingetHash,
+    "winget installer manifest must contain a 64-character hexadecimal SHA-256",
+  );
+  assert(
+    !/^0{64}$/u.test(wingetHash.toLowerCase()),
+    "winget installer manifest still contains a placeholder SHA-256",
+  );
+
+  let scoop;
+  try {
+    scoop = JSON.parse(scoopText);
+  } catch (error) {
+    throw new Error(`Scoop installer manifest is not valid JSON: ${error}`);
+  }
+  const scoopHash = scoop?.architecture?.["64bit"]?.hash;
+  assert(
+    typeof scoopHash === "string" && /^[0-9a-f]{64}$/iu.test(scoopHash),
+    "Scoop installer manifest must contain a 64-character hexadecimal SHA-256",
+  );
+  assert(
+    !/^0{64}$/u.test(scoopHash.toLowerCase()),
+    "Scoop installer manifest still contains a placeholder SHA-256",
+  );
 }
 
 export function validateAccessibilityAuditPolicy(policy) {
