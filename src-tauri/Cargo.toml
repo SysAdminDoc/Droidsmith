@@ -6,14 +6,10 @@ authors = ["Droidsmith contributors"]
 license = "MIT"
 repository = "https://github.com/SysAdminDoc/Droidsmith"
 edition = "2021"
-# MSRV floor. Raised from 1.81 because that wall was set by an upstream
-# project, not by this one: Tauri merged an MSRV bump to 1.90 on `dev` with a
-# stated "latest minus three" policy, so the next Tauri minor hard-blocks at
-# 1.81. The floor was also the stated reason several dependencies were held at
-# `=` pins and why an unmaintained transitive crate sat permanently suppressed
-# in `.cargo/audit.toml`. `rust-toolchain.toml` pins the toolchain builds
-# actually use; this is the lowest version the crate claims to support and is
-# what clippy's `incompatible_msrv` lint checks against.
+# MSRV floor. Raised from 1.81 to 1.90 for the native toolchain APIs and
+# dependency floors used by the command boundary. `rust-toolchain.toml` pins
+# the toolchain used for builds; this is the lowest version the crate claims to
+# support and the version checked by clippy's `incompatible_msrv` lint.
 rust-version = "1.90"
 # The crate ships several helper binaries (CLI, linters, bindings generator).
 # Pin the GUI binary as the default so `cargo run` / `tauri dev` launch the app.
