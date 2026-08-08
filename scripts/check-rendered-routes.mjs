@@ -486,6 +486,15 @@ async function runDesktopFlow(browser) {
   await page
     .getByText(/unstable hidden settings key.*never blocks an operation/)
     .waitFor();
+  await page.evaluate(() => window.__DROIDSMITH_MOCK_EMPTY_FINDINGS__(true));
+  await page.getByRole("button", { name: "Run connection doctor" }).click();
+  await page.getByText("No host problems found", { exact: true }).waitFor();
+  await page
+    .getByText(
+      "ADB, USB, drivers, and host prerequisites reported no actionable findings.",
+      { exact: true },
+    )
+    .waitFor();
 
   for (const route of ["Devices", "Apps", "Debloat", "Profiles", "Console"]) {
     await page.getByRole("button", { name: new RegExp(route) }).click();
@@ -1233,6 +1242,11 @@ async function runDesktopFlow(browser) {
   await page.getByLabel("Launch app on connect").fill("com.example.app");
   await page.getByRole("button", { name: "Load installed apps" }).click();
   await page.getByText(/Autocomplete: \d+ apps/).waitFor();
+  await page.evaluate(() => {
+    window.__DROIDSMITH_MOCK_EMPTY_PACKAGES__(true);
+  });
+  await page.getByRole("button", { name: "Load installed apps" }).click();
+  await page.getByText("No installed apps found", { exact: true }).waitFor();
   // R-089: camera mirroring reveals facing/size controls, then back to screen.
   await page.getByLabel("Video source").selectOption("camera");
   await page.getByLabel("Camera facing").selectOption("front");
@@ -2408,6 +2422,7 @@ async function installTauriMock(
     const gateResolvers = new Map();
     const gatePromises = new Map();
     let emptyPackages = false;
+    let emptyFindings = false;
     window.__DROIDSMITH_MOCK_FAIL_NEXT__ = (cmd) => failNext.add(cmd);
     window.__DROIDSMITH_MOCK_GATE__ = (cmd) => {
       gatePromises.set(
@@ -2424,6 +2439,9 @@ async function installTauriMock(
     };
     window.__DROIDSMITH_MOCK_EMPTY_PACKAGES__ = (value) => {
       emptyPackages = value;
+    };
+    window.__DROIDSMITH_MOCK_EMPTY_FINDINGS__ = (value) => {
+      emptyFindings = value;
     };
     // R-082 tuning: curated device-settings catalog with mutable values so
     // put_device_setting round-trips through the subsequent list.
@@ -2677,70 +2695,72 @@ async function installTauriMock(
             },
             device_state_counts: { device: 1 },
             advanced_protection_mode: "enabled",
-            findings: [
-              {
-                code: "advanced_protection_mode",
-                severity: "warning",
-                title: "Advanced Protection Mode may restrict debugging",
-                summary:
-                  "A connected device reported Advanced Protection Mode enabled through an unstable hidden settings key. This heuristic may help explain install or connection failures; it is not proof of their cause and never blocks an operation.",
-                evidence: [
-                  "settings get secure advanced_protection_mode returned 1",
+            findings: emptyFindings
+              ? []
+              : [
+                  {
+                    code: "advanced_protection_mode",
+                    severity: "warning",
+                    title: "Advanced Protection Mode may restrict debugging",
+                    summary:
+                      "A connected device reported Advanced Protection Mode enabled through an unstable hidden settings key. This heuristic may help explain install or connection failures; it is not proof of their cause and never blocks an operation.",
+                    evidence: [
+                      "settings get secure advanced_protection_mode returned 1",
+                    ],
+                    remediation: [
+                      "Review Android's Advanced Protection restrictions on the device.",
+                      "Use the remaining diagnostics to confirm the actual failure cause.",
+                    ],
+                    official_url:
+                      "https://developer.android.com/privacy-and-security/advanced-protection-mode",
+                    summary_key: null,
+                    summary_params: [],
+                  },
+                  {
+                    code: "adb_ready",
+                    severity: "info",
+                    title: "ADB executable is ready",
+                    summary:
+                      "Droidsmith resolved ADB and completed transport enumeration.",
+                    evidence: ["Platform Tools version: 37.0.0"],
+                    remediation: ["Keep Platform Tools current."],
+                    official_url:
+                      "https://developer.android.com/tools/releases/platform-tools",
+                    summary_key: null,
+                    summary_params: [],
+                  },
+                  {
+                    code: "platform_tools_warning",
+                    severity: "warning",
+                    title: "Platform Tools compatibility needs attention",
+                    summary:
+                      "Platform Tools 35.0.2 predates the 36.0.2 reliability floor; upgrade to 37.0.0.",
+                    evidence: ["Policy reviewed: 2026-07-15"],
+                    remediation: [
+                      "Install the recommended official Platform Tools release, then rescan.",
+                    ],
+                    official_url:
+                      "https://developer.android.com/tools/releases/platform-tools",
+                    summary_key: "below_floor",
+                    summary_params: [
+                      { key: "version", value: "35.0.2" },
+                      { key: "floor", value: "36.0.2" },
+                      { key: "recommended", value: "37.0.0" },
+                    ],
+                  },
+                  {
+                    code: "server_config_override",
+                    severity: "warning",
+                    title: "Custom ADB server configuration is active",
+                    summary:
+                      "An environment variable overrides the default ADB server.",
+                    evidence: ["ADB_SERVER_SOCKET is set (value redacted)"],
+                    remediation: ["Review the named environment variable."],
+                    official_url: "https://developer.android.com/tools/adb",
+                    summary_key: null,
+                    summary_params: [],
+                  },
                 ],
-                remediation: [
-                  "Review Android's Advanced Protection restrictions on the device.",
-                  "Use the remaining diagnostics to confirm the actual failure cause.",
-                ],
-                official_url:
-                  "https://developer.android.com/privacy-and-security/advanced-protection-mode",
-                summary_key: null,
-                summary_params: [],
-              },
-              {
-                code: "adb_ready",
-                severity: "info",
-                title: "ADB executable is ready",
-                summary:
-                  "Droidsmith resolved ADB and completed transport enumeration.",
-                evidence: ["Platform Tools version: 37.0.0"],
-                remediation: ["Keep Platform Tools current."],
-                official_url:
-                  "https://developer.android.com/tools/releases/platform-tools",
-                summary_key: null,
-                summary_params: [],
-              },
-              {
-                code: "platform_tools_warning",
-                severity: "warning",
-                title: "Platform Tools compatibility needs attention",
-                summary:
-                  "Platform Tools 35.0.2 predates the 36.0.2 reliability floor; upgrade to 37.0.0.",
-                evidence: ["Policy reviewed: 2026-07-15"],
-                remediation: [
-                  "Install the recommended official Platform Tools release, then rescan.",
-                ],
-                official_url:
-                  "https://developer.android.com/tools/releases/platform-tools",
-                summary_key: "below_floor",
-                summary_params: [
-                  { key: "version", value: "35.0.2" },
-                  { key: "floor", value: "36.0.2" },
-                  { key: "recommended", value: "37.0.0" },
-                ],
-              },
-              {
-                code: "server_config_override",
-                severity: "warning",
-                title: "Custom ADB server configuration is active",
-                summary:
-                  "An environment variable overrides the default ADB server.",
-                evidence: ["ADB_SERVER_SOCKET is set (value redacted)"],
-                remediation: ["Review the named environment variable."],
-                official_url: "https://developer.android.com/tools/adb",
-                summary_key: null,
-                summary_params: [],
-              },
-            ],
             privacy: [
               "No changes were made.",
               "Device serials and environment values were not retained.",

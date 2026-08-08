@@ -1218,6 +1218,8 @@
     "startAppLoad": "Load installed apps",
     "startAppLoading": "Loading…",
     "startAppLoaded": "Autocomplete: {{count}} apps",
+    "startAppEmptyTitle": "No installed apps found",
+    "startAppEmptyBody": "The device returned an empty package inventory. Enter a package name manually or retry after reconnecting.",
     "startAppError": "Couldn't load apps: {{message}}",
     "startAppInvalid": "Enter a valid package name (e.g. com.example.app).",
     "startAppHint": "Optional. Launches the chosen app on connect (scrcpy 3.0+).",
@@ -1686,6 +1688,8 @@
     "scanning": "Scanning host…",
     "idle": "No scan has run. The doctor does not install drivers, edit rules, restart ADB, or retain serials and keys.",
     "failed": "Connection doctor failed",
+    "noFindingsTitle": "No host problems found",
+    "noFindingsBody": "ADB, USB, drivers, and host prerequisites reported no actionable findings.",
     "adbVersion": "ADB {{version}}",
     "adbUnverified": "ADB unverified",
     "compatibility": {

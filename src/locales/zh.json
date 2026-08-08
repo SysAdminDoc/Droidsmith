@@ -1218,6 +1218,8 @@
     "startAppLoad": "加载已安装应用",
     "startAppLoading": "加载中…",
     "startAppLoaded": "自动补全：{{count}} 个应用",
+    "startAppEmptyTitle": "未找到已安装的应用",
+    "startAppEmptyBody": "设备返回了空的软件包清单。请手动输入软件包名，或重新连接后重试。",
     "startAppError": "无法加载应用：{{message}}",
     "startAppInvalid": "请输入有效的软件包名（例如 com.example.app）。",
     "startAppHint": "可选。连接时启动所选应用（scrcpy 3.0+）。",
@@ -1686,6 +1688,8 @@
     "scanning": "正在扫描主机…",
     "idle": "尚未运行扫描。医生不会安装驱动程序、编辑规则、重启 ADB 或保留序列号和密钥。",
     "failed": "连接医生失败",
+    "noFindingsTitle": "未发现主机问题",
+    "noFindingsBody": "ADB、USB、驱动程序和主机先决条件均未报告需要处理的问题。",
     "adbVersion": "ADB {{version}}",
     "adbUnverified": "ADB 未验证",
     "compatibility": {

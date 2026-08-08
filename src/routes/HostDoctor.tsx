@@ -8,7 +8,7 @@ import {
   type HostFinding,
 } from "../lib/tauri";
 import { formatDateTime } from "../lib/i18n";
-import { Badge, Button, Card, StatePanel } from "./common";
+import { Badge, Button, Card, EmptyState, StatePanel } from "./common";
 
 type DoctorState =
   | { kind: "idle" }
@@ -110,9 +110,15 @@ export default function HostDoctor() {
             </span>
           </div>
 
-          {state.report.findings.map((finding) => (
-            <Finding key={finding.code} finding={finding} />
-          ))}
+          {state.report.findings.length === 0 ? (
+            <EmptyState title={t("hostDoctor.noFindingsTitle")}>
+              {t("hostDoctor.noFindingsBody")}
+            </EmptyState>
+          ) : (
+            state.report.findings.map((finding) => (
+              <Finding key={finding.code} finding={finding} />
+            ))
+          )}
 
           <details className="rounded-md border border-white/10 bg-white/[0.025] p-3 text-xs text-anvil-400">
             <summary className="cursor-pointer font-medium text-anvil-200">

@@ -1218,6 +1218,8 @@
     "startAppLoad": "Installierte Apps laden",
     "startAppLoading": "Wird geladen…",
     "startAppLoaded": "Autovervollständigung: {{count}} Apps",
+    "startAppEmptyTitle": "Keine installierten Apps gefunden",
+    "startAppEmptyBody": "Das Gerät hat ein leeres Paketinventar zurückgegeben. Gib einen Paketnamen manuell ein oder versuche es nach dem erneuten Verbinden noch einmal.",
     "startAppError": "Apps konnten nicht geladen werden: {{message}}",
     "startAppInvalid": "Gib einen gültigen Paketnamen ein (z. B. com.example.app).",
     "startAppHint": "Optional. Startet die gewählte App beim Verbinden (scrcpy 3.0+).",
@@ -1686,6 +1688,8 @@
     "scanning": "Scanne Host…",
     "idle": "Kein Scan wurde ausgeführt. Der Arzt installiert keine Treiber, bearbeitet keine Regeln, startet ADB nicht neu und speichert keine Seriennummern und Schlüssel.",
     "failed": "Verbindungsarzt fehlgeschlagen",
+    "noFindingsTitle": "Keine Host-Probleme gefunden",
+    "noFindingsBody": "ADB, USB, Treiber und Host-Voraussetzungen melden keine umsetzbaren Befunde.",
     "adbVersion": "ADB {{version}}",
     "adbUnverified": "ADB nicht verifiziert",
     "compatibility": {

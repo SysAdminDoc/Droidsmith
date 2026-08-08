@@ -45,6 +45,7 @@ import {
   Badge,
   Button,
   Card,
+  EmptyState,
   FieldInput,
   FieldSelect,
   PaneHeader,
@@ -1297,6 +1298,16 @@ export default function MirrorRoute() {
                 </div>
               </Card>
             )}
+
+            {appInventory.kind === "ready" &&
+              appInventory.packages.length === 0 && (
+                <EmptyState
+                  className="mt-4"
+                  title={t("mirror.startAppEmptyTitle")}
+                >
+                  {t("mirror.startAppEmptyBody")}
+                </EmptyState>
+              )}
 
             {session.kind === "error" && (
               <StatePanel
