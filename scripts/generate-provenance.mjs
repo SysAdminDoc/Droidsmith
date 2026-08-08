@@ -65,12 +65,21 @@ export function readInputs(root) {
 }
 
 export function generateProvenance(inputs) {
-  const packageJson = parseJson(inputs.packageJsonText, "package.json");
-  const packageLock = parseJson(inputs.packageLockText, "package-lock.json");
+  const canonicalInputs = Object.fromEntries(
+    Object.entries(inputs).map(([name, value]) => [name, normalizeText(value)]),
+  );
+  const packageJson = parseJson(
+    canonicalInputs.packageJsonText,
+    "package.json",
+  );
+  const packageLock = parseJson(
+    canonicalInputs.packageLockText,
+    "package-lock.json",
+  );
   const npmComponents = collectNpmRuntimeComponents(packageLock);
   const cargoComponents = collectCargoRuntimeComponents(
-    inputs.cargoManifestText,
-    inputs.cargoLockText,
+    canonicalInputs.cargoManifestText,
+    canonicalInputs.cargoLockText,
   );
   const components = deduplicateComponents([
     ...npmComponents,
@@ -98,9 +107,9 @@ export function generateProvenance(inputs) {
   };
   const sbomText = `${JSON.stringify(sbom, null, 2)}\n`;
   const checksumInputs = {
-    "package-lock.json": inputs.packageLockText,
-    "src-tauri/Cargo.lock": inputs.cargoLockText,
-    "third-party-notices.json": inputs.noticesText,
+    "package-lock.json": canonicalInputs.packageLockText,
+    "src-tauri/Cargo.lock": canonicalInputs.cargoLockText,
+    "third-party-notices.json": canonicalInputs.noticesText,
     [sbomRelativePath]: sbomText,
   };
   const checksumsText = `${Object.entries(checksumInputs)
@@ -109,6 +118,11 @@ export function generateProvenance(inputs) {
     .join("\n")}\n`;
 
   return { sbom, sbomText, checksumsText };
+}
+
+function normalizeText(value) {
+  assert(typeof value === "string", "provenance inputs must be text");
+  return value.replace(/\r\n?/gu, "\n");
 }
 
 export function collectNpmRuntimeComponents(lock) {

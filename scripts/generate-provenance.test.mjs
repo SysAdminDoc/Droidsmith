@@ -124,3 +124,16 @@ test("provenance output is deterministic, parseable, and bound to every input", 
     /SHA256SUMS differs from provenance inputs/u,
   );
 });
+
+test("provenance hashes are invariant to checkout newline style", () => {
+  const windowsInputs = Object.fromEntries(
+    Object.entries(inputs).map(([name, value]) => [
+      name,
+      value.replaceAll("\n", "\r\n"),
+    ]),
+  );
+  assert.deepEqual(
+    generateProvenance(windowsInputs),
+    generateProvenance(inputs),
+  );
+});
