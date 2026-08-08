@@ -361,7 +361,7 @@ function HealthBar({
         <span className="text-anvil-400">{value}</span>
       </div>
       <div
-        className="mt-1 h-1.5 overflow-hidden rounded-full bg-white/[0.08]"
+        className="mt-1 h-1.5 overflow-hidden rounded-sm bg-white/[0.08]"
         role="progressbar"
         aria-label={label}
         aria-valuenow={pct == null ? undefined : Math.round(pct)}
@@ -370,7 +370,7 @@ function HealthBar({
       >
         <div
           className={cn(
-            "h-full rounded-full transition-[width]",
+            "h-full rounded-sm transition-[width]",
             pct != null && pct >= 90 ? "bg-red-400/70" : "bg-circuit-300/70",
           )}
           style={{ width: `${pct ?? 0}%` }}

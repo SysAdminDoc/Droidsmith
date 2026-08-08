@@ -605,7 +605,7 @@ export default function ConsoleRoute() {
                       <span
                         aria-hidden="true"
                         className={[
-                          "h-1.5 w-1.5 shrink-0 rounded-full",
+                          "h-1.5 w-1.5 shrink-0 rounded-sm",
                           entry.error ? "bg-red-300" : "bg-mint-300",
                         ].join(" ")}
                       />

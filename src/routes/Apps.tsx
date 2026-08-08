@@ -1097,33 +1097,33 @@ export default function AppsRoute() {
    *  would mean re-picking the file anyway. */
   const inspectRecoveryBaseline = useCallback(
     async (roundTrip: BaselineRoundTrip) => {
-    if (!authorizedTarget) return;
-    const lease = recoveryOperation.begin();
-    setRecoveryState({
-      kind: "busy",
-      message: t("apps.recoveryInspecting"),
-    });
-    try {
-      const selected = await callSelectHostPath("recovery_baseline_open");
-      if (!lease.isCurrent()) return;
-      if (!selected) {
-        setRecoveryState({ kind: "idle" });
-        return;
+      if (!authorizedTarget) return;
+      const lease = recoveryOperation.begin();
+      setRecoveryState({
+        kind: "busy",
+        message: t("apps.recoveryInspecting"),
+      });
+      try {
+        const selected = await callSelectHostPath("recovery_baseline_open");
+        if (!lease.isCurrent()) return;
+        if (!selected) {
+          setRecoveryState({ kind: "idle" });
+          return;
+        }
+        const diff = await callInspectRecoveryBaseline(
+          authorizedTarget,
+          selected.id,
+          roundTrip,
+        );
+        lease.commit(() => setRecoveryState({ kind: "review", diff }));
+      } catch (error) {
+        lease.commit(() =>
+          setRecoveryState({
+            kind: "error",
+            message: errorMessage(error),
+          }),
+        );
       }
-      const diff = await callInspectRecoveryBaseline(
-        authorizedTarget,
-        selected.id,
-        roundTrip,
-      );
-      lease.commit(() => setRecoveryState({ kind: "review", diff }));
-    } catch (error) {
-      lease.commit(() =>
-        setRecoveryState({
-          kind: "error",
-          message: errorMessage(error),
-        }),
-      );
-    }
     },
     [authorizedTarget, recoveryOperation, t],
   );

@@ -57,7 +57,7 @@ export function HealthCheckIcon({ healthy }: { healthy: boolean }) {
   return (
     <span
       className={cn(
-        "flex h-5 w-5 shrink-0 items-center justify-center rounded-full border",
+        "flex h-5 w-5 shrink-0 items-center justify-center rounded-sm border",
         healthy
           ? "border-emerald-300 text-emerald-300"
           : "border-amber-300 text-amber-300",
@@ -77,7 +77,7 @@ export function HealthCheckIcon({ healthy }: { healthy: boolean }) {
           <path d="m5 10 3 3 7-7" />
         </svg>
       ) : (
-        <span className="h-1.5 w-1.5 rounded-full bg-current" />
+        <span className="h-1.5 w-1.5 rounded-sm bg-current" />
       )}
     </span>
   );
@@ -87,7 +87,7 @@ export function SelectionIcon({ selected }: { selected: boolean }) {
   if (!selected) {
     return (
       <span
-        className="h-5 w-5 rounded-full border border-white/[0.14]"
+        className="h-5 w-5 rounded-sm border border-white/[0.14]"
         aria-hidden="true"
       />
     );
@@ -95,7 +95,7 @@ export function SelectionIcon({ selected }: { selected: boolean }) {
 
   return (
     <span
-      className="flex h-6 w-6 items-center justify-center rounded-full bg-circuit-300 text-anvil-950 shadow-sm"
+      className="flex h-6 w-6 items-center justify-center rounded-sm bg-circuit-300 text-anvil-950 shadow-sm"
       aria-hidden="true"
     >
       <svg

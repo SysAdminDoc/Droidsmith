@@ -15,6 +15,7 @@
     "heartbeat",
     "run_host_doctor",
     "list_devices",
+    "get_app_memory_limit",
     "preview_diagnostics",
     "list_wireless_services",
     "list_wireless_debugging_risks",

@@ -7,6 +7,7 @@ import {
   validateAutomationFiles,
   validateAccessibilityAuditPolicy,
   validateDependencyFloor,
+  validateNpmDependencyFloor,
   validateRendererBundleManifest,
   validateScrcpyPolicyDocument,
   validateExpiry,
@@ -468,6 +469,29 @@ test("cargo dependency requirements are read from both inline and table form", (
   assert.equal(readCargoDependencyRequirement(manifest, "tauri-build"), "2.6");
   assert.equal(readCargoDependencyRequirement(manifest, "serde_json"), "1");
   assert.equal(readCargoDependencyRequirement(manifest, "absent"), undefined);
+});
+
+test("npm dependency floors reject each vulnerable resolved version", () => {
+  const braceFloor = {
+    package: "brace-expansion",
+    minimumVersion: "5.0.9",
+    advisory: "GHSA-rgw5-rvv9-x895",
+  };
+  const nanoidFloor = {
+    package: "nanoid",
+    minimumVersion: "3.3.17",
+    advisory: "GHSA-2v37-7h3g-55p8",
+  };
+  assert.doesNotThrow(() => validateNpmDependencyFloor(braceFloor, "5.0.9"));
+  assert.doesNotThrow(() => validateNpmDependencyFloor(nanoidFloor, "3.3.18"));
+  assert.throws(
+    () => validateNpmDependencyFloor(braceFloor, "5.0.8"),
+    /below the 5\.0\.9 security floor/u,
+  );
+  assert.throws(
+    () => validateNpmDependencyFloor(nanoidFloor, "3.3.16"),
+    /below the 3\.3\.17 security floor/u,
+  );
 });
 
 const scrcpyPolicy = {

@@ -500,7 +500,7 @@ function PackageActionMenu({
     <details className="group flex flex-col items-end">
       <summary
         aria-label={`${t("apps.actions")}: ${pkg.package}`}
-        className="grid h-9 w-9 cursor-pointer list-none place-items-center rounded-[0.25rem] text-lg text-anvil-300 transition hover:bg-white/[0.06] hover:text-anvil-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-circuit-300 [&::-webkit-details-marker]:hidden"
+        className="grid h-9 w-9 cursor-pointer list-none place-items-center rounded text-lg text-anvil-300 transition hover:bg-white/[0.06] hover:text-anvil-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-circuit-300 [&::-webkit-details-marker]:hidden"
       >
         <span aria-hidden="true">⋮</span>
       </summary>

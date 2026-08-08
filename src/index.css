@@ -5,10 +5,84 @@
 @layer base {
   :root {
     color-scheme: dark;
+    --ds-canvas: #091219;
+    --ds-rail: #07131b;
+    --ds-surface: #0c141c;
+    --ds-dialog: #0d1720;
+    --ds-rule: rgb(255 255 255 / 0.1);
+    --ds-text: #f3f7fa;
+    --ds-muted: #91a2b2;
+    --ds-accent: #35d6ed;
+    --ds-overlay: rgb(1 7 11 / 0.74);
+    --ds-anvil-50: 243 247 250;
+    --ds-anvil-100: 227 234 240;
+    --ds-anvil-200: 206 216 225;
+    --ds-anvil-300: 182 194 206;
+    --ds-anvil-400: 145 162 178;
+    --ds-anvil-500: 132 151 168;
+    --ds-anvil-600: 125 145 162;
+    --ds-anvil-700: 49 64 77;
+    --ds-anvil-800: 26 38 49;
+    --ds-anvil-900: 13 23 32;
+    --ds-anvil-950: 7 13 19;
+    --ds-circuit-50: 236 254 255;
+    --ds-circuit-100: 207 250 254;
+    --ds-circuit-200: 165 243 252;
+    --ds-circuit-300: 53 214 237;
+    --ds-circuit-400: 25 200 227;
+    --ds-circuit-500: 8 173 201;
+    --ds-circuit-600: 8 145 178;
+    --ds-circuit-700: 14 116 144;
+    --ds-circuit-800: 21 94 117;
+    --ds-circuit-900: 22 78 99;
+    --ds-circuit-950: 8 51 68;
+    --ds-signal-green: 84 217 144;
+    --ds-signal-amber: 255 198 87;
+    --ds-signal-red: 255 117 109;
+    --ds-surface-card: 12 20 28;
+    --ds-surface-dialog: 13 23 32;
+    --ds-surface-terminal: 5 11 16;
   }
 
   :root[data-theme="light"] {
     color-scheme: light;
+    --ds-canvas: #eef2f6;
+    --ds-rail: #f8fafc;
+    --ds-surface: #ffffff;
+    --ds-dialog: #ffffff;
+    --ds-rule: rgb(15 23 42 / 0.12);
+    --ds-text: #1c2733;
+    --ds-muted: #526170;
+    --ds-accent: #087f95;
+    --ds-overlay: rgb(15 23 42 / 0.34);
+    --ds-anvil-50: 28 39 51;
+    --ds-anvil-100: 28 39 51;
+    --ds-anvil-200: 82 97 112;
+    --ds-anvil-300: 82 97 112;
+    --ds-anvil-400: 62 78 94;
+    --ds-anvil-500: 62 78 94;
+    --ds-anvil-600: 62 78 94;
+    --ds-anvil-700: 216 224 232;
+    --ds-anvil-800: 239 244 247;
+    --ds-anvil-900: 248 250 252;
+    --ds-anvil-950: 255 255 255;
+    --ds-circuit-50: 4 74 87;
+    --ds-circuit-100: 6 115 132;
+    --ds-circuit-200: 6 115 132;
+    --ds-circuit-300: 6 115 132;
+    --ds-circuit-400: 6 115 132;
+    --ds-circuit-500: 5 101 117;
+    --ds-circuit-600: 5 90 105;
+    --ds-circuit-700: 4 74 87;
+    --ds-circuit-800: 3 61 72;
+    --ds-circuit-900: 3 49 58;
+    --ds-circuit-950: 2 35 42;
+    --ds-signal-green: 8 127 79;
+    --ds-signal-amber: 138 84 0;
+    --ds-signal-red: 180 35 24;
+    --ds-surface-card: 255 255 255;
+    --ds-surface-dialog: 255 255 255;
+    --ds-surface-terminal: 6 16 25;
   }
 
   html,
@@ -18,7 +92,9 @@
   }
 
   body {
-    @apply bg-anvil-950 font-sans text-anvil-100 antialiased;
+    @apply font-sans antialiased;
+    background: var(--ds-canvas);
+    color: var(--ds-text);
     font-size: 14px;
     font-feature-settings:
       "cv02" 1,
@@ -29,8 +105,8 @@
   }
 
   :root[data-theme="light"] body {
-    background: #f3f6f9;
-    color: #1c2733;
+    background: var(--ds-canvas);
+    color: var(--ds-text);
   }
 
   :root[data-theme="light"] .bg-anvil-950,
@@ -51,9 +127,143 @@
     color: #526170 !important;
   }
 
+  :root[data-theme="light"] .text-circuit-100,
+  :root[data-theme="light"] .text-circuit-200,
+  :root[data-theme="light"] .text-circuit-300,
+  :root[data-theme="light"] .text-circuit-400 {
+    color: #087f95 !important;
+  }
+
+  :root[data-theme="light"] .bg-circuit-300 {
+    background-color: #006b7f !important;
+    color: #f8fafc !important;
+  }
+
+  :root[data-theme="light"] .text-circuit-50,
+  :root[data-theme="light"] .text-circuit-100,
+  :root[data-theme="light"] .text-circuit-200,
+  :root[data-theme="light"] .text-circuit-300,
+  :root[data-theme="light"] .text-circuit-400 {
+    color: #006b7f !important;
+  }
+
+  :root[data-theme="light"] .text-emerald-100,
+  :root[data-theme="light"] .text-emerald-200,
+  :root[data-theme="light"] .text-emerald-300,
+  :root[data-theme="light"] .text-emerald-400,
+  :root[data-theme="light"] .text-emerald-500,
+  :root[data-theme="light"] .text-green-100,
+  :root[data-theme="light"] .text-green-200,
+  :root[data-theme="light"] .text-green-300,
+  :root[data-theme="light"] .text-green-400,
+  :root[data-theme="light"] .text-green-500,
+  :root[data-theme="light"] [class*="text-emerald-100/"],
+  :root[data-theme="light"] [class*="text-emerald-200/"],
+  :root[data-theme="light"] [class*="text-emerald-300/"],
+  :root[data-theme="light"] [class*="text-emerald-400/"],
+  :root[data-theme="light"] [class*="text-green-100/"],
+  :root[data-theme="light"] [class*="text-green-200/"],
+  :root[data-theme="light"] [class*="text-green-300/"],
+  :root[data-theme="light"] [class*="text-green-400/"] {
+    color: #067647 !important;
+  }
+
+  :root[data-theme="light"] .text-amber-100,
+  :root[data-theme="light"] .text-amber-200,
+  :root[data-theme="light"] .text-amber-300,
+  :root[data-theme="light"] .text-amber-400,
+  :root[data-theme="light"] .text-amber-500,
+  :root[data-theme="light"] .text-yellow-100,
+  :root[data-theme="light"] .text-yellow-200,
+  :root[data-theme="light"] .text-yellow-300,
+  :root[data-theme="light"] .text-yellow-400,
+  :root[data-theme="light"] .text-yellow-500 {
+    color: #8a5400 !important;
+  }
+
+  :root[data-theme="light"] [class*="text-amber-100/"],
+  :root[data-theme="light"] [class*="text-amber-200/"],
+  :root[data-theme="light"] [class*="text-amber-300/"],
+  :root[data-theme="light"] [class*="text-amber-400/"],
+  :root[data-theme="light"] [class*="text-yellow-100/"],
+  :root[data-theme="light"] [class*="text-yellow-200/"],
+  :root[data-theme="light"] [class*="text-yellow-300/"],
+  :root[data-theme="light"] [class*="text-yellow-400/"] {
+    color: #8a5400 !important;
+  }
+
+  :root[data-theme="light"] .text-red-100,
+  :root[data-theme="light"] .text-red-200,
+  :root[data-theme="light"] .text-red-300,
+  :root[data-theme="light"] .text-red-400,
+  :root[data-theme="light"] .text-red-500 {
+    color: #b42318 !important;
+  }
+
+  :root[data-theme="light"] [class*="text-red-100/"],
+  :root[data-theme="light"] [class*="text-red-200/"],
+  :root[data-theme="light"] [class*="text-red-300/"],
+  :root[data-theme="light"] [class*="text-red-400/"] {
+    color: #b42318 !important;
+  }
+
   :root[data-theme="light"] .technical-canvas {
-    background-color: #eef2f6;
+    background-color: var(--ds-canvas);
     background-image: none;
+  }
+
+  /* Terminal and code surfaces intentionally stay dark in both themes so
+     logs retain their familiar visual hierarchy. Their text uses the light
+     side of the palette instead of the page-muted tokens. */
+  :root[data-theme="light"] .bg-surface-terminal {
+    background-color: rgb(var(--ds-surface-terminal)) !important;
+    color: #e3eaf0;
+  }
+
+  :root[data-theme="light"] .bg-surface-terminal .text-anvil-50,
+  :root[data-theme="light"] .bg-surface-terminal .text-anvil-100,
+  :root[data-theme="light"] .bg-surface-terminal .text-anvil-200,
+  :root[data-theme="light"] .bg-surface-terminal .text-anvil-300,
+  :root[data-theme="light"] .bg-surface-terminal .text-anvil-400,
+  :root[data-theme="light"] .bg-surface-terminal .text-anvil-500,
+  :root[data-theme="light"] .bg-surface-terminal .text-anvil-600 {
+    color: #e3eaf0 !important;
+  }
+
+  :root[data-theme="light"] .bg-surface-terminal [class*="text-anvil-"] {
+    color: #e3eaf0 !important;
+  }
+
+  :root[data-theme="light"] .bg-surface-terminal .text-circuit-100,
+  :root[data-theme="light"] .bg-surface-terminal .text-circuit-200,
+  :root[data-theme="light"] .bg-surface-terminal .text-circuit-300,
+  :root[data-theme="light"] .bg-surface-terminal .text-circuit-400 {
+    color: #67e8f9 !important;
+  }
+
+  /* Raw black utility surfaces are used for bounded command/output previews;
+     keep them readable when the surrounding page switches to light. */
+  :root[data-theme="light"] [class*="bg-black"],
+  :root[data-theme="light"] code {
+    background-color: rgb(var(--ds-surface-card)) !important;
+  }
+
+  :root[data-theme="light"] [class*="bg-surface-card/"] {
+    background-color: rgb(var(--ds-surface-card)) !important;
+  }
+
+  :root[data-theme="light"] [class*="bg-circuit-950"] {
+    background-color: rgb(var(--ds-circuit-300) / 0.08) !important;
+  }
+
+  /* Keep compatibility with a caller that still carries the old literal
+     surface utility while it is being migrated to the semantic token. */
+  :root[data-theme="light"] [class*="bg-[#0c141c]"] {
+    background-color: rgb(var(--ds-surface-card)) !important;
+  }
+
+  :root[data-theme="light"] .runtime-rail {
+    background-color: var(--ds-rail) !important;
   }
 
   button,
@@ -61,6 +271,19 @@
   select,
   textarea {
     font: inherit;
+  }
+
+  :where(
+    button,
+    input,
+    select,
+    textarea,
+    a,
+    summary,
+    [role="button"]
+  ):focus-visible {
+    outline: 2px solid var(--ds-accent) !important;
+    outline-offset: 2px;
   }
 
   h1,
@@ -126,8 +349,65 @@
   }
 
   .technical-canvas {
-    background-color: #091219;
+    background-color: var(--ds-canvas);
     background-image: none;
+  }
+
+  .app-shell {
+    background-color: var(--ds-canvas) !important;
+    color: var(--ds-text);
+  }
+
+  .sidebar-shell {
+    background-color: var(--ds-rail) !important;
+    border-color: var(--ds-rule) !important;
+  }
+
+  .main-shell {
+    background-color: var(--ds-canvas);
+  }
+
+  .surface-card {
+    border-color: var(--ds-rule) !important;
+  }
+
+  .ds-dialog {
+    background-color: var(--ds-dialog) !important;
+    border-color: var(--ds-rule) !important;
+    animation: ds-dialog-in 180ms ease-out both;
+  }
+
+  .ds-overlay {
+    background-color: var(--ds-overlay) !important;
+    animation: ds-overlay-in 140ms ease-out both;
+  }
+
+  .ds-control,
+  .ds-field {
+    border-color: var(--ds-rule) !important;
+  }
+
+  .ds-control {
+    min-height: 2rem;
+  }
+
+  .ds-field {
+    background-color: color-mix(
+      in srgb,
+      var(--ds-canvas) 84%,
+      white 16%
+    ) !important;
+  }
+
+  .ds-field::placeholder {
+    color: var(--ds-muted);
+    opacity: 0.72;
+  }
+
+  .ds-field:focus-visible,
+  .ds-control:focus-visible {
+    border-color: color-mix(in srgb, var(--ds-accent) 72%, transparent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--ds-accent) 20%, transparent);
   }
 
   .route-frame {
@@ -163,6 +443,26 @@
 
   .route-frame :is(input, select, textarea):focus {
     outline: none;
+  }
+
+  @keyframes ds-overlay-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes ds-dialog-in {
+    from {
+      opacity: 0;
+      transform: translateY(0.35rem) scale(0.99);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
   }
 
   .runtime-rail {

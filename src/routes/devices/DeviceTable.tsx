@@ -146,7 +146,7 @@ export function DeviceTable({
                           : undefined
                       }
                       onClick={() => onSelect(device)}
-                      className="flex h-7 w-7 items-center justify-center rounded-full text-anvil-600 transition hover:text-anvil-300 disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-circuit-300 focus-visible:ring-offset-2 focus-visible:ring-offset-anvil-900"
+                      className="flex h-7 w-7 items-center justify-center rounded-sm text-anvil-600 transition hover:text-anvil-300 disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-circuit-300 focus-visible:ring-offset-2 focus-visible:ring-offset-anvil-900"
                     >
                       <SelectionIcon selected={isSelected} />
                     </button>

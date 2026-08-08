@@ -900,11 +900,15 @@ function validateDependencySecurityFloors(floors) {
       typeof floor.manifest === "string" && fs.existsSync(manifestPath),
       `dependency security floor manifest is missing: ${floor.manifest}`,
     );
+    const npmFloor = floor.manifest.endsWith("package-lock.json");
+    const dependencyName = npmFloor ? floor.package : floor.crate;
     assert(
-      typeof floor.crate === "string" && floor.crate.length > 0,
-      "dependency security floor crate is required",
+      typeof dependencyName === "string" && dependencyName.length > 0,
+      npmFloor
+        ? "npm dependency security floor package is required"
+        : "dependency security floor crate is required",
     );
-    assertSemver(`${floor.crate} security floor`, floor.minimumVersion);
+    assertSemver(`${dependencyName} security floor`, floor.minimumVersion);
     assert(
       typeof floor.rationale === "string" &&
         floor.rationale.trim().length >= 20,
@@ -913,8 +917,23 @@ function validateDependencySecurityFloors(floors) {
     assert(
       typeof floor.sourceUrl === "string" &&
         floor.sourceUrl.startsWith("https://"),
-      `${floor.crate} security floor needs an https source URL`,
+      `${dependencyName} security floor needs an https source URL`,
     );
+    assert(
+      typeof floor.advisory === "string" &&
+        /^(?:CVE|GHSA)-/u.test(floor.advisory),
+      `${dependencyName} security floor needs a CVE or GHSA advisory id`,
+    );
+    if (npmFloor) {
+      const lock = readJson(manifestPath);
+      const resolved = readNpmDependencyVersion(lock, floor.package);
+      assert(
+        resolved !== undefined,
+        `${floor.package} is not resolved in ${floor.manifest}`,
+      );
+      validateNpmDependencyFloor(floor, resolved);
+      continue;
+    }
     const declared = readCargoDependencyRequirement(
       fs.readFileSync(manifestPath, "utf8"),
       floor.crate,
@@ -925,6 +944,18 @@ function validateDependencySecurityFloors(floors) {
     );
     validateDependencyFloor(floor, declared);
   }
+}
+
+export function readNpmDependencyVersion(lock, packageName) {
+  return lock?.packages?.[`node_modules/${packageName}`]?.version;
+}
+
+export function validateNpmDependencyFloor(floor, resolved) {
+  assertSemver(`${floor.package} resolved version`, resolved);
+  assert(
+    compareVersions(resolved, floor.minimumVersion) >= 0,
+    `${floor.package} resolves to ${resolved}, below the ${floor.minimumVersion} security floor (${floor.cve ?? floor.advisory})`,
+  );
 }
 
 // A caret requirement only guarantees the advisory fix when the declared floor

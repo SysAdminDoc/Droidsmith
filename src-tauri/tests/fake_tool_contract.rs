@@ -497,6 +497,7 @@ fn device(serial: &str, build: &str) -> Device {
         model: Some("Pixel".to_string()),
         product: Some("panther".to_string()),
         device: Some("panther".to_string()),
+        marketing_name: None,
         bus_address: None,
         connection_type: None,
         negotiated_speed: None,
@@ -567,7 +568,12 @@ fn run_fake_adb(args: &[String]) {
         serde_json::to_writer(&mut record, args).unwrap();
         record.write_all(b"\n").unwrap();
     }
-    let Some(command) = case.commands.iter().find(|command| command.argv == args) else {
+    let Some(command) = case.commands.iter().find(|command| {
+        command.argv.len() == args.len()
+            && command.argv.iter().zip(args).all(|(expected, actual)| {
+                expected == actual || unquote_shell_path(actual) == expected.as_str()
+            })
+    }) else {
         eprintln!(
             "unmatched sanitized ADB transcript command in {}: {}",
             case.id,
@@ -585,6 +591,14 @@ fn run_fake_adb(args: &[String]) {
         .unwrap();
     if command.exit_code != 0 {
         std::process::exit(command.exit_code);
+    }
+}
+
+fn unquote_shell_path(value: &str) -> String {
+    if value.starts_with('\'') && value.ends_with('\'') && value.len() >= 2 {
+        value[1..value.len() - 1].replace("'\\''", "'")
+    } else {
+        String::new()
     }
 }
 

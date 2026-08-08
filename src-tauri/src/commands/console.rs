@@ -136,14 +136,7 @@ pub(crate) enum ShellClassification {
 /// whitespace into `getprop;`) would execute a hidden mutation while the head
 /// token still looked read-only. Such argv can never be classified read-only.
 pub(crate) fn argv_has_shell_control_metacharacter(argv: &[String]) -> bool {
-    argv.iter().any(|token| {
-        token.chars().any(|character| {
-            matches!(
-                character,
-                ';' | '|' | '&' | '$' | '`' | '(' | ')' | '<' | '>'
-            )
-        })
-    })
+    actions::argv_has_shell_control_metacharacter(argv)
 }
 
 pub(crate) fn logcat_is_read_only(argv: &[String]) -> bool {

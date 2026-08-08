@@ -1307,6 +1307,16 @@ pub fn validate_plan(plan: &PlannedAction) -> Result<(), TransportError> {
                     "shell action has invalid canonical context".to_string(),
                 ));
             }
+            if plan.request.context.confirmation_source == ConfirmationSource::FileManagerReview
+                && crate::remote_files::argv_has_shell_control_metacharacter(
+                    &plan.request.context.shell_argv,
+                )
+            {
+                return Err(TransportError::Parse(
+                    "remote file action contains shell control syntax outside a quoted path"
+                        .to_string(),
+                ));
+            }
             let restore = &plan.request.context.device_control_restore_argv;
             let expected_before = plan
                 .request
@@ -1432,6 +1442,21 @@ pub fn valid_shell_argv(argv: &[String]) -> bool {
         })
 }
 
+/// Return true when a shell token can chain commands, substitute a process,
+/// or redirect output.  This is shared by the interactive console and the
+/// structured remote-file executor so every `adb shell` boundary uses the
+/// same control-character policy.
+pub fn argv_has_shell_control_metacharacter(argv: &[String]) -> bool {
+    argv.iter().any(|token| {
+        token.chars().any(|character| {
+            matches!(
+                character,
+                ';' | '|' | '&' | '$' | '`' | '(' | ')' | '<' | '>'
+            )
+        })
+    })
+}
+
 /// `pm` exits 0 even when the package action fails — the failure shows
 /// up in stdout. This recognises the common shapes:
 ///
@@ -1518,7 +1543,6 @@ mod tests {
             model: None,
             product: None,
             device: None,
-            marketing_name: None,
             build_fingerprint: Some("build/test".into()),
             transport_kind: crate::adb::DeviceTransportKind::Usb,
             untrusted_transport_override: false,
@@ -1532,6 +1556,7 @@ mod tests {
             model: None,
             product: None,
             device: None,
+            marketing_name: None,
             bus_address: None,
             connection_type: None,
             negotiated_speed: None,

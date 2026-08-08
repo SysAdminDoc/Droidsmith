@@ -56,10 +56,11 @@ export function Card({
   return (
     <div
       className={cn(
+        "surface-card",
         surface === "section" &&
-          "rounded-none border-y border-white/[0.105] bg-[#0c141c]/70 shadow-none",
+          "rounded-none border-y border-white/[0.105] bg-surface-card/70 shadow-none",
         surface === "panel" &&
-          "rounded-none border-y border-white/[0.105] bg-[#0c141c]/55 shadow-none",
+          "rounded-none border-y border-white/[0.105] bg-surface-card/55 shadow-none",
         surface === "dialog" &&
           "rounded-md border border-white/10 bg-surface-dialog shadow-2xl",
         className ?? "px-4 py-3",
@@ -85,7 +86,7 @@ export function Button({
     <button
       type="button"
       className={cn(
-        "inline-flex items-center justify-center gap-1.5 rounded-[0.12rem] border border-transparent font-medium transition duration-150",
+        "ds-control inline-flex items-center justify-center gap-1.5 rounded border border-transparent font-medium transition duration-150",
         "focus:outline-none focus-visible:ring-2 focus-visible:ring-circuit-300 focus-visible:ring-offset-2 focus-visible:ring-offset-anvil-950",
         "disabled:cursor-not-allowed disabled:opacity-50",
         size === "sm" ? "min-h-8 px-2.5 text-xs" : "min-h-8 px-3 text-xs",
@@ -215,7 +216,7 @@ export function Badge({
       {tone !== "neutral" && tone !== "info" && (
         <span
           className={cn(
-            "h-1.5 w-1.5 shrink-0 rounded-full",
+            "h-1.5 w-1.5 shrink-0 rounded-sm",
             tone === "success" && "bg-emerald-300",
             tone === "warning" && "bg-amber-300",
             tone === "danger" && "bg-red-300",
@@ -347,7 +348,7 @@ export function FieldInput({
   return (
     <input
       className={cn(
-        "h-8 min-w-0 max-w-full rounded-[0.12rem] border border-white/[0.12] bg-transparent px-2.5 text-sm text-anvil-50 outline-none transition",
+        "ds-field h-8 min-w-0 max-w-full rounded border border-white/[0.12] bg-transparent px-2.5 text-sm text-anvil-50 outline-none transition",
         "placeholder:text-anvil-600 hover:border-white/20 focus:border-circuit-300/60 focus:ring-2 focus:ring-circuit-300/20",
         "disabled:cursor-not-allowed disabled:opacity-50",
         className,
@@ -364,7 +365,7 @@ export function FieldSelect({
   return (
     <select
       className={cn(
-        "h-8 min-w-0 max-w-full rounded-[0.12rem] border border-white/[0.12] bg-transparent px-2.5 text-sm text-anvil-50 outline-none transition",
+        "ds-field h-8 min-w-0 max-w-full rounded border border-white/[0.12] bg-transparent px-2.5 text-sm text-anvil-50 outline-none transition",
         "hover:border-white/20 focus:border-circuit-300/60 focus:ring-2 focus:ring-circuit-300/20",
         "disabled:cursor-not-allowed disabled:opacity-50",
         className,
@@ -381,7 +382,7 @@ export function FieldTextArea({
   return (
     <textarea
       className={cn(
-        "w-full min-w-0 max-w-full rounded-[0.12rem] border border-white/[0.12] bg-transparent px-2.5 py-2 text-sm text-anvil-50 outline-none transition",
+        "ds-field w-full min-w-0 max-w-full rounded border border-white/[0.12] bg-transparent px-2.5 py-2 text-sm text-anvil-50 outline-none transition",
         "placeholder:text-anvil-600 hover:border-white/20 focus:border-circuit-300/60 focus:ring-2 focus:ring-circuit-300/20",
         "disabled:cursor-not-allowed disabled:opacity-50",
         className,

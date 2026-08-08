@@ -23,7 +23,7 @@ fn device_name_map() -> &'static DeviceNameMap {
     static MAP: OnceLock<DeviceNameMap> = OnceLock::new();
     MAP.get_or_init(|| {
         let map: DeviceNameMap =
-            serde_json::from_str(include_str!("../../../../resources/device-names.json"))
+            serde_json::from_str(include_str!("../../../resources/device-names.json"))
                 .expect("bundled device name map must be valid JSON");
         debug_assert_eq!(map.schema_version, 1);
         debug_assert!(!map.source.is_empty() && !map.revision_date.is_empty());
@@ -173,10 +173,9 @@ fn parse_memory_limit_kb(output: &str) -> Option<u64> {
             (value, 1u64)
         } else if let Some(value) = normalized.strip_suffix("MB") {
             (value, 1024u64)
-        } else if let Some(value) = normalized.strip_suffix("GB") {
-            (value, 1024u64 * 1024)
         } else {
-            return None;
+            let value = normalized.strip_suffix("GB")?;
+            (value, 1024u64 * 1024)
         };
         number.parse::<u64>().ok()?.checked_mul(multiplier)
     })

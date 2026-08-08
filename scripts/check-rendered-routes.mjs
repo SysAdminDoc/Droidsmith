@@ -95,52 +95,62 @@ async function runAccessibilityAuditFlow(browser) {
     "Tuning",
     "APK Analyzer",
   ];
-  for (const route of routes) {
+  for (const theme of ["dark", "light"]) {
+    await page.evaluate((nextTheme) => {
+      document.documentElement.dataset.theme = nextTheme;
+      document.documentElement.style.colorScheme = nextTheme;
+    }, theme);
+    for (const route of routes) {
+      await page
+        .getByRole("button", { name: new RegExp(`^${escapeRegex(route)}`) })
+        .first()
+        .click();
+      await page.getByRole("heading", { name: route, exact: true }).waitFor();
+      const accessibilityTree = await page.locator("body").ariaSnapshot();
+      if (/\bR-\d{3}\b/u.test(accessibilityTree)) {
+        throw new Error(
+          `${route} exposed an internal roadmap id:\n${accessibilityTree}`,
+        );
+      }
+      await assertAxeClean(page, `${theme} ${route} route`);
+      await assertContrastClean(page, `${theme} ${route} route`);
+    }
+
+    await page.keyboard.press("Control+k");
+    await page.getByRole("dialog", { name: "Command palette" }).waitFor();
+    await assertAxeClean(page, `${theme} command palette`);
+    await assertContrastClean(page, `${theme} command palette`);
+    await page.keyboard.press("Escape");
+
+    await page.getByRole("button", { name: "Help", exact: true }).click();
+    await page.getByRole("dialog", { name: "Getting started" }).waitFor();
+    await assertAxeClean(page, `${theme} onboarding dialog`);
+    await assertContrastClean(page, `${theme} onboarding dialog`);
+    await page.keyboard.press("Escape");
+
+    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await page.getByRole("dialog", { name: /settings/i }).waitFor();
+    await assertAxeClean(page, `${theme} settings dialog`);
+    await assertContrastClean(page, `${theme} settings dialog`);
+    await page.keyboard.press("Escape");
+
     await page
-      .getByRole("button", { name: new RegExp(`^${escapeRegex(route)}`) })
+      .getByRole("button", { name: /^Console/ })
       .first()
       .click();
-    await page.getByRole("heading", { name: route, exact: true }).waitFor();
-    const accessibilityTree = await page.locator("body").ariaSnapshot();
-    if (/\bR-\d{3}\b/u.test(accessibilityTree)) {
-      throw new Error(
-        `${route} exposed an internal roadmap id:\n${accessibilityTree}`,
-      );
-    }
-    await assertAxeClean(page, `${route} route`);
-    await assertContrastClean(page, `${route} route`);
+    await page.getByRole("heading", { name: "Console", exact: true }).waitFor();
+    await page.getByLabel("ADB shell command").fill("rm /sdcard/qa.txt");
+    await page.getByRole("button", { name: "Run", exact: true }).click();
+    await page
+      .getByRole("alertdialog", { name: "Review shell mutation" })
+      .waitFor();
+    await assertAxeClean(page, `${theme} destructive action review dialog`);
+    await assertContrastClean(
+      page,
+      `${theme} destructive action review dialog`,
+    );
+    await page.keyboard.press("Escape");
   }
-
-  await page.keyboard.press("Control+k");
-  await page.getByRole("dialog", { name: "Command palette" }).waitFor();
-  await assertAxeClean(page, "command palette");
-  await assertContrastClean(page, "command palette");
-  await page.keyboard.press("Escape");
-
-  await page.getByRole("button", { name: "Help", exact: true }).click();
-  await page.getByRole("dialog", { name: "Getting started" }).waitFor();
-  await assertAxeClean(page, "onboarding dialog");
-  await assertContrastClean(page, "onboarding dialog");
-  await page.keyboard.press("Escape");
-
-  await page.getByRole("button", { name: "Settings", exact: true }).click();
-  await page.getByRole("dialog", { name: /settings/i }).waitFor();
-  await assertAxeClean(page, "settings dialog");
-  await assertContrastClean(page, "settings dialog");
-  await page.keyboard.press("Escape");
-
-  await page
-    .getByRole("button", { name: /^Console/ })
-    .first()
-    .click();
-  await page.getByRole("heading", { name: "Console", exact: true }).waitFor();
-  await page.getByLabel("ADB shell command").fill("rm /sdcard/qa.txt");
-  await page.getByRole("button", { name: "Run", exact: true }).click();
-  await page
-    .getByRole("alertdialog", { name: "Review shell mutation" })
-    .waitFor();
-  await assertAxeClean(page, "destructive action review dialog");
-  await assertContrastClean(page, "destructive action review dialog");
 
   assertNoConsoleErrors(errors, "accessibility route smoke");
   await context.close();
@@ -3537,7 +3547,12 @@ async function installTauriMock(
             },
             user: { mode: "owner", id: null },
             actions: [
-              { kind: "disable", package: "com.example.app", filter: "", note: "" },
+              {
+                kind: "disable",
+                package: "com.example.app",
+                filter: "",
+                note: "",
+              },
               {
                 kind: "disable",
                 package: "com.example.disabled",

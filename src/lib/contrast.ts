@@ -7,6 +7,7 @@ export type RgbaColor = Readonly<{
 
 const HEX_COLOR = /^#([\da-f]{6}|[\da-f]{8})$/iu;
 const RGB_COLOR = /^rgba?\((.*)\)$/iu;
+const SRGB_COLOR = /^color\(\s*srgb\s+(.+)\)$/iu;
 
 export function parseCssColor(value: string): RgbaColor {
   const normalized = value.trim().toLowerCase();
@@ -21,6 +22,28 @@ export function parseCssColor(value: string): RgbaColor {
       green: Number.parseInt(hex.slice(2, 4), 16),
       blue: Number.parseInt(hex.slice(4, 6), 16),
       alpha: hex.length === 8 ? Number.parseInt(hex.slice(6, 8), 16) / 255 : 1,
+    };
+  }
+
+  const srgb = normalized.match(SRGB_COLOR)?.[1];
+  if (srgb) {
+    const [channelsPart, slashAlpha] = srgb
+      .split("/")
+      .map((part) => part.trim());
+    const channels = (channelsPart ?? "").split(/\s+/u).map(Number);
+    const alpha = slashAlpha === undefined ? 1 : Number(slashAlpha);
+    if (
+      channels.length !== 3 ||
+      channels.some((channel) => !Number.isFinite(channel)) ||
+      !Number.isFinite(alpha)
+    ) {
+      throw new Error(`Unsupported CSS color: ${value}`);
+    }
+    return {
+      red: channels[0]! * 255,
+      green: channels[1]! * 255,
+      blue: channels[2]! * 255,
+      alpha,
     };
   }
 

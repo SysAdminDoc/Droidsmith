@@ -120,6 +120,23 @@
       "cve": "CVE-2026-42184",
       "rationale": "is_local_url used split_once('.'), so a remote page such as http://app.evil.com matched the app:// custom protocol on Windows and could invoke local-only IPC commands. Droidsmith exposes privileged device-mutation commands across that boundary, so the fixed version must be a declared manifest floor rather than whatever the lockfile happens to resolve.",
       "sourceUrl": "https://github.com/tauri-apps/tauri/security/advisories/GHSA-7gmj-67g7-phm9"
+    },
+    {
+      "manifest": "package-lock.json",
+      "package": "brace-expansion",
+      "minimumVersion": "5.0.9",
+      "advisory": "GHSA-rgw5-rvv9-x895",
+      "cve": "CVE-2026-69152",
+      "rationale": "The npm lockfile must not resolve the brace-expansion command-line injection advisory through the ESLint minimatch graph. The patched release is the first safe 5.x version and is checked from the resolved lockfile entry.",
+      "sourceUrl": "https://github.com/advisories/GHSA-rgw5-rvv9-x895"
+    },
+    {
+      "manifest": "package-lock.json",
+      "package": "nanoid",
+      "minimumVersion": "3.3.17",
+      "advisory": "GHSA-2v37-7h3g-55p8",
+      "rationale": "The PostCSS dependency graph must resolve a nanoid release containing the advisory fix. Checking the lockfile version prevents a fresh install from silently returning the vulnerable 3.3.16 transitive package.",
+      "sourceUrl": "https://github.com/advisories/GHSA-2v37-7h3g-55p8"
     }
   ]
 }

@@ -278,7 +278,7 @@ export default function App() {
   }, []);
 
   return (
-    <div className="min-h-full overflow-hidden bg-anvil-950 text-anvil-100 lg:grid lg:h-full lg:grid-rows-[minmax(0,1fr)_2.15rem]">
+    <div className="app-shell min-h-full overflow-hidden bg-anvil-950 text-anvil-100 lg:grid lg:h-full lg:grid-rows-[minmax(0,1fr)_2.15rem]">
       <a
         href="#main-content"
         className="sr-only focus:not-sr-only focus:fixed focus:start-4 focus:top-4 focus:z-50 focus:rounded-md focus:bg-circuit-300 focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:text-anvil-950"
@@ -288,14 +288,14 @@ export default function App() {
       <div className="relative flex min-h-full min-w-0 flex-col lg:h-full lg:min-h-0 lg:flex-row">
         <aside
           ref={sidebarRef}
-          className="border-b border-white/10 bg-[#07131b] px-2.5 py-2.5 lg:sticky lg:top-0 lg:flex lg:h-full lg:w-[12rem] lg:shrink-0 lg:flex-col lg:overflow-y-auto lg:border-b-0 lg:border-e lg:border-white/[0.13] lg:px-2 lg:py-2.5"
+          className="sidebar-shell border-b border-white/10 bg-[#07131b] px-2.5 py-2.5 lg:sticky lg:top-0 lg:flex lg:h-full lg:w-[12rem] lg:shrink-0 lg:flex-col lg:overflow-y-auto lg:border-b-0 lg:border-e lg:border-white/[0.13] lg:px-2 lg:py-2.5"
           aria-label={t("app.sidebarLabel")}
         >
           <div className="flex items-center justify-between gap-3 border-b border-white/[0.08] pb-2.5">
             <Brand state={hb} />
             <button
               type="button"
-              className="grid h-8 w-8 shrink-0 place-items-center rounded-[0.12rem] text-anvil-400 transition hover:bg-white/[0.06] hover:text-anvil-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-circuit-300"
+              className="grid h-8 w-8 shrink-0 place-items-center rounded text-anvil-400 transition hover:bg-white/[0.06] hover:text-anvil-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-circuit-300"
               aria-label={t("palette.title")}
               title={`${t("palette.title")} (Ctrl+K)`}
               onClick={() => palette.setOpen(true)}
@@ -349,7 +349,7 @@ export default function App() {
           id="main-content"
           tabIndex={-1}
           aria-label={t(activeItem.labelKey)}
-          className="technical-canvas min-w-0 flex-1 overflow-auto px-3 py-2.5 outline-none sm:px-4 lg:h-full lg:px-4 lg:py-2.5 xl:px-5"
+          className="main-shell technical-canvas min-w-0 flex-1 overflow-auto px-3 py-2.5 outline-none sm:px-4 lg:h-full lg:px-4 lg:py-2.5 xl:px-5"
         >
           <div className="mx-auto max-w-[96rem]">
             <LazyRoute item={activeItem} />
@@ -517,7 +517,7 @@ function OnboardingModal({ onDismiss }: { onDismiss: () => void }) {
       aria-modal="true"
       aria-labelledby="onboarding-title"
       tabIndex={-1}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 outline-none backdrop-blur-sm"
+      className="ds-overlay fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 outline-none backdrop-blur-sm"
     >
       <OnboardingTour onDismiss={onDismiss} />
     </div>
@@ -551,9 +551,9 @@ function SettingsModal({
       aria-modal="true"
       aria-labelledby="settings-modal-title"
       tabIndex={-1}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 outline-none backdrop-blur-sm"
+      className="ds-overlay fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 outline-none backdrop-blur-sm"
     >
-      <div className="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-lg border border-white/10 bg-surface-dialog p-5 shadow-2xl sm:p-6">
+      <div className="ds-dialog max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-lg border border-white/10 bg-surface-dialog p-5 shadow-2xl sm:p-6">
         <div className="flex items-start justify-between gap-4 border-b border-white/10 pb-4">
           <div>
             <h2
@@ -622,9 +622,9 @@ function AboutModal({
       aria-modal="true"
       aria-labelledby="about-modal-title"
       tabIndex={-1}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 outline-none backdrop-blur-sm"
+      className="ds-overlay fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 outline-none backdrop-blur-sm"
     >
-      <div className="w-full max-w-md rounded-lg border border-white/10 bg-surface-dialog p-6 shadow-2xl">
+      <div className="ds-dialog w-full max-w-md rounded-lg border border-white/10 bg-surface-dialog p-6 shadow-2xl">
         <div className="flex items-start gap-4">
           <LogoMark />
           <div className="min-w-0">
@@ -723,7 +723,7 @@ function RuntimeRail({ state }: { state: LoadState }) {
       <span className="flex items-center gap-2 text-anvil-200">
         <span
           className={cn(
-            "h-2 w-2 rounded-full",
+            "h-2 w-2 rounded-sm",
             adbResolved ? "bg-emerald-300" : "bg-amber-300",
           )}
           aria-hidden="true"
@@ -886,7 +886,7 @@ function LanguageSelector({ className }: { className?: string }) {
         aria-describedby={
           languageError ? "language-persistence-error" : undefined
         }
-        className="h-9 w-full rounded-md border border-transparent bg-white/[0.035] px-3 text-xs text-anvil-300 outline-none transition hover:bg-white/[0.06] focus:border-circuit-300/60 focus:ring-2 focus:ring-circuit-300/20"
+        className="ds-field h-9 w-full rounded-md border border-transparent bg-white/[0.035] px-3 text-xs text-anvil-300 outline-none transition hover:bg-white/[0.06] focus:border-circuit-300/60 focus:ring-2 focus:ring-circuit-300/20"
       >
         {SUPPORTED_LANGUAGES.map((language) => (
           <option key={language.code} value={language.code}>
@@ -983,7 +983,7 @@ function LogoMark() {
     <img
       src={droidsmithLogo}
       alt=""
-      className="h-8 w-8 shrink-0 rounded-[0.12rem]"
+      className="h-8 w-8 shrink-0 rounded"
       aria-hidden="true"
     />
   );

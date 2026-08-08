@@ -2,7 +2,11 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::adb::{actions, AdbTransport, DeviceTarget, TransportError};
+use crate::adb::{
+    actions,
+    transport::{joined_posix_shell_command, posix_shell_quote},
+    AdbTransport, DeviceTarget, TransportError,
+};
 
 const MAX_REMOTE_PATH_BYTES: usize = 4_096;
 
@@ -49,6 +53,68 @@ pub enum RemoteFileError {
     RenameDestination,
     #[error("{0:?} does not accept a destination path")]
     UnexpectedDestination(RemoteFileMutationKind),
+}
+
+fn path_indexes(kind: RemoteFileMutationKind) -> &'static [usize] {
+    match kind {
+        RemoteFileMutationKind::Mkdir => &[1],
+        RemoteFileMutationKind::DeleteFile | RemoteFileMutationKind::DeleteDirectory => &[2],
+        RemoteFileMutationKind::Rename => &[2, 3],
+    }
+}
+
+/// Apply the shared shell-control check to command/flag tokens while allowing
+/// legal filename bytes in the validated path slots. Those path slots are
+/// single-quoted at the transport boundary below; rejecting a semicolon in a
+/// filename here would make safe, ordinary Android filenames unusable.
+pub fn argv_has_shell_control_metacharacter(argv: &[String]) -> bool {
+    let kind = match argv {
+        [command, _] if command == "mkdir" => RemoteFileMutationKind::Mkdir,
+        [command, option, _, _] if command == "mv" && option == "-n" => {
+            RemoteFileMutationKind::Rename
+        }
+        [command, option, _] if command == "rm" && option == "-f" => {
+            RemoteFileMutationKind::DeleteFile
+        }
+        [command, option, _] if command == "rm" && option == "-rf" => {
+            RemoteFileMutationKind::DeleteDirectory
+        }
+        _ => return true,
+    };
+    let mut command_tokens = argv.to_vec();
+    for index in path_indexes(kind) {
+        command_tokens[*index] = "remote-path".to_string();
+    }
+    actions::argv_has_shell_control_metacharacter(&command_tokens)
+}
+
+/// The human/audit representation of a remote-file command. Unlike the raw
+/// plan argv (which stays structured for state verification), this is the
+/// exact POSIX command text with only device paths quoted.
+pub fn joined_command(argv: &[String]) -> String {
+    let kind = match argv.first().map(String::as_str) {
+        Some("mkdir") => RemoteFileMutationKind::Mkdir,
+        Some("mv") => RemoteFileMutationKind::Rename,
+        Some("rm") if argv.get(1).map(String::as_str) == Some("-f") => {
+            RemoteFileMutationKind::DeleteFile
+        }
+        Some("rm") => RemoteFileMutationKind::DeleteDirectory,
+        _ => {
+            return joined_posix_shell_command(&argv.iter().map(String::as_str).collect::<Vec<_>>())
+        }
+    };
+    let path_indices = path_indexes(kind);
+    argv.iter()
+        .enumerate()
+        .map(|(index, value)| {
+            if path_indices.contains(&index) {
+                posix_shell_quote(value)
+            } else {
+                value.clone()
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 pub fn validate_path(value: &str) -> Result<String, RemoteFileError> {
@@ -156,6 +222,9 @@ pub fn plan(
             )
         }
     };
+    if argv_has_shell_control_metacharacter(&argv) {
+        return Err(RemoteFileError::UnsafePath);
+    }
     Ok(RemoteFileMutationPlan {
         kind: request.kind,
         source_path,
@@ -190,7 +259,11 @@ pub fn action_plan(
             batch_id: None,
         },
     });
-    action.description = plan.description.clone();
+    action.description = format!(
+        "{} (executes `{}`)",
+        plan.description,
+        joined_command(&plan.argv)
+    );
     action
 }
 
@@ -390,5 +463,37 @@ mod tests {
             Ok(String::new()),
         );
         assert!(verify_transition(&verified, &target(), &argv).is_ok());
+    }
+
+    #[test]
+    fn quotes_legal_paths_at_the_shell_boundary_and_verifies_them() {
+        for path in [
+            "/sdcard/My files/report.txt",
+            "/sdcard/report.txt ",
+            "/sdcard/report;notes.txt",
+        ] {
+            let planned = plan(&RemoteFileMutationRequest {
+                kind: RemoteFileMutationKind::DeleteFile,
+                source_path: path.to_string(),
+                destination_path: None,
+            })
+            .unwrap();
+            assert_eq!(planned.argv[2], path);
+            assert_eq!(
+                joined_command(&planned.argv),
+                format!("rm -f {}", posix_shell_quote(path))
+            );
+
+            let transport = MockTransport::new();
+            transport.expect_shell(
+                "abc",
+                &["test", "-e", path],
+                Err(TransportError::Exit {
+                    code: 1,
+                    stderr: String::new(),
+                }),
+            );
+            assert!(verify_transition(&transport, &target(), &planned.argv).is_ok());
+        }
     }
 }

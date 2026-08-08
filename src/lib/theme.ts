@@ -18,6 +18,17 @@ export function applyTheme(
 ): void {
   root?.setAttribute("data-theme", theme);
   root?.style.setProperty("color-scheme", theme);
+  if (typeof window !== "undefined" && "__TAURI_INTERNALS__" in window) {
+    // Keep the native title bar/window chrome aligned with the persisted
+    // renderer preference. The guarded dynamic import keeps browser smoke and
+    // unit tests independent of the Tauri runtime.
+    void import("@tauri-apps/api/app")
+      .then(({ setTheme }) => setTheme(theme))
+      .catch(() => {
+        // A browser preview or an older native runtime may not expose the
+        // app-level theme API; the renderer theme remains authoritative.
+      });
+  }
 }
 
 export function persistTheme(

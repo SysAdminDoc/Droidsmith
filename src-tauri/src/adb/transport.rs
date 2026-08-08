@@ -31,6 +31,57 @@ use crate::adb::parsers::parse_adb_devices_proto_text;
 /// (install, logcat, scrcpy) take per-call overrides.
 pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(10);
 
+/// Quote one argument for the POSIX shell that executes an `adb shell`
+/// command.  ADB's shell transport joins its arguments before handing them to
+/// the device shell, so passing a path as a native host argument is not enough
+/// to preserve spaces or shell metacharacters.  Single quotes are the only
+/// characters emitted by this helper that the shell treats specially; an
+/// embedded quote is closed, escaped, and reopened.
+pub fn posix_shell_quote(value: &str) -> String {
+    let mut quoted = String::with_capacity(value.len() + 2);
+    quoted.push('\'');
+    for character in value.chars() {
+        if character == '\'' {
+            quoted.push_str("'\\''");
+        } else {
+            quoted.push(character);
+        }
+    }
+    quoted.push('\'');
+    quoted
+}
+
+/// Quote an argument when it is an absolute device-side path whose bytes could
+/// be split or interpreted by the device shell. Other shell tokens and already
+/// safe paths retain their existing argv spelling so command probes and
+/// protocol arguments remain byte-for-byte compatible with older platform-tools.
+pub fn device_shell_argument(value: &str) -> String {
+    if value.starts_with('/')
+        && (value.chars().any(char::is_whitespace)
+            || value.chars().any(|character| {
+                matches!(
+                    character,
+                    ';' | '|' | '&' | '$' | '`' | '(' | ')' | '<' | '>' | '\''
+                )
+            }))
+    {
+        posix_shell_quote(value)
+    } else {
+        value.to_string()
+    }
+}
+
+/// Return the exact command text ADB presents to the device shell after its
+/// argument join.  Keeping this representation available makes reviewed
+/// command tests assert the shell boundary rather than only the in-memory
+/// argv plan.
+pub fn joined_posix_shell_command(args: &[&str]) -> String {
+    args.iter()
+        .map(|argument| posix_shell_quote(argument))
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OutputStream {
     Stdout,
@@ -200,19 +251,26 @@ impl AdbTransport for ShellTransport {
     }
 
     fn shell(&self, serial: &str, args: &[&str]) -> Result<String, TransportError> {
-        let mut full = Vec::with_capacity(args.len() + 3);
-        full.push("-s");
-        full.push(serial);
-        full.push("shell");
-        full.extend_from_slice(args);
+        let quoted = args
+            .iter()
+            .map(|argument| device_shell_argument(argument))
+            .collect::<Vec<_>>();
+        let mut full = vec!["-s".to_string(), serial.to_string(), "shell".to_string()];
+        full.extend(quoted);
+        let full = full.iter().map(String::as_str).collect::<Vec<_>>();
         self.run(&full)
     }
 
     fn shell_target(&self, target: &DeviceTarget, args: &[&str]) -> Result<String, TransportError> {
         let selector = target.adb_selector();
-        let mut full: Vec<&str> = selector.iter().map(String::as_str).collect();
-        full.push("shell");
-        full.extend_from_slice(args);
+        let quoted = args
+            .iter()
+            .map(|argument| device_shell_argument(argument))
+            .collect::<Vec<_>>();
+        let mut full: Vec<String> = selector;
+        full.push("shell".to_string());
+        full.extend(quoted);
+        let full = full.iter().map(String::as_str).collect::<Vec<_>>();
         self.run(&full)
     }
 }
@@ -666,6 +724,27 @@ mod mock {
                     result,
                 });
         }
+    }
+
+    #[test]
+    fn posix_shell_quote_preserves_path_boundaries_and_controls() {
+        assert_eq!(
+            posix_shell_quote("/sdcard/My files/report; "),
+            "'/sdcard/My files/report; '"
+        );
+        assert_eq!(
+            posix_shell_quote("/sdcard/O'Reilly"),
+            "'/sdcard/O'\\''Reilly'"
+        );
+        assert_eq!(
+            device_shell_argument("/sdcard/report; "),
+            "'/sdcard/report; '"
+        );
+        assert_eq!(device_shell_argument("getprop"), "getprop");
+        assert_eq!(
+            joined_posix_shell_command(&["mv", "-n", "/sdcard/My files/report; "]),
+            "'mv' '-n' '/sdcard/My files/report; '"
+        );
     }
 
     impl Default for MockTransport {

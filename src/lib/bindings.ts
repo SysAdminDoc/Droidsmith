@@ -168,7 +168,10 @@ export const commands = {
   async listDevices(): Promise<ListDevicesResult> {
     return await TAURI_INVOKE("list_devices");
   },
-  /** Read-only Android 17 app memory-limiter status. */
+  /**
+   * Read the Android 17 app memory limiter status. The probe is intentionally
+   * read-only and reports unsupported/unknown on older or OEM devices.
+   */
   async getAppMemoryLimit(target: DeviceTarget): Promise<AppMemoryLimit> {
     return await TAURI_INVOKE("get_app_memory_limit", { target });
   },
@@ -1359,6 +1362,16 @@ export type ApkVerifierUnavailableReason =
   | "probe_failed"
   | "execution_failed"
   | "output_unsupported";
+/**
+ * Read-only Android 17 memory-limiter status. Older SDKs are explicitly
+ * marked unsupported; a missing OEM probe is unknown rather than an error.
+ */
+export type AppMemoryLimit = {
+  sdk_level: number | null;
+  status: string;
+  limit_kb: number | null;
+  detail: string | null;
+};
 export type AppPackage = {
   /**
    * Application package id, e.g. `com.android.chrome`.
@@ -1625,7 +1638,11 @@ export type Device = {
    * Optional `device:` field — the kernel device codename.
    */
   device: string | null;
-  /** Offline marketing name resolved from the bundled codename map. */
+  /**
+   * Offline marketing name resolved from the bundled codename map. `None`
+   * means the codename was absent or is not mapped; the raw codename is
+   * always retained in `device`.
+   */
   marketing_name: string | null;
   /**
    * USB bus address reported by the structured tracker. Legacy inventory
@@ -1672,12 +1689,6 @@ export type Device = {
    * rather than a hardware serial.
    */
   wireless: boolean;
-};
-export type AppMemoryLimit = {
-  sdk_level: number | null;
-  status: string;
-  limit_kb: number | null;
-  detail: string | null;
 };
 export type DeviceConnectionType = "unknown" | "usb" | "socket";
 export type DeviceInfo = {

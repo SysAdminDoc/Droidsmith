@@ -14,6 +14,20 @@ completion.
 Working batches live here. Sections collapse into a versioned release on
 each milestone tag.
 
+### Security and accessibility
+
+- **Remote file mutations quote shell-sensitive device paths.** Absolute paths
+  containing whitespace, punctuation, or quotes are protected at the `adb
+  shell` boundary, while the structured plan remains available for exact
+  state verification and journal review. (R-133)
+- **The npm security gate now has resolved-package floors.** `brace-expansion`
+  and `nanoid` are pinned above their patched advisory releases and the policy
+  rejects a vulnerable lockfile resolution before release. (IMP-113)
+- **The light theme is audited across every route and dialog.** Palette
+  utilities use semantic CSS variables, terminal/code surfaces retain readable
+  contrast, native window theme follows the persisted preference, and the
+  rendered axe/contrast gate runs in both dark and light modes. (IMP-114)
+
 ## [0.9.17] - 2026-08-02
 
 ### Changed
