@@ -1025,7 +1025,10 @@
     "reviewBeforeApply": "最终安全审查",
     "confirmApplyTitle": "确认精简更改",
     "confirmApplyBody": "Droidsmith 将为此 Android 用户从 {{name}} 中禁用所选包。",
+    "confirmApplyBodyActions": "Droidsmith 将为此 Android 用户对 {{name}} 中选定的软件包应用已审查的操作。",
     "confirmTotal": "要禁用的包数",
+    "confirmTotalActions": "包含已审查操作的软件包",
+    "actionLabel": "操作",
     "confirmUnsafe": "不安全等级的包",
     "unsafeSelectedTitle": "不安全的包需要额外审查",
     "unsafeSelectedBody": "这些条目可能会破坏核心设备或 OEM 功能。请在继续之前验证每个包 ID。",
@@ -1063,6 +1066,10 @@
     "confirmDisable_few": "禁用 {{count}} 个包",
     "confirmDisable_many": "禁用 {{count}} 个包",
     "confirmDisable_other": "禁用 {{count}} 个包",
+    "confirmApply_one": "对 {{count}} 个包应用操作",
+    "confirmApply_few": "对 {{count}} 个包应用操作",
+    "confirmApply_many": "对 {{count}} 个包应用操作",
+    "confirmApply_other": "对 {{count}} 个包应用操作",
     "back": "返回",
     "recoveryBaseline": "便携式恢复基线",
     "recoveryExport": "应用前导出基线",
@@ -1138,6 +1145,10 @@
     "disabledCount_few": "{{count}} 个包已成功禁用。",
     "disabledCount_many": "{{count}} 个包已成功禁用。",
     "disabledCount_other": "{{count}} 个包已成功禁用。",
+    "appliedCount_one": "已成功应用 {{count}} 个软件包操作。",
+    "appliedCount_few": "已成功应用 {{count}} 个软件包操作。",
+    "appliedCount_many": "已成功应用 {{count}} 个软件包操作。",
+    "appliedCount_other": "已成功应用 {{count}} 个软件包操作。",
     "failedCount_one": "{{count}} 个包失败。",
     "failedCount_few": "{{count}} 个包失败。",
     "failedCount_many": "{{count}} 个包失败。",
@@ -1182,7 +1193,8 @@
     "verify": {
       "missing": "应用后包消失了；预期其保持已安装且已禁用状态。",
       "still_enabled": "应用后包仍处于启用状态。",
-      "unknown": "应用后无法验证包状态。"
+      "unknown": "应用后无法验证包状态。",
+      "actionState": "{{action}} 未达到预期状态 {{expected}}；设备报告为 {{actual}}。"
     },
     "export": {
       "title": "导出设备状态",

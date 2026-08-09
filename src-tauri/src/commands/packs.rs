@@ -31,8 +31,18 @@ pub struct PlanPackRequest {
     pub pack_id: String,
     pub revision: u32,
     pub selected: Vec<String>,
+    /// Renderer-reviewed action choices. The backend compares each choice to
+    /// the pack preference and accepts only equal-or-safer overrides.
+    #[serde(default)]
+    pub action_overrides: Vec<PackActionOverride>,
     #[serde(default)]
     pub override_compatibility: bool,
+}
+
+#[derive(specta::Type, Debug, Clone, Deserialize)]
+pub struct PackActionOverride {
+    pub package: String,
+    pub action: crate::packs::PackAction,
 }
 
 #[derive(specta::Type, Debug, Clone, Serialize)]
@@ -491,6 +501,31 @@ pub async fn analyze_apk(
     .await
 }
 
+fn pack_action_capability(
+    action: crate::packs::PackAction,
+    capabilities: &adb::PackageActionCapabilities,
+    archive: Option<&adb::PackageArchiveCapability>,
+) -> Result<(), String> {
+    let capability = match action {
+        crate::packs::PackAction::Suspend => &capabilities.suspend,
+        crate::packs::PackAction::Disable => &capabilities.disable,
+        crate::packs::PackAction::UninstallForUser => &capabilities.uninstall_for_user,
+        crate::packs::PackAction::Archive => &capabilities.archive,
+    };
+    if !capability.supported {
+        return Err(capability.reason.clone());
+    }
+    if action == crate::packs::PackAction::Archive {
+        let Some(archive) = archive else {
+            return Err("package archive capability was not probed".to_string());
+        };
+        if !archive.supported {
+            return Err(archive.reason.clone());
+        }
+    }
+    Ok(())
+}
+
 #[tauri::command]
 #[specta::specta]
 pub fn plan_pack(
@@ -527,7 +562,7 @@ pub fn plan_pack(
     }
     let transport = validated_transport(&request.target)?;
     let context = pack_context(&transport, &request.target, request.user_id)?;
-    let assessment = crate::packs::assess(&pack, &context);
+    let mut assessment = crate::packs::assess(&pack, &context);
     if assessment.override_required && !request.override_compatibility {
         return Err(CommandError {
             code: "pack_compatibility_override_required",
@@ -544,12 +579,96 @@ pub fn plan_pack(
                 message,
             }
         })?;
-    let selected_ids: Vec<String> = pack
+
+    let mut action_overrides = HashMap::<String, crate::packs::PackAction>::new();
+    for override_entry in request.action_overrides {
+        if !valid_package_name(&override_entry.package) {
+            return Err(CommandError {
+                code: "pack_action_package_invalid",
+                message: format!(
+                    "pack action override names invalid package {:?}",
+                    override_entry.package
+                ),
+            });
+        }
+        if action_overrides
+            .insert(override_entry.package.clone(), override_entry.action)
+            .is_some()
+        {
+            return Err(CommandError {
+                code: "pack_action_duplicate",
+                message: format!(
+                    "pack action override for {:?} was supplied more than once",
+                    override_entry.package
+                ),
+            });
+        }
+    }
+    for (package, action) in &action_overrides {
+        let Some(entry) = pack.packages.iter().find(|entry| entry.id == *package) else {
+            return Err(CommandError {
+                code: "pack_action_package_unknown",
+                message: format!("pack action override names unknown package {package:?}"),
+            });
+        };
+        if !selected.contains(package) {
+            return Err(CommandError {
+                code: "pack_action_not_selected",
+                message: format!("pack action override for unselected package {package:?}"),
+            });
+        }
+        let preferred = entry.action.unwrap_or_default();
+        if !action.is_no_riskier_than(preferred) {
+            return Err(CommandError {
+                code: "pack_action_risk_increase",
+                message: format!(
+                    "pack action override for {package:?} cannot move from {preferred:?} to riskier {action:?}"
+                ),
+            });
+        }
+    }
+
+    let action_capabilities = adb::package_action_capabilities(&transport, &request.target);
+    let archive_capability = pack.packages.iter().any(|entry| {
+        selected.contains(&entry.id)
+            && action_overrides
+                .get(&entry.id)
+                .copied()
+                .unwrap_or_else(|| entry.action.unwrap_or_default())
+                == crate::packs::PackAction::Archive
+    });
+    let archive_capability =
+        archive_capability.then(|| adb::archive_capability(&transport, &request.target));
+    for entry in pack
         .packages
         .iter()
         .filter(|entry| selected.contains(&entry.id))
-        .map(|entry| entry.id.clone())
-        .collect();
+    {
+        let action = action_overrides
+            .get(&entry.id)
+            .copied()
+            .unwrap_or_else(|| entry.action.unwrap_or_default());
+        if let Some(support) = assessment
+            .entries
+            .iter_mut()
+            .find(|support| support.id == entry.id)
+        {
+            support.resolved_action = action;
+            if support.status == crate::packs::PackEntryStatus::Ready {
+                if let Err(reason) = pack_action_capability(
+                    action,
+                    &action_capabilities,
+                    archive_capability.as_ref(),
+                ) {
+                    support.status = crate::packs::PackEntryStatus::Unsupported;
+                    support.detail = Some(format!(
+                        "pack action {action:?} is unavailable on this device: {reason}"
+                    ));
+                }
+            }
+        }
+    }
+
     let status_by_id: std::collections::HashMap<&str, &crate::packs::PackEntryAssessment> =
         assessment
             .entries
@@ -558,6 +677,7 @@ pub fn plan_pack(
             .collect();
     let mut plans = Vec::new();
     let mut skipped = Vec::new();
+    let mut selected_ids = Vec::new();
     for entry in pack
         .packages
         .iter()
@@ -571,11 +691,12 @@ pub fn plan_pack(
             skipped.push((*support).clone());
             continue;
         }
+        selected_ids.push(entry.id.clone());
         plans.push(actions::plan(actions::ActionRequest {
             serial: request.target.serial.clone(),
             target: request.target.clone(),
             package: entry.id.clone(),
-            kind: actions::ActionKind::Disable,
+            kind: support.resolved_action.action_kind(),
             user_id: request.user_id,
             pack_context: Some(actions::PackActionContext {
                 pack_id: pack.id.clone(),
@@ -609,6 +730,7 @@ fn missing_pack_assessment(entry: &crate::packs::PackEntry) -> crate::packs::Pac
             "pack assessment omitted this entry; the action was skipped safely".to_string(),
         ),
         effective_removal: entry.removal,
+        resolved_action: entry.action.unwrap_or_default(),
         shared_system_uid: false,
     }
 }
@@ -623,6 +745,7 @@ mod invariant_tests {
             id: "com.example.missing".to_string(),
             description: "fixture".to_string(),
             removal: crate::packs::RemovalLevel::Recommended,
+            action: None,
             labels: Vec::new(),
             depends_on: Vec::new(),
             needed_by: Vec::new(),

@@ -156,6 +156,18 @@
           "description": "Severity tier; matches UAD-NG semantics.",
           "$ref": "#/$defs/RemovalLevel"
         },
+        "action": {
+          "description": "Preferred operation for this package. Omitted entries retain the\nhistorical `disable` default; the planner re-checks the command on the\nselected device before producing a mutation plan.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PackAction"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "description": {
           "description": "What the package does, in user-facing language. Pack-lint\nrequires this — no anonymous entries.",
           "type": "string"
@@ -199,6 +211,15 @@
         "advanced",
         "expert",
         "unsafe"
+      ]
+    },
+    "PackAction": {
+      "type": "string",
+      "enum": [
+        "suspend",
+        "disable",
+        "archive",
+        "uninstall_for_user"
       ]
     },
     "PackProvenance": {

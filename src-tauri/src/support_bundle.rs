@@ -825,10 +825,10 @@ mod tests {
         assert!(preview.content.contains("\"status\": \"supported\""));
         assert!(preview
             .content
-            .contains("\"recommended_version\": \"37.0.0\""));
+            .contains("\"recommended_version\": \"37.0.1\""));
         assert!(preview
             .content
-            .contains("\"policy_reviewed_on\": \"2026-07-15\""));
+            .contains("\"policy_reviewed_on\": \"2026-08-08\""));
         fs::remove_dir_all(root).unwrap();
     }
 

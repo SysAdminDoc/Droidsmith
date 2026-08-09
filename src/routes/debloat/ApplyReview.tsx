@@ -169,12 +169,12 @@ export function DebloatApplyReview({
           id="debloat-apply-review-description"
           className="mt-2 text-sm leading-6 text-anvil-300"
         >
-          {t("debloat.confirmApplyBody", { name: pack.name })}
+          {t("debloat.confirmApplyBodyActions", { name: pack.name })}
         </p>
         <dl className="mt-4 grid grid-cols-2 gap-3">
           <div className="rounded-md border border-white/10 bg-white/[0.04] p-3">
             <dt className="text-xs text-anvil-400">
-              {t("debloat.confirmTotal")}
+              {t("debloat.confirmTotalActions")}
             </dt>
             <dd className="mt-1 text-xl font-semibold text-anvil-50">
               {summary.total}
@@ -379,7 +379,7 @@ export function DebloatApplyReview({
             onClick={onConfirm}
             disabled={confirmBlocked}
           >
-            {t("debloat.confirmDisable", { count: summary.total })}
+            {t("debloat.confirmApply", { count: summary.total })}
           </Button>
         </div>
       </div>

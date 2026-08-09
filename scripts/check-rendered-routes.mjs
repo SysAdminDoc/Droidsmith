@@ -1060,7 +1060,7 @@ async function runDesktopFlow(browser) {
     fullPage: false,
   });
   const debloatDisable = debloatReview.getByRole("button", {
-    name: "Disable 3 packages",
+    name: "Apply actions to 3 packages",
   });
   await debloatDisable.waitFor();
   if (await debloatDisable.isDisabled()) {
@@ -2524,6 +2524,7 @@ async function installTauriMock(
           status: "ready",
           detail: null,
           effective_removal: "recommended",
+          resolved_action: "suspend",
           shared_system_uid: false,
         },
         {
@@ -2531,6 +2532,7 @@ async function installTauriMock(
           status: "ready",
           detail: null,
           effective_removal: "unsafe",
+          resolved_action: "disable",
           shared_system_uid: true,
         },
         {
@@ -2538,6 +2540,7 @@ async function installTauriMock(
           status: "ready",
           detail: null,
           effective_removal: "unsafe",
+          resolved_action: "disable",
           shared_system_uid: false,
         },
       ],
@@ -3136,6 +3139,10 @@ async function installTauriMock(
         }
         if (cmd === "get_package_action_capabilities") {
           return {
+            disable: {
+              supported: true,
+              reason: "pm disable-user is advertised by this device",
+            },
             suspend: {
               supported: suspendActionsSupported,
               reason: suspendActionsSupported
@@ -3147,6 +3154,22 @@ async function installTauriMock(
               reason: suspendActionsSupported
                 ? "pm unsuspend is advertised by this device"
                 : "pm unsuspend is not advertised by this device",
+            },
+            archive: {
+              supported: archiveApi >= 35,
+              reason:
+                archiveApi >= 35
+                  ? "pm archive is advertised by this device"
+                  : "pm archive is not advertised by this device",
+            },
+            uninstall_for_user: {
+              supported: true,
+              reason: "pm uninstall is advertised by this device",
+            },
+            storage_stats: {
+              supported: true,
+              reason:
+                "pm get-package-storage-stats is advertised by this device",
             },
           };
         }
@@ -4259,6 +4282,7 @@ async function installTauriMock(
                     {
                       id: "com.example.app",
                       removal: "recommended",
+                      action: "suspend",
                       description: "Safe QA package.",
                       depends_on: [],
                       needed_by: [],
@@ -4462,6 +4486,12 @@ async function installTauriMock(
         }
         if (cmd === "plan_pack") {
           const selected = args.request.selected;
+          const actionByPackage = new Map(
+            (args.request.action_overrides ?? []).map((item) => [
+              item.package,
+              item.action,
+            ]),
+          );
           const packContext = {
             pack_id: "qa-debloat",
             revision: 3,
@@ -4480,7 +4510,7 @@ async function installTauriMock(
                 serial: "QA123",
                 target: args.request.target,
                 package: packageId,
-                kind: "disable",
+                kind: actionByPackage.get(packageId) ?? "disable",
                 user_id: args.request.user_id,
                 pack_context: packContext,
               }),

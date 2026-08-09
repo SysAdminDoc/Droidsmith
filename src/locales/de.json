@@ -1025,7 +1025,10 @@
     "reviewBeforeApply": "Letzte Sicherheitsprüfung",
     "confirmApplyTitle": "Debloat-Änderungen bestätigen",
     "confirmApplyBody": "Droidsmith wird die ausgewählten Pakete aus {{name}} für diesen Android-Benutzer deaktivieren.",
+    "confirmApplyBodyActions": "Droidsmith wird die geprüften Aktionen auf die ausgewählten Pakete aus {{name}} für diesen Android-Benutzer anwenden.",
     "confirmTotal": "Zu deaktivierende Pakete",
+    "confirmTotalActions": "Pakete mit geprüften Aktionen",
+    "actionLabel": "Aktion",
     "confirmUnsafe": "Pakete der Stufe Unsicher",
     "unsafeSelectedTitle": "Unsichere Pakete erfordern zusätzliche Prüfung",
     "unsafeSelectedBody": "Diese Einträge können Kernfunktionen des Geräts oder OEM-Funktionen beeinträchtigen. Überprüfen Sie jede Paket-ID vor dem Fortfahren.",
@@ -1063,6 +1066,10 @@
     "confirmDisable_few": "{{count}} Pakete deaktivieren",
     "confirmDisable_many": "{{count}} Pakete deaktivieren",
     "confirmDisable_other": "{{count}} Pakete deaktivieren",
+    "confirmApply_one": "Aktion auf {{count}} Paket anwenden",
+    "confirmApply_few": "Aktionen auf {{count}} Pakete anwenden",
+    "confirmApply_many": "Aktionen auf {{count}} Pakete anwenden",
+    "confirmApply_other": "Aktionen auf {{count}} Pakete anwenden",
     "back": "Zurück",
     "recoveryBaseline": "Portable Wiederherstellungsbasis",
     "recoveryExport": "Basis vor dem Anwenden exportieren",
@@ -1138,6 +1145,10 @@
     "disabledCount_few": "{{count}} Pakete erfolgreich deaktiviert.",
     "disabledCount_many": "{{count}} Pakete erfolgreich deaktiviert.",
     "disabledCount_other": "{{count}} Pakete erfolgreich deaktiviert.",
+    "appliedCount_one": "{{count}} Paketaktion erfolgreich angewendet.",
+    "appliedCount_few": "{{count}} Paketaktionen erfolgreich angewendet.",
+    "appliedCount_many": "{{count}} Paketaktionen erfolgreich angewendet.",
+    "appliedCount_other": "{{count}} Paketaktionen erfolgreich angewendet.",
     "failedCount_one": "{{count}} Paket fehlgeschlagen.",
     "failedCount_few": "{{count}} Pakete fehlgeschlagen.",
     "failedCount_many": "{{count}} Pakete fehlgeschlagen.",
@@ -1182,7 +1193,8 @@
     "verify": {
       "missing": "Paket nach Anwendung verschwunden; erwartet wurde, dass es installiert und deaktiviert bleibt.",
       "still_enabled": "Paket ist nach Anwendung immer noch aktiviert.",
-      "unknown": "Paketstatus konnte nach Anwendung nicht verifiziert werden."
+      "unknown": "Paketstatus konnte nach Anwendung nicht verifiziert werden.",
+      "actionState": "{{action}} erreichte nicht den erwarteten Zustand {{expected}}; das Gerät meldete {{actual}}."
     },
     "export": {
       "title": "Gerätestatus exportieren",

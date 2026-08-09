@@ -51,10 +51,21 @@ export function snapshotJournalPackageState(
   system: boolean | null,
 ): PackageSnapshot | null {
   switch (state) {
-    case "installed_enabled":
+    case "suspended":
+    case "unsuspended":
+    case "preinstalled_enabled":
+    case "user_installed_enabled":
       return { present: true, enabled: true, system };
+    case "preinstalled_disabled":
+    case "user_installed_disabled":
+    case "installed_enabled":
     case "installed_disabled":
-      return { present: true, enabled: false, system };
+      return {
+        present: true,
+        enabled: state.endsWith("_enabled"),
+        system,
+      };
+    case "archived":
     case "not_installed":
       return { present: false, enabled: null, system: null };
     default:

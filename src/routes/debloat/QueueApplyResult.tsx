@@ -55,7 +55,7 @@ export function QueueApplyResult({
         }
       >
         <p>
-          {t("debloat.disabledCount", { count: stats.verified })}
+          {t("debloat.appliedCount", { count: stats.verified })}
           {stats.failed > 0 &&
             ` ${t("debloat.failedCount", { count: stats.failed })}`}
           {stats.cancelled > 0 &&

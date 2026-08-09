@@ -150,6 +150,11 @@ pub struct PackEntry {
     pub id: String,
     /// Severity tier; matches UAD-NG semantics.
     pub removal: RemovalLevel,
+    /// Preferred operation for this package. Omitted entries retain the
+    /// historical `disable` default; the planner re-checks the command on the
+    /// selected device before producing a mutation plan.
+    #[serde(default)]
+    pub action: Option<PackAction>,
     /// What the package does, in user-facing language. Pack-lint
     /// requires this — no anonymous entries.
     pub description: String,
@@ -165,6 +170,53 @@ pub struct PackEntry {
     /// "vendor-locked").
     #[serde(default)]
     pub labels: Vec<String>,
+}
+
+#[derive(
+    schemars::JsonSchema,
+    specta::Type,
+    Debug,
+    Clone,
+    Copy,
+    Default,
+    PartialEq,
+    Eq,
+    Serialize,
+    Deserialize,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum PackAction {
+    Suspend,
+    #[default]
+    Disable,
+    Archive,
+    UninstallForUser,
+}
+
+impl PackAction {
+    pub fn action_kind(self) -> crate::adb::actions::ActionKind {
+        match self {
+            Self::Suspend => crate::adb::actions::ActionKind::Suspend,
+            Self::Disable => crate::adb::actions::ActionKind::Disable,
+            Self::Archive => crate::adb::actions::ActionKind::Archive,
+            Self::UninstallForUser => crate::adb::actions::ActionKind::UninstallForUser,
+        }
+    }
+
+    /// Lower numbers are safer. A renderer override may only move toward a
+    /// safer action than the pack's preferred operation.
+    pub fn safety_rank(self) -> u8 {
+        match self {
+            Self::Suspend => 0,
+            Self::Disable => 1,
+            Self::Archive => 2,
+            Self::UninstallForUser => 3,
+        }
+    }
+
+    pub fn is_no_riskier_than(self, preferred: Self) -> bool {
+        self.safety_rank() <= preferred.safety_rank()
+    }
 }
 
 #[derive(
@@ -224,6 +276,9 @@ pub struct PackEntryAssessment {
     /// Runtime safety tier after deterministic device evidence is applied.
     /// This never mutates the source pack or its schema-v1 removal tier.
     pub effective_removal: RemovalLevel,
+    /// Action after applying the pack preference and any reviewed safer
+    /// override. Unsupported actions are marked in `status` and never planned.
+    pub resolved_action: PackAction,
     /// True when the entry was raised to Unsafe because it shares
     /// `android.uid.system` on the selected device/user.
     pub shared_system_uid: bool,
@@ -454,6 +509,7 @@ pub fn from_device_state(
         packages.push(PackEntry {
             id: entry.id.clone(),
             removal,
+            action: None,
             description,
             depends_on: Vec::new(),
             needed_by: Vec::new(),
@@ -713,6 +769,7 @@ pub fn assess(pack: &Pack, context: &DevicePackContext) -> PackAssessment {
                         "package is not installed for the selected Android user".to_string(),
                     ),
                     effective_removal,
+                    resolved_action: entry.action.unwrap_or_default(),
                     shared_system_uid,
                 };
             }
@@ -731,6 +788,7 @@ pub fn assess(pack: &Pack, context: &DevicePackContext) -> PackAssessment {
                     status: PackEntryStatus::Ready,
                     detail: None,
                     effective_removal,
+                    resolved_action: entry.action.unwrap_or_default(),
                     shared_system_uid,
                 }
             } else {
@@ -742,6 +800,7 @@ pub fn assess(pack: &Pack, context: &DevicePackContext) -> PackAssessment {
                         unavailable.join(", ")
                     )),
                     effective_removal,
+                    resolved_action: entry.action.unwrap_or_default(),
                     shared_system_uid,
                 }
             }
@@ -847,6 +906,28 @@ packages:
         assert_eq!(p.packages[0].removal, RemovalLevel::Recommended);
         assert_eq!(p.packages[1].labels, vec!["productivity"]);
         assert!(lint(&p).is_empty());
+    }
+
+    #[test]
+    fn pack_actions_are_schema_checked_and_default_to_disable() {
+        let defaulted: Pack = serde_yaml_ng::from_str(GOOD).unwrap();
+        assert_eq!(defaulted.packages[0].action, None);
+
+        let suspended = GOOD.replace(
+            "    removal: recommended\n",
+            "    removal: recommended\n    action: suspend\n",
+        );
+        let parsed: Pack = serde_yaml_ng::from_str(&suspended).unwrap();
+        assert_eq!(parsed.packages[0].action, Some(PackAction::Suspend));
+
+        let unknown = suspended.replace("action: suspend", "action: erase");
+        let error = serde_yaml_ng::from_str::<Pack>(&unknown)
+            .unwrap_err()
+            .to_string();
+        assert!(
+            error.contains("unknown variant"),
+            "unexpected error: {error}"
+        );
     }
 
     #[test]

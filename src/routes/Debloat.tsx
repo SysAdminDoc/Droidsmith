@@ -17,6 +17,8 @@ import {
   type AndroidUser,
   type JournalEntry,
   type Pack,
+  type PackAction,
+  type PackActionOverride,
   type PackAssessment,
   type PackCandidate,
   type PlannedAction,
@@ -67,6 +69,7 @@ type WizardStep =
       pack: Pack;
       assessment: PackAssessment;
       selected: Set<string>;
+      actionOverrides: Map<string, PackAction>;
       overrideAccepted: boolean;
       planError: string | null;
     }
@@ -84,6 +87,7 @@ type WizardStep =
       pack: Pack;
       assessment: PackAssessment;
       queue: DebloatQueueRow[];
+      actionOverrides: Map<string, PackAction>;
       cancelled: boolean;
       overrideAccepted: boolean;
     };
@@ -309,8 +313,23 @@ export default function DebloatRoute() {
       pack,
       assessment,
       selected: expandPackDependencies(pack, recommended),
+      actionOverrides: new Map(),
       overrideAccepted: false,
       planError: null,
+    });
+  }, []);
+
+  const changeAction = useCallback((id: string, action: PackAction) => {
+    setBaselineNotice(null);
+    setWizard((prev) => {
+      if (prev.step !== "preview") return prev;
+      const actionOverrides = new Map(prev.actionOverrides);
+      const preferred =
+        prev.pack.packages.find((entry) => entry.id === id)?.action ??
+        "disable";
+      if (action === preferred) actionOverrides.delete(id);
+      else actionOverrides.set(id, action);
+      return { ...prev, actionOverrides, planError: null };
     });
   }, []);
 
@@ -460,7 +479,13 @@ export default function DebloatRoute() {
             journal.applied.after_state,
             baseline.system,
           );
-          error = verificationMessage(verifyDisabled(after));
+          error = verifyPackAction(
+            row.entry.action ?? "disable",
+            journal.applied.after_state,
+            after,
+            verificationMessage,
+            t,
+          );
         } catch (e) {
           error = errorMessage(e);
         }
@@ -538,6 +563,9 @@ export default function DebloatRoute() {
           pack,
           assessment,
           queue,
+          actionOverrides: new Map(
+            queue.map((row) => [row.entry.id, row.entry.action ?? "disable"]),
+          ),
           cancelled,
           overrideAccepted,
         }),
@@ -565,13 +593,27 @@ export default function DebloatRoute() {
         pack_id: wizard.pack.id,
         revision: wizard.pack.revision,
         selected: [...wizard.selected],
+        action_overrides: packActionOverrides(
+          wizard.pack,
+          wizard.selected,
+          wizard.actionOverrides,
+        ),
         override_compatibility: wizard.overrideAccepted,
       });
       if (!lease.isCurrent()) return;
+      const resolvedActions = new Map(
+        planned.assessment.entries.map((entry) => [
+          entry.id,
+          entry.resolved_action,
+        ]),
+      );
       const queue = makeQueueRows(
-        wizard.pack.packages.filter((entry) =>
-          planned.selected_ids.includes(entry.id),
-        ),
+        wizard.pack.packages
+          .filter((entry) => planned.selected_ids.includes(entry.id))
+          .map((entry) => ({
+            ...entry,
+            action: resolvedActions.get(entry.id) ?? entry.action,
+          })),
       );
       await runQueue(
         wizard.pack,
@@ -613,6 +655,11 @@ export default function DebloatRoute() {
         pack_id: wizard.pack.id,
         revision: wizard.pack.revision,
         selected: [...wizard.selected],
+        action_overrides: packActionOverrides(
+          wizard.pack,
+          wizard.selected,
+          wizard.actionOverrides,
+        ),
         override_compatibility: wizard.overrideAccepted,
       });
       if (!lease.isCurrent()) return;
@@ -628,9 +675,9 @@ export default function DebloatRoute() {
       const artifact = await callExportRecoveryBaseline(
         authorizedTarget,
         selectedUser,
-        planned.selected_ids.map((packageName) => ({
-          package: packageName,
-          kind: "disable",
+        planned.plans.map((plan) => ({
+          package: plan.request.package,
+          kind: plan.request.kind,
         })),
         { id: wizard.pack.id, revision: wizard.pack.revision },
         selected.id,
@@ -682,6 +729,11 @@ export default function DebloatRoute() {
         pack_id: wizard.pack.id,
         revision: wizard.pack.revision,
         selected: failedIds,
+        action_overrides: packActionOverrides(
+          wizard.pack,
+          new Set(failedIds),
+          wizard.actionOverrides,
+        ),
         override_compatibility: wizard.overrideAccepted,
       });
       if (!lease.isCurrent()) return;
@@ -692,8 +744,13 @@ export default function DebloatRoute() {
         const previous = previousRows.get(id);
         if (previous && previous.status !== "failed") return previous;
         const entry = wizard.pack.packages.find((item) => item.id === id)!;
+        const resolvedAction = planned.assessment.entries.find(
+          (item) => item.id === id,
+        )?.resolved_action;
         return {
-          ...makeQueueRows([entry])[0]!,
+          ...makeQueueRows([
+            { ...entry, action: resolvedAction ?? entry.action },
+          ])[0]!,
           attempts: previous?.attempts ?? 0,
         };
       });
@@ -843,9 +900,11 @@ export default function DebloatRoute() {
               pack={wizard.pack}
               assessment={wizard.assessment}
               selected={wizard.selected}
+              actionOverrides={wizard.actionOverrides}
               overrideAccepted={wizard.overrideAccepted}
               planError={wizard.planError}
               onToggle={toggleEntry}
+              onActionChange={changeAction}
               onApplyPreset={applyPreset}
               onOverrideChange={(accepted) => {
                 setBaselineNotice(null);
@@ -933,4 +992,51 @@ function debloatRecoveryFileName(packId: string): string {
   const date = new Date().toISOString().slice(0, 10);
   const safePack = packId.replace(/[^A-Za-z0-9_.-]/g, "_");
   return `droidsmith-recovery-${date}-${safePack}.json`;
+}
+
+function packActionOverrides(
+  pack: Pack,
+  selected: Set<string>,
+  overrides: ReadonlyMap<string, PackAction>,
+): PackActionOverride[] {
+  return pack.packages
+    .filter((entry) => selected.has(entry.id))
+    .map((entry) => ({
+      package: entry.id,
+      action: overrides.get(entry.id) ?? entry.action ?? "disable",
+    }));
+}
+
+function verifyPackAction(
+  action: PackAction,
+  afterState: string,
+  after: PackageSnapshot | null,
+  fallback: (result: DisableVerification) => string | null,
+  t: ReturnType<typeof useTranslation>["t"],
+): string | null {
+  const verified =
+    (action === "suspend" && afterState === "suspended") ||
+    (action === "disable" && afterState.endsWith("_disabled")) ||
+    (action === "archive" && afterState === "archived") ||
+    (action === "uninstall_for_user" && afterState === "not_installed");
+  if (verified) return null;
+  if (action === "disable") return fallback(verifyDisabled(after));
+  return t("debloat.verify.actionState", {
+    action: t(`apps.actionKind.${action}`),
+    expected: expectedActionState(action),
+    actual: afterState,
+  });
+}
+
+function expectedActionState(action: PackAction): string {
+  switch (action) {
+    case "suspend":
+      return "suspended";
+    case "disable":
+      return "*_disabled";
+    case "archive":
+      return "archived";
+    case "uninstall_for_user":
+      return "not_installed";
+  }
 }

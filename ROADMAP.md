@@ -28,13 +28,6 @@ and Android, privacy-safe diagnostics, and the widest remaining product gap
   Acceptance: the classifier additionally consults the device's Google Play system update level (module metadata) and returns `Patched` when it is at or after the floor; when the module level cannot be read the verdict stays `AuthBypassUnpatched` **and** the UI states that the Mainline path was not checked, rather than implying a complete judgement; transcript fixtures cover patched-via-Mainline, unpatched, and module-unreadable. The exact readable property needs live validation against a device before the fixture is treated as authoritative.
   Complexity: M
 
-- [ ] R-137 P1 — Let a debloat pack choose its action
-  Why: every pack entry is planned as `Disable`, so the reversible `suspend` rung shipped in v0.9.15 — the safest action the app has — is unreachable from the flagship content format, and so are uninstall-for-user and archive.
-  Evidence: `src-tauri/src/commands/packs.rs:578` hardcodes `kind: actions::ActionKind::Disable`; `packs/schema.json` `PackEntry` carries a `removal` **risk tier** (Recommended/Advanced/Expert/Unsafe) but no action; UAD-NG issue #345 is the same request.
-  Touches: `packs/schema.json`, `src-tauri/src/packs/mod.rs`, `src-tauri/src/commands/packs.rs`, `src/routes/debloat/`, `packs/*.yaml`
-  Acceptance: a pack entry may declare a preferred action; the Debloat review shows the resolved action per entry and lets the user downgrade to a safer one; an action the device does not advertise (per the existing `pm help` probe) is never planned; unspecified entries keep planning `Disable` so existing packs are unchanged; the pack lint rejects an action the schema version does not define.
-  Complexity: M
-
 - [ ] IMP-118 P1 — Test the Tauri command surface
   Why: ~4,649 lines across thirteen `commands/*.rs` files carry no inline tests, and that set includes the two functions holding the P0 injection defect.
   Evidence: no `#[cfg(test)]` in `commands/{actions_commands,console,devices,diagnostics,files,installs,mirror,packages,plans,profiles,settings_commands,system,wireless}.rs`; `commands/packs.rs` is the only exception.

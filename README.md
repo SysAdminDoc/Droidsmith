@@ -95,6 +95,13 @@ capture the selected Android user's state from PackageManager before and after
 the mutation, require an exact transition, and record a verified journal
 inverse. Devices that omit either command never show the corresponding action.
 
+Debloat YAML packs can now declare a preferred action per package: `suspend`,
+`disable`, `archive`, or `uninstall_for_user`. The review surface shows each
+resolved action and permits only equal-or-safer overrides; the planner probes
+the selected device's advertised PackageManager commands and skips unsupported
+actions. Existing packs omit the field and retain the historical `disable`
+default, while the apply queue verifies the journal's exact post-state.
+
 Package export defaults to a ZIP containing every base/split APK plus a
 versioned manifest with artifact hashes and hashed device/build identity. The
 deprecated `adb backup` path is hidden under Advanced, preflights target SDK,
@@ -136,7 +143,7 @@ ADB front end, but it has hard limits that an open project can fix:
 | Source | Closed | MIT, public on GitHub |
 | Platforms | Windows only (.NET 4.6+) | Windows, macOS, Linux |
 | Free tier | Core only — dark theme, Process Manager, batch ops are sponsor-gated | All features always free |
-| Debloat lists | Static | Versioned YAML packs, vendor quirks, recovery baselines, and a final count/unsafe-tier review before apply; external data imports require provenance and redistribution review |
+| Debloat lists | Static | Versioned YAML packs with per-entry reviewed actions, vendor quirks, recovery baselines, and a final count/unsafe-tier review before apply; external data imports require provenance and redistribution review |
 | Screen mirror | Virtual buttons + screenshots | Capability-negotiated scrcpy launch/supervision with per-device presets, encoder selection, and actionable bounded failure diagnostics; bundled scrcpy remains planned |
 | Wireless ADB | Manual `adb pair` in console | First-class Android 11+ pairing, exact mDNS TLS provenance, explicit legacy/unknown TCP warnings, and privacy-bounded VPN/mDNS failure guidance |
 | Automation | None | GUI-authored YAML profiles, explicit v1 migration, live dry-run diffs, and a JSON-capable headless CLI |

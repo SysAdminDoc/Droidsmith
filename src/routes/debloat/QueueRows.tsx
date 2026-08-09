@@ -20,6 +20,7 @@ export function QueueRows({
         <thead className="bg-white/[0.04]">
           <tr>
             <TableHeaderCell>{t("apps.package")}</TableHeaderCell>
+            <TableHeaderCell>{t("debloat.actionLabel")}</TableHeaderCell>
             <TableHeaderCell>{t("devices.state")}</TableHeaderCell>
             <TableHeaderCell>{t("debloat.beforeAfter")}</TableHeaderCell>
             <TableHeaderCell>{t("debloat.journalId")}</TableHeaderCell>
@@ -44,6 +45,11 @@ export function QueueRows({
                     deviceContext={deviceContext}
                   />
                 )}
+              </TableCell>
+              <TableCell>
+                <span className="text-xs text-anvil-300">
+                  {t(`apps.actionKind.${row.entry.action ?? "disable"}`)}
+                </span>
               </TableCell>
               <TableCell>
                 <Badge tone={queueStatusTone(row.status)}>

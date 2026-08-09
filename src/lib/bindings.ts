@@ -2513,6 +2513,11 @@ export type Pack = {
    */
   provenance?: PackProvenance;
 };
+export type PackAction =
+  | "suspend"
+  | "disable"
+  | "archive"
+  | "uninstall_for_user";
 export type PackActionContext = {
   pack_id: string;
   revision: number;
@@ -2521,6 +2526,7 @@ export type PackActionContext = {
   compatibility_status: string;
   override_accepted: boolean;
 };
+export type PackActionOverride = { package: string; action: PackAction };
 export type PackAssessment = {
   status: CompatibilityStatus;
   override_required: boolean;
@@ -2546,6 +2552,12 @@ export type PackEntry = {
    * Severity tier; matches UAD-NG semantics.
    */
   removal: RemovalLevel;
+  /**
+   * Preferred operation for this package. Omitted entries retain the
+   * historical `disable` default; the planner re-checks the command on the
+   * selected device before producing a mutation plan.
+   */
+  action?: PackAction | null;
   /**
    * What the package does, in user-facing language. Pack-lint
    * requires this — no anonymous entries.
@@ -2576,6 +2588,11 @@ export type PackEntryAssessment = {
    * This never mutates the source pack or its schema-v1 removal tier.
    */
   effective_removal: RemovalLevel;
+  /**
+   * Action after applying the pack preference and any reviewed safer
+   * override. Unsupported actions are marked in `status` and never planned.
+   */
+  resolved_action: PackAction;
   /**
    * True when the entry was raised to Unsafe because it shares
    * `android.uid.system` on the selected device/user.
@@ -2639,8 +2656,11 @@ export type PackTargets = {
   user_scope?: UserScope;
 };
 export type PackageActionCapabilities = {
+  disable: PackageSubcommandCapability;
   suspend: PackageSubcommandCapability;
   unsuspend: PackageSubcommandCapability;
+  archive: PackageSubcommandCapability;
+  uninstall_for_user: PackageSubcommandCapability;
   /**
    * `pm get-package-storage-stats`. Probed the same way as the mutating
    * subcommands because OEMs drop it just as freely; API level is not an
@@ -2740,6 +2760,11 @@ export type PlanPackRequest = {
   pack_id: string;
   revision: number;
   selected: string[];
+  /**
+   * Renderer-reviewed action choices. The backend compares each choice to
+   * the pack preference and accepts only equal-or-safer overrides.
+   */
+  action_overrides?: PackActionOverride[];
   override_compatibility?: boolean;
 };
 export type PlanShellActionRequest = { target: DeviceTarget; argv: string[] };

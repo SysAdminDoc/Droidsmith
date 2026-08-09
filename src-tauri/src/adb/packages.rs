@@ -65,8 +65,11 @@ pub struct PackageSubcommandCapability {
 
 #[derive(specta::Type, Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct PackageActionCapabilities {
+    pub disable: PackageSubcommandCapability,
     pub suspend: PackageSubcommandCapability,
     pub unsuspend: PackageSubcommandCapability,
+    pub archive: PackageSubcommandCapability,
+    pub uninstall_for_user: PackageSubcommandCapability,
     /// `pm get-package-storage-stats`. Probed the same way as the mutating
     /// subcommands because OEMs drop it just as freely; API level is not an
     /// authority.
@@ -534,11 +537,23 @@ pub fn package_action_capabilities(
         Err(error) => {
             let reason = format!("could not inspect package-manager commands: {error}");
             PackageActionCapabilities {
+                disable: PackageSubcommandCapability {
+                    supported: false,
+                    reason: reason.clone(),
+                },
                 suspend: PackageSubcommandCapability {
                     supported: false,
                     reason: reason.clone(),
                 },
                 unsuspend: PackageSubcommandCapability {
+                    supported: false,
+                    reason: reason.clone(),
+                },
+                archive: PackageSubcommandCapability {
+                    supported: false,
+                    reason: reason.clone(),
+                },
+                uninstall_for_user: PackageSubcommandCapability {
                     supported: false,
                     reason: reason.clone(),
                 },
@@ -570,8 +585,11 @@ pub fn parse_package_action_capabilities(help: &str) -> PackageActionCapabilitie
         }
     };
     PackageActionCapabilities {
+        disable: capability("disable-user"),
         suspend: capability("suspend"),
         unsuspend: capability("unsuspend"),
+        archive: capability("archive"),
+        uninstall_for_user: capability("uninstall"),
         storage_stats: capability("get-package-storage-stats"),
     }
 }
@@ -779,6 +797,9 @@ package:/system/app/FacebookStub/FacebookStub.apk=com.facebook.appmanager uid:10
         );
         assert!(capabilities.suspend.supported);
         assert!(!capabilities.unsuspend.supported);
+        assert!(!capabilities.disable.supported);
+        assert!(!capabilities.archive.supported);
+        assert!(!capabilities.uninstall_for_user.supported);
         assert!(capabilities.unsuspend.reason.contains("not advertised"));
 
         let both = parse_package_action_capabilities(
@@ -786,12 +807,21 @@ package:/system/app/FacebookStub/FacebookStub.apk=com.facebook.appmanager uid:10
         );
         assert!(both.suspend.supported);
         assert!(both.unsuspend.supported);
+        assert!(!both.disable.supported);
+        assert!(!both.archive.supported);
+        assert!(!both.uninstall_for_user.supported);
         // Storage stats are probed the same way, and absent by default.
         assert!(!both.storage_stats.supported);
         let with_stats = parse_package_action_capabilities(
             "  get-package-storage-stats [--user <USER_ID>] <PACKAGE>\n",
         );
         assert!(with_stats.storage_stats.supported);
+        let with_mutations = parse_package_action_capabilities(
+            "  disable-user [--user USER_ID] PACKAGE\n  archive [--user USER_ID] PACKAGE\n  uninstall [--user USER_ID] PACKAGE\n",
+        );
+        assert!(with_mutations.disable.supported);
+        assert!(with_mutations.archive.supported);
+        assert!(with_mutations.uninstall_for_user.supported);
     }
 
     #[test]
@@ -849,6 +879,9 @@ package:/system/app/FacebookStub/FacebookStub.apk=com.facebook.appmanager uid:10
         let capabilities = package_action_capabilities(&mock, &target());
         assert!(!capabilities.suspend.supported);
         assert!(!capabilities.unsuspend.supported);
+        assert!(!capabilities.disable.supported);
+        assert!(!capabilities.archive.supported);
+        assert!(!capabilities.uninstall_for_user.supported);
         assert!(capabilities.suspend.reason.contains("could not inspect"));
     }
 

@@ -1025,7 +1025,10 @@
     "reviewBeforeApply": "Финальная проверка безопасности",
     "confirmApplyTitle": "Подтвердите изменения очистки",
     "confirmApplyBody": "Droidsmith отключит выбранные пакеты из {{name}} для этого пользователя Android.",
+    "confirmApplyBodyActions": "Droidsmith применит проверенные действия к выбранным пакетам из {{name}} для этого пользователя Android.",
     "confirmTotal": "Пакетов для отключения",
+    "confirmTotalActions": "Пакетов с проверенными действиями",
+    "actionLabel": "Действие",
     "confirmUnsafe": "Небезопасных пакетов",
     "unsafeSelectedTitle": "Небезопасные пакеты требуют особой проверки",
     "unsafeSelectedBody": "Эти элементы могут нарушить основные функции устройства или OEM. Проверьте каждый ID пакета перед продолжением.",
@@ -1063,6 +1066,10 @@
     "confirmDisable_few": "Отключить {{count}} пакета",
     "confirmDisable_many": "Отключить {{count}} пакетов",
     "confirmDisable_other": "Отключить {{count}} пакетов",
+    "confirmApply_one": "Применить действие к {{count}} пакету",
+    "confirmApply_few": "Применить действия к {{count}} пакетам",
+    "confirmApply_many": "Применить действия к {{count}} пакетам",
+    "confirmApply_other": "Применить действия к {{count}} пакетам",
     "back": "Назад",
     "recoveryBaseline": "Переносимый baseline восстановления",
     "recoveryExport": "Экспортировать baseline перед применением",
@@ -1138,6 +1145,10 @@
     "disabledCount_few": "{{count}} пакета успешно отключены.",
     "disabledCount_many": "{{count}} пакетов успешно отключено.",
     "disabledCount_other": "{{count}} пакетов успешно отключено.",
+    "appliedCount_one": "Успешно применено действий с пакетами: {{count}}.",
+    "appliedCount_few": "Успешно применено действий с пакетами: {{count}}.",
+    "appliedCount_many": "Успешно применено действий с пакетами: {{count}}.",
+    "appliedCount_other": "Успешно применено действий с пакетами: {{count}}.",
     "failedCount_one": "{{count}} пакет не удался.",
     "failedCount_few": "{{count}} пакета не удались.",
     "failedCount_many": "{{count}} пакетов не удалось.",
@@ -1182,7 +1193,8 @@
     "verify": {
       "missing": "Пакет исчез после применения; ожидалось, что он останется установленным и отключенным.",
       "still_enabled": "Пакет все еще включен после применения.",
-      "unknown": "Не удалось проверить состояние пакета после применения."
+      "unknown": "Не удалось проверить состояние пакета после применения.",
+      "actionState": "Действие «{{action}}» не достигло ожидаемого состояния {{expected}}; устройство сообщило {{actual}}."
     },
     "export": {
       "title": "Экспорт состояния устройства",

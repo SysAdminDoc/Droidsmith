@@ -432,11 +432,18 @@
     "complete": "limpieza completada",
     "completeTitle": "{{name}} — limpieza completada",
     "confirmApplyBody": "Droidsmith deshabilitará los paquetes seleccionados de {{name}} para este usuario de Android.",
+    "confirmApplyBodyActions": "Droidsmith aplicará las acciones revisadas a los paquetes seleccionados de {{name}} para este usuario de Android.",
     "confirmApplyTitle": "Confirmar cambios de limpieza",
+    "actionLabel": "Acción",
+    "confirmTotalActions": "Paquetes con acciones revisadas",
     "confirmDisable_few": "Deshabilitar {{count}} paquetes",
     "confirmDisable_many": "Deshabilitar {{count}} paquetes",
     "confirmDisable_one": "Deshabilitar {{count}} paquete",
     "confirmDisable_other": "Deshabilitar {{count}} paquetes",
+    "confirmApply_one": "Aplicar la acción a {{count}} paquete",
+    "confirmApply_few": "Aplicar acciones a {{count}} paquetes",
+    "confirmApply_many": "Aplicar acciones a {{count}} paquetes",
+    "confirmApply_other": "Aplicar acciones a {{count}} paquetes",
     "confirmJournal": "Cada cambio intentado y su resultado verificado se escribirán en el diario por dispositivo para revisión y deshacer compatible.",
     "hazardsChecking": "Comparando los paquetes seleccionados con riesgos observados del fabricante…",
     "hazardsError": "No se pudieron comprobar los riesgos del fabricante: {{message}}",
@@ -460,6 +467,10 @@
     "disabledCount_many": "{{count}} paquetes deshabilitados exitosamente.",
     "disabledCount_one": "{{count}} paquete deshabilitado exitosamente.",
     "disabledCount_other": "{{count}} paquetes deshabilitados exitosamente.",
+    "appliedCount_one": "{{count}} acción de paquete aplicada correctamente.",
+    "appliedCount_few": "{{count}} acciones de paquete aplicadas correctamente.",
+    "appliedCount_many": "{{count}} acciones de paquete aplicadas correctamente.",
+    "appliedCount_other": "{{count}} acciones de paquete aplicadas correctamente.",
     "entryStatus": {
       "missing": "No instalado",
       "ready": "Listo",
@@ -574,7 +585,8 @@
     "verify": {
       "missing": "El paquete desapareció después de aplicar; se esperaba que permaneciera instalado y deshabilitado.",
       "still_enabled": "El paquete sigue habilitado después de aplicar.",
-      "unknown": "No se pudo verificar el estado del paquete después de aplicar."
+      "unknown": "No se pudo verificar el estado del paquete después de aplicar.",
+      "actionState": "{{action}} no alcanzó el estado esperado {{expected}}; el dispositivo informó {{actual}}."
     },
     "export": {
       "title": "Exportar estado del dispositivo",

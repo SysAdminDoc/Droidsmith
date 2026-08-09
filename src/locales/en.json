@@ -1025,7 +1025,10 @@
     "reviewBeforeApply": "Final safety review",
     "confirmApplyTitle": "Confirm debloat changes",
     "confirmApplyBody": "Droidsmith will disable the selected packages from {{name}} for this Android user.",
+    "confirmApplyBodyActions": "Droidsmith will apply the reviewed actions to the selected packages from {{name}} for this Android user.",
     "confirmTotal": "Packages to disable",
+    "confirmTotalActions": "Packages with reviewed actions",
+    "actionLabel": "Action",
     "confirmUnsafe": "Unsafe-tier packages",
     "unsafeSelectedTitle": "Unsafe packages require extra scrutiny",
     "unsafeSelectedBody": "These entries can break core device or OEM features. Verify every package ID before continuing.",
@@ -1063,6 +1066,10 @@
     "confirmDisable_few": "Disable {{count}} packages",
     "confirmDisable_many": "Disable {{count}} packages",
     "confirmDisable_other": "Disable {{count}} packages",
+    "confirmApply_one": "Apply action to {{count}} package",
+    "confirmApply_few": "Apply actions to {{count}} packages",
+    "confirmApply_many": "Apply actions to {{count}} packages",
+    "confirmApply_other": "Apply actions to {{count}} packages",
     "back": "Back",
     "recoveryBaseline": "Portable recovery baseline",
     "recoveryExport": "Export baseline before applying",
@@ -1138,6 +1145,10 @@
     "disabledCount_few": "{{count}} packages disabled successfully.",
     "disabledCount_many": "{{count}} packages disabled successfully.",
     "disabledCount_other": "{{count}} packages disabled successfully.",
+    "appliedCount_one": "{{count}} package action applied successfully.",
+    "appliedCount_few": "{{count}} package actions applied successfully.",
+    "appliedCount_many": "{{count}} package actions applied successfully.",
+    "appliedCount_other": "{{count}} package actions applied successfully.",
     "failedCount_one": "{{count}} package failed.",
     "failedCount_few": "{{count}} packages failed.",
     "failedCount_many": "{{count}} packages failed.",
@@ -1182,7 +1193,8 @@
     "verify": {
       "missing": "Package disappeared after apply; expected it to remain installed and disabled.",
       "still_enabled": "Package is still enabled after apply.",
-      "unknown": "Package state could not be verified after apply."
+      "unknown": "Package state could not be verified after apply.",
+      "actionState": "{{action}} did not reach the expected state {{expected}}; the device reported {{actual}}."
     },
     "export": {
       "title": "Export device state",

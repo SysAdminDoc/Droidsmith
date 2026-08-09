@@ -58,6 +58,11 @@ each milestone tag.
   and Cargo licenses from offline metadata, marks undeclared licenses as
   `NOASSERTION`, and includes reproducible serial, timestamp, and tool fields.
   (R-136)
+- **Debloat packs now carry reviewed actions.** Pack entries can prefer
+  suspend, disable, archive, or uninstall-for-user; the preview permits only
+  safer overrides, the planner probes the device's advertised capabilities,
+  and the queue verifies each journaled post-state. Existing packs retain the
+  historical disable default. (R-137)
 
 ## [0.9.17] - 2026-08-02
 

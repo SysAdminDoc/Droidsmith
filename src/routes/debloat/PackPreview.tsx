@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import type {
   Pack,
   PackAssessment,
+  PackAction,
   PackEntry,
   PackEntryAssessment,
   RemovalLevel,
@@ -13,7 +14,14 @@ import {
   packagesForPreset,
   type DebloatPreset,
 } from "../debloatPack";
-import { Badge, Button, Card, FieldInput, StatePanel } from "../common";
+import {
+  Badge,
+  Button,
+  Card,
+  FieldInput,
+  FieldSelect,
+  StatePanel,
+} from "../common";
 import { CompatibilityChecks } from "./CompatibilityChecks";
 import { compatibilityTone } from "./tones";
 
@@ -21,9 +29,11 @@ export function PackPreview({
   pack,
   assessment,
   selected,
+  actionOverrides,
   overrideAccepted,
   planError,
   onToggle,
+  onActionChange,
   onApplyPreset,
   onOverrideChange,
   onExportBaseline,
@@ -34,9 +44,11 @@ export function PackPreview({
   pack: Pack;
   assessment: PackAssessment;
   selected: Set<string>;
+  actionOverrides: ReadonlyMap<string, PackAction>;
   overrideAccepted: boolean;
   planError: string | null;
   onToggle: (id: string) => void;
+  onActionChange: (id: string, action: PackAction) => void;
   onApplyPreset: (preset: DebloatPreset) => void;
   onOverrideChange: (accepted: boolean) => void;
   onExportBaseline: () => void;
@@ -178,6 +190,9 @@ export function PackPreview({
                 {entries.map((entry) => {
                   const support = assessments.get(entry.id);
                   const selectable = support?.status === "ready";
+                  const preferredAction = entry.action ?? "disable";
+                  const selectedAction =
+                    actionOverrides.get(entry.id) ?? preferredAction;
                   return (
                     <label
                       key={entry.id}
@@ -206,6 +221,35 @@ export function PackPreview({
                             {t(`debloat.entryStatus.${support.status}`)}
                           </Badge>
                         )}
+                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                          <span className="text-xs text-anvil-500">
+                            {t("debloat.actionLabel")}
+                          </span>
+                          <FieldSelect
+                            value={selectedAction}
+                            aria-label={`${t("debloat.actionLabel")}: ${entry.id}`}
+                            onClick={(event) => event.stopPropagation()}
+                            onChange={(event) =>
+                              onActionChange(
+                                entry.id,
+                                event.target.value as PackAction,
+                              )
+                            }
+                            className="h-7 py-0 text-xs"
+                          >
+                            {packActions
+                              .filter(
+                                (action) =>
+                                  actionRank(action) <=
+                                  actionRank(preferredAction),
+                              )
+                              .map((action) => (
+                                <option key={action} value={action}>
+                                  {t(`apps.actionKind.${action}`)}
+                                </option>
+                              ))}
+                          </FieldSelect>
+                        </div>
                         <p className="mt-1 text-xs leading-5 text-anvil-400">
                           {entry.description}
                         </p>
@@ -302,6 +346,17 @@ export function PackPreview({
       </div>
     </>
   );
+}
+
+const packActions: PackAction[] = [
+  "suspend",
+  "disable",
+  "archive",
+  "uninstall_for_user",
+];
+
+function actionRank(action: PackAction): number {
+  return packActions.indexOf(action);
 }
 
 function entryStatusTone(
