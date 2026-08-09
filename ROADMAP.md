@@ -23,13 +23,6 @@ and Android, privacy-safe diagnostics, and the widest remaining product gap
 
 ### P2
 
-- [ ] IMP-121 P2 — Fix the repository discoverability metadata
-  Why: the project is mis-tagged with a language it does not contain and is missing every topic a prospective user would search, on 9 stars.
-  Evidence: `gh repo view` reports topics `android, kotlin, rust` — there is no Kotlin in the tree — with an empty `homepageUrl`; `bundle.homepage` in `src-tauri/tauri.conf.json` is set.
-  Touches: repository settings (no files)
-  Acceptance: `kotlin` removed; `tauri`, `typescript`, `adb`, `scrcpy`, `debloat`, `android-debloat`, `device-management` added; homepage points at the repository or its releases page.
-  Complexity: S
-
 - [ ] IMP-122 P2 — Retire the local documents that mislead a reader
   Why: four ignored/untracked documents or templates state things that are false, including a security contact that does not exist alongside a disclosure path that does.
   Evidence: `SECURITY.md` (untracked) names `security@droidsmith.invalid`, a Discord absent from the README, a `0.0.x` supported line, and lists signing / SBOM publication / Ed25519 update verification as current hardening commitments while all are in `Roadmap_Blocked.md`; `.github/ISSUE_TEMPLATE/config.yml` already routes to GitHub private advisories; `Roadmap_Blocked.md` still carries a light-theme entry that IMP-112 shipped in v0.9.16; `.github/ISSUE_TEMPLATE/bug.md` and `feature.md` are untracked duplicates of the tracked `.yml` forms; `docs/DEVELOPMENT.md` is untracked, says Node 20+, and omits tuning/APK Analyzer routes.

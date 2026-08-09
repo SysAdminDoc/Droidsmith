@@ -20,6 +20,9 @@ each milestone tag.
   paths are tested in every command domain, with fake-transport coverage for
   journal batch execution and focused tests for filesystem, package, wireless,
   profile, settings, diagnostics, and host-tool boundaries. (IMP-118)
+- **Repository discoverability metadata now matches the product.** GitHub topics
+  cover the Tauri, TypeScript, ADB, scrcpy, and Android-debloat workflows, and
+  the repository homepage points to the project. (IMP-121)
 - **Fleet profile runs are available from the GUI.** Profiles can be planned or
   applied across the connected fleet with per-device progress, cancellation,
   safe transport screening, and an atomically saved schema-2 report rendered by
