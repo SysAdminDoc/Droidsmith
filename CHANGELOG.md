@@ -27,6 +27,10 @@ each milestone tag.
   The local security policy points to private GitHub advisories and the current
   `0.9.x` support line, while stale duplicate templates and development notes
   were retired. (IMP-122)
+- **APK verification failures now explain their evidence limits.** Explicit and
+  generic PackageManager verification markers retain raw output, distinguish
+  known signals from unknown policy causes, and link to Android's official FAQ;
+  no unobserved install workaround is suggested. (R-141)
 - **Fleet profile runs are available from the GUI.** Profiles can be planned or
   applied across the connected fleet with per-device progress, cancellation,
   safe transport screening, and an atomically saved schema-2 report rendered by

@@ -23,13 +23,6 @@ and Android, privacy-safe diagnostics, and the widest remaining product gap
 
 ### P2
 
-- [ ] R-141 P2 — Make APK install failures legible ahead of developer-verification enforcement
-  Why: enforcement starts 2026-09-30 in select regions, and store/non-ADB distribution may fail for reasons the current error surface cannot explain; Google's official FAQ now explicitly says ADB installs work without verification, so this item must not imply that ordinary local ADB installs are threatened.
-  Evidence: https://developer.android.com/developer-verification and https://developer.android.com/developer-verification/guides/faq (enforcement date, limited-distribution 20-device cap, and the explicit ADB-install exemption); `src-tauri/src/install.rs` and `src/routes/apps/InstallPanels.tsx` classify install failures.
-  Touches: `src-tauri/src/install.rs`, `src/routes/apps/InstallPanels.tsx`, `quirks/`
-  Acceptance: verification-related `pm install` failure strings are classified and explained rather than surfaced as opaque `INSTALL_FAILED_*`; the explanation states what is known and what is not, and cites the developer-verification page; no workaround is asserted that has not been observed.
-  Complexity: S
-
 - [ ] R-142 P2 — Capture and surface the exact `pm` failure text for uninstall-for-user
   Why: users report `pm uninstall -k --user 0` failing on Android 17 where it worked on Android 16, and **no documented Android 17 behavior change touches `pm` or `cmd package`** — so the only honest response is to report precisely what the device said instead of guessing a cause.
   Evidence: https://xdaforums.com/t/android-17-no-longer-able-to-uninstall-bloatware-via-adb.4795845/ (Pixel 8, Android 17 stable, Chrome/Gmail/YouTube); https://developer.android.com/about/versions/17/behavior-changes-all contains no package-management change; `src-tauri/src/adb/actions.rs` `pm_failure_marker` already recognises `Failure [...]` and `Error:` shapes.

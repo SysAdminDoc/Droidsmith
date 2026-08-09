@@ -7,6 +7,9 @@ import { formatBackupSize } from "../appsBackup";
 import { Button, RevealInFolderButton, StatePanel } from "../common";
 import type { BackupNotice, InstallState } from "./types";
 
+const ANDROID_DEVELOPER_VERIFICATION_URL =
+  "https://developer.android.com/developer-verification/guides/faq";
+
 /** APK install progress/result surface with SDK-override review entry point
  *  (IMP-67: extracted verbatim from the former Apps.tsx god-file). */
 export function InstallStatePanel({
@@ -65,6 +68,9 @@ export function InstallStatePanel({
 
   const { result } = state;
   const failure = result.failure;
+  const verificationFailure =
+    failure?.code === "INSTALL_FAILED_DEVELOPER_VERIFICATION" ||
+    failure?.code === "INSTALL_FAILED_VERIFICATION_FAILURE";
   return (
     <StatePanel
       title={
@@ -121,7 +127,29 @@ export function InstallStatePanel({
               {t("apps.installRemedy")}
             </dt>
             <dd className="text-anvil-100">{failure.remedy}</dd>
+            {verificationFailure && (
+              <>
+                <dt className="font-medium text-anvil-400">
+                  {t("apps.installVerificationSource")}
+                </dt>
+                <dd>
+                  <a
+                    className="text-circuit-200 underline decoration-circuit-300/50 underline-offset-2 hover:text-circuit-100"
+                    href={ANDROID_DEVELOPER_VERIFICATION_URL}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    {t("apps.installVerificationGuidance")}
+                  </a>
+                </dd>
+              </>
+            )}
           </dl>
+          {verificationFailure && (
+            <p className="mt-3 text-xs leading-5 text-anvil-400">
+              {t("apps.installVerificationNotice")}
+            </p>
+          )}
           <p className="mt-3 text-xs text-anvil-400">
             {t("apps.installNoAutomaticOverride")}
           </p>

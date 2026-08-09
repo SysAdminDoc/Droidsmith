@@ -25,6 +25,8 @@ const MAX_TOTAL_APK_BYTES: u64 = 8 * 1024 * 1024 * 1024;
 const INSTALL_TIMEOUT: Duration = Duration::from_secs(300);
 const TRANSFER_TIMEOUT: Duration = Duration::from_secs(300);
 const MAX_RAW_OUTPUT_CHARS: usize = 16 * 1024;
+const ANDROID_DEVELOPER_VERIFICATION_URL: &str =
+    "https://developer.android.com/developer-verification/guides/faq";
 
 #[derive(specta::Type, Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -681,6 +683,9 @@ fn combined_output(output: &ProcessOutput) -> String {
 
 pub fn classify_install_failure(raw: &str) -> InstallFailure {
     let normalized = raw.to_ascii_uppercase();
+    if let Some(failure) = classify_verification_failure(raw, &normalized) {
+        return failure;
+    }
     let (code, cause, remedy, suggested_override) = if normalized
         .contains("INSTALL_FAILED_VERSION_DOWNGRADE")
     {
@@ -761,6 +766,49 @@ pub fn classify_install_failure(raw: &str) -> InstallFailure {
         raw_output: bounded(raw),
         advanced_protection_mode: AdvancedProtectionMode::Unknown,
     }
+}
+
+/// Classify verifier-shaped output without claiming that the developer
+/// verification program caused an ordinary ADB failure. Android documents ADB
+/// installs as exempt, while the low-level `pm` output can still contain a
+/// generic verifier status or OEM-specific text.
+fn classify_verification_failure(raw: &str, normalized: &str) -> Option<InstallFailure> {
+    let explicit_developer_marker = normalized.contains("DEVELOPER_VERIFICATION")
+        || normalized.contains("DEVELOPER VERIFICATION");
+    let generic_verification_marker =
+        normalized.contains("VERIFICATION_FAILURE") || normalized.contains("VERIFICATION FAILED");
+    if !explicit_developer_marker && !generic_verification_marker {
+        return None;
+    }
+
+    let (fallback_code, cause, remedy) = if explicit_developer_marker {
+        (
+            "INSTALL_FAILED_DEVELOPER_VERIFICATION",
+            "The device output mentions Android developer verification, but it does not identify the exact policy state behind the rejection.",
+            format!(
+                "Known: the device output contains a developer-verification marker. Not known: the exact registration, distribution-channel, region, or certified-device state that led to it. Android's official FAQ says ADB installs are not subject to developer verification, so this message alone does not prove that developer verification blocked this ADB attempt. Review the official guidance: {ANDROID_DEVELOPER_VERIFICATION_URL}",
+            ),
+        )
+    } else {
+        (
+            "INSTALL_FAILED_VERIFICATION_FAILURE",
+            "PackageManager reported a verification failure, but the ADB output does not identify which verifier or policy rejected the package.",
+            format!(
+                "Known: PackageManager reported a verification failure. Not known: whether this was Android developer verification, another package verifier, or an OEM-specific check, nor the policy state. Android's official FAQ says ADB installs are not subject to developer verification, so this message alone does not prove that developer verification blocked this ADB attempt. Review the raw output and official guidance: {ANDROID_DEVELOPER_VERIFICATION_URL}",
+            ),
+        )
+    };
+
+    Some(InstallFailure {
+        code: extract_install_code(raw)
+            .unwrap_or(fallback_code)
+            .to_string(),
+        cause: cause.to_string(),
+        remedy,
+        suggested_override: None,
+        raw_output: bounded(raw),
+        advanced_protection_mode: AdvancedProtectionMode::Unknown,
+    })
 }
 
 fn extract_install_code(raw: &str) -> Option<&str> {
@@ -1139,6 +1187,28 @@ mod tests {
         );
         assert_eq!(split.code, "INSTALL_FAILED_MISSING_SPLIT");
         assert_eq!(split.suggested_override, None);
+    }
+
+    #[test]
+    fn classifies_developer_verification_markers_without_claiming_a_cause() {
+        let explicit = classify_install_failure(
+            "Failure [DEVELOPER_VERIFICATION_FAILED_REASON_NETWORK_UNAVAILABLE]",
+        );
+        assert_eq!(explicit.code, "INSTALL_FAILED_DEVELOPER_VERIFICATION");
+        assert!(explicit
+            .cause
+            .contains("does not identify the exact policy"));
+        assert!(explicit.remedy.contains("ADB installs are not subject"));
+        assert!(explicit.remedy.contains(ANDROID_DEVELOPER_VERIFICATION_URL));
+
+        let generic = classify_install_failure(
+            "Failure [INSTALL_FAILED_VERIFICATION_FAILURE: verifier rejected package]",
+        );
+        assert_eq!(generic.code, "INSTALL_FAILED_VERIFICATION_FAILURE");
+        assert!(generic.cause.contains("does not identify which verifier"));
+        assert!(generic.remedy.contains("another package verifier"));
+        assert!(generic.remedy.contains(ANDROID_DEVELOPER_VERIFICATION_URL));
+        assert_eq!(generic.suggested_override, None);
     }
 
     #[test]
