@@ -23,6 +23,7 @@ mod host_diagnostics;
 mod host_path;
 mod install;
 pub mod journal;
+pub mod mcp;
 pub mod operations;
 /// `packs` is `pub` so the `droidsmith-pack-lint` binary (which links
 /// against this crate as `droidsmith_lib`) can reach the loader + lint

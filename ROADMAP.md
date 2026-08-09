@@ -23,13 +23,6 @@ and Android, privacy-safe diagnostics, and the widest remaining product gap
 
 ### P2
 
-- [ ] R-149 P2 — Expose the headless CLI as an MCP server
-  Why: agent-driven device workflows are where this space is moving, and Droidsmith can serve them over stdio with no HTTP client, no telemetry and no new network surface — the one differentiator its architecture makes cheap and its competitors' architectures make expensive.
-  Evidence: `src-tauri/src/bin/droidsmith_cli.rs` already emits stable `--json` for every operation with documented exit codes; escrcpy 3.0.8 ships an MCP-protocol assistant; `callstack/agent-device` (3.9k stars) and Android Studio Otter 3's agent tooling target the same workflows.
-  Touches: `src-tauri/src/bin/` (new binary), `src-tauri/src/fleet_report.rs`, `README.md`
-  Acceptance: a `droidsmith-mcp` stdio server exposes read-only tools (list devices, list packages, plan profile, inspect baseline, read fleet report) plus explicitly-flagged mutating tools; every mutating tool refuses without the same confirmation the GUI requires; the server makes no network connection and holds no state the CLI does not already own.
-  Complexity: L
-
 - [ ] R-151 P2 — Add historical app-exit and ANR diagnostics to Process Manager
   Why: Process Manager shows the live `ps` snapshot and Android 17 memory-limit status, but it cannot explain why an app previously died — the diagnosis users currently obtain from an opaque `dumpsys` command.
   Evidence: `src/routes/devices/ProcessManager.tsx` has no exit-history query; `src-tauri/src/adb/device_info.rs` and `src-tauri/src/commands/devices.rs` expose only `am memory-limiter status`; Android's `ApplicationExitInfo` defines stable crash/ANR/low-memory/package-state reasons and `dumpsys` is the supported bounded system-service inspection path.

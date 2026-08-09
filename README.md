@@ -147,7 +147,7 @@ ADB front end, but it has hard limits that an open project can fix:
 | Debloat lists | Static | Versioned YAML packs with per-entry reviewed actions, vendor quirks, recovery baselines, and a final count/unsafe-tier review before apply; external data imports require provenance and redistribution review |
 | Screen mirror | Virtual buttons + screenshots | Capability-negotiated scrcpy launch/supervision with per-device presets, encoder selection, and actionable bounded failure diagnostics; bundled scrcpy remains planned |
 | Wireless ADB | Manual `adb pair` in console | First-class Android 11+ pairing, exact mDNS TLS provenance, explicit legacy/unknown TCP warnings, and privacy-bounded VPN/mDNS failure guidance |
-| Automation | None | GUI-authored YAML profiles, explicit v1 migration, live dry-run diffs, and a JSON-capable headless CLI |
+| Automation | None | GUI-authored YAML profiles, explicit v1 migration, live dry-run diffs, JSON headless CLI, and a local stdio MCP server |
 | Extensibility | None | Versioned local pack, quirk, and profile schemas; plugin API and marketplace are deferred |
 | i18n | EN + RU | i18next-driven (DE, EN, ES, RU, ZH), contributor-friendly |
 | Multi-device | One at a time | Device selector and per-device workflows; side-by-side device tabs remain planned |
@@ -271,10 +271,33 @@ operation or incompatibility, `2` for invalid input, `3` when ADB is absent, and
 
 ```bash
 droidsmith-cli devices --json
+droidsmith-cli packages --device SERIAL --filter all --json
 droidsmith-cli migrate-v1 old-profile.yaml --output profile-v3.yaml --json
 droidsmith-cli run profile-v3.yaml --device SERIAL --dry-run --json
 droidsmith-cli run profile-v3.yaml --device SERIAL --apply --json
 ```
+
+### Local MCP automation
+
+`droidsmith-mcp` is a local Model Context Protocol server for agent-driven
+workflows. An MCP host launches the executable and exchanges one JSON-RPC
+message per line over stdin/stdout; it opens no HTTP listener, stores no
+workflow state, and emits no telemetry. Device operations reuse the sibling
+`droidsmith-cli`, so the same ADB validation, transport warnings, dry-run
+plans, exit semantics, and journal remain authoritative.
+
+The read-only tools are `devices_list`, `packages_list`, `profile_plan`,
+`baseline_inspect`, `fleet_report_read`, and `pack_plan`. The mutating tools
+are explicitly marked in `tools/list` and are `profile_apply`,
+`baseline_apply`, and `pack_apply`. Each mutating call must include
+`confirmed: true` after its plan has been reviewed; without it, the server
+returns `confirmation_required` before launching the CLI. The fleet-report
+tool uses the same redacted viewer as the app, so report serials are returned
+as identity digests.
+
+Configure the MCP host with the path to `droidsmith-mcp` as a stdio server
+command. Keep `droidsmith-cli` beside it, or set `DROIDSMITH_CLI` to an
+explicit local CLI path when using a custom installation layout.
 
 Debloat packs are also available from the headless surface. `list` is offline;
 `plan` always performs a read-only device assessment, while `apply` requires an

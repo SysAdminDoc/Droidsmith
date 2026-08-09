@@ -20,6 +20,11 @@ each milestone tag.
   NSIS installer, portable executable, and `SHA256SUMS` are attached to the
   generated GitHub release; Winget and Scoop manifests carry the released
   NSIS SHA-256. (R-148)
+- **The headless workflows are available over local MCP stdio.**
+  `droidsmith-mcp` exposes read-only device, package, profile, baseline, pack,
+  and redacted fleet-report tools, while profile, baseline, and pack mutations
+  are explicitly annotated and refuse without `confirmed: true`; all device
+  execution remains in the existing CLI boundary. (R-149)
 
 ### Security and accessibility
 

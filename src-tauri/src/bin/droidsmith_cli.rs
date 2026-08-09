@@ -4,6 +4,7 @@
 //!
 //! ```text
 //! droidsmith-cli devices                        # list ADB devices
+//! droidsmith-cli packages --device SERIAL --json
 //! droidsmith-cli pack list --json                # list bundled/imported packs
 //! droidsmith-cli pack plan pixel-stock --device SERIAL --json
 //! droidsmith-cli pack apply pixel-stock --all-devices --dry-run --json
@@ -60,6 +61,7 @@ fn main() -> ExitCode {
 
     match argv[0].as_str() {
         "devices" => cmd_devices(&argv[1..]),
+        "packages" => cmd_packages(&argv[1..]),
         "pack" => cmd_pack(&argv[1..]),
         "run" => cmd_run(&argv[1..]),
         "migrate-v1" => cmd_migrate(&argv[1..], MigrateFrom::V1),
@@ -84,6 +86,7 @@ fn print_help() {
         "droidsmith-cli — headless ADB action runner\n\n\
          USAGE\n  \
          droidsmith-cli devices [--json]\n  \
+         droidsmith-cli packages --device <serial> [--user <id>] [--filter all|user|system|enabled|disabled|archived|retained] [--json] [--allow-unsafe-transport]\n  \
          droidsmith-cli pack list [--json]\n  \
          droidsmith-cli pack plan <pack-id|pack.yaml> (--device <serial> | --all-devices) [--json] [--allow-unsafe-transport] [--allow-unsafe-tier] [--accept-compatibility]\n  \
          droidsmith-cli pack apply <pack-id|pack.yaml> (--device <serial> | --all-devices) (--dry-run|--apply) [--json] [--allow-unsafe-transport] [--allow-unsafe-tier] [--accept-compatibility]\n  \
@@ -1229,6 +1232,148 @@ fn cmd_devices(argv: &[String]) -> ExitCode {
             ExitCode::from(1)
         }
     }
+}
+
+#[derive(Serialize)]
+struct PackagesOutput {
+    schema_version: u32,
+    command: &'static str,
+    device_serial: String,
+    user_id: u32,
+    filter: adb::PackageFilter,
+    packages: Vec<adb::AppPackage>,
+    archive: adb::PackageArchiveCapability,
+}
+
+fn parse_package_filter(value: &str) -> Result<adb::PackageFilter, String> {
+    match value {
+        "all" => Ok(adb::PackageFilter::All),
+        "user" => Ok(adb::PackageFilter::User),
+        "system" => Ok(adb::PackageFilter::System),
+        "enabled" => Ok(adb::PackageFilter::Enabled),
+        "disabled" => Ok(adb::PackageFilter::Disabled),
+        "archived" => Ok(adb::PackageFilter::Archived),
+        "retained" => Ok(adb::PackageFilter::Retained),
+        other => Err(format!(
+            "unknown --filter {other:?}; pass all, user, system, enabled, disabled, archived, or retained"
+        )),
+    }
+}
+
+fn cmd_packages(argv: &[String]) -> ExitCode {
+    let mut serial = None;
+    let mut user_id = 0_u32;
+    let mut filter = adb::PackageFilter::All;
+    let mut json = false;
+    let mut allow_unsafe_transport = false;
+    let mut index = 0;
+    while index < argv.len() {
+        match argv[index].as_str() {
+            "--device" => {
+                index += 1;
+                if index >= argv.len() {
+                    eprintln!("[droidsmith-cli] --device requires an argument");
+                    return ExitCode::from(2);
+                }
+                serial = Some(argv[index].clone());
+            }
+            "--user" => {
+                index += 1;
+                if index >= argv.len() {
+                    eprintln!("[droidsmith-cli] --user requires an argument");
+                    return ExitCode::from(2);
+                }
+                user_id = match argv[index].parse::<u32>() {
+                    Ok(value) => value,
+                    Err(_) => {
+                        eprintln!("[droidsmith-cli] --user must be an Android numeric user id");
+                        return ExitCode::from(2);
+                    }
+                };
+            }
+            "--filter" => {
+                index += 1;
+                if index >= argv.len() {
+                    eprintln!("[droidsmith-cli] --filter requires an argument");
+                    return ExitCode::from(2);
+                }
+                filter = match parse_package_filter(&argv[index]) {
+                    Ok(value) => value,
+                    Err(error) => {
+                        eprintln!("[droidsmith-cli] {error}");
+                        return ExitCode::from(2);
+                    }
+                };
+            }
+            "--json" => json = true,
+            "--allow-unsafe-transport" => allow_unsafe_transport = true,
+            other => {
+                eprintln!("[droidsmith-cli] unknown flag: {other}");
+                return ExitCode::from(2);
+            }
+        }
+        index += 1;
+    }
+    let serial = match resolve_device_selector(serial, false) {
+        Ok(Some(serial)) => serial,
+        Ok(None) => unreachable!("single-device package listing requires a serial"),
+        Err(error) => {
+            eprintln!("[droidsmith-cli] {error}");
+            return ExitCode::from(2);
+        }
+    };
+    let Some(transport) = resolve_or_fail() else {
+        return ExitCode::from(3);
+    };
+    let mut target = match target_for_serial(&transport, &serial) {
+        Ok(target) => target,
+        Err(error) => {
+            eprintln!("[droidsmith-cli] {error}");
+            return ExitCode::from(1);
+        }
+    };
+    if let Err(error) = authorize_cli_transport(&mut target, allow_unsafe_transport) {
+        eprintln!("[droidsmith-cli] {error}");
+        return ExitCode::from(2);
+    }
+    let listing = match adb::list_packages_with_capability(&transport, &target, filter, user_id) {
+        Ok(listing) => listing,
+        Err(error) => {
+            eprintln!("[droidsmith-cli] package listing failed: {error}");
+            return ExitCode::from(1);
+        }
+    };
+    if json {
+        println!(
+            "{}",
+            serde_json::to_string(&PackagesOutput {
+                schema_version: 1,
+                command: "packages",
+                device_serial: serial,
+                user_id,
+                filter,
+                packages: listing.packages,
+                archive: listing.archive,
+            })
+            .expect("serializable package listing")
+        );
+    } else {
+        println!("PACKAGE\tSTATE\tCLASS");
+        for package in listing.packages {
+            let state = if package.archived {
+                "archived"
+            } else if package.retained {
+                "retained"
+            } else if package.enabled {
+                "enabled"
+            } else {
+                "disabled"
+            };
+            let class = if package.system { "system" } else { "user" };
+            println!("{}\t{state}\t{class}", package.package);
+        }
+    }
+    ExitCode::SUCCESS
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -3097,6 +3242,16 @@ mod tests {
                 .unwrap_err()
                 .contains("invalid")
         );
+    }
+
+    #[test]
+    fn package_filter_parser_accepts_every_inventory_filter() {
+        for value in [
+            "all", "user", "system", "enabled", "disabled", "archived", "retained",
+        ] {
+            assert!(parse_package_filter(value).is_ok(), "filter {value}");
+        }
+        assert!(parse_package_filter("unknown").is_err());
     }
 
     #[test]

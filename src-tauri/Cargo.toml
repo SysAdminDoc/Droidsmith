@@ -95,6 +95,10 @@ name = "droidsmith-cli"
 path = "src/bin/droidsmith_cli.rs"
 
 [[bin]]
+name = "droidsmith-mcp"
+path = "src/bin/droidsmith_mcp.rs"
+
+[[bin]]
 name = "droidsmith-bindings"
 path = "src/bin/generate_bindings.rs"
 
