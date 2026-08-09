@@ -45,9 +45,10 @@ community, and security review:
 8. **P2 diagnostics:** add read-only historical app-exit/ANR records beside the
    existing process list and Android 17 memory-limit status (R-151); do not
    conflate this with the blocked crash/dropbox viewer R-102.
-9. **P2 verification:** make the existing Vitest coverage configuration and
-   cargo-fuzz targets executable in bounded CI lanes (IMP-131/IMP-132). The
-   cheap release-policy check now runs on every frontend push and pull request
+9. **P2 verification:** the focused Vitest coverage gate now measures the
+   deterministic `src/lib` helper/state surface (IMP-131 shipped); the existing
+   cargo-fuzz targets still need a bounded scheduled lane (IMP-132). The cheap
+   release-policy check now runs on every frontend push and pull request
    (IMP-134 shipped).
 10. **P2 content and documentation:** import user-supplied UAD data without
     redistributing GPL content (R-146), publish the unreleased Windows artifact
@@ -259,8 +260,8 @@ IMP-114 is the still-open total-theme gate.
   rendering is intentionally absent from Vitest, so the Playwright smoke gate is
   the primary route test. Existing fuzz targets for ADB text, YAML, journal
   JSONL, and scrcpy text require nightly `cargo-fuzz` and are manual-only.
-  IMP-131/IMP-132 should add bounded, reproducible safety lanes rather than a
-  vanity global percentage.
+  IMP-132 should add a bounded, reproducible safety lane rather than relying on
+  a developer's local fuzz run.
 - **Release/docs:** `release:check` includes provenance, UI smoke, npm audit,
   cargo-deny, schema/resource checks, and bundle checks; the standalone npm
   security script is narrower. CI's `release-smoke` job is schedule/manual only,

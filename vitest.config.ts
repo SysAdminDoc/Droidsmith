@@ -23,9 +23,24 @@ export default defineConfig({
     globals: false,
     include: ["src/**/*.test.{ts,tsx}"],
     coverage: {
+      provider: "v8",
       reporter: ["text", "json", "html"],
-      include: ["src/**/*.{ts,tsx}"],
-      exclude: ["src/**/*.test.{ts,tsx}", "src/main.tsx", "src/vite-env.d.ts"],
+      // Route components are intentionally covered by the invisible rendered
+      // route gate. Keep this focused gate on renderer helpers/state that can
+      // be exercised deterministically in Vitest.
+      include: ["src/lib/**/*.{ts,tsx}"],
+      exclude: [
+        "src/**/*.test.{ts,tsx}",
+        "src/lib/bindings.ts",
+        "src/main.tsx",
+        "src/vite-env.d.ts",
+      ],
+      thresholds: {
+        statements: 45,
+        branches: 40,
+        functions: 35,
+        lines: 45,
+      },
     },
   },
 });

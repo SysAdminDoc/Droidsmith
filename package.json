@@ -34,6 +34,7 @@
     "bindings:generate": "node scripts/check-bindings.mjs --write",
     "bindings:check": "node scripts/check-bindings.mjs",
     "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
     "test:watch": "vitest"
   },
   "dependencies": {
@@ -55,6 +56,7 @@
     "@typescript-eslint/eslint-plugin": "^8.65.0",
     "@typescript-eslint/parser": "^8.65.0",
     "@vitejs/plugin-react": "^4.3.4",
+    "@vitest/coverage-v8": "4.1.7",
     "autoprefixer": "^10.4.20",
     "eslint": "^10.8.0",
     "eslint-plugin-react-hooks": "^7.1.1",

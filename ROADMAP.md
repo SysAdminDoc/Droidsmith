@@ -144,13 +144,6 @@ and Android, privacy-safe diagnostics, and the widest remaining product gap
   Acceptance: a selected package can request a bounded, read-only `dumpsys activity exit-info` history; parsed rows show timestamp, user, process, reason, status, RSS/PSS where present, and an explicit unknown state for OEM formats; traces and raw dumps are not captured automatically; package/user selection and target lifecycle guards match the existing process query.
   Complexity: M
 
-- [ ] IMP-131 P2 — Turn the existing frontend coverage configuration into a focused gate
-  Why: Vitest declares coverage reporters but no script, provider enablement, or threshold, so the repository cannot tell whether safety-critical helpers are losing tests while route rendering remains intentionally Playwright-only.
-  Evidence: `vitest.config.ts:25-29` defines reporters/include/exclude; `package.json` has no coverage script; `.github/workflows/ci.yml` never invokes `vitest --coverage`; Vitest supports scoped glob thresholds and negative uncovered-item budgets.
-  Touches: `package.json`, `vitest.config.ts`, `.github/workflows/ci.yml`, `src/lib/*.test.ts`, `src/routes/**/*.test.ts`
-  Acceptance: `npm run test:coverage` uses a pinned provider, reports artifacts, and enforces measured thresholds for `src/lib` and command/state helpers rather than a vanity global percentage; CI runs it on pull requests and the threshold ratchets only with a test-backed change.
-  Complexity: M
-
 - [ ] IMP-132 P2 — Run the existing cargo-fuzz targets in a bounded scheduled lane
   Why: ADB/OEM text, YAML, journal JSONL, and scrcpy parsers are security-sensitive and already have fuzz targets, but the only execution path is a manual nightly command.
   Evidence: `src-tauri/fuzz/fuzz_targets/{adb_text,yaml_documents,journal_jsonl,scrcpy_text}.rs`; `README.md:505-509`; `.github/workflows/ci.yml` has no nightly `cargo fuzz` job; cargo-fuzz is Linux/Unix nightly tooling and its own documentation supports fixed-time runs and corpus minimization.

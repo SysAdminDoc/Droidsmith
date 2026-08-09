@@ -502,8 +502,11 @@ output. Keep renderer-only compatibility helpers in `src/lib/tauri.ts` instead
 of duplicating Rust wire records.
 
 The individual commands (`npm run format:check`, `npm run lint`,
-`npm run typecheck`, `npm test`, `npm run security:audit`, `npm run ui:smoke`,
-and `npm run release:smoke`) remain available for fast iteration.
+`npm run typecheck`, `npm test`, `npm run test:coverage`,
+`npm run security:audit`, `npm run ui:smoke`, and `npm run release:smoke`)
+remain available for fast iteration. The coverage command uses the pinned V8
+provider and gates the deterministic `src/lib` helper/state surface; route
+rendering remains covered by the invisible rendered-route smoke gate.
 
 Generate the offline release provenance inventory before publishing artifacts:
 

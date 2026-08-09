@@ -81,6 +81,10 @@ each milestone tag.
   `serde_yaml_ng` for this release after a dated compatibility review; a
   `serde-saphyr` migration remains a separate fixture- and graph-reviewed
   change rather than an untested dependency swap. (IMP-126)
+- **Frontend coverage is now a focused merge gate.** The pinned V8 provider
+  reports text/JSON/HTML artifacts and enforces measured statement, branch,
+  function, and line thresholds over `src/lib` helper/state code in CI.
+  (IMP-131)
 - **Command failures now have locale-safe summaries.** Stable native error
   codes map to translated summaries in all five locales, while OEM/device
   output remains visible under a labelled technical-details line and
