@@ -1535,6 +1535,7 @@
     "authorTab": "Erstellen",
     "importTab": "Importieren und Vorschau",
     "reportTab": "Flottenbericht",
+    "fleetTab": "Auf Flotte anwenden",
     "identityTitle": "Profilidentität",
     "nameLabel": "Name",
     "namePlaceholder": "Arbeitstelefon-Grundausstattung",
@@ -1634,6 +1635,22 @@
       "dataCleared": "Daten gelöscht",
       "stopped": "Beendet",
       "reviewedAction": "Geprüfte Aktion"
+    },
+    "fleet": {
+      "title": "Profil auf Flotte anwenden",
+      "description": "Dieses Profil auf alle verbundenen Geräte planen oder anwenden. Nicht autorisierte, Offline- und unsichere TCP-Transporte werden übersprungen und ein Schema-2-Bericht wird gespeichert.",
+      "profile": "Profil: {{name}}",
+      "devices": "{{count}} autorisierte Geräte",
+      "actions": "{{count}} Aktionen",
+      "skipNotice": "Nur autorisierte USB- und gekoppelte TLS-Wi-Fi-Geräte sind geeignet. Andere Transporte werden im Bericht als übersprungen aufgeführt.",
+      "plan": "Flottenlauf planen",
+      "apply": "Auf alle Geräte anwenden",
+      "choosing": "Berichtspfad wählen…",
+      "cancel": "Lauf abbrechen",
+      "writing": "Bericht wird nach {{path}} geschrieben",
+      "failed": "Flottenlauf fehlgeschlagen",
+      "noDevicesTitle": "Keine autorisierten Geräte",
+      "noDevicesBody": "Autorisieren Sie mindestens ein Gerät, bevor Sie einen Flottenlauf starten."
     },
     "report": {
       "title": "Bericht eines Flottenlaufs",

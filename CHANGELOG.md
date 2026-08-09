@@ -20,6 +20,10 @@ each milestone tag.
   paths are tested in every command domain, with fake-transport coverage for
   journal batch execution and focused tests for filesystem, package, wireless,
   profile, settings, diagnostics, and host-tool boundaries. (IMP-118)
+- **Fleet profile runs are available from the GUI.** Profiles can be planned or
+  applied across the connected fleet with per-device progress, cancellation,
+  safe transport screening, and an atomically saved schema-2 report rendered by
+  the existing offline report viewer. (R-138)
 - **Remote file mutations quote shell-sensitive device paths.** Absolute paths
   containing whitespace, punctuation, or quotes are protected at the `adb
   shell` boundary, while the structured plan remains available for exact

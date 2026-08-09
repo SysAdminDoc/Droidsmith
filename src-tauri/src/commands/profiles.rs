@@ -37,6 +37,12 @@ pub struct ProfilePreview {
     pub filter_exclusions: Vec<profile::FilterExclusion>,
 }
 
+#[derive(specta::Type, Debug, Clone, Serialize)]
+pub struct FleetRunResult {
+    pub artifact: HostArtifact,
+    pub report: fleet_report::FleetReportView,
+}
+
 /// Render a saved fleet run report through a one-shot native read grant.
 ///
 /// Deliberately the only command in this file that never constructs a
@@ -56,6 +62,58 @@ pub fn inspect_fleet_report(
     let path = grants.consume(&path_grant, HostPathPurpose::FleetReportOpen)?;
     let loaded = fleet_report::load(&path)?;
     Ok(fleet_report::view(&loaded.report))
+}
+
+/// Plan and optionally apply a profile across every connected device. The
+/// fleet runner owns screening and report construction; this command only
+/// supplies the GUI's explicit apply choice and persists the resulting report
+/// through a purpose-scoped native save grant.
+#[tauri::command]
+#[specta::specta]
+pub async fn run_profile_fleet(
+    grants: tauri::State<'_, PathGrantStore>,
+    profile: profile::Profile,
+    apply: bool,
+    path_grant: String,
+    operation_id: String,
+    on_event: tauri::ipc::Channel<OperationEvent>,
+) -> Result<FleetRunResult, CommandError> {
+    let issues = profile::lint(&profile);
+    if !issues.is_empty() {
+        return Err(CommandError {
+            code: "profile_invalid",
+            message: issues.join("; "),
+        });
+    }
+    let output_target = grants.consume(&path_grant, HostPathPurpose::FleetReportSave)?;
+    let sink = operations::channel_sink(on_event);
+    let result = spawn_blocking_operation(move || {
+        let adb_path = adb::locate_adb().path.ok_or_else(|| CommandError {
+            code: "adb_not_found",
+            message: "adb binary not found".to_string(),
+        })?;
+        let transport = adb::ShellTransport::new(&adb_path);
+        let report = crate::fleet::run_all(&transport, &profile, apply, false, &operation_id, sink)
+            .map_err(|error| CommandError {
+                code: error.code(),
+                message: error.to_string(),
+            })?;
+        let view = fleet_report::view(&report);
+        let bytes = serde_json::to_vec_pretty(&report).map_err(|error| CommandError {
+            code: "fleet_report_serialize_failed",
+            message: error.to_string(),
+        })?;
+        let staged = StagedArtifact::new(&output_target)?;
+        std::fs::write(staged.path(), bytes)?;
+        let artifact = staged.commit(ArtifactKind::AnyFile)?;
+        Ok(FleetRunResult {
+            artifact,
+            report: view,
+        })
+    })
+    .await?;
+    grants.record_produced(&result.artifact.local_path)?;
+    Ok(result)
 }
 
 /// Import a profile through a one-shot native read grant and build a complete,

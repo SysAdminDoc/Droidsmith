@@ -31,6 +31,7 @@ import {
   type DeviceTarget as GeneratedDeviceTarget,
   type DisconnectResult,
   type FastbootDevice,
+  type FleetRunResult,
   type FleetReportView,
   type Heartbeat,
   type HostArtifact,
@@ -897,6 +898,24 @@ export async function callInspectFleetReport(
   pathGrant: string,
 ): Promise<FleetReportView> {
   return rendererRecord(await commands.inspectFleetReport(pathGrant));
+}
+
+export async function callRunProfileFleet(
+  profile: Profile,
+  apply: boolean,
+  pathGrant: string,
+  options?: OperationOptions,
+): Promise<FleetRunResult> {
+  const { operationId, channel } = operationChannel("profile-fleet", options);
+  return rendererRecord(
+    await commands.runProfileFleet(
+      profile,
+      apply,
+      pathGrant,
+      operationId,
+      channel,
+    ),
+  );
 }
 
 export async function callSaveProfile(

@@ -21,13 +21,6 @@ and Android, privacy-safe diagnostics, and the widest remaining product gap
 
 ### P1
 
-- [ ] IMP-118 P1 — Test the Tauri command surface
-  Why: ~4,649 lines across thirteen `commands/*.rs` files carry no inline tests, and that set includes the two functions holding the P0 injection defect.
-  Evidence: no `#[cfg(test)]` in `commands/{actions_commands,console,devices,diagnostics,files,installs,mirror,packages,plans,profiles,settings_commands,system,wireless}.rs`; `commands/packs.rs` is the only exception.
-  Touches: `src-tauri/src/commands/*.rs`
-  Acceptance: each command module has a test module covering its validation and error paths against a fake transport, starting with `files.rs` and `console.rs`; `list_remote_files` and `apply_remote_file_mutation` have tests asserting the executed command string.
-  Complexity: M
-
 - [ ] R-138 P1 — Fleet apply in the GUI
   Why: `--all-devices` exists only in the CLI and the Profiles workspace can only *review* a saved report, so the one capability every commercial competitor paywalls is invisible to anyone who does not open a terminal.
   Evidence: `--all-devices` appears in `src-tauri/src/bin/droidsmith_cli.rs` and in locale strings only; `src/routes/profiles/FleetReportPanel.tsx` is read-only; escrcpy 3.0.8 ships multi-device batch install/screenshot/input-broadcast; ADB AppControl gates batch operations behind "Extended", AirDroid Business behind per-device licensing.

@@ -56,6 +56,7 @@ macro_rules! droidsmith_commands {
             list_users,
             inspect_profile,
             inspect_fleet_report,
+            run_profile_fleet,
             save_profile,
             list_packs,
             import_pack,

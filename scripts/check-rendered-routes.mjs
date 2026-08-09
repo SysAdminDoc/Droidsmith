@@ -888,6 +888,15 @@ async function runDesktopFlow(browser) {
   await page.getByRole("button", { name: "Add selected (1)" }).click();
   await page.getByRole("button", { name: "Validate and export" }).click();
   await page.getByText("Profile saved", { exact: true }).waitFor();
+  // R-138: the GUI can plan the authored profile across the connected fleet;
+  // the backend returns the same redacted report view used by the report tab.
+  await page.getByRole("button", { name: "Apply to fleet" }).click();
+  await page.getByRole("button", { name: "Plan fleet run" }).click();
+  await page
+    .getByText("Report for profile QA profile", { exact: true })
+    .waitFor();
+  await page.getByText("1 devices", { exact: true }).waitFor();
+  await page.getByRole("button", { name: "Close report" }).click();
   await page.getByRole("button", { name: "Import and preview" }).click();
   await page.getByRole("button", { name: "Choose profile" }).click();
   await page.getByText("Full dry-run diff", { exact: true }).waitFor();
@@ -2630,6 +2639,10 @@ async function installTauriMock(
               id: "123e4567-e89b-42d3-a456-42661417401a",
               local_path: "C:/Users/QA/Desktop/fleet-run-2026-08-01.json",
             },
+            fleet_report_save: {
+              id: "123e4567-e89b-42d3-a456-42661417401b",
+              local_path: "C:/Users/QA/Desktop/qa-profile-fleet.json",
+            },
             package_export_save: {
               id: "123e4567-e89b-42d3-a456-426614174006",
               local_path: "C:/Users/QA/Desktop/com.example.app.apks.zip",
@@ -3475,6 +3488,81 @@ async function installTauriMock(
             local_path: "C:/Users/QA/Desktop/qa-profile-v2.yaml",
             size_bytes: 768,
             sha256: "c".repeat(64),
+          };
+        }
+        if (cmd === "run_profile_fleet") {
+          if (
+            args.path_grant !== "123e4567-e89b-42d3-a456-42661417401b" ||
+            args.profile.version !== "2" ||
+            args.profile.actions.length === 0 ||
+            typeof args.apply !== "boolean"
+          ) {
+            throw new Error("Fleet profile run did not validate its request");
+          }
+          emitChannel(args.on_event, {
+            operation_id: args.operation_id,
+            kind: "started",
+            message: "Running profile across fleet",
+          });
+          emitChannel(args.on_event, {
+            operation_id: args.operation_id,
+            kind: "progress",
+            message: "Device 1/1: QA123",
+          });
+          return {
+            artifact: {
+              local_path: "C:/Users/QA/Desktop/qa-profile-fleet.json",
+              size_bytes: 1024,
+              sha256: "g".repeat(64),
+            },
+            report: {
+              schema_version: 2,
+              generated_at: "2026-08-01T09:20:00Z",
+              apply: args.apply,
+              profile: {
+                name: args.profile.name,
+                version: args.profile.version,
+                fingerprint_sha256: "h".repeat(64),
+                action_set_sha256: "i".repeat(64),
+                action_count: args.profile.actions.length,
+              },
+              lineage: null,
+              totals: {
+                devices: 1,
+                ran: 1,
+                errored: 0,
+                skipped: 0,
+                actions_planned: args.profile.actions.length,
+                actions_applied: args.apply ? args.profile.actions.length : 0,
+                actions_failed: 0,
+                actions_skipped: 0,
+              },
+              devices: [
+                {
+                  device: {
+                    identity_sha256: "j".repeat(64),
+                    fingerprint_bound: true,
+                  },
+                  outcome: "ran",
+                  transport_kind: "usb",
+                  android_user: 0,
+                  success: true,
+                  failure_code: null,
+                  failure_reason: null,
+                  actions: args.profile.actions.map((action, index) => ({
+                    index: index + 1,
+                    package: action.package,
+                    action: action.kind,
+                    user_id: 0,
+                    before_state: "enabled",
+                    description: `review ${action.package}`,
+                    status: args.apply ? "applied" : null,
+                    error: null,
+                  })),
+                },
+              ],
+              success: true,
+            },
           };
         }
         if (cmd === "inspect_fleet_report") {

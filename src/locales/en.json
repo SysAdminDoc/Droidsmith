@@ -1535,6 +1535,7 @@
     "authorTab": "Author",
     "importTab": "Import and preview",
     "reportTab": "Fleet report",
+    "fleetTab": "Apply to fleet",
     "identityTitle": "Profile identity",
     "nameLabel": "Name",
     "namePlaceholder": "Work phone essentials",
@@ -1634,6 +1635,22 @@
       "dataCleared": "Data cleared",
       "stopped": "Stopped",
       "reviewedAction": "Reviewed action"
+    },
+    "fleet": {
+      "title": "Apply profile to fleet",
+      "description": "Plan or apply this profile across every connected device. The run skips unauthorized, offline, and untrusted TCP transports and saves a portable schema-2 report.",
+      "profile": "Profile: {{name}}",
+      "devices": "{{count}} authorized devices",
+      "actions": "{{count}} actions",
+      "skipNotice": "Only authorized USB and paired TLS Wi-Fi devices are eligible. Other transports remain in the report as skips.",
+      "plan": "Plan fleet run",
+      "apply": "Apply to all devices",
+      "choosing": "Choose report path…",
+      "cancel": "Cancel run",
+      "writing": "Writing report to {{path}}",
+      "failed": "Fleet run failed",
+      "noDevicesTitle": "No authorized devices",
+      "noDevicesBody": "Authorize at least one device before starting a fleet run."
     },
     "report": {
       "title": "Fleet run report",

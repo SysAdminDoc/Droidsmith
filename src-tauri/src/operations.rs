@@ -194,6 +194,18 @@ impl RegisteredOperation {
         self.cancellation.is_cancelled()
     }
 
+    pub(crate) fn progress(&self, message: impl Into<String>) {
+        (self.sink)(OperationEvent {
+            operation_id: self.operation_id.clone(),
+            kind: OperationEventKind::Progress,
+            stream: None,
+            chunk: None,
+            message: Some(message.into()),
+            elapsed_ms: Some(saturating_millis(self.started.elapsed())),
+            attempt: None,
+        });
+    }
+
     pub(crate) fn run_stage(
         &mut self,
         program: &Path,

@@ -1693,6 +1693,7 @@
     "importFailed": "La importación del perfil falló",
     "importTab": "Importar y previsualizar",
     "reportTab": "Informe de flota",
+    "fleetTab": "Aplicar a la flota",
     "importTitle": "Previsualización de importación en solo lectura",
     "importing": "Leyendo…",
     "incompatible": "Bloqueado por restricciones",
@@ -1754,6 +1755,22 @@
       "dataCleared": "Datos borrados",
       "stopped": "Detenido",
       "reviewedAction": "Acción revisada"
+    },
+    "fleet": {
+      "title": "Aplicar perfil a la flota",
+      "description": "Planifica o aplica este perfil en todos los dispositivos conectados. Los transportes no autorizados, sin conexión y TCP no confiables se omiten y se guarda un informe de esquema 2.",
+      "profile": "Perfil: {{name}}",
+      "devices": "{{count}} dispositivos autorizados",
+      "actions": "{{count}} acciones",
+      "skipNotice": "Solo los dispositivos USB autorizados y Wi-Fi TLS emparejados son aptos. Los demás transportes quedan como omisiones en el informe.",
+      "plan": "Planificar ejecución de flota",
+      "apply": "Aplicar a todos los dispositivos",
+      "choosing": "Elegir ruta del informe…",
+      "cancel": "Cancelar ejecución",
+      "writing": "Escribiendo informe en {{path}}",
+      "failed": "La ejecución de flota falló",
+      "noDevicesTitle": "No hay dispositivos autorizados",
+      "noDevicesBody": "Autoriza al menos un dispositivo antes de iniciar una ejecución de flota."
     },
     "report": {
       "title": "Informe de ejecución de flota",

@@ -1535,6 +1535,7 @@
     "authorTab": "编写",
     "importTab": "导入和预览",
     "reportTab": "设备群报告",
+    "fleetTab": "应用到设备群",
     "identityTitle": "配置文件身份",
     "nameLabel": "名称",
     "namePlaceholder": "工作手机必备",
@@ -1634,6 +1635,22 @@
       "dataCleared": "数据已清除",
       "stopped": "已停止",
       "reviewedAction": "经审查的操作"
+    },
+    "fleet": {
+      "title": "将配置应用到设备群",
+      "description": "在所有已连接设备上规划或应用此配置。未授权、离线和不可信 TCP 传输会被跳过，并保存 schema-2 报告。",
+      "profile": "配置：{{name}}",
+      "devices": "{{count}} 台已授权设备",
+      "actions": "{{count}} 个操作",
+      "skipNotice": "只有已授权 USB 和已配对 TLS Wi-Fi 设备符合条件，其他传输会在报告中标记为跳过。",
+      "plan": "规划设备群运行",
+      "apply": "应用到所有设备",
+      "choosing": "选择报告路径…",
+      "cancel": "取消运行",
+      "writing": "正在将报告写入 {{path}}",
+      "failed": "设备群运行失败",
+      "noDevicesTitle": "没有已授权设备",
+      "noDevicesBody": "请至少授权一台设备后再开始设备群运行。"
     },
     "report": {
       "title": "设备群运行报告",

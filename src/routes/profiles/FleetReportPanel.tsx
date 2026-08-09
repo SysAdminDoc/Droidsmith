@@ -5,6 +5,7 @@ import type {
   FleetReportActionView,
   FleetReportDeviceView,
   FleetReportView,
+  Profile,
 } from "../../lib/tauri";
 import {
   Badge,
@@ -35,10 +36,113 @@ export type FleetReportState =
   | { kind: "ready"; path: string; report: FleetReportView }
   | { kind: "error"; message: string };
 
+export type FleetApplyState =
+  | { kind: "idle" }
+  | { kind: "choosing"; apply: boolean }
+  | {
+      kind: "running";
+      apply: boolean;
+      path: string;
+      operationId: string;
+      messages: string[];
+    }
+  | { kind: "error"; message: string };
+
 /** Short, stable prefix of a SHA-256 digest — enough to tell devices apart in
  *  a list without pretending the whole digest is readable. */
 function shortDigest(digest: string): string {
   return digest.slice(0, 12);
+}
+
+export function FleetApplyWorkspace({
+  state,
+  profile,
+  deviceCount,
+  onRun,
+  onCancel,
+}: {
+  state: FleetApplyState;
+  profile: Profile;
+  deviceCount: number;
+  onRun: (apply: boolean) => void;
+  onCancel: () => void;
+}) {
+  const { t } = useTranslation();
+  const busy = state.kind === "choosing" || state.kind === "running";
+  const invalid = !profile.name || profile.actions.length === 0;
+  return (
+    <div className="space-y-3">
+      <Card className="space-y-4 p-5">
+        <div>
+          <h3 className="font-semibold text-anvil-50">
+            {t("profiles.fleet.title")}
+          </h3>
+          <p className="mt-1 max-w-3xl text-sm leading-6 text-anvil-400">
+            {t("profiles.fleet.description")}
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Badge tone="info">
+            {t("profiles.fleet.profile", { name: profile.name || "—" })}
+          </Badge>
+          <Badge tone="neutral">
+            {t("profiles.fleet.devices", { count: deviceCount })}
+          </Badge>
+          <Badge tone="neutral">
+            {t("profiles.fleet.actions", { count: profile.actions.length })}
+          </Badge>
+        </div>
+        <p className="text-xs text-amber-200/85">
+          {t("profiles.fleet.skipNotice")}
+        </p>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            variant="primary"
+            disabled={busy || invalid || deviceCount === 0}
+            onClick={() => onRun(false)}
+          >
+            {state.kind === "choosing" && !state.apply
+              ? t("profiles.fleet.choosing")
+              : t("profiles.fleet.plan")}
+          </Button>
+          <Button
+            variant="danger"
+            disabled={busy || invalid || deviceCount === 0}
+            onClick={() => onRun(true)}
+          >
+            {state.kind === "choosing" && state.apply
+              ? t("profiles.fleet.choosing")
+              : t("profiles.fleet.apply")}
+          </Button>
+          {state.kind === "running" && (
+            <Button variant="secondary" onClick={onCancel}>
+              {t("profiles.fleet.cancel")}
+            </Button>
+          )}
+        </div>
+        {state.kind === "running" && (
+          <div
+            className="rounded border border-white/10 bg-black/10 p-3"
+            aria-live="polite"
+          >
+            <p className="text-xs text-anvil-400">
+              {t("profiles.fleet.writing", { path: state.path })}
+            </p>
+            <ul className="mt-2 max-h-48 space-y-1 overflow-auto font-mono text-xs text-anvil-200">
+              {state.messages.map((message, index) => (
+                <li key={`${index}:${message}`}>{message}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </Card>
+      {state.kind === "error" && (
+        <StatePanel title={t("profiles.fleet.failed")} tone="danger">
+          <p className="break-all">{state.message}</p>
+        </StatePanel>
+      )}
+    </div>
+  );
 }
 
 /** A report can name any journaled action kind, including ones the profile

@@ -3,19 +3,23 @@ import { useTranslation } from "react-i18next";
 
 import {
   errorMessage,
+  callCancelOperation,
   callGetDeviceInfo,
   callInspectFleetReport,
   callInspectProfile,
   callListPackages,
   callListUsers,
+  callRunProfileFleet,
   callSaveProfile,
   callSelectHostPath,
   deviceTarget,
+  newOperationId,
   type ActionKind,
   type AndroidUser,
   type AppPackage,
   type Device,
   type DeviceInfo,
+  type OperationEvent,
   type Profile,
   type ProfileAction,
   type ProfilePreview,
@@ -44,7 +48,9 @@ import {
   TransportTrustNotice,
 } from "./common";
 import {
+  FleetApplyWorkspace,
   FleetReportWorkspace,
+  type FleetApplyState,
   type FleetReportState,
 } from "./profiles/FleetReportPanel";
 
@@ -137,9 +143,9 @@ export default function ProfilesRoute() {
     null,
   );
   const [selectedSerial, setSelectedSerial] = useState<string | null>(null);
-  const [workspace, setWorkspace] = useState<"author" | "import" | "report">(
-    "author",
-  );
+  const [workspace, setWorkspace] = useState<
+    "author" | "import" | "fleet" | "report"
+  >("author");
   const [inventory, setInventory] = useState<InventoryState>({ kind: "idle" });
   const [profileName, setProfileName] = useState("");
   const [description, setDescription] = useState("");
@@ -162,6 +168,9 @@ export default function ProfilesRoute() {
     kind: "idle",
   });
   const [reportState, setReportState] = useState<FleetReportState>({
+    kind: "idle",
+  });
+  const [fleetState, setFleetState] = useState<FleetApplyState>({
     kind: "idle",
   });
 
@@ -283,6 +292,11 @@ export default function ProfilesRoute() {
     ],
   );
 
+  const fleetProfile =
+    previewState.kind === "ready" && previewState.preview.compatible
+      ? previewState.preview.profile
+      : currentProfile;
+
   function selectDevice(device: Device) {
     setSelectedTransportId(device.transport_id);
     setSelectedSerial(device.serial);
@@ -402,6 +416,84 @@ export default function ProfilesRoute() {
     }
   }
 
+  async function runFleet(apply: boolean) {
+    if (authorizedDevices.length === 0) {
+      setNotice({
+        tone: "warning",
+        title: t("profiles.fleet.noDevicesTitle"),
+        body: t("profiles.fleet.noDevicesBody"),
+      });
+      return;
+    }
+    if (!fleetProfile.name) {
+      setNotice({
+        tone: "warning",
+        title: t("profiles.nameRequired"),
+        body: t("profiles.nameRequiredBody"),
+      });
+      return;
+    }
+    if (fleetProfile.actions.length === 0) {
+      setNotice({
+        tone: "warning",
+        title: t("profiles.actionsRequired"),
+        body: t("profiles.actionsRequiredBody"),
+      });
+      return;
+    }
+
+    setNotice(null);
+    setFleetState({ kind: "choosing", apply });
+    try {
+      const grant = await callSelectHostPath(
+        "fleet_report_save",
+        `${fileSafeName(fleetProfile.name)}-fleet.json`,
+      );
+      if (!grant) {
+        setFleetState({ kind: "idle" });
+        return;
+      }
+      const operationId = newOperationId("profile-fleet");
+      setFleetState({
+        kind: "running",
+        apply,
+        path: grant.local_path,
+        operationId,
+        messages: [],
+      });
+      const result = await callRunProfileFleet(fleetProfile, apply, grant.id, {
+        operationId,
+        onEvent: (event: OperationEvent) => {
+          setFleetState((state) => {
+            if (state.kind !== "running" || state.operationId !== operationId) {
+              return state;
+            }
+            const message = event.message ?? event.kind;
+            return {
+              ...state,
+              messages: [...state.messages, message].slice(-12),
+            };
+          });
+        },
+      });
+      setReportState({
+        kind: "ready",
+        path: result.artifact.local_path,
+        report: result.report,
+      });
+      setFleetState({ kind: "idle" });
+      setWorkspace("report");
+    } catch (error) {
+      setFleetState({ kind: "error", message: errorMessage(error) });
+    }
+  }
+
+  function cancelFleet() {
+    if (fleetState.kind === "running") {
+      void callCancelOperation(fleetState.operationId);
+    }
+  }
+
   return (
     <div>
       <PaneHeader
@@ -493,6 +585,13 @@ export default function ProfilesRoute() {
           >
             {t("profiles.reportTab")}
           </WorkspaceTab>
+          <WorkspaceTab
+            active={workspace === "fleet"}
+            disabled={authorizedDevices.length === 0}
+            onClick={() => setWorkspace("fleet")}
+          >
+            {t("profiles.fleetTab")}
+          </WorkspaceTab>
         </div>
 
         {workspace === "report" && (
@@ -503,7 +602,17 @@ export default function ProfilesRoute() {
           />
         )}
 
-        {selectedTarget && workspace !== "report" && (
+        {workspace === "fleet" && (
+          <FleetApplyWorkspace
+            state={fleetState}
+            profile={fleetProfile}
+            deviceCount={authorizedDevices.length}
+            onRun={(apply) => void runFleet(apply)}
+            onCancel={cancelFleet}
+          />
+        )}
+
+        {selectedTarget && workspace !== "report" && workspace !== "fleet" && (
           <>
             {workspace === "author" ? (
               <AuthorWorkspace

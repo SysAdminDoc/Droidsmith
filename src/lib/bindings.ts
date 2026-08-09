@@ -443,6 +443,27 @@ export const commands = {
     });
   },
   /**
+   * Plan and optionally apply a profile across every connected device. The
+   * fleet runner owns screening and report construction; this command only
+   * supplies the GUI's explicit apply choice and persists the resulting report
+   * through a purpose-scoped native save grant.
+   */
+  async runProfileFleet(
+    profile: Profile,
+    apply: boolean,
+    pathGrant: string,
+    operationId: string,
+    onEvent: TAURI_CHANNEL<OperationEvent>,
+  ): Promise<FleetRunResult> {
+    return await TAURI_INVOKE("run_profile_fleet", {
+      profile,
+      apply,
+      path_grant: pathGrant,
+      operation_id: operationId,
+      on_event: onEvent,
+    });
+  },
+  /**
    * Validate and atomically export a current v2 profile through a purpose-
    * scoped native save grant. This is also the only GUI path that finalizes a
    * reviewed v1 migration.
@@ -2014,6 +2035,10 @@ export type FleetReportView = {
   devices: FleetReportDeviceView[];
   success: boolean;
 };
+export type FleetRunResult = {
+  artifact: HostArtifact;
+  report: FleetReportView;
+};
 export type GnirehtetExitReason =
   | "user_stopped"
   | "device_disconnected"
@@ -2138,6 +2163,7 @@ export type HostPathPurpose =
   | "install_open"
   | "recovery_baseline_open"
   | "profile_open"
+  | "fleet_report_save"
   | "fleet_report_open"
   | "pack_import_open"
   | "pack_export_save"

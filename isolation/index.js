@@ -85,6 +85,10 @@
     inspect_recovery_baseline: [["target", "path_grant", "round_trip"], []],
     inspect_profile: [["target", "path_grant"], []],
     inspect_fleet_report: [["path_grant"], []],
+    run_profile_fleet: [
+      ["profile", "apply", "path_grant", "operation_id", "on_event"],
+      [],
+    ],
     save_profile: [["path_grant", "profile"], []],
     journal_undo: [["target", "entry_id"], []],
     journal_undo_batch: [["target", "batch_id"], []],
@@ -1018,6 +1022,10 @@
       }
     }
     if (command === "save_profile") validateProfile(payload.profile);
+    if (command === "run_profile_fleet") {
+      validateProfile(payload.profile);
+      if (typeof payload.apply !== "boolean") reject("fleet_apply");
+    }
     if (command === "journal_undo")
       ensureInteger(payload.entry_id, "entry_id", 1);
     if (command === "stop_scrcpy")

@@ -32,6 +32,7 @@ use droidsmith_lib::adb::{
     AdbTransport, DeviceTarget, ShellTransport,
 };
 use droidsmith_lib::device_identity::DeviceIdentity;
+use droidsmith_lib::fleet::{self, FleetScreen};
 use droidsmith_lib::fleet_report::{
     self, ActionStatus, DeviceErrorOutput, DeviceRunResult, FleetRunReport, ReportLineage,
     RetryTarget, RunApplyOutput, RunOutput, RunPlanOutput, FLEET_REPORT_SCHEMA_VERSION,
@@ -2149,23 +2150,8 @@ fn list_fleet(transport: &ShellTransport) -> Result<Vec<Device>, String> {
 /// Bind a discovered device to an operable, fingerprinted target. Shared by the
 /// single-serial and `--all-devices` paths so both enforce the same
 /// actionable-state and build-identity checks.
-fn finalize_target(transport: &ShellTransport, mut device: Device) -> Result<DeviceTarget, String> {
-    if !device.state.is_actionable() {
-        return Err(format!(
-            "device serial {:?} is not actionable ({:?})",
-            device.serial, device.state
-        ));
-    }
-    let fingerprint = transport
-        .shell_target(&device.target(), &["getprop", "ro.build.fingerprint"])
-        .map_err(|error| format!("could not identify the device build: {error}"))?
-        .trim()
-        .to_string();
-    if fingerprint.is_empty() {
-        return Err("device did not report a build fingerprint".to_string());
-    }
-    device.build_fingerprint = Some(fingerprint);
-    Ok(device.target())
+fn finalize_target(transport: &ShellTransport, device: Device) -> Result<DeviceTarget, String> {
+    fleet::finalize_target(transport, device)
 }
 
 fn target_for_serial(transport: &ShellTransport, serial: &str) -> Result<DeviceTarget, String> {
@@ -2182,40 +2168,8 @@ fn target_for_serial(transport: &ShellTransport, serial: &str) -> Result<DeviceT
     finalize_target(transport, matches.remove(0))
 }
 
-/// Screening verdict for one discovered device in a `--all-devices` fleet run.
-enum FleetScreen {
-    /// Actionable and transport-authorized; ready for fingerprint binding.
-    Eligible(Device),
-    /// Excluded before any device I/O, with a user-facing reason.
-    Skipped { serial: String, reason: String },
-}
-
-/// Pure fleet screen: partition discovered devices into eligible vs skipped
-/// without touching the device. Unauthorized/offline devices and
-/// override-required transports (legacy/unknown TCP without
-/// `--allow-unsafe-transport`) are skipped rather than aborting the fleet.
 fn screen_fleet_devices(devices: Vec<Device>, allow_unsafe_transport: bool) -> Vec<FleetScreen> {
-    devices
-        .into_iter()
-        .map(|device| {
-            if !device.state.is_actionable() {
-                return FleetScreen::Skipped {
-                    serial: device.serial.clone(),
-                    reason: format!("device is not actionable ({:?})", device.state),
-                };
-            }
-            if device.transport_kind.requires_override() && !allow_unsafe_transport {
-                return FleetScreen::Skipped {
-                    serial: device.serial.clone(),
-                    reason: format!(
-                        "uses an unauthenticated {} transport; pass --allow-unsafe-transport to include it",
-                        device.transport_kind.label()
-                    ),
-                };
-            }
-            FleetScreen::Eligible(device)
-        })
-        .collect()
+    fleet::screen_fleet_devices(devices, allow_unsafe_transport)
 }
 
 /// Sanitize a device serial (which may be `host:port`) into a filesystem-safe
