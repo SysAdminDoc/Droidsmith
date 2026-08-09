@@ -221,6 +221,8 @@ const documentationFixture = {
 | Android SDK Platform Tools | \`37.0.0\` recommended; warn below \`36.0.2\` |
 | Pack / quirk documents | schema \`"1"\` / \`"1"\` |
 | Profile documents | schema \`"2"\`; v1 has a reviewed import migration |
+The current extension surface is schema-only: this build accepts schema version
+\`"1"\` for packs and quirks and version \`"2"\` for profiles.
 Release artifacts are unsigned and Droidsmith does not check for or install application updates.
 `,
   ".github/ISSUE_TEMPLATE/bug_report.yml": `
@@ -254,6 +256,17 @@ test("tracked documentation enforces truth, live links, and version rows", () =>
       (relativePath) => existingPaths.has(relativePath),
     );
   assert.doesNotThrow(() => validate(documentationFixture));
+  assert.throws(
+    () =>
+      validate({
+        ...documentationFixture,
+        "README.md": documentationFixture["README.md"].replace(
+          'version `"2"` for profiles',
+          'version `"3"` for profiles',
+        ),
+      }),
+    /profile schema contract/u,
+  );
 
   const readmeWith = (addition) => ({
     ...documentationFixture,

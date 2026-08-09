@@ -352,6 +352,11 @@ export function validateTrackedDocumentation(
       `README supported-version table differs from manifests: ${row}`,
     );
   }
+  const profileSchemaSentence = `version \`${JSON.stringify(expectations.profileSchema)}\` for profiles.`;
+  assert(
+    normalizedReadme.includes(profileSchemaSentence),
+    "README profile schema contract differs from contribution-schema-policy.json",
+  );
 
   for (const [relativePath, content] of Object.entries(documents)) {
     for (const match of content.matchAll(

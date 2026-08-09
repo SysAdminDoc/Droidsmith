@@ -35,13 +35,6 @@ and Android, privacy-safe diagnostics, and the widest remaining product gap
   Acceptance: every component carries `licenses` sourced offline from `cargo metadata` and `package-lock.json`, with an explicit unknown marker where upstream declares none; the document carries `serialNumber`, `metadata.timestamp` and `metadata.tools`; a test fails if any component lacks a licence entry; the timestamp is derived from a reproducible input, not wall-clock, so `provenance:check` stays deterministic.
   Complexity: M
 
-- [ ] IMP-117 P1 — Close the README contract drift and regenerate the screenshots
-  Why: the README states a schema version the code does not accept, and its three screenshots predate a full visual-system replacement — both are user-facing claims no gate covers.
-  Evidence: `README.md:168` says profiles accept schema `"2"` while `src-tauri/src/profile.rs:16` is `"3"` and `README.md:199` says `"3"`; `scripts/check-release-policy.mjs:686` validates only the Platform-Tools sentence; `docs/screenshots/*.png` last regenerated 2026-07-17 (`git log`), before the 2026-08-02 v0.9.17 redesign; `npm run docs:screenshots` already exists.
-  Touches: `README.md`, `scripts/check-release-policy.mjs`, `docs/screenshots/`
-  Acceptance: the README profile-schema sentence is derived from `PROFILE_SCHEMA_VERSION` the same way the Platform-Tools line is derived from its policy, and the gate fails when they diverge; the three README screenshots are recaptured from the current visual system.
-  Complexity: S
-
 - [ ] R-137 P1 — Let a debloat pack choose its action
   Why: every pack entry is planned as `Disable`, so the reversible `suspend` rung shipped in v0.9.15 — the safest action the app has — is unreachable from the flagship content format, and so are uninstall-for-user and archive.
   Evidence: `src-tauri/src/commands/packs.rs:578` hardcodes `kind: actions::ActionKind::Disable`; `packs/schema.json` `PackEntry` carries a `removal` **risk tier** (Recommended/Advanced/Expert/Unsafe) but no action; UAD-NG issue #345 is the same request.

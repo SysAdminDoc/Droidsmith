@@ -166,7 +166,7 @@ ADB front end, but it has hard limits that an open project can fix:
 Bundled platform-tools and bundled scrcpy are not wired into the installer yet;
 install those tools on the host when their workflows are needed.
 The current extension surface is schema-only: this build accepts schema version
-`"1"` for packs and quirks and version `"2"` for profiles. Profile v1 has an
+`"1"` for packs and quirks and version `"3"` for profiles. Profile v1 has an
 explicit review-and-migrate path; future revisions are rejected with migration
 guidance. The plugin API and marketplace remain deferred.
 

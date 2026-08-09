@@ -49,6 +49,10 @@ each milestone tag.
 - **The Rust MSRV rationale matches the actual toolchain contract.** The
   1.90 floor is documented as an intentional native-toolchain requirement and
   remains pinned by `rust-toolchain.toml`. (IMP-123)
+- **README schema copy and screenshots match the current build.** The profile
+  contract now states schema 3, the release gate checks that prose against the
+  contribution schema policy, and all three README screenshots were refreshed
+  through the mocked route capture. (IMP-117)
 
 ## [0.9.17] - 2026-08-02
 
