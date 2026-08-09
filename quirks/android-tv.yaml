@@ -1,0 +1,20 @@
+version: "1"
+quirks:
+  - id: android-tv-launcher-needs-fallback
+    title: "Android TV: disabling the launcher can remove the home screen"
+    matches:
+      manufacturer: ["Google", "NVIDIA", "Sony", "TCL", "Xiaomi"]
+      rom: ["google/sabrina", "google/adt3", "google/kathmandu", "nvidia/foster", "sony/bravia", "tcl/", "xiaomi/mibox", "xiaomi/mitv"]
+      package_id: ["com.google.android.tvlauncher", "com.google.android.apps.tv.launcherx"]
+    explanation: |
+      Evidence basis: the public Android TV Toolkit documents disabling the
+      Google TV launcher only after a replacement launcher has been installed
+      and opened successfully.
+
+      Observed on: Android TV and Google TV builds matching the known TV
+      manufacturer and build families above. This rule does not claim that
+      every OEM launcher uses either package.
+    mitigation:
+      kind: documentation
+      url: "https://github.com/seun-novodev/android-tv-debloat-toolkit"
+      note: "Install and open a replacement TV launcher before disabling the system launcher."

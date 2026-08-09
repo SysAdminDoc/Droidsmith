@@ -1389,6 +1389,39 @@ packages:
     }
 
     #[test]
+    fn android_tv_pack_requires_a_tv_model_and_build_family() {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../packs/android-tv-google-tv.yaml");
+        let pack = load(&path).unwrap();
+        let tv = DevicePackContext {
+            manufacturer: Some("Google".into()),
+            model: Some("Chromecast with Google TV".into()),
+            build_fingerprint: Some("google/sabrina/sabrina:12/test".into()),
+            api_level: Some(34),
+            user_id: 0,
+            user_current: true,
+            installed_packages: HashSet::new(),
+            system_uid_packages: HashSet::new(),
+        };
+        assert_eq!(assess(&pack, &tv).status, CompatibilityStatus::Compatible);
+
+        let handset = DevicePackContext {
+            model: Some("Pixel 8".into()),
+            build_fingerprint: Some("google/shiba/shiba:14/test".into()),
+            ..tv
+        };
+        let assessment = assess(&pack, &handset);
+        assert_eq!(assessment.status, CompatibilityStatus::Mismatch);
+        assert!(assessment.override_required);
+        assert!(assessment
+            .checks
+            .iter()
+            .any(|check| check.field == "model" && check.status == CompatibilityStatus::Mismatch));
+        assert!(assessment.checks.iter().any(|check| {
+            check.field == "build_fingerprint" && check.status == CompatibilityStatus::Mismatch
+        }));
+    }
+
+    #[test]
     fn parses_a_well_formed_pack() {
         let p: Pack = serde_yaml_ng::from_str(GOOD).unwrap();
         assert_eq!(p.version, "1");

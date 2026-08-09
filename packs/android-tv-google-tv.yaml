@@ -1,0 +1,166 @@
+id: "android-tv-google-tv"
+revision: 1
+name: "Android TV / Google TV"
+version: "1"
+description: >
+  Conservative debloat pack for Android TV and Google TV devices. The target
+  combines manufacturer, TV-oriented model, and known TV build-fingerprint
+  families so it remains a compatibility mismatch on ordinary handset builds.
+  It deliberately leaves the launcher, media shell, Play Services, YouTube,
+  and streaming applications out of scope.
+attribution: |
+  Original Droidsmith curation based on the public Android TV Toolkit package
+  references. Package availability varies by OEM; missing entries are shown
+  as unavailable and are never planned. MIT licensed.
+provenance:
+  source: "https://github.com/seun-novodev/android-tv-debloat-toolkit"
+  license: "MIT"
+
+targets:
+  manufacturer: ["Google", "NVIDIA", "Sony", "TCL", "Xiaomi"]
+  model: ["tv", "chromecast", "adt-3", "sabrina", "google tv streamer", "shield", "mibox", "mi box", "mitv", "bravia", "android tv", "google tv"]
+  build_fingerprint: ["google/sabrina", "google/adt3", "google/kathmandu", "nvidia/foster", "sony/bravia", "tcl/", "xiaomi/mibox", "xiaomi/mitv"]
+  android_min: 30
+  user_scope: owner
+
+packages:
+  - id: com.google.android.tvrecommendations
+    removal: recommended
+    description: >
+      Android TV recommendation service that supplies sponsored and suggested
+      rows on the home screen. Disable it to reduce recommendation traffic;
+      re-enable it if you rely on those rows.
+    labels: ["google", "recommendations", "ads"]
+
+  - id: com.google.android.leanbacklauncher.recommendations
+    removal: recommended
+    description: >
+      Legacy Google TV recommendation provider used by some Leanback builds.
+      It is optional on devices that do not use its home-screen rows.
+    labels: ["google", "recommendations", "ads"]
+
+  - id: com.google.android.gms.cast.receiver
+    removal: advanced
+    description: >
+      Chromecast receiver for casting media to the TV. Disabling removes Cast
+      discovery and playback; keep it when phones or speakers cast to this TV.
+    labels: ["google", "casting"]
+
+  - id: com.google.android.backdrop
+    removal: recommended
+    description: >
+      Ambient backdrop and screensaver image provider. Disable it if the TV
+      uses a different screensaver or never displays ambient artwork.
+    labels: ["google", "screensaver"]
+
+  - id: com.google.android.videos
+    removal: recommended
+    description: >
+      Google Play Movies and TV catalog application. Disable it when local
+      playback or another streaming application handles video instead.
+    labels: ["google", "media"]
+
+  - id: com.google.android.play.games
+    removal: recommended
+    description: >
+      Google Play Games client. Disable it when the TV is not used for games;
+      game sign-in and achievements provided by this client will be unavailable.
+    labels: ["google", "gaming"]
+
+  - id: com.google.android.apps.nbu.smartconnect.tv
+    removal: advanced
+    description: >
+      Google Smart Connect companion for TV-device discovery. Disable it only
+      when the household does not use the companion or remote-control flows.
+    labels: ["google", "connectivity"]
+
+  - id: com.google.android.feedback
+    removal: advanced
+    description: >
+      Google feedback reporter. Disabling removes the ability to submit
+      feedback from Google components but does not remove TV playback.
+    labels: ["google", "telemetry"]
+
+  - id: com.android.egg
+    removal: recommended
+    description: >
+      Hidden Android Easter egg. This cosmetic activity is not needed for TV
+      operation and can be disabled without removing media features.
+    labels: ["aosp", "cosmetic"]
+
+  - id: com.android.dreams.basic
+    removal: recommended
+    description: >
+      Basic Android screensaver. Disable it when the TV uses an OEM or custom
+      screensaver; the selected alternative must already be installed.
+    labels: ["aosp", "screensaver"]
+
+  - id: com.tcl.gallery
+    removal: recommended
+    description: >
+      TCL Gallery application. Disable it when local photo browsing is not
+      used; photos remain on the device for another viewer.
+    labels: ["tcl", "media"]
+
+  - id: com.tcl.notereminder
+    removal: recommended
+    description: >
+      TCL notes and reminders application. Disable it when those TCL widgets
+      and notifications are not used.
+    labels: ["tcl", "utility"]
+
+  - id: com.tcl.messagebox
+    removal: recommended
+    description: >
+      TCL MessageBox support application. Disable it to remove TCL support
+      notifications; re-enable it if the TV's support panel needs it.
+    labels: ["tcl", "support"]
+
+  - id: com.tcl.guard
+    removal: advanced
+    description: >
+      TCL device-protection and scanning service. Disable only when an
+      alternative security workflow is in place.
+    labels: ["tcl", "security"]
+
+  - id: com.tcl.tvweishi
+    removal: recommended
+    description: >
+      TCL security-overlay companion reported by TCL TV builds. Disable it
+      when the associated overlay and notifications are unwanted.
+    labels: ["tcl", "ads"]
+
+  - id: com.tcl.appmarket2
+    removal: advanced
+    description: >
+      TCL application marketplace. Disabling removes the TCL store and its
+      update path; keep it if it is the household's app source.
+    labels: ["tcl", "store"]
+
+  - id: com.tcl.esticker
+    removal: recommended
+    description: >
+      TCL sticker and decorative-content component. Disable it when those
+      cosmetic features are not used.
+    labels: ["tcl", "cosmetic"]
+
+  - id: com.tcl.overseasappshow
+    removal: recommended
+    description: >
+      TCL promotional app-surface service. Disable it to reduce OEM promotion
+      rows and notifications; it is not the TV launcher itself.
+    labels: ["tcl", "ads"]
+
+  - id: com.tcl.bootadservice
+    removal: recommended
+    description: >
+      TCL boot-promotion service. Disable it to suppress TCL startup offers;
+      the TV's boot process remains outside this package.
+    labels: ["tcl", "ads"]
+
+  - id: com.tcl.dashboard
+    removal: advanced
+    description: >
+      TCL dashboard companion. Disable only after confirming that the TV's
+      home and input controls do not depend on this OEM surface.
+    labels: ["tcl", "dashboard"]

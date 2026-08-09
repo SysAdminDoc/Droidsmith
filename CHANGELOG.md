@@ -28,6 +28,11 @@ each milestone tag.
 
 ### Security and accessibility
 
+- **Android TV and Google TV devices now have a conservative debloat pack.**
+  The bundled pack targets known TV manufacturer/model/fingerprint families,
+  records MIT provenance for the public reference list, skips absent packages,
+  and adds a predictive launcher-fallback quirk; ordinary handset builds are
+  assessed as incompatible. (R-150)
 - **File Manager now gates mutations using device evidence.** Push, mkdir,
   rename, and delete controls are disabled with a localized reason when the
   browsed directory is not writable/searchable or a protected path is selected;

@@ -741,4 +741,31 @@ quirks:
             }
         }
     }
+
+    #[test]
+    fn bundled_android_tv_rule_warns_before_launcher_mutation() {
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .unwrap()
+            .join("quirks");
+        let quirks = load_dir(&dir).unwrap();
+        let package_ids = vec!["com.google.android.apps.tv.launcherx".to_string()];
+
+        let matched = package_hazards(
+            &quirks,
+            Some("Google"),
+            Some("google/sabrina/sabrina:12/test"),
+            &package_ids,
+        );
+        assert_eq!(matched.len(), 1);
+        assert_eq!(matched[0].id, "android-tv-launcher-needs-fallback");
+
+        assert!(package_hazards(
+            &quirks,
+            Some("Google"),
+            Some("google/shiba/shiba:14/test"),
+            &package_ids,
+        )
+        .is_empty());
+    }
 }

@@ -25,13 +25,6 @@ and Android, privacy-safe diagnostics, and the widest remaining product gap
 
 ### P3
 
-- [ ] R-150 P3 — Ship an Android TV / Fire TV debloat pack
-  Why: TV boxes are an underserved surface with the same problem and no maintained desktop tooling, and the vendor pack framework already covers Fire OS.
-  Evidence: `packs/amazon-fireos.yaml` exists with 12 entries; `seun-novodev/android-tv-debloat-toolkit` (549 stars) is the closest thing to a maintained list.
-  Touches: `packs/`, `quirks/`, `src-tauri/tauri.conf.json`
-  Acceptance: a pack targeting Android TV / Google TV builds ships with `targets` distinguishing them from handsets, every entry carries a description and provenance, and `pack_lint` passes; the pack is not offered on devices whose characteristics do not match.
-  Complexity: M
-
 - [ ] IMP-128 P3 — Split `Apps.tsx`
   Why: it is the largest file in the frontend at 2,023 lines despite six components already extracted, and the initial bundle sits at 84% of its declared budget.
   Evidence: `src/routes/Apps.tsx` 2,023 lines against `src/routes/apps/` already holding `PackageTable`, `FilterControls`, `InstallPanels`, `JournalPanel`, `PermissionsPanel`, `RecoveryBaselinePanel`; `dist/assets/index-*.js` 380 KB against `release-policy.json` `initialJavaScriptBudgetBytes` 450000; the `commands.rs` split behind `command_registry.rs` is the precedent.
