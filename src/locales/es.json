@@ -695,6 +695,8 @@
       "fileListFailed": "No se pudo listar {{path}}: {{message}}",
       "fileManager": "Administrador de archivos",
       "fileManagerBody": "Explora, transfiere y realiza cambios revisados en archivos del dispositivo.",
+      "fileMutationBlockedProtected": "Esta ruta protegida del dispositivo no se puede modificar.",
+      "fileMutationsBlockedPermissions": "Los permisos del dispositivo no permiten cambios aquí.",
       "fileName": "Nombre",
       "fileNameBody": "Introduce un nombre único dentro de {{path}}. La ruta exacta del dispositivo se muestra antes de cualquier cambio.",
       "fileOperationComplete": "Cambio de archivo completado y el directorio fue actualizado.",

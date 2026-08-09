@@ -569,6 +569,52 @@ async function runDesktopFlow(browser) {
   await page.getByRole("heading", { name: "File manager" }).waitFor();
   await page.getByRole("button", { name: "Browse", exact: true }).click();
   await page.getByText("Résumé final.txt", { exact: true }).waitFor();
+  const filePanel = page
+    .getByRole("heading", { name: "File manager", exact: true })
+    .locator("../../..");
+  const pushFileButton = filePanel.getByRole("button", {
+    name: "Push file",
+    exact: true,
+  });
+  const newFolderButton = filePanel.getByRole("button", {
+    name: "New folder",
+    exact: true,
+  });
+  await page.evaluate(() =>
+    window.__DROIDSMITH_MOCK_DIRECTORY_PERMISSIONS__("dr-xr-xr-x"),
+  );
+  await filePanel.getByRole("button", { name: "Refresh", exact: true }).click();
+  if (
+    !(await pushFileButton.isDisabled()) ||
+    !(await newFolderButton.isDisabled())
+  ) {
+    throw new Error(
+      "File mutations must be disabled for a non-writable directory",
+    );
+  }
+  if (
+    !(await filePanel.innerText()).includes(
+      "Device permissions do not allow changes here",
+    )
+  ) {
+    throw new Error("File mutation block reason was not rendered");
+  }
+  await page.evaluate(() =>
+    window.__DROIDSMITH_MOCK_DIRECTORY_PERMISSIONS__("?"),
+  );
+  await filePanel.getByRole("button", { name: "Refresh", exact: true }).click();
+  if (
+    (await pushFileButton.isDisabled()) ||
+    (await newFolderButton.isDisabled())
+  ) {
+    throw new Error(
+      "Unknown directory permissions must leave mutations enabled",
+    );
+  }
+  await page.evaluate(() =>
+    window.__DROIDSMITH_MOCK_DIRECTORY_PERMISSIONS__("drwxrwx---"),
+  );
+  await filePanel.getByRole("button", { name: "Refresh", exact: true }).click();
 
   await page.getByRole("button", { name: "New folder" }).click();
   await page.getByRole("dialog", { name: "Create device folder" }).waitFor();
@@ -2587,6 +2633,7 @@ async function installTauriMock(
         parse_error: null,
       },
     ];
+    let remoteDirectoryPermissions = "drwxrwx---";
     let journalId = 20;
     const runtimeJournal = [];
     let densityOverride = 480;
@@ -2639,6 +2686,9 @@ async function installTauriMock(
     };
     window.__DROIDSMITH_MOCK_EMPTY_FINDINGS__ = (value) => {
       emptyFindings = value;
+    };
+    window.__DROIDSMITH_MOCK_DIRECTORY_PERMISSIONS__ = (permissions) => {
+      remoteDirectoryPermissions = permissions;
     };
     // R-082 tuning: curated device-settings catalog with mutable values so
     // put_device_setting round-trips through the subsequent list.
@@ -3467,6 +3517,7 @@ async function installTauriMock(
           return {
             path: args.remote_path,
             entries: remoteFiles.map((entry) => ({ ...entry })),
+            directory_permissions: remoteDirectoryPermissions,
             free_space_kb: 8_388_608,
           };
         }

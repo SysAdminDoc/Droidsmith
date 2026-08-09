@@ -34,6 +34,10 @@ import {
   statusToneClass,
   type StatusMessage,
 } from "./common";
+import {
+  mutationBlockReasonForDirectory,
+  mutationBlockReasonForEntry,
+} from "./filePermissions";
 
 type FileNameDraft =
   | { kind: "mkdir"; value: string }
@@ -360,6 +364,14 @@ export function FileManager({ target }: { target: DeviceTarget }) {
     await fileOperation.requestActiveCancellation();
   }, [fileOperation, fileOperationId, t]);
 
+  const directoryBlockReason = mutationBlockReasonForDirectory(
+    listing?.directory_permissions,
+  );
+  const directoryBlockCopy =
+    directoryBlockReason === "permissions"
+      ? t("devices.controls.fileMutationsBlockedPermissions")
+      : null;
+
   return (
     <>
       {draft && (
@@ -527,6 +539,8 @@ export function FileManager({ target }: { target: DeviceTarget }) {
                   type="button"
                   size="sm"
                   onClick={() => void stagePush()}
+                  disabled={directoryBlockReason !== null}
+                  title={directoryBlockCopy ?? undefined}
                 >
                   {t("devices.controls.push")}
                 </Button>
@@ -534,9 +548,16 @@ export function FileManager({ target }: { target: DeviceTarget }) {
                   type="button"
                   size="sm"
                   onClick={() => setDraft({ kind: "mkdir", value: "" })}
+                  disabled={directoryBlockReason !== null}
+                  title={directoryBlockCopy ?? undefined}
                 >
                   {t("devices.controls.newFolder")}
                 </Button>
+                {directoryBlockCopy && (
+                  <span className="max-w-40 text-[11px] leading-4 text-anvil-500">
+                    {directoryBlockCopy}
+                  </span>
+                )}
               </>
             )}
             <Button
@@ -598,86 +619,112 @@ export function FileManager({ target }: { target: DeviceTarget }) {
                   <p>{t("devices.controls.emptyDirectoryBody")}</p>
                 </EmptyState>
               )}
-              {listing.entries.map((entry, index) => (
-                <div
-                  key={`${entry.name}-${index}`}
-                  className="flex items-center gap-3 px-4 py-2 text-xs hover:bg-white/[0.03]"
-                >
-                  <FileGlyph directory={entry.is_dir} />
-                  {entry.is_dir ? (
-                    <button
-                      type="button"
-                      className="min-w-0 flex-1 truncate text-start font-mono text-circuit-200 hover:underline"
-                      onClick={() =>
-                        void browse(
-                          currentPath === "/"
-                            ? `/${entry.name}`
-                            : `${currentPath}/${entry.name}`,
-                        )
-                      }
-                    >
-                      {entry.name}/
-                    </button>
-                  ) : (
-                    <span className="min-w-0 flex-1 truncate font-mono text-anvil-100">
-                      {entry.name}
+              {listing.entries.map((entry, index) => {
+                const entryPath = remotePathFor(entry.name);
+                const entryBlockReason = mutationBlockReasonForEntry(
+                  entryPath,
+                  listing.directory_permissions,
+                );
+                const entryBlockCopy =
+                  entryBlockReason === "protected"
+                    ? t("devices.controls.fileMutationBlockedProtected")
+                    : entryBlockReason === "permissions"
+                      ? t("devices.controls.fileMutationsBlockedPermissions")
+                      : undefined;
+                return (
+                  <div
+                    key={`${entry.name}-${index}`}
+                    className="flex items-center gap-3 px-4 py-2 text-xs hover:bg-white/[0.03]"
+                  >
+                    <FileGlyph directory={entry.is_dir} />
+                    {entry.is_dir ? (
+                      <button
+                        type="button"
+                        className="min-w-0 flex-1 truncate text-start font-mono text-circuit-200 hover:underline"
+                        onClick={() =>
+                          void browse(
+                            currentPath === "/"
+                              ? `/${entry.name}`
+                              : `${currentPath}/${entry.name}`,
+                          )
+                        }
+                      >
+                        {entry.name}/
+                      </button>
+                    ) : (
+                      <span className="min-w-0 flex-1 truncate font-mono text-anvil-100">
+                        {entry.name}
+                      </span>
+                    )}
+                    <span className="shrink-0 font-mono text-anvil-500">
+                      {entry.is_dir
+                        ? ""
+                        : formatBytes(entry.size, t("common.unknown"))}
                     </span>
-                  )}
-                  <span className="shrink-0 font-mono text-anvil-500">
-                    {entry.is_dir
-                      ? ""
-                      : formatBytes(entry.size, t("common.unknown"))}
-                  </span>
-                  <span className="hidden shrink-0 font-mono text-anvil-600 sm:inline">
-                    {entry.permissions}
-                  </span>
-                  {entry.parse_error && (
-                    <Badge tone="warning" className="shrink-0">
-                      {t("devices.controls.parseIssue")}
-                    </Badge>
-                  )}
-                  {!entry.is_dir && !entry.parse_error && (
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => void pullRemote(entry)}
-                    >
-                      {t("devices.controls.pull")}
-                    </Button>
-                  )}
-                  {!entry.parse_error && (
-                    <>
+                    <span className="hidden shrink-0 font-mono text-anvil-600 sm:inline">
+                      {entry.permissions}
+                    </span>
+                    {entry.parse_error && (
+                      <Badge tone="warning" className="shrink-0">
+                        {t("devices.controls.parseIssue")}
+                      </Badge>
+                    )}
+                    {!entry.is_dir && !entry.parse_error && (
                       <Button
                         type="button"
                         size="sm"
                         variant="ghost"
-                        onClick={() =>
-                          setDraft({ kind: "rename", entry, value: entry.name })
-                        }
+                        onClick={() => void pullRemote(entry)}
                       >
-                        {t("devices.controls.rename")}
+                        {t("devices.controls.pull")}
                       </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="danger"
-                        onClick={() =>
-                          void stageMutation({
-                            kind: entry.is_dir
-                              ? "delete_directory"
-                              : "delete_file",
-                            source_path: remotePathFor(entry.name),
-                            destination_path: null,
-                          })
-                        }
-                      >
-                        {t("devices.controls.delete")}
-                      </Button>
-                    </>
-                  )}
-                </div>
-              ))}
+                    )}
+                    {!entry.parse_error && (
+                      <>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          onClick={() =>
+                            setDraft({
+                              kind: "rename",
+                              entry,
+                              value: entry.name,
+                            })
+                          }
+                          disabled={entryBlockReason !== null}
+                          title={entryBlockCopy}
+                        >
+                          {t("devices.controls.rename")}
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="danger"
+                          onClick={() =>
+                            void stageMutation({
+                              kind: entry.is_dir
+                                ? "delete_directory"
+                                : "delete_file",
+                              source_path: remotePathFor(entry.name),
+                              destination_path: null,
+                            })
+                          }
+                          disabled={entryBlockReason !== null}
+                          title={entryBlockCopy}
+                        >
+                          {t("devices.controls.delete")}
+                        </Button>
+                      </>
+                    )}
+                    {entryBlockCopy && (
+                      <span className="max-w-40 text-[11px] leading-4 text-anvil-500">
+                        {entryBlockCopy}
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
             </div>
             {pullMsg && (
               <div className="flex items-center justify-between gap-3 border-t border-white/10 px-4 py-2">

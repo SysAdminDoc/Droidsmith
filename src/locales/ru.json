@@ -569,6 +569,8 @@
       "showingProcesses": "Показаны 100 из {{count}} процессов",
       "fileManager": "Файловый менеджер",
       "fileManagerBody": "Просматривайте, передавайте и изменяйте файлы на устройстве после проверки.",
+      "fileMutationBlockedProtected": "Защищённый путь устройства нельзя изменить.",
+      "fileMutationsBlockedPermissions": "Разрешения устройства не позволяют изменять этот каталог.",
       "freeSpace": "{{size}} свободно",
       "browse": "Обзор",
       "fileListFailed": "Не удалось получить список {{path}}: {{message}}",

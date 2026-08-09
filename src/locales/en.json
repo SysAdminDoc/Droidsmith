@@ -569,6 +569,8 @@
       "showingProcesses": "Showing 100 of {{count}} processes",
       "fileManager": "File manager",
       "fileManagerBody": "Browse, transfer, and make reviewed file changes on the device.",
+      "fileMutationBlockedProtected": "This protected device path cannot be changed.",
+      "fileMutationsBlockedPermissions": "Device permissions do not allow changes here.",
       "freeSpace": "{{size}} free",
       "browse": "Browse",
       "fileListFailed": "Couldn't list {{path}}: {{message}}",

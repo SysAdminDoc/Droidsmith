@@ -25,13 +25,6 @@ and Android, privacy-safe diagnostics, and the widest remaining product gap
 
 ### P3
 
-- [ ] IMP-127 P3 — Grey out file operations the device will refuse
-  Why: the file manager currently lets a user confirm a mutation that cannot succeed, and the permission bits needed to know better are already parsed.
-  Evidence: `src-tauri/src/adb/parsers.rs` parses `ls -la` permission columns; `src/routes/devices/FileManager.tsx` enables actions unconditionally; ADB Explorer v1.0.26070 ships permission-based action gating.
-  Touches: `src/routes/devices/FileManager.tsx`, `src-tauri/src/remote_files.rs`
-  Acceptance: push, rename, delete and mkdir are disabled with a reason when the parsed permissions or the protected-path list forbid them; an unparseable permission string leaves the action enabled rather than guessing.
-  Complexity: M
-
 - [ ] R-150 P3 — Ship an Android TV / Fire TV debloat pack
   Why: TV boxes are an underserved surface with the same problem and no maintained desktop tooling, and the vendor pack framework already covers Fire OS.
   Evidence: `packs/amazon-fireos.yaml` exists with 12 entries; `seun-novodev/android-tv-debloat-toolkit` (549 stars) is the closest thing to a maintained list.

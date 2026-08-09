@@ -28,6 +28,10 @@ each milestone tag.
 
 ### Security and accessibility
 
+- **File Manager now gates mutations using device evidence.** Push, mkdir,
+  rename, and delete controls are disabled with a localized reason when the
+  browsed directory is not writable/searchable or a protected path is selected;
+  unknown OEM permission modes remain enabled for review. (IMP-127)
 - **Process Manager can inspect historical app exits and ANRs.** A bounded,
   read-only `dumpsys activity exit-info` query now parses timestamp, user,
   process, reason, status, and memory fields with explicit unknown handling for

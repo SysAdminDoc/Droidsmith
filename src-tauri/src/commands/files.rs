@@ -208,6 +208,10 @@ fn list_remote_files_with_transport(
 ) -> Result<RemoteListing, CommandError> {
     let stdout = transport.shell_target(target, &["ls", "-la", &remote])?;
     let entries = parse_ls_output(&stdout);
+    let directory_permissions = transport
+        .shell_target(target, &["ls", "-ld", &remote])
+        .ok()
+        .and_then(|output| directory_permissions_from_ls(&output));
     let free_space = transport
         .shell_target(target, &["df", "-k", &remote])
         .ok()
@@ -215,8 +219,23 @@ fn list_remote_files_with_transport(
     Ok(RemoteListing {
         path: remote,
         entries,
+        directory_permissions,
         free_space_kb: free_space,
     })
+}
+
+fn directory_permissions_from_ls(stdout: &str) -> Option<String> {
+    parse_ls_output(stdout)
+        .into_iter()
+        .next()
+        .and_then(|entry| {
+            let valid = entry.permissions.len() == 10
+                && entry.permissions.starts_with('d')
+                && entry.permissions[1..].chars().all(|character| {
+                    matches!(character, 'r' | 'w' | 'x' | 's' | 't' | 'S' | 'T' | '-')
+                });
+            valid.then_some(entry.permissions)
+        })
 }
 
 /// Validate a structured file mutation and return the exact argv that will be
@@ -431,6 +450,10 @@ pub async fn pull_file(
 pub struct RemoteListing {
     pub path: String,
     pub entries: Vec<RemoteFileEntry>,
+    /// Permission bits for the browsed directory. `None` means the OEM output
+    /// was unavailable or unparseable; the renderer must leave mutations
+    /// enabled rather than guessing in that case.
+    pub directory_permissions: Option<String>,
     pub free_space_kb: Option<u64>,
 }
 
@@ -495,6 +518,11 @@ mod tests {
         );
         mock.expect_shell(
             "files-test",
+            &["ls", "-ld", "/sdcard/QA dir"],
+            Ok("drwxrwx--- 2 root shell 4096 2026-08-08 10:00 QA dir\n".to_string()),
+        );
+        mock.expect_shell(
+            "files-test",
             &["df", "-k", "/sdcard/QA dir"],
             Ok("Filesystem 1K-blocks Used Available Use% Mounted on\n/dev/block 1000 250 750 25% /sdcard\n".to_string()),
         );
@@ -503,6 +531,7 @@ mod tests {
             list_remote_files_with_transport(&mock, &target(), "/sdcard/QA dir".to_string())
                 .expect("remote listing");
         assert_eq!(listing.path, "/sdcard/QA dir");
+        assert_eq!(listing.directory_permissions.as_deref(), Some("drwxrwx---"));
         assert_eq!(listing.free_space_kb, Some(750));
         assert_eq!(listing.entries.len(), 2);
         assert!(listing
@@ -513,6 +542,15 @@ mod tests {
             .entries
             .iter()
             .any(|entry| entry.name == "note.txt" && entry.size == Some(12)));
+    }
+
+    #[test]
+    fn unparseable_directory_permissions_remain_unknown() {
+        assert_eq!(directory_permissions_from_ls("OEM-specific mode\n"), None);
+        assert_eq!(
+            directory_permissions_from_ls("drwxrwx--- 2 root shell 4096 2026-08-08 10:00 QA\n"),
+            Some("drwxrwx---".to_string())
+        );
     }
 
     #[test]

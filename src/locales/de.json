@@ -569,6 +569,8 @@
       "showingProcesses": "Zeige 100 von {{count}} Prozessen",
       "fileManager": "Dateimanager",
       "fileManagerBody": "Dateien auf dem Gerät durchsuchen, übertragen und geprüfte Dateiänderungen vornehmen.",
+      "fileMutationBlockedProtected": "Dieser geschützte Gerätepfad kann nicht geändert werden.",
+      "fileMutationsBlockedPermissions": "Die Geräteberechtigungen erlauben hier keine Änderungen.",
       "freeSpace": "{{size}} frei",
       "browse": "Durchsuchen",
       "fileListFailed": "{{path}} konnte nicht aufgelistet werden: {{message}}",

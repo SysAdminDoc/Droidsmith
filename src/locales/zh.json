@@ -569,6 +569,8 @@
       "showingProcesses": "显示 {{count}} 个进程中的 100 个",
       "fileManager": "文件管理器",
       "fileManagerBody": "在设备上浏览、传输和执行经审查的文件更改。",
+      "fileMutationBlockedProtected": "无法更改此受保护的设备路径。",
+      "fileMutationsBlockedPermissions": "设备权限不允许在此处进行更改。",
       "freeSpace": "{{size}} 可用",
       "browse": "浏览",
       "fileListFailed": "无法列出 {{path}}：{{message}}",
