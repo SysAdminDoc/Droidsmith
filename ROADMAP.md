@@ -23,13 +23,6 @@ and Android, privacy-safe diagnostics, and the widest remaining product gap
 
 ### P2
 
-- [ ] R-151 P2 — Add historical app-exit and ANR diagnostics to Process Manager
-  Why: Process Manager shows the live `ps` snapshot and Android 17 memory-limit status, but it cannot explain why an app previously died — the diagnosis users currently obtain from an opaque `dumpsys` command.
-  Evidence: `src/routes/devices/ProcessManager.tsx` has no exit-history query; `src-tauri/src/adb/device_info.rs` and `src-tauri/src/commands/devices.rs` expose only `am memory-limiter status`; Android's `ApplicationExitInfo` defines stable crash/ANR/low-memory/package-state reasons and `dumpsys` is the supported bounded system-service inspection path.
-  Touches: `src-tauri/src/adb/`, `src-tauri/src/commands/devices.rs`, `src/routes/devices/ProcessManager.tsx`, `src/locales/*.json`, transcript fixtures, rendered-route smoke
-  Acceptance: a selected package can request a bounded, read-only `dumpsys activity exit-info` history; parsed rows show timestamp, user, process, reason, status, RSS/PSS where present, and an explicit unknown state for OEM formats; traces and raw dumps are not captured automatically; package/user selection and target lifecycle guards match the existing process query.
-  Complexity: M
-
 ### P3
 
 - [ ] IMP-127 P3 — Grey out file operations the device will refuse

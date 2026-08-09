@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use serde::Serialize;
 
 use crate::adb::device::{
@@ -388,6 +390,56 @@ pub struct ProcessInfo {
     pub parse_error: Option<String>,
 }
 
+#[derive(specta::Type, Debug, Clone, Copy, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ProcessExitReason {
+    Anr,
+    Crash,
+    CrashNative,
+    DependencyDied,
+    ExcessiveResourceUsage,
+    ExitSelf,
+    Freezer,
+    InitializationFailure,
+    LowMemory,
+    MemoryLimiter,
+    Other,
+    PackageStateChange,
+    PackageUpdated,
+    PermissionChange,
+    Signaled,
+    UserRequested,
+    UserStopped,
+    Unknown,
+}
+
+#[derive(specta::Type, Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct ProcessExitInfo {
+    /// The device-formatted timestamp. It is kept as text because OEMs may
+    /// change the format; missing or malformed values are rendered as
+    /// `unknown` rather than guessed into a local timezone.
+    pub timestamp: String,
+    pub user_id: Option<u32>,
+    pub process: String,
+    pub reason: ProcessExitReason,
+    pub reason_code: Option<i32>,
+    pub status: Option<i32>,
+    /// Android reports PSS/RSS in kB through ApplicationExitInfo; dumpsys
+    /// variants may add a human-readable suffix, which is normalized here.
+    pub pss_kb: Option<u64>,
+    pub rss_kb: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub parse_error: Option<String>,
+}
+
+#[derive(specta::Type, Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct ProcessExitParse {
+    pub entries: Vec<ProcessExitInfo>,
+    pub truncated: bool,
+}
+
+pub const MAX_PROCESS_EXIT_HISTORY_ROWS: usize = 128;
+
 pub fn parse_ls_output(stdout: &str) -> Vec<RemoteFileEntry> {
     let mut out = Vec::new();
     for raw in stdout.lines() {
@@ -710,6 +762,258 @@ pub fn parse_ps_output(stdout: &str) -> Vec<ProcessInfo> {
     }
 
     out
+}
+
+/// Parse the bounded, human-readable `dumpsys activity exit-info <package>`
+/// surface. AOSP emits one `ApplicationExitInfo #N` block per historical
+/// record, but OEMs frequently omit fields or change labels. Every block is
+/// retained as an explicit row; fields that cannot be established are
+/// `unknown`/`None` instead of being inferred from a different signal.
+pub fn parse_process_exit_info(stdout: &str) -> ProcessExitParse {
+    let mut entries = Vec::new();
+    let mut current = Vec::new();
+    let mut saw_header = false;
+    let mut record_count = 0;
+    let mut truncated = false;
+
+    for raw in stdout.lines() {
+        let line = raw.trim();
+        if is_process_exit_header(line) {
+            append_process_exit_record(&current, &mut entries, &mut record_count, &mut truncated);
+            current.clear();
+            saw_header = true;
+            continue;
+        }
+        if saw_header && !line.is_empty() {
+            current.push(line.to_string());
+        }
+    }
+    append_process_exit_record(&current, &mut entries, &mut record_count, &mut truncated);
+
+    if entries.is_empty() && !stdout.trim().is_empty() {
+        entries.push(unknown_process_exit("unrecognized exit-info format"));
+    }
+    ProcessExitParse { entries, truncated }
+}
+
+fn append_process_exit_record(
+    lines: &[String],
+    entries: &mut Vec<ProcessExitInfo>,
+    record_count: &mut usize,
+    truncated: &mut bool,
+) {
+    if lines.is_empty() {
+        return;
+    }
+    *record_count += 1;
+    if entries.len() < MAX_PROCESS_EXIT_HISTORY_ROWS {
+        entries.push(parse_process_exit_record(lines));
+    } else {
+        *truncated = true;
+    }
+}
+
+fn is_process_exit_header(line: &str) -> bool {
+    let lower = line.to_ascii_lowercase();
+    lower.starts_with("applicationexitinfo #")
+        || lower.starts_with("application exit info #")
+        || lower.starts_with("process exit info #")
+}
+
+fn parse_process_exit_record(lines: &[String]) -> ProcessExitInfo {
+    let fields = process_exit_fields(lines);
+    let timestamp = fields
+        .get("timestamp")
+        .filter(|value| !value.trim().is_empty())
+        .cloned()
+        .unwrap_or_else(|| "unknown".to_string());
+    let user_id = fields
+        .get("user")
+        .or_else(|| fields.get("userid"))
+        .and_then(|value| parse_i32_value(value))
+        .and_then(|value| u32::try_from(value).ok());
+    let process = fields
+        .get("process")
+        .filter(|value| !value.trim().is_empty())
+        .cloned()
+        .unwrap_or_else(|| "unknown".to_string());
+    let reason_raw = fields.get("reason").map(String::as_str).unwrap_or("");
+    let (reason, reason_code) = parse_process_exit_reason(reason_raw);
+    let status = fields
+        .get("status")
+        .and_then(|value| parse_i32_value(value));
+    let pss_kb = fields.get("pss").and_then(|value| parse_memory_kb(value));
+    let rss_kb = fields.get("rss").and_then(|value| parse_memory_kb(value));
+
+    let mut missing = Vec::new();
+    if timestamp == "unknown" {
+        missing.push("timestamp");
+    }
+    if user_id.is_none() {
+        missing.push("user");
+    }
+    if process == "unknown" {
+        missing.push("process");
+    }
+    if reason == ProcessExitReason::Unknown {
+        if reason_raw.trim().is_empty() {
+            missing.push("reason");
+        } else if reason_code.is_some() {
+            missing.push("known reason code");
+        }
+    }
+    ProcessExitInfo {
+        timestamp,
+        user_id,
+        process,
+        reason,
+        reason_code,
+        status,
+        pss_kb,
+        rss_kb,
+        parse_error: (!missing.is_empty())
+            .then(|| format!("missing or unknown {}", missing.join(", "))),
+    }
+}
+
+fn unknown_process_exit(message: &str) -> ProcessExitInfo {
+    ProcessExitInfo {
+        timestamp: "unknown".to_string(),
+        user_id: None,
+        process: "unknown".to_string(),
+        reason: ProcessExitReason::Unknown,
+        reason_code: None,
+        status: None,
+        pss_kb: None,
+        rss_kb: None,
+        parse_error: Some(message.to_string()),
+    }
+}
+
+/// Turn whitespace-separated `key=value` fragments into fields while keeping
+/// continuation words attached to the preceding value. This handles both the
+/// current one-field-per-line AOSP dump and compact OEM rows.
+fn process_exit_fields(lines: &[String]) -> HashMap<String, String> {
+    let mut fields = HashMap::new();
+    let mut pending_key: Option<String> = None;
+    let mut pending_value = String::new();
+
+    for line in lines {
+        for token in line.split_whitespace() {
+            let is_field = token
+                .split_once('=')
+                .is_some_and(|(key, _)| is_process_exit_key(key));
+            if is_field {
+                if let Some(key) = pending_key.take() {
+                    fields.insert(key, pending_value.trim().to_string());
+                }
+                let (key, value) = token.split_once('=').expect("field token has equals");
+                pending_key = Some(key.to_ascii_lowercase());
+                pending_value.clear();
+                pending_value.push_str(value);
+            } else if pending_key.is_some() {
+                if !pending_value.is_empty() {
+                    pending_value.push(' ');
+                }
+                pending_value.push_str(token);
+            }
+        }
+    }
+    if let Some(key) = pending_key {
+        fields.insert(key, pending_value.trim().to_string());
+    }
+    fields
+}
+
+fn is_process_exit_key(key: &str) -> bool {
+    !key.is_empty()
+        && key
+            .chars()
+            .all(|character| character.is_ascii_alphanumeric() || character == '_')
+}
+
+fn parse_i32_value(value: &str) -> Option<i32> {
+    value
+        .split_whitespace()
+        .next()
+        .and_then(|token| token.parse::<i32>().ok())
+}
+
+fn parse_memory_kb(value: &str) -> Option<u64> {
+    let value = value.trim().trim_end_matches(',');
+    let number_end = value
+        .char_indices()
+        .find(|(_, character)| !character.is_ascii_digit() && *character != '.')
+        .map(|(index, _)| index)
+        .unwrap_or(value.len());
+    let number = value.get(..number_end)?.parse::<f64>().ok()?;
+    if !number.is_finite() || number < 0.0 {
+        return None;
+    }
+    let unit = value[number_end..].trim().to_ascii_lowercase();
+    let multiplier = match unit.as_str() {
+        "" | "kb" | "kib" => 1.0,
+        "b" => 1.0 / 1024.0,
+        "mb" | "mib" => 1024.0,
+        "gb" | "gib" => 1024.0 * 1024.0,
+        _ => return None,
+    };
+    let kilobytes = (number * multiplier).round();
+    (kilobytes <= u64::MAX as f64).then_some(kilobytes as u64)
+}
+
+fn parse_process_exit_reason(value: &str) -> (ProcessExitReason, Option<i32>) {
+    let code = parse_i32_value(value);
+    let label = value
+        .split_once('(')
+        .and_then(|(_, rest)| rest.split_once(')').map(|(label, _)| label))
+        .unwrap_or(value)
+        .to_ascii_lowercase();
+    let reason = match code {
+        Some(0) => ProcessExitReason::Unknown,
+        Some(1) => ProcessExitReason::ExitSelf,
+        Some(2) => ProcessExitReason::Signaled,
+        Some(3) => ProcessExitReason::LowMemory,
+        Some(4) => ProcessExitReason::Crash,
+        Some(5) => ProcessExitReason::CrashNative,
+        Some(6) => ProcessExitReason::Anr,
+        Some(7) => ProcessExitReason::InitializationFailure,
+        Some(8) => ProcessExitReason::PermissionChange,
+        Some(9) => ProcessExitReason::ExcessiveResourceUsage,
+        Some(10) => ProcessExitReason::UserRequested,
+        Some(11) => ProcessExitReason::UserStopped,
+        Some(12) => ProcessExitReason::DependencyDied,
+        Some(13) => ProcessExitReason::Other,
+        Some(14) => ProcessExitReason::Freezer,
+        Some(15) => ProcessExitReason::PackageStateChange,
+        Some(16) => ProcessExitReason::PackageUpdated,
+        Some(17) => ProcessExitReason::MemoryLimiter,
+        Some(_) => ProcessExitReason::Unknown,
+        None if label.contains("anr") => ProcessExitReason::Anr,
+        None if label.contains("native") && label.contains("crash") => {
+            ProcessExitReason::CrashNative
+        }
+        None if label.contains("crash") => ProcessExitReason::Crash,
+        None if label.contains("low") && label.contains("memory") => ProcessExitReason::LowMemory,
+        None if label.contains("memory") && label.contains("limit") => {
+            ProcessExitReason::MemoryLimiter
+        }
+        None if label.contains("self") => ProcessExitReason::ExitSelf,
+        None if label.contains("signal") => ProcessExitReason::Signaled,
+        None if label.contains("user") && label.contains("stop") => ProcessExitReason::UserStopped,
+        None if label.contains("user") && label.contains("request") => {
+            ProcessExitReason::UserRequested
+        }
+        None if label.contains("permission") => ProcessExitReason::PermissionChange,
+        None if label.contains("package") && label.contains("update") => {
+            ProcessExitReason::PackageUpdated
+        }
+        None if label.contains("package") && label.contains("state") => {
+            ProcessExitReason::PackageStateChange
+        }
+        None => ProcessExitReason::Unknown,
+    };
+    (reason, code)
 }
 
 fn is_process_header(line: &str) -> bool {
@@ -1426,6 +1730,50 @@ u0_a55 789 1 51200 4096 0 0 S com.samsung.android.app
         // OEM headers without a CPU column leave it None rather than misreading.
         let no_cpu = parse_ps_output("PID USER VSZ RSS NAME\n5 root 10 20 init\n");
         assert_eq!(no_cpu[0].cpu_percent, None);
+    }
+
+    #[test]
+    fn parses_application_exit_info_records_and_normalizes_memory() {
+        let rows = parse_process_exit_info(include_str!(
+            "../../fixtures/adb-transcripts/v1/process-exit-info.txt"
+        ));
+        assert_eq!(rows.entries.len(), 2);
+        assert!(!rows.truncated);
+        assert_eq!(rows.entries[0].user_id, Some(0));
+        assert_eq!(rows.entries[0].process, "com.example.qa:child");
+        assert_eq!(rows.entries[0].reason, ProcessExitReason::LowMemory);
+        assert_eq!(rows.entries[0].reason_code, Some(3));
+        assert_eq!(rows.entries[0].status, Some(0));
+        assert_eq!(rows.entries[0].pss_kb, Some(2560));
+        assert_eq!(rows.entries[0].rss_kb, Some(122 * 1024));
+        assert_eq!(rows.entries[1].user_id, Some(0));
+        assert_eq!(rows.entries[1].reason, ProcessExitReason::Anr);
+        assert_eq!(rows.entries[1].status, Some(9));
+        assert_eq!(rows.entries[1].rss_kb, Some(8192));
+    }
+
+    #[test]
+    fn preserves_unknown_oem_exit_info_as_an_explicit_row() {
+        let rows = parse_process_exit_info(
+            "ACTIVITY MANAGER PROCESS EXIT INFO\n  vendor_format=opaque reason_code=99\n",
+        );
+        assert_eq!(rows.entries.len(), 1);
+        assert_eq!(rows.entries[0].reason, ProcessExitReason::Unknown);
+        assert_eq!(rows.entries[0].process, "unknown");
+        assert!(rows.entries[0].parse_error.is_some());
+    }
+
+    #[test]
+    fn bounds_process_exit_history_rows() {
+        let mut output = String::from("ACTIVITY MANAGER PROCESS EXIT INFO\n");
+        for index in 0..(MAX_PROCESS_EXIT_HISTORY_ROWS + 1) {
+            output.push_str(&format!(
+                "ApplicationExitInfo #{index}:\n timestamp=2026-06-08 01:45:55 process=p{index} reason=6 (ANR) user=0\n"
+            ));
+        }
+        let rows = parse_process_exit_info(&output);
+        assert_eq!(rows.entries.len(), MAX_PROCESS_EXIT_HISTORY_ROWS);
+        assert!(rows.truncated);
     }
 
     #[test]

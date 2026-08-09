@@ -455,6 +455,17 @@ async function runDesktopFlow(browser) {
   const appProcessRow = processPanel
     .getByRole("row")
     .filter({ hasText: "com.example.qa" });
+
+  await processPanel
+    .getByLabel("Package", { exact: true })
+    .fill("com.example.qa");
+  await processPanel.getByLabel("Android user", { exact: true }).fill("0");
+  await processPanel
+    .getByRole("button", { name: "Load history", exact: true })
+    .click();
+  await processPanel.getByRole("row").filter({ hasText: "ANR" }).waitFor();
+  await processPanel.getByText("Low memory", { exact: true }).waitFor();
+
   const forceStopButton = appProcessRow.getByRole("button", {
     name: "Force-stop",
     exact: true,
@@ -4236,6 +4247,37 @@ async function installTauriMock(
               parse_error: null,
             },
           ];
+        }
+        if (cmd === "list_process_exit_history") {
+          return {
+            package: args.package,
+            user_id: args.userId,
+            entries: [
+              {
+                timestamp: "2026-06-08 01:45:55.364",
+                user_id: 0,
+                process: "com.example.qa:child",
+                reason: "low_memory",
+                reason_code: 3,
+                status: 0,
+                pss_kb: 2560,
+                rss_kb: 124928,
+                parse_error: null,
+              },
+              {
+                timestamp: "2026-06-08 01:40:00.000",
+                user_id: 0,
+                process: "com.example.qa",
+                reason: "anr",
+                reason_code: 6,
+                status: 9,
+                pss_kb: 4096,
+                rss_kb: 8192,
+                parse_error: null,
+              },
+            ],
+            truncated: false,
+          };
         }
         if (cmd === "plan_action") {
           return planFor(args.request);

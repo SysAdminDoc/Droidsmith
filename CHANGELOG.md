@@ -28,6 +28,10 @@ each milestone tag.
 
 ### Security and accessibility
 
+- **Process Manager can inspect historical app exits and ANRs.** A bounded,
+  read-only `dumpsys activity exit-info` query now parses timestamp, user,
+  process, reason, status, and memory fields with explicit unknown handling for
+  OEM formats; raw dumps and traces are not retained. (R-151)
 - **Tauri command modules now carry boundary coverage.** Validation and failure
   paths are tested in every command domain, with fake-transport coverage for
   journal batch execution and focused tests for filesystem, package, wireless,

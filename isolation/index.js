@@ -35,6 +35,7 @@
     "list_network_connections",
     "list_permissions",
     "list_processes",
+    "list_process_exit_history",
     "list_remote_files",
     "plan_remote_file_mutation",
     "locate_scrcpy",

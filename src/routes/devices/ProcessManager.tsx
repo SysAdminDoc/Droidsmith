@@ -6,9 +6,11 @@ import {
   errorMessage,
   callApplyAction,
   callGetAppMemoryLimit,
+  callListProcessExitHistory,
   callListProcesses,
   callPlanAction,
   type DeviceTarget,
+  type ProcessExitHistory,
   type ProcessInfo,
   type AppMemoryLimit,
 } from "../../lib/tauri";
@@ -23,6 +25,10 @@ export function ProcessManager({ target }: { target: DeviceTarget }) {
   const { t } = useTranslation();
   const refreshOperation = useTargetOperation(target, "process-list");
   const mutationOperation = useTargetOperation(target, "process-mutation");
+  const exitHistoryOperation = useTargetOperation(
+    target,
+    "process-exit-history",
+  );
   const [processes, setProcesses] = useState<ProcessInfo[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -32,7 +38,21 @@ export function ProcessManager({ target }: { target: DeviceTarget }) {
   const [stopping, setStopping] = useState<string | null>(null);
   const [stopError, setStopError] = useState<string | null>(null);
   const [memoryLimit, setMemoryLimit] = useState<AppMemoryLimit | null>(null);
+  const [exitPackage, setExitPackage] = useState("");
+  const [exitUser, setExitUser] = useState("0");
+  const [exitHistory, setExitHistory] = useState<ProcessExitHistory | null>(
+    null,
+  );
+  const [exitHistoryLoading, setExitHistoryLoading] = useState(false);
+  const [exitHistoryError, setExitHistoryError] = useState<string | null>(null);
   const confirmTrapRef = useFocusTrap<HTMLDivElement>(confirmPackage !== null);
+
+  const exitUserNumber = Number(exitUser.trim());
+  const validExitUser =
+    /^\d+$/.test(exitUser.trim()) &&
+    Number.isSafeInteger(exitUserNumber) &&
+    exitUserNumber >= 0 &&
+    exitUserNumber <= 0xffffffff;
 
   useEffect(() => {
     setProcesses([]);
@@ -42,6 +62,9 @@ export function ProcessManager({ target }: { target: DeviceTarget }) {
     setStopping(null);
     setStopError(null);
     setMemoryLimit(null);
+    setExitHistory(null);
+    setExitHistoryLoading(false);
+    setExitHistoryError(null);
   }, [target.connection_generation, target.serial, target.transport_id]);
 
   useEffect(() => {
@@ -112,6 +135,43 @@ export function ProcessManager({ target }: { target: DeviceTarget }) {
     },
     [mutationOperation, refresh, t, target],
   );
+
+  const loadExitHistory = useCallback(async () => {
+    const pkg = exitPackage.trim();
+    if (!pkg || !validExitUser) {
+      setExitHistoryError(t("devices.controls.exitHistoryInvalid"));
+      return;
+    }
+    const lease = exitHistoryOperation.begin();
+    setExitHistoryLoading(true);
+    setExitHistoryError(null);
+    try {
+      const history = await callListProcessExitHistory(
+        target,
+        pkg,
+        exitUserNumber,
+      );
+      lease.commit(() => setExitHistory(history));
+    } catch (e) {
+      lease.commit(() => {
+        setExitHistory(null);
+        setExitHistoryError(
+          t("devices.controls.exitHistoryReadFailed", {
+            message: errorMessage(e),
+          }),
+        );
+      });
+    } finally {
+      lease.commit(() => setExitHistoryLoading(false));
+    }
+  }, [
+    exitHistoryOperation,
+    exitPackage,
+    exitUserNumber,
+    t,
+    target,
+    validExitUser,
+  ]);
 
   const filtered = processes
     .filter((p) =>
@@ -193,6 +253,158 @@ export function ProcessManager({ target }: { target: DeviceTarget }) {
               : t("devices.controls.memoryLimitUnknown")}
         </div>
       )}
+      <div className="border-b border-white/10 bg-white/[0.02] px-4 py-4">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <h4 className="text-sm font-semibold text-anvil-100">
+              {t("devices.controls.exitHistory")}
+            </h4>
+            <p className="mt-1 max-w-2xl text-xs text-anvil-400">
+              {t("devices.controls.exitHistoryBody")}
+            </p>
+          </div>
+          <form
+            className="flex flex-wrap items-end gap-2"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void loadExitHistory();
+            }}
+          >
+            <label className="flex min-w-48 flex-col gap-1 text-[11px] text-anvil-400">
+              {t("devices.controls.exitHistoryPackage")}
+              <FieldInput
+                type="text"
+                value={exitPackage}
+                onChange={(event) => setExitPackage(event.target.value)}
+                placeholder={t(
+                  "devices.controls.exitHistoryPackagePlaceholder",
+                )}
+                aria-label={t("devices.controls.exitHistoryPackage")}
+                className="h-8 font-mono text-xs"
+              />
+            </label>
+            <label className="flex w-28 flex-col gap-1 text-[11px] text-anvil-400">
+              {t("devices.controls.exitHistoryUser")}
+              <FieldInput
+                type="number"
+                min="0"
+                step="1"
+                value={exitUser}
+                onChange={(event) => setExitUser(event.target.value)}
+                aria-label={t("devices.controls.exitHistoryUser")}
+                className="h-8 font-mono text-xs"
+              />
+            </label>
+            <Button
+              type="submit"
+              size="sm"
+              variant="ghost"
+              disabled={
+                exitHistoryLoading || !exitPackage.trim() || !validExitUser
+              }
+            >
+              {exitHistoryLoading
+                ? t("devices.controls.exitHistoryLoading")
+                : t("devices.controls.exitHistoryLoad")}
+            </Button>
+          </form>
+        </div>
+        {exitHistoryError && (
+          <div
+            role="alert"
+            className="mt-3 rounded border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs text-red-200"
+          >
+            {exitHistoryError}
+          </div>
+        )}
+        {exitHistory && (
+          <div className="mt-4 overflow-x-auto">
+            {exitHistory.truncated && (
+              <p className="mb-2 text-xs text-amber-200">
+                {t("devices.controls.exitHistoryTruncated", {
+                  count: exitHistory.entries.length,
+                })}
+              </p>
+            )}
+            {exitHistory.entries.length === 0 ? (
+              <EmptyState title={t("devices.controls.exitHistoryEmpty")}>
+                <p>{t("devices.controls.exitHistoryEmptyBody")}</p>
+              </EmptyState>
+            ) : (
+              <table className="min-w-full text-xs">
+                <thead>
+                  <tr>
+                    <th className="px-2 py-2 text-start font-semibold text-anvil-500">
+                      {t("devices.controls.exitTimestamp")}
+                    </th>
+                    <th className="px-2 py-2 text-start font-semibold text-anvil-500">
+                      {t("devices.controls.exitHistoryUser")}
+                    </th>
+                    <th className="px-2 py-2 text-start font-semibold text-anvil-500">
+                      {t("devices.controls.exitProcess")}
+                    </th>
+                    <th className="px-2 py-2 text-start font-semibold text-anvil-500">
+                      {t("devices.controls.exitReasonLabel")}
+                    </th>
+                    <th className="px-2 py-2 text-end font-semibold text-anvil-500">
+                      {t("devices.controls.exitStatus")}
+                    </th>
+                    <th className="px-2 py-2 text-end font-semibold text-anvil-500">
+                      {t("devices.controls.exitPss")}
+                    </th>
+                    <th className="px-2 py-2 text-end font-semibold text-anvil-500">
+                      {t("devices.controls.exitRss")}
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/5">
+                  {exitHistory.entries.map((entry, index) => (
+                    <tr
+                      key={`${entry.timestamp}-${entry.process}-${index}`}
+                      className="hover:bg-white/[0.03]"
+                    >
+                      <td className="whitespace-nowrap px-2 py-1.5 font-mono text-anvil-300">
+                        {entry.timestamp || t("devices.controls.exitUnknown")}
+                      </td>
+                      <td className="px-2 py-1.5 font-mono text-anvil-300">
+                        {entry.user_id ?? t("devices.controls.exitUnknown")}
+                      </td>
+                      <td className="px-2 py-1.5 font-mono text-anvil-100">
+                        {entry.process || t("devices.controls.exitUnknown")}
+                      </td>
+                      <td className="px-2 py-1.5 text-anvil-200">
+                        {t(`devices.controls.exitReasons.${entry.reason}`, {
+                          defaultValue: t("devices.controls.exitUnknown"),
+                        })}
+                        {entry.parse_error && (
+                          <Badge tone="warning" className="ms-2">
+                            {t("devices.controls.exitParseIssue", {
+                              message: entry.parse_error,
+                            })}
+                          </Badge>
+                        )}
+                      </td>
+                      <td className="px-2 py-1.5 text-end font-mono text-anvil-300">
+                        {entry.status ?? t("devices.controls.exitUnknown")}
+                      </td>
+                      <td className="px-2 py-1.5 text-end font-mono text-anvil-300">
+                        {entry.pss_kb != null
+                          ? formatKb(entry.pss_kb)
+                          : t("devices.controls.exitUnknown")}
+                      </td>
+                      <td className="px-2 py-1.5 text-end font-mono text-anvil-300">
+                        {entry.rss_kb != null
+                          ? formatKb(entry.rss_kb)
+                          : t("devices.controls.exitUnknown")}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        )}
+      </div>
       {confirmPackage && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
           <div

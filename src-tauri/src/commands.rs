@@ -18,9 +18,9 @@ use crate::adb::device::valid_serial;
 use crate::adb::packages::valid_package_name;
 use crate::adb::parsers::{
     audit_layout_nodes, parse_effective_density, parse_fastboot_devices, parse_ls_output,
-    parse_ps_output, parse_running_services, parse_ss_output, parse_uiautomator_dump,
-    FastbootDevice, LayoutAuditFinding, LayoutNode, NetworkConnection, ProcessInfo,
-    RemoteFileEntry, RunningService,
+    parse_process_exit_info, parse_ps_output, parse_running_services, parse_ss_output,
+    parse_uiautomator_dump, FastbootDevice, LayoutAuditFinding, LayoutNode, NetworkConnection,
+    ProcessExitInfo, ProcessInfo, RemoteFileEntry, RunningService,
 };
 use crate::adb::transport::AdbTransport;
 use crate::adb::{self, actions};

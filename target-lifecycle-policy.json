@@ -104,6 +104,7 @@
     ],
     "src/routes/devices/ProcessManager.tsx": [
       "callApplyAction",
+      "callListProcessExitHistory",
       "callListProcesses",
       "callPlanAction"
     ]

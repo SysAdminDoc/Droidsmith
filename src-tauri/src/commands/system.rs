@@ -482,6 +482,61 @@ pub fn list_processes(target: adb::DeviceTarget) -> Result<Vec<ProcessInfo>, Com
     Ok(parse_ps_output(&stdout))
 }
 
+const MAX_PROCESS_EXIT_HISTORY_BYTES: usize = 512 * 1024;
+
+#[derive(specta::Type, Debug, Clone, Serialize)]
+pub struct ProcessExitHistory {
+    pub package: String,
+    pub user_id: u32,
+    pub entries: Vec<ProcessExitInfo>,
+    pub truncated: bool,
+}
+
+/// Read the bounded historical process-exit records Android keeps for one
+/// package. The raw `dumpsys` response is parsed in memory and is never
+/// persisted or returned to the renderer.
+#[tauri::command]
+#[specta::specta]
+pub fn list_process_exit_history(
+    target: adb::DeviceTarget,
+    package: String,
+    #[allow(non_snake_case)] userId: u32,
+) -> Result<ProcessExitHistory, CommandError> {
+    validate_package_arg(&package)?;
+    let transport = validated_transport(&target)?;
+    let users = adb::list_users(&transport, &target)?;
+    if !users.iter().any(|user| user.id == userId) {
+        return Err(CommandError {
+            code: "process_exit_user_missing",
+            message: format!("Android user {userId} is not available"),
+        });
+    }
+
+    let stdout =
+        transport.shell_target(&target, &["dumpsys", "activity", "exit-info", &package])?;
+    if stdout.len() > MAX_PROCESS_EXIT_HISTORY_BYTES {
+        return Err(CommandError {
+            code: "process_exit_history_too_large",
+            message: format!(
+                "Process exit history exceeds the {MAX_PROCESS_EXIT_HISTORY_BYTES}-byte limit"
+            ),
+        });
+    }
+    let parsed = parse_process_exit_info(&stdout);
+    let entries = parsed
+        .entries
+        .into_iter()
+        .filter(|entry| entry.user_id.is_none() || entry.user_id == Some(userId))
+        .collect();
+
+    Ok(ProcessExitHistory {
+        package,
+        user_id: userId,
+        entries,
+        truncated: parsed.truncated,
+    })
+}
+
 /// Running services for a specific package on the device, parsed from
 /// `dumpsys activity services <package>`.
 #[tauri::command]
@@ -714,6 +769,14 @@ mod tests {
         assert_eq!(permissions.len(), 2);
         assert!(permissions[0].granted);
         assert!(!permissions[1].granted);
+    }
+
+    #[test]
+    fn process_exit_history_rejects_invalid_package_before_transport() {
+        let error =
+            list_process_exit_history(adb::DeviceTarget::default(), "not a package".into(), 0)
+                .unwrap_err();
+        assert_eq!(error.code, "invalid_package");
     }
 
     #[test]

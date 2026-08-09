@@ -890,6 +890,22 @@ export const commands = {
     return await TAURI_INVOKE("list_processes", { target });
   },
   /**
+   * Read the bounded historical process-exit records Android keeps for one
+   * package. The raw `dumpsys` response is parsed in memory and is never
+   * persisted or returned to the renderer.
+   */
+  async listProcessExitHistory(
+    target: DeviceTarget,
+    packageName: string,
+    userId: number,
+  ): Promise<ProcessExitHistory> {
+    return await TAURI_INVOKE("list_process_exit_history", {
+      target,
+      package: packageName,
+      userId,
+    });
+  },
+  /**
    * Running services for a specific package on the device, parsed from
    * `dumpsys activity services <package>`.
    */
@@ -3000,6 +3016,51 @@ export type PlatformToolsReason =
   | "recommended"
   | "unrecognized";
 export type PlatformToolsStatus = "supported" | "warn" | "blocked";
+export type ProcessExitHistory = {
+  package: string;
+  user_id: number;
+  entries: ProcessExitInfo[];
+  truncated: boolean;
+};
+export type ProcessExitInfo = {
+  /**
+   * The device-formatted timestamp. It is kept as text because OEMs may
+   * change the format; missing or malformed values are rendered as
+   * `unknown` rather than guessed into a local timezone.
+   */
+  timestamp: string;
+  user_id: number | null;
+  process: string;
+  reason: ProcessExitReason;
+  reason_code: number | null;
+  status: number | null;
+  /**
+   * Android reports PSS/RSS in kB through ApplicationExitInfo; dumpsys
+   * variants may add a human-readable suffix, which is normalized here.
+   */
+  pss_kb: number | null;
+  rss_kb: number | null;
+  parse_error?: string | null;
+};
+export type ProcessExitReason =
+  | "anr"
+  | "crash"
+  | "crash_native"
+  | "dependency_died"
+  | "excessive_resource_usage"
+  | "exit_self"
+  | "freezer"
+  | "initialization_failure"
+  | "low_memory"
+  | "memory_limiter"
+  | "other"
+  | "package_state_change"
+  | "package_updated"
+  | "permission_change"
+  | "signaled"
+  | "user_requested"
+  | "user_stopped"
+  | "unknown";
 export type ProcessInfo = {
   pid: number;
   user: string;

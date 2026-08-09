@@ -70,6 +70,7 @@ import {
   type PlanPackRequest as GeneratedPlanPackRequest,
   type PlannedAction as GeneratedPlannedAction,
   type PlannedPack as GeneratedPlannedPack,
+  type ProcessExitHistory,
   type ProcessInfo,
   type RunningService,
   type UninstallRecoveryAssessment,
@@ -1181,6 +1182,14 @@ export async function callListProcesses(
   target: DeviceTarget,
 ): Promise<ProcessInfo[]> {
   return commands.listProcesses(target);
+}
+
+export async function callListProcessExitHistory(
+  target: DeviceTarget,
+  pkg: string,
+  userId: number,
+): Promise<ProcessExitHistory> {
+  return commands.listProcessExitHistory(target, pkg, userId);
 }
 
 export async function callListRunningServices(

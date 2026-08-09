@@ -91,6 +91,7 @@ macro_rules! droidsmith_commands {
             list_permissions,
             set_permission,
             list_processes,
+            list_process_exit_history,
             list_running_services,
             take_screenshot,
             locate_scrcpy,
