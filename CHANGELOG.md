@@ -74,6 +74,9 @@ each milestone tag.
   explicitly preserves CHANGELOG, RESEARCH, and ROADMAP alongside README, and
   the local contributor guidance distinguishes those public documents from
   private markdown notes. (IMP-129)
+- **Pull requests now run the cheap release-policy gate.** Frontend CI checks
+  policy, version, schema, accessibility, provenance, and dependency floors on
+  push/PR while the full unsigned bundle smoke remains scheduled. (IMP-134)
 - **Command failures now have locale-safe summaries.** Stable native error
   codes map to translated summaries in all five locales, while OEM/device
   output remains visible under a labelled technical-details line and

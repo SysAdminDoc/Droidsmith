@@ -31,6 +31,9 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx playwright install --with-deps chromium
+      # Keep release metadata and dependency-floor declarations merge-blocking
+      # without waiting for the scheduled native bundle smoke.
+      - run: npm run release:check -- --policy-only
       - run: npm run format:check
       - run: npm run lint
       - run: npm run typecheck

@@ -357,6 +357,7 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - run: npm ci
+      - run: npm run release:check -- --policy-only
       - run: npm run ui:smoke
       - run: cargo test --locked
       - run: npm run security:audit

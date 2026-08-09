@@ -46,8 +46,9 @@ community, and security review:
    existing process list and Android 17 memory-limit status (R-151); do not
    conflate this with the blocked crash/dropbox viewer R-102.
 9. **P2 verification:** make the existing Vitest coverage configuration and
-   cargo-fuzz targets executable in bounded CI lanes (IMP-131/IMP-132), and run
-   the cheap release-policy check on pull requests (IMP-134).
+   cargo-fuzz targets executable in bounded CI lanes (IMP-131/IMP-132). The
+   cheap release-policy check now runs on every frontend push and pull request
+   (IMP-134 shipped).
 10. **P2 content and documentation:** import user-supplied UAD data without
     redistributing GPL content (R-146), publish the unreleased Windows artifact
     when a bundle-capable host is available (R-148), and repair SECURITY,
@@ -265,9 +266,9 @@ IMP-114 is the still-open total-theme gate.
   so a pull request can pass frontend/native/security jobs without building a
   production bundle. `docs/DEVELOPMENT.md` is untracked, still describes Node
   20+, and omits later routes; SECURITY.md is untracked and contradicts the
-    private-advisory path. IMP-117 covers README/schema/screenshots; IMP-122 and
-    IMP-134 address the remaining document/CI contract without creating more
-    markdown tracking files. IMP-129 shipped the tracked-markdown exceptions.
+    private-advisory path. IMP-117 covers README/schema/screenshots; IMP-122
+    addresses the remaining document contract without creating more markdown
+    tracking files. IMP-129 and IMP-134 shipped their respective policy fixes.
 - **Observability:** diagnostics are intentionally file-only and no-network;
   that is compatible with the privacy posture. The missing hardening is
   redaction and structured local error codes, not a telemetry SDK.
@@ -388,7 +389,6 @@ IMP-114 is the still-open total-theme gate.
   is readable across the supported Android/OEM matrix, and which real Android 17
   transcripts explain `pm uninstall --user` failures? R-135 and R-142 must remain
   unknown rather than guessing until a device sample exists.
-- **PR release cost:** should IMP-134 run only `release:check --policy-only` on
-  every pull request and reserve full multi-OS bundle smoke for the scheduled
-  lane? The code supports the cheap policy-only split; the maintainer must set
-  the CI cost budget.
+- **PR release cost:** IMP-134 now runs `release:check --policy-only` on every
+  frontend push and pull request; the scheduled lane retains the expensive
+  multi-OS bundle smoke.

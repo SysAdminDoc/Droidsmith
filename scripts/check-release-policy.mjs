@@ -1115,6 +1115,7 @@ export function validateAutomationFiles(ciWorkflow, dependabot) {
     "\n  release-smoke:\n",
     "os: [ubuntu-latest, windows-latest, macos-latest]",
     "npm ci",
+    "npm run release:check -- --policy-only",
     "npm run ui:smoke",
     "cargo test --locked",
     "npm run security:audit",

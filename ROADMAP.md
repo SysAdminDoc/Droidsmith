@@ -165,13 +165,6 @@ and Android, privacy-safe diagnostics, and the widest remaining product gap
   Acceptance: a scheduled or manually dispatched Linux job installs the pinned nightly/cargo-fuzz toolchain, runs each target with an explicit bounded budget, uploads minimized corpus/crash artifacts, and replays checked-in corpus cases in the normal parser test lane; it does not make Windows/macOS release jobs depend on nightly LLVM.
   Complexity: M
 
-- [ ] IMP-134 P2 — Run the cheap release-policy check on pull requests
-  Why: frontend/native/security jobs run on pushes and pull requests, but the production bundle smoke job is schedule/manual only, allowing a merge to break release metadata or the renderer-policy contract without immediate feedback.
-  Evidence: `.github/workflows/ci.yml:99-106` gates `release-smoke` on `schedule` or `workflow_dispatch`; `scripts/check-release-policy.mjs` supports `--policy-only` and checks policy/version/schema metadata without building a native bundle.
-  Touches: `.github/workflows/ci.yml`, release-policy documentation/tests
-  Acceptance: push and pull-request CI runs `npm run release:check -- --policy-only` (or an equivalent direct node invocation) and fails on policy, version, schema, accessibility, provenance, or dependency-floor drift; the scheduled multi-OS full bundle smoke remains in place for expensive native verification.
-  Complexity: S
-
 ### P3
 
 - [ ] IMP-127 P3 — Grey out file operations the device will refuse
