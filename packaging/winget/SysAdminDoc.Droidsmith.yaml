@@ -10,6 +10,6 @@ Installers:
   - Architecture: x64
     InstallerType: nullsoft
     InstallerUrl: https://github.com/SysAdminDoc/Droidsmith/releases/download/v0.9.17/Droidsmith_0.9.17_x64-setup.exe
-    InstallerSha256: 11b409cf2defec0215c45e3fee3cd8d07676f9b5af47b1ad06cab11fa6bd578f
+    InstallerSha256: 0da2afac7563f86eabb8a59a25e5556c6b13bf64d5f2565f2ba3397c60f08e8d
 ManifestType: singleton
 ManifestVersion: 1.6.0

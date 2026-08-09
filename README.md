@@ -111,11 +111,12 @@ validation. Detected data entries are not a promise of completeness or future
 restore compatibility; Droidsmith does not present `adb restore` as a reliable
 recovery path.
 
-The source tree and manifests are version `0.9.17`. As checked on 2026-08-02,
-the newest downloadable GitHub artifact is the older
-[v0.5.3 release](https://github.com/SysAdminDoc/Droidsmith/releases/tag/v0.5.3),
-published on 2026-07-17; changes after that tag are available from source but
-are not yet published release artifacts. Remaining actionable work lives in
+The source tree and manifests are version `0.9.17`. The latest downloadable
+artifact is the unsigned Windows
+[v0.9.17 release](https://github.com/SysAdminDoc/Droidsmith/releases/tag/v0.9.17),
+published on 2026-08-09 with MSI, NSIS, portable, and `SHA256SUMS` assets.
+Linux and macOS bundles remain outside this Windows-only release. Remaining
+actionable work lives in
 [ROADMAP.md](ROADMAP.md), release notes live in [CHANGELOG.md](CHANGELOG.md),
 and current product/architecture findings live in [RESEARCH.md](RESEARCH.md).
 

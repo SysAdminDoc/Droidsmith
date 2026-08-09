@@ -14,6 +14,13 @@ completion.
 Working batches live here. Sections collapse into a versioned release on
 each milestone tag.
 
+### Distribution
+
+- **Unsigned Windows release artifacts are now published.** The v0.9.17 MSI,
+  NSIS installer, portable executable, and `SHA256SUMS` are attached to the
+  generated GitHub release; Winget and Scoop manifests carry the released
+  NSIS SHA-256. (R-148)
+
 ### Security and accessibility
 
 - **Tauri command modules now carry boundary coverage.** Validation and failure

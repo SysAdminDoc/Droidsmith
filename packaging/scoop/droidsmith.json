@@ -6,7 +6,7 @@
   "architecture": {
     "64bit": {
       "url": "https://github.com/SysAdminDoc/Droidsmith/releases/download/v0.9.17/Droidsmith_0.9.17_x64-setup.exe",
-      "hash": "11b409cf2defec0215c45e3fee3cd8d07676f9b5af47b1ad06cab11fa6bd578f"
+      "hash": "0da2afac7563f86eabb8a59a25e5556c6b13bf64d5f2565f2ba3397c60f08e8d"
     }
   },
   "innosetup": false,

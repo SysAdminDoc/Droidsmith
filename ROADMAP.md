@@ -23,14 +23,6 @@ and Android, privacy-safe diagnostics, and the widest remaining product gap
 
 ### P2
 
-- [ ] R-148 P2 — Publish the unreleased versions
-  Why: twelve releases exist only in source; the newest downloadable artifact is v0.5.3 from 2026-07-17, so no user can obtain any work from the last three weeks.
-  Evidence: `gh release list` returns only `v0.5.3` (2026-07-17) and `v0.1.0`; manifests are at 0.9.17; `README.md:106` already discloses the gap. Depends on the bundle-capable-host open question in RESEARCH.md.
-  Note: this is the **Windows unsigned** artifact only, which project policy permits. It does not supersede the blocked "unsigned multi-platform distribution" entry (Linux bundles, still blocked on no Linux host), **R-006/R-010** (signing, notarization, `externalBin`) or **R-110** (minisign-signed provenance) — those blockers are unchanged.
-  Touches: release process, `packaging/`, `CHANGELOG.md`
-  Acceptance: an unsigned Windows MSI and NSIS installer are built, `release:check` including `release:smoke` passes against the real bundle, the artifacts are attached to a `v0.9.x` GitHub release with generated notes, `SHA256SUMS` is published alongside, and the packaging manifests carry the real installer hashes.
-  Complexity: M
-
 - [ ] R-149 P2 — Expose the headless CLI as an MCP server
   Why: agent-driven device workflows are where this space is moving, and Droidsmith can serve them over stdio with no HTTP client, no telemetry and no new network surface — the one differentiator its architecture makes cheap and its competitors' architectures make expensive.
   Evidence: `src-tauri/src/bin/droidsmith_cli.rs` already emits stable `--json` for every operation with documented exit codes; escrcpy 3.0.8 ships an MCP-protocol assistant; `callstack/agent-device` (3.9k stars) and Android Studio Otter 3's agent tooling target the same workflows.
