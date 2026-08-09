@@ -12,9 +12,11 @@
 //! `tauri::Builder::run` returns `Err`, so the user-visible "a crash log
 //! was written" message is actually truthful.
 //!
-//! No network. No PII. The user can always wipe the log folder from
-//! Settings → Diagnostics (UI piece lands in Phase 7).
+//! No network. Panic payload text is redacted before persistence; exported
+//! support bundles apply a second privacy filter. The user can always wipe
+//! the log folder from Settings → Diagnostics (UI piece lands in Phase 7).
 
+use std::any::Any;
 use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -201,15 +203,26 @@ fn write_panic_record(dir: &Path, info: &std::panic::PanicHookInfo<'_>) -> std::
         .location()
         .map(|l| format!("{}:{}:{}", l.file(), l.line(), l.column()))
         .unwrap_or_else(|| "?".to_string());
-    let payload = info
-        .payload()
-        .downcast_ref::<&str>()
-        .map(|s| (*s).to_string())
-        .or_else(|| info.payload().downcast_ref::<String>().cloned())
-        .unwrap_or_else(|| "<non-string panic payload>".to_string());
-
-    writeln!(f, "[{}] panic at {location}: {payload}", iso_now())?;
+    writeln!(f, "{}", format_panic_record(&location, info.payload()))?;
     Ok(())
+}
+
+fn format_panic_record(location: &str, payload: &(dyn Any + Send)) -> String {
+    format!(
+        "[{}] panic at {location}: payload={} (redacted)",
+        iso_now(),
+        panic_payload_kind(payload),
+    )
+}
+
+fn panic_payload_kind(payload: &(dyn Any + Send)) -> &'static str {
+    if payload.is::<&str>() {
+        "str"
+    } else if payload.is::<String>() {
+        "string"
+    } else {
+        "non-string"
+    }
 }
 
 fn rotate_if_needed(log_path: &Path) -> std::io::Result<()> {
@@ -291,6 +304,23 @@ mod tests {
         // It never returns None now — must always return a path.
         let p = fallback_log_dir();
         assert!(!p.as_os_str().is_empty());
+    }
+
+    #[test]
+    fn panic_payloads_are_redacted_before_persistence() {
+        let payload = String::from(
+            "serial=ZY224JQ9 path=C:\\Users\\Alice\\repo email=alice@example.com adb shell getprop",
+        );
+        let record = format_panic_record("src/main.rs:42:7", &payload);
+        assert!(record.contains("payload=string (redacted)"));
+        for secret in [
+            "ZY224JQ9",
+            "C:\\Users\\Alice",
+            "alice@example.com",
+            "adb shell getprop",
+        ] {
+            assert!(!record.contains(secret), "leaked {secret}");
+        }
     }
 
     #[cfg(target_os = "macos")]
