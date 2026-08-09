@@ -1,0 +1,4 @@
+scrcpy 4.0 <https://github.com/Genymobile/scrcpy>
+[server] INFO: List of video encoders:
+ --video-codec=h264 --video-encoder='c2.android.avc.encoder' (hw)
+ --video-codec=h265 --video-encoder=c2.android.hevc.encoder (sw)

@@ -85,6 +85,10 @@ each milestone tag.
   reports text/JSON/HTML artifacts and enforces measured statement, branch,
   function, and line thresholds over `src/lib` helper/state code in CI.
   (IMP-131)
+- **Parser fuzzing now has a bounded CI lane.** Stable tests replay the
+  checked-in ADB, YAML, journal, and scrcpy seeds; scheduled/manual Linux CI
+  installs pinned nightly tooling, runs each target for 30 seconds, and uploads
+  crash artifacts without coupling release builds to nightly LLVM. (IMP-132)
 - **Command failures now have locale-safe summaries.** Stable native error
   codes map to translated summaries in all five locales, while OEM/device
   output remains visible under a labelled technical-details line and

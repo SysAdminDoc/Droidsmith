@@ -144,13 +144,6 @@ and Android, privacy-safe diagnostics, and the widest remaining product gap
   Acceptance: a selected package can request a bounded, read-only `dumpsys activity exit-info` history; parsed rows show timestamp, user, process, reason, status, RSS/PSS where present, and an explicit unknown state for OEM formats; traces and raw dumps are not captured automatically; package/user selection and target lifecycle guards match the existing process query.
   Complexity: M
 
-- [ ] IMP-132 P2 — Run the existing cargo-fuzz targets in a bounded scheduled lane
-  Why: ADB/OEM text, YAML, journal JSONL, and scrcpy parsers are security-sensitive and already have fuzz targets, but the only execution path is a manual nightly command.
-  Evidence: `src-tauri/fuzz/fuzz_targets/{adb_text,yaml_documents,journal_jsonl,scrcpy_text}.rs`; `README.md:505-509`; `.github/workflows/ci.yml` has no nightly `cargo fuzz` job; cargo-fuzz is Linux/Unix nightly tooling and its own documentation supports fixed-time runs and corpus minimization.
-  Touches: `.github/workflows/ci.yml`, `src-tauri/fuzz/`, `README.md`, corpus/replay tests
-  Acceptance: a scheduled or manually dispatched Linux job installs the pinned nightly/cargo-fuzz toolchain, runs each target with an explicit bounded budget, uploads minimized corpus/crash artifacts, and replays checked-in corpus cases in the normal parser test lane; it does not make Windows/macOS release jobs depend on nightly LLVM.
-  Complexity: M
-
 ### P3
 
 - [ ] IMP-127 P3 — Grey out file operations the device will refuse

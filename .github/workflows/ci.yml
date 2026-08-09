@@ -100,6 +100,43 @@ jobs:
       - run: npm run security:audit
       - run: cargo deny --locked --manifest-path src-tauri/Cargo.toml --config deny.toml check bans licenses sources
 
+  fuzz:
+    name: Bounded parser fuzzing
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # pinned nightly lane
+        with:
+          toolchain: nightly-2026-08-01
+      - name: Install pinned cargo-fuzz
+        run: cargo install cargo-fuzz --version 0.13.2 --locked
+      - name: Run bounded corpus jobs
+        working-directory: src-tauri/fuzz
+        shell: bash
+        run: |
+          set +e
+          mkdir -p artifacts
+          status=0
+          for target in adb_text yaml_documents journal_jsonl scrcpy_text; do
+            cargo fuzz run "$target" "corpus/$target" -- \
+              -max_total_time=30 \
+              -print_final_stats=1 \
+              -artifact_prefix="artifacts/${target}-"
+            code=$?
+            if [ "$code" -ne 0 ]; then
+              status=$code
+            fi
+          done
+          exit "$status"
+      - name: Upload fuzz artifacts
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: droidsmith-fuzz-artifacts
+          path: src-tauri/fuzz/artifacts
+          if-no-files-found: ignore
+
   release-smoke:
     name: Unsigned bundle smoke (${{ matrix.os }})
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'

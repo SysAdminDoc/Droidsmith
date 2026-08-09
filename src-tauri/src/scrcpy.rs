@@ -1319,6 +1319,14 @@ mod tests {
     }
 
     #[test]
+    fn replays_checked_in_scrcpy_corpus_seed() {
+        let seed = include_str!("../fuzz/corpus/scrcpy_text/capabilities.txt");
+        assert_eq!(parse_version(seed).as_deref(), Some("4.0"));
+        assert!(!parse_tool_video_codecs(seed).is_empty());
+        assert_eq!(parse_video_encoders(seed).len(), 2);
+    }
+
+    #[test]
     fn classifies_actionable_exit_reasons_from_bounded_stderr() {
         assert_eq!(
             classify_exit_reason(

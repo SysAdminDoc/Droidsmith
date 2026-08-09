@@ -527,11 +527,14 @@ inventory in memory, parses it, and requires exact package-URL parity with
 those lockfile graphs. The generated directory is ignored so release
 automation can attach fresh artifacts without dirtying the source tree.
 
-Seeded optional fuzz targets for ADB/OEM text, YAML documents, and journal
-JSONL live under `src-tauri/fuzz`. On a supported Unix-like host with nightly
-Rust and `cargo-fuzz` installed, run them from `src-tauri` with
-`cargo fuzz run adb_text` (or `yaml_documents` / `journal_jsonl`); normal builds
-do not compile fuzz tooling.
+Seeded fuzz targets for ADB/OEM text, YAML documents, journal JSONL, and scrcpy
+text live under `src-tauri/fuzz`. The normal stable parser test lane replays
+the checked-in seeds. On a supported Unix-like host with nightly Rust and
+`cargo-fuzz` installed, run them from `src-tauri/fuzz` with `cargo fuzz run
+adb_text` (or `yaml_documents`, `journal_jsonl`, or `scrcpy_text`); normal
+builds do not compile fuzz tooling. Scheduled/manual CI runs each target for a
+bounded 30-second budget and uploads any minimized artifacts without making
+Windows/macOS release jobs depend on nightly LLVM.
 
 `npm run ui:smoke` starts Vite with mocked Tauri IPC and checks sidebar
 navigation and route focus, command-palette combobox/listbox semantics, modal
