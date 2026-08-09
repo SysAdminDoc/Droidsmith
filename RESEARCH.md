@@ -265,9 +265,9 @@ IMP-114 is the still-open total-theme gate.
   so a pull request can pass frontend/native/security jobs without building a
   production bundle. `docs/DEVELOPMENT.md` is untracked, still describes Node
   20+, and omits later routes; SECURITY.md is untracked and contradicts the
-  private-advisory path. IMP-117 covers README/schema/screenshots; IMP-122,
-  IMP-129, and IMP-134 address the document/CI contract without creating more
-  markdown tracking files.
+    private-advisory path. IMP-117 covers README/schema/screenshots; IMP-122 and
+    IMP-134 address the remaining document/CI contract without creating more
+    markdown tracking files. IMP-129 shipped the tracked-markdown exceptions.
 - **Observability:** diagnostics are intentionally file-only and no-network;
   that is compatible with the privacy posture. The missing hardening is
   redaction and structured local error codes, not a telemetry SDK.

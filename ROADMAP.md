@@ -188,13 +188,6 @@ and Android, privacy-safe diagnostics, and the widest remaining product gap
   Acceptance: a pack targeting Android TV / Google TV builds ships with `targets` distinguishing them from handsets, every entry carries a description and provenance, and `pack_lint` passes; the pack is not offered on devices whose characteristics do not match.
   Complexity: M
 
-- [ ] IMP-129 P3 — Make the markdown ignore rules match what is actually tracked
-  Why: the documented rule and the repository state disagree, so a contributor or an agent is told roadmap and changelog edits are local-only when they are in fact public tracked files linked from the README.
-  Evidence: `.gitignore` declares `*.md` with only `!README.md` and `!.github/ISSUE_TEMPLATE/*.yml` excepted; `CLAUDE.md:101` states "All `.md` files except README.md are gitignored"; `git ls-files` returns `CHANGELOG.md`, `RESEARCH.md`, `ROADMAP.md` as tracked, and `README.md:109-112` links to all three.
-  Touches: `.gitignore`, `CLAUDE.md`
-  Acceptance: `.gitignore` explicitly un-ignores the three tracked documents alongside `README.md`; the `CLAUDE.md` file-hygiene rule states which markdown files are public and which are local-only; `git check-ignore` reports no tracked file as ignored.
-  Complexity: S
-
 - [ ] IMP-128 P3 — Split `Apps.tsx`
   Why: it is the largest file in the frontend at 2,023 lines despite six components already extracted, and the initial bundle sits at 84% of its declared budget.
   Evidence: `src/routes/Apps.tsx` 2,023 lines against `src/routes/apps/` already holding `PackageTable`, `FilterControls`, `InstallPanels`, `JournalPanel`, `PermissionsPanel`, `RecoveryBaselinePanel`; `dist/assets/index-*.js` 380 KB against `release-policy.json` `initialJavaScriptBudgetBytes` 450000; the `commands.rs` split behind `command_registry.rs` is the precedent.

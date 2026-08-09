@@ -70,6 +70,10 @@ each milestone tag.
   Host Doctor also explains the OS-specific USB backend default and exact
   environment override only when a verified 37.0.1+ server supports it.
   (R-139, R-140)
+- **Tracked markdown now matches the contributor contract.** `.gitignore`
+  explicitly preserves CHANGELOG, RESEARCH, and ROADMAP alongside README, and
+  the local contributor guidance distinguishes those public documents from
+  private markdown notes. (IMP-129)
 - **Command failures now have locale-safe summaries.** Stable native error
   codes map to translated summaries in all five locales, while OEM/device
   output remains visible under a labelled technical-details line and

@@ -53,11 +53,14 @@ playwright/.cache/
 test-results/
 provenance/
 
-# Markdown files are local-only except the durable public README. GitHub intake
-# uses YAML issue forms so contributor guidance cannot disappear behind this
-# rule.
+# Public project tracking documents are durable repository state. Other
+# markdown remains local-only so generated notes and private work do not get
+# staged accidentally; GitHub intake uses YAML issue forms.
 *.md
 !README.md
+!CHANGELOG.md
+!RESEARCH.md
+!ROADMAP.md
 !.github/ISSUE_TEMPLATE/*.yml
 
 # AI config
