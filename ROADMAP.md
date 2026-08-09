@@ -23,13 +23,6 @@ and Android, privacy-safe diagnostics, and the widest remaining product gap
 
 ### P2
 
-- [ ] R-142 P2 — Capture and surface the exact `pm` failure text for uninstall-for-user
-  Why: users report `pm uninstall -k --user 0` failing on Android 17 where it worked on Android 16, and **no documented Android 17 behavior change touches `pm` or `cmd package`** — so the only honest response is to report precisely what the device said instead of guessing a cause.
-  Evidence: https://xdaforums.com/t/android-17-no-longer-able-to-uninstall-bloatware-via-adb.4795845/ (Pixel 8, Android 17 stable, Chrome/Gmail/YouTube); https://developer.android.com/about/versions/17/behavior-changes-all contains no package-management change; `src-tauri/src/adb/actions.rs` `pm_failure_marker` already recognises `Failure [...]` and `Error:` shapes.
-  Touches: `src-tauri/src/adb/actions.rs`, `src/routes/apps/`, `quirks/pixel.yaml`, `src-tauri/fixtures/adb-transcripts/v1/`
-  Acceptance: an uninstall-for-user failure records and displays the device's verbatim `pm` output, the package, the Android user and the SDK level, and offers the existing `install-existing` recovery path; a quirk rule is added only once a real transcript is captured — this is a reporting change, not an assumed workaround. Needs live validation on an Android 17 device.
-  Complexity: M
-
 - [ ] IMP-124 P2 — Surface licence and third-party notices in the About dialog
   Why: the app bundles Apache-2.0 tooling and maintains a notices inventory, but neither the notices nor the project licence are reachable from the running application, and the notices file is not even shipped.
   Evidence: `src/App.tsx:596-655` shows only name, tagline, version and runtime; `third-party-notices.json` is absent from `bundle.resources` in `src-tauri/tauri.conf.json`; `LICENSE-THIRD-PARTY.md` exists and `check-release-policy.mjs` validates it.
