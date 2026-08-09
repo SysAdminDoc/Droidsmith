@@ -77,6 +77,10 @@ each milestone tag.
 - **Pull requests now run the cheap release-policy gate.** Frontend CI checks
   policy, version, schema, accessibility, provenance, and dependency floors on
   push/PR while the full unsigned bundle smoke remains scheduled. (IMP-134)
+- **The YAML parser choice is now explicit.** The project retains
+  `serde_yaml_ng` for this release after a dated compatibility review; a
+  `serde-saphyr` migration remains a separate fixture- and graph-reviewed
+  change rather than an untested dependency swap. (IMP-126)
 - **Command failures now have locale-safe summaries.** Stable native error
   codes map to translated summaries in all five locales, while OEM/device
   output remains visible under a labelled technical-details line and

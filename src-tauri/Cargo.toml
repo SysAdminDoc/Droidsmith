@@ -35,6 +35,11 @@ tauri-plugin-dialog = "2"
 tauri-plugin-single-instance = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+# Re-reviewed 2026-08-08 against serde-saphyr 1.0.1. Keep serde_yaml_ng for
+# this release: every accepted pack, quirk, and profile fixture currently
+# parses through its 0.10 API, while serde-saphyr does not publish an MSRV and
+# changes the parser/error surface. A migration needs a fixture-by-fixture
+# compatibility pass and a reviewed dependency graph, not a drive-by bump.
 serde_yaml_ng = "0.10"
 # Pinned for graph hygiene, not for the Rust floor: schemars 1.2.2 pulls
 # syn 3 and serde_derive_internals 0.30 alongside the versions already in the

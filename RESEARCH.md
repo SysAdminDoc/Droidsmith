@@ -226,8 +226,9 @@ blocker rather than a new roadmap duplicate (blocked R-006/R-010/R-110). The
 remaining roadmap items are independently grounded: IMP-119 covers the two
 missing collection empty states; IMP-121 the repository topics/homepage;
 IMP-123 the stale MSRV rationale; IMP-124 the unshipped third-party notices;
-IMP-126 the dormant YAML parser; R-143 CLI pack application; and R-144 the
-additional reversible `pm` rungs. IMP-112 is the shipped light-theme baseline;
+R-143 CLI pack application; and R-144 the additional reversible `pm` rungs.
+IMP-126 shipped a dated decision to retain `serde_yaml_ng` pending a fixture-
+compatible migration; IMP-112 is the shipped light-theme baseline;
 IMP-114 is the still-open total-theme gate.
 
 ## Architecture Assessment

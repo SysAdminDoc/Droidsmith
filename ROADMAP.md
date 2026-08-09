@@ -122,13 +122,6 @@ and Android, privacy-safe diagnostics, and the widest remaining product gap
   Acceptance: the gate renders a 1,000-package inventory, exercises filter/search/sort, and asserts a declared interaction budget; virtualization is introduced only if the measurement fails the budget, and the budget lives in `release-policy.json` alongside the bundle budget.
   Complexity: M
 
-- [ ] IMP-126 P2 — Re-evaluate the YAML parser
-  Why: `serde_yaml_ng` parses every untrusted document the app accepts and has had no release in roughly 27 months; the previously-preferred alternative was rejected only for being hours old.
-  Evidence: `src-tauri/Cargo.toml` depends on `serde_yaml_ng = "0.10"`, last published 2024-05-26; RESEARCH.md 2026-07-31 deferred `serde-saphyr` pending patch history and the MSRV move, both of which have since happened (floor is now 1.90).
-  Touches: `src-tauri/Cargo.toml`, `src-tauri/src/packs/mod.rs`, `src-tauri/src/quirks/mod.rs`, `src-tauri/src/profile.rs`, `deny.toml`
-  Acceptance: a decision is recorded either way with a dated rationale; if migrating, all existing pack/quirk/profile fixtures parse identically and the proptest boundary suite passes unchanged; if staying, the reason and a re-review date are recorded in `Cargo.toml` next to the dependency.
-  Complexity: M
-
 - [ ] R-148 P2 — Publish the unreleased versions
   Why: twelve releases exist only in source; the newest downloadable artifact is v0.5.3 from 2026-07-17, so no user can obtain any work from the last three weeks.
   Evidence: `gh release list` returns only `v0.5.3` (2026-07-17) and `v0.1.0`; manifests are at 0.9.17; `README.md:106` already discloses the gap. Depends on the bundle-capable-host open question in RESEARCH.md.
