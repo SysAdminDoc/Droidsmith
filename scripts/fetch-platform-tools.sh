@@ -80,7 +80,7 @@ esac
 
 # Read the single reviewed upstream policy. The release gate validates these
 # fields and ensures this script keeps consuming them.
-STABLE_VERSION="$(policy_value recommendedVersion)"
+STABLE_VERSION="$(policy_value pinnedVersion)"
 URL_LINUX="$(policy_value downloads.linux.url)"
 SHA_LINUX="$(policy_value downloads.linux.sha256)"
 URL_DARWIN="$(policy_value downloads.darwin.url)"
@@ -147,7 +147,7 @@ if [[ "$SHA" != "SKIP" ]]; then
     fi
     echo "[fetch-platform-tools] SHA-256 verified."
 else
-    echo "[fetch-platform-tools] $CHANNEL channel: SHA-256 verification skipped (rolling)."
+    echo "[fetch-platform-tools] $CHANNEL channel: SHA-256 verification skipped (preview)."
 fi
 
 EXTRACT="$TMP/extracted"

@@ -27,6 +27,28 @@ each milestone tag.
   utilities use semantic CSS variables, terminal/code surfaces retain readable
   contrast, native window theme follows the persisted preference, and the
   rendered axe/contrast gate runs in both dark and light modes. (IMP-114)
+- **Platform Tools are pinned to a reviewed 37.0.1 archive.** Windows,
+  Linux, and macOS now use versioned official URLs with the correct OS tokens,
+  verified SHA-256s, and a release-policy test that rejects rolling URLs.
+  (R-134)
+- **Provenance hashes are checkout-stable.** `.gitattributes` fixes text
+  normalization across hosts and the provenance suite covers CRLF input
+  invariance. (IMP-115)
+- **Release policy rejects placeholder installer hashes.** Winget and Scoop
+  manifests must carry a real lowercase SHA-256 before packaging can pass.
+  (IMP-116)
+- **Native panic records redact caller payloads.** Crash logs retain useful
+  location and type metadata without persisting arbitrary serials, paths,
+  emails, or command output. (IMP-133)
+- **Healthy empty diagnostics states are explicit.** Host Doctor and Mirror
+  now explain a clean host or empty app inventory, with all locales and route
+  smoke assertions covered. (IMP-119)
+- **The contributor security shortcut now runs cargo-deny.** Local npm
+  security checks enforce the same bans, licenses, and source policy as the
+  release gate. (IMP-120)
+- **The Rust MSRV rationale matches the actual toolchain contract.** The
+  1.90 floor is documented as an intentional native-toolchain requirement and
+  remains pinned by `rust-toolchain.toml`. (IMP-123)
 
 ## [0.9.17] - 2026-08-02
 

@@ -22,8 +22,8 @@
   Re-download even if the staged binaries already exist.
 
 .PARAMETER Channel
-  "stable" (default) or "preview". The preview channel pulls the same
-  rolling upstream URL without a pinned checksum for local experiments.
+  "stable" (default) or "preview". The preview channel uses the same
+  reviewed archive without a checksum assertion for local experiments.
 
 .NOTES
   Stable metadata comes from platform-tools-policy.json. Bumping the policy
@@ -49,10 +49,10 @@ $stableDownload = $policy.downloads.windows
 $PinnedStable = @{
     Url    = $stableDownload.url
     Sha256 = $stableDownload.sha256
-    Version = $policy.recommendedVersion
+    Version = $policy.pinnedVersion
 }
 $PinnedPreview = $PinnedStable.Clone()
-$PinnedPreview.Sha256 = "SKIP"  # rolling channel; checksum can't be pinned
+$PinnedPreview.Sha256 = "SKIP"  # preview channel; checksum intentionally skipped
 $PinnedPreview.Version = "rolling"
 
 $Pinned = if ($Channel -eq "preview") { $PinnedPreview } else { $PinnedStable }

@@ -21,20 +21,6 @@ and Android, privacy-safe diagnostics, and the widest remaining product gap
 
 ### P1
 
-- [ ] R-134 P1 — Pin platform-tools to versioned archive URLs instead of a rolling one
-  Why: a SHA-256 pinned against `platform-tools-latest-*.zip` must break on every upstream release, and the fetch script's response is to refuse the archive — so the sidecar path is guaranteed to fail rather than degrade.
-  Evidence: `platform-tools-policy.json` `downloads.*.url` are the `-latest-` URLs; `scripts/fetch-platform-tools.ps1:94` throws on mismatch; probed 2026-08-04 — `platform-tools_r37.0.1-win.zip` 200, `platform-tools_r37.0.0-win.zip` 200, `platform-tools_r37.0.1-windows.zip` **404** (the Windows token is `win`); the rolling URL has served 37.0.1 since 2026-07-30 while the policy's `recommendedVersion` still says `37.0.0` (reviewed 2026-07-15); `https://dl.google.com/android/repository/repository2-1.xml` publishes rev + SHA-1 as a version oracle.
-  Touches: `platform-tools-policy.json`, `scripts/fetch-platform-tools.ps1`, `scripts/fetch-platform-tools.sh`, `scripts/check-release-policy.mjs`, `README.md:196`
-  Acceptance: the policy carries a `pinnedVersion` plus per-OS versioned URLs using the `win`/`darwin`/`linux` tokens; both fetch scripts download the pinned archive and verify its SHA-256; `recommendedVersion` is 37.0.1 with `reviewedOn` updated; a policy test asserts the Windows URL uses `-win.zip`; the README summary line regenerates from the policy.
-  Complexity: S
-
-- [ ] IMP-115 P1 — Add `.gitattributes` so provenance hashes stop depending on the checkout host
-  Why: the provenance manifest hashes text-file bytes, and with no `.gitattributes` and `core.autocrlf=true` a Windows and a Linux checkout of the same commit produce different `SHA256SUMS` — which defeats the artifact's only purpose.
-  Evidence: no `.gitattributes` in the tree; `.editorconfig` declares `end_of_line = lf` for all but `*.ps1`; `scripts/generate-provenance.mjs:47-60` reads `package.json`, `package-lock.json`, `Cargo.toml`, `Cargo.lock`, `third-party-notices.json` as UTF-8 and `:453` SHA-256s the content; `scripts/check-bindings.mjs:40` does an exact string compare of generated vs committed `src/lib/bindings.ts`; git history already carries a one-off "Cargo.lock CRLF" fix.
-  Touches: `.gitattributes` (new), `scripts/generate-provenance.test.mjs`
-  Acceptance: `* text=auto eol=lf` with `*.ps1 eol=crlf` and binary assets marked `-text`; the working tree renormalizes in one commit; a test asserts the provenance hash of a fixture is unchanged when the input is written with CRLF.
-  Complexity: S
-
 - [ ] R-135 P1 — Account for Project Mainline when judging CVE-2026-0073
   Why: the fix ships through the Mainline ADB subcomponent as a Google Play system update, so `ro.build.version.security_patch` under-reports patched devices and the one place Droidsmith emits a security verdict currently over-claims.
   Evidence: `src-tauri/src/adb/security_patch.rs:42-66` classifies from build patch level + SDK only; the AOSP 2026-05-01 bulletin lists ADB under Mainline-delivered components (ref A-469080888).
@@ -48,13 +34,6 @@ and Android, privacy-safe diagnostics, and the widest remaining product gap
   Touches: `scripts/generate-provenance.mjs`, `scripts/generate-provenance.test.mjs`, `provenance/SBOM.cdx.json`
   Acceptance: every component carries `licenses` sourced offline from `cargo metadata` and `package-lock.json`, with an explicit unknown marker where upstream declares none; the document carries `serialNumber`, `metadata.timestamp` and `metadata.tools`; a test fails if any component lacks a licence entry; the timestamp is derived from a reproducible input, not wall-clock, so `provenance:check` stays deterministic.
   Complexity: M
-
-- [ ] IMP-116 P1 — Block placeholder installer hashes in the release gate
-  Why: both committed package manifests carry 64 zeros as their integrity value and nothing prevents them being tagged or submitted in that state.
-  Evidence: `packaging/winget/SysAdminDoc.Droidsmith.yaml:13`, `packaging/scoop/droidsmith.json:9`; written unconditionally by `scripts/generate-packaging-manifests.mjs` (`PLACEHOLDER_SHA256`); `scripts/check-release-policy.mjs` has a placeholder rule for domains only.
-  Touches: `scripts/check-release-policy.mjs`, `scripts/packaging-manifests.test.mjs`, `scripts/generate-packaging-manifests.mjs`
-  Acceptance: `release:check` fails when any packaging manifest holds an all-zero or non-hex SHA-256, proven by a test that makes it fail first; the generator marks the field as unpopulated in a way the gate recognises rather than emitting a plausible-looking hash.
-  Complexity: S
 
 - [ ] IMP-117 P1 — Close the README contract drift and regenerate the screenshots
   Why: the README states a schema version the code does not accept, and its three screenshots predate a full visual-system replacement — both are user-facing claims no gate covers.
@@ -91,28 +70,7 @@ and Android, privacy-safe diagnostics, and the widest remaining product gap
   Acceptance: known command codes map to localized summaries in all five locales; exact OEM/device text remains verbatim in a labelled technical-details disclosure while renderer-added host paths/identifiers are separately redacted; the nested recovery fallback has locale-safe static copy and a test exercises it when the i18n tree itself fails.
   Complexity: M
 
-- [ ] IMP-133 P1 — Redact native panic payloads before writing `crash.log`
-  Why: the diagnostics module claims no PII, but its panic hook persists arbitrary payload strings while support-bundle sanitization happens only later during export.
-  Evidence: `src-tauri/src/diagnostics.rs:15-16,189-212` writes the payload verbatim; `src-tauri/src/support_bundle.rs:778-825` tests sanitized excerpts but not the raw hook; Rust `PanicHookInfo::payload` is explicitly caller-provided data.
-  Touches: `src-tauri/src/diagnostics.rs`, `src-tauri/src/support_bundle.rs`, native diagnostics tests
-  Acceptance: crash records retain timestamp, panic class, and source location but bound or redact arbitrary payload content before persistence; a test payload containing a serial, path, email, and command output never appears in `crash.log` or rotated excerpts; support-bundle and wipe behavior remain unchanged.
-  Complexity: S
-
 ### P2
-
-- [ ] IMP-119 P2 — Add the two missing empty states
-  Why: a healthy host and an empty app inventory currently render as chrome with no content, which is indistinguishable from a render failure.
-  Evidence: `src/routes/HostDoctor.tsx:76-113` maps `findings` with no zero-length branch while `src-tauri/src/host_diagnostics.rs:161-360` pushes findings only conditionally; `src/routes/Mirror.tsx:886-913` renders a zero count with no copy; the shared `EmptyState` at `src/routes/common.tsx:395` is used correctly by every other collection route.
-  Touches: `src/routes/HostDoctor.tsx`, `src/routes/Mirror.tsx`, `src/locales/*.json`
-  Acceptance: HostDoctor renders an explicit "no problems found" state; Mirror's app inventory renders `EmptyState`; both are asserted in `scripts/check-rendered-routes.mjs`; all five locales carry the new keys.
-  Complexity: S
-
-- [ ] IMP-120 P2 — Run `cargo deny` in the local security gate
-  Why: `release:check` now runs cargo-deny, but the standalone `npm run security:audit` path used by contributors and CI still omits the license, ban, and source policy, so the two local security entry points can disagree.
-  Evidence: `scripts/check-release-policy.mjs` invokes `cargo deny --locked ... check bans licenses sources`; `.github/workflows/ci.yml:97` repeats it; `package.json` `security:audit` still runs only npm audit, `audit-rust.mjs`, and isolation.
-  Touches: `package.json`, `scripts/audit-rust.mjs`
-  Acceptance: `npm run security:audit` runs `cargo deny` with the same arguments as CI and fails on a violation; a missing `cargo-deny` binary is a clear actionable error, not a silent skip.
-  Complexity: S
 
 - [ ] IMP-121 P2 — Fix the repository discoverability metadata
   Why: the project is mis-tagged with a language it does not contain and is missing every topic a prospective user would search, on 9 stars.
@@ -126,13 +84,6 @@ and Android, privacy-safe diagnostics, and the widest remaining product gap
   Evidence: `SECURITY.md` (untracked) names `security@droidsmith.invalid`, a Discord absent from the README, a `0.0.x` supported line, and lists signing / SBOM publication / Ed25519 update verification as current hardening commitments while all are in `Roadmap_Blocked.md`; `.github/ISSUE_TEMPLATE/config.yml` already routes to GitHub private advisories; `Roadmap_Blocked.md` still carries a light-theme entry that IMP-112 shipped in v0.9.16; `.github/ISSUE_TEMPLATE/bug.md` and `feature.md` are untracked duplicates of the tracked `.yml` forms; `docs/DEVELOPMENT.md` is untracked, says Node 20+, and omits tuning/APK Analyzer routes.
   Touches: `SECURITY.md`, `docs/DEVELOPMENT.md`, `Roadmap_Blocked.md`, `.github/ISSUE_TEMPLATE/bug.md`, `.github/ISSUE_TEMPLATE/feature.md`
   Acceptance: `SECURITY.md` names the GitHub private-advisory path, states the real supported line, and separates shipped hardening from planned; `docs/DEVELOPMENT.md` either becomes the tracked accurate development guide or is removed from the contributor link; the stale light-theme entry is removed from `Roadmap_Blocked.md`; the duplicate `.md` issue templates are deleted.
-  Complexity: S
-
-- [ ] IMP-123 P2 — Correct the MSRV rationale comment
-  Why: the comment justifying the 1.90 floor cites a Tauri MSRV bump that has not landed in the released line, and this repo's own convention is to fix a note in place the moment it is found wrong.
-  Evidence: `src-tauri/Cargo.toml` `rust-version = "1.90"` with a comment stating Tauri merged a bump to 1.90 on `dev` and that the next minor hard-blocks at 1.81; `tauri` 2.11.x still declares `rust-version = 1.77.2`.
-  Touches: `src-tauri/Cargo.toml`
-  Acceptance: the floor stays at 1.90 and the comment states the actual current reason (toolchain features in use and the pinned `rust-toolchain.toml`), with the Tauri claim removed or dated and sourced.
   Complexity: S
 
 - [ ] R-139 P2 — Surface the `adb kill-server` blame chain

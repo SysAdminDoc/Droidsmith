@@ -195,7 +195,7 @@ guidance. The plugin API and marketplace remain deferred.
 | Node.js | `^22.12.0 \|\| >=24.0.0` |
 | Rust | `>=1.90` |
 | Tauri | `2.x` |
-| Android SDK Platform Tools | `37.0.0` recommended; warn below `36.0.2` |
+| Android SDK Platform Tools | `37.0.1` recommended; warn below `36.0.2` |
 | Pack / quirk documents | schema `"1"` / `"1"` |
 | Profile documents | schema `"3"`; v1 has a reviewed import migration |
 
@@ -470,11 +470,12 @@ bundle artifacts. Install its Rust tools once with
 
 Platform Tools compatibility is governed by
 [`platform-tools-policy.json`](platform-tools-policy.json). The policy was
-reviewed on 2026-07-15, recommends 37.0.0, and warns (without blocking) below
-36.0.2 except for explicitly listed known-bad releases. Unrecognized newer
-versions are never blocked. Both fetch scripts consume the same version,
-official archive URLs, and SHA-256 pins; the release gate rejects policy,
-runtime, script, or documentation drift.
+reviewed on 2026-08-08, recommends 37.0.1, and warns (without blocking) below
+36.0.2 except for explicitly listed known-bad releases. The policy pins the
+same 37.0.1 archive for both fetch scripts. Unrecognized newer versions are
+never blocked. Both scripts consume versioned official archive URLs and
+SHA-256 pins; the release gate rejects policy, runtime, script, or
+documentation drift.
 
 Rust commands and DTOs generate `src/lib/bindings.ts` through Tauri Specta.
 After changing an IPC signature, run `npm run bindings:generate`; the

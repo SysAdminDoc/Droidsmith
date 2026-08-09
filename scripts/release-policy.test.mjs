@@ -13,6 +13,7 @@ import {
   validateScrcpyPolicyDocument,
   validateExpiry,
   validatePlatformToolsDocumentation,
+  validatePlatformToolsArchiveUrl,
   validateTrackedDocumentation,
   validateVersionValues,
 } from "./check-release-policy.mjs";
@@ -109,6 +110,25 @@ test("Platform Tools documentation is generated from policy values", () => {
         matching,
       ),
     /summary differs/u,
+  );
+});
+
+test("Platform Tools archive URLs use the pinned version and OS tokens", () => {
+  assert.doesNotThrow(() =>
+    validatePlatformToolsArchiveUrl(
+      "https://dl.google.com/android/repository/platform-tools_r37.0.1-win.zip",
+      "windows",
+      "37.0.1",
+    ),
+  );
+  assert.throws(
+    () =>
+      validatePlatformToolsArchiveUrl(
+        "https://dl.google.com/android/repository/platform-tools_r37.0.1-windows.zip",
+        "windows",
+        "37.0.1",
+      ),
+    /versioned official archive/u,
   );
 });
 

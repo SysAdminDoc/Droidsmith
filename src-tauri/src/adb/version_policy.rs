@@ -288,7 +288,8 @@ mod tests {
     #[test]
     fn recommendation_uses_full_semantic_version_ordering() {
         assert!(!is_recommended("36.9.9"));
-        assert!(is_recommended("37.0.0"));
+        assert!(!is_recommended("37.0.0"));
+        assert!(is_recommended("37.0.1"));
         assert!(is_recommended("38.0.0"));
     }
 }

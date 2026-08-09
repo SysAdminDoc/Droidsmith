@@ -27,6 +27,11 @@ const scoopManifestPath = path.join(
   "scoop",
   "droidsmith.json",
 );
+const platformToolsArchiveTokens = Object.freeze({
+  windows: "win",
+  linux: "linux",
+  darwin: "darwin",
+});
 
 if (path.resolve(argv[1] ?? "") === fileURLToPath(import.meta.url)) {
   main();
@@ -615,6 +620,23 @@ function readNested(value, dottedPath) {
   return cursor;
 }
 
+export function platformToolsArchiveUrl(os, version) {
+  assert(
+    Object.hasOwn(platformToolsArchiveTokens, os),
+    `unsupported Platform Tools operating system: ${os}`,
+  );
+  assertSemver(`platform-tools ${os} archive version`, version);
+  return `https://dl.google.com/android/repository/platform-tools_r${version}-${platformToolsArchiveTokens[os]}.zip`;
+}
+
+export function validatePlatformToolsArchiveUrl(url, os, version) {
+  assert(
+    url === platformToolsArchiveUrl(os, version),
+    `${os} Platform Tools URL must be the versioned official archive`,
+  );
+  return true;
+}
+
 function validatePlatformToolsPolicy() {
   const policy = readJson(platformToolsPolicyPath);
   assert(
@@ -624,6 +646,7 @@ function validatePlatformToolsPolicy() {
   for (const field of [
     "reviewedOn",
     "recommendedVersion",
+    "pinnedVersion",
     "warningBelowVersion",
     "sourceUrl",
     "rationale",
@@ -635,6 +658,11 @@ function validatePlatformToolsPolicy() {
   }
   assertAbsoluteDate("platform-tools policy reviewedOn", policy.reviewedOn);
   assertSemver("platform-tools recommendedVersion", policy.recommendedVersion);
+  assertSemver("platform-tools pinnedVersion", policy.pinnedVersion);
+  assert(
+    policy.pinnedVersion === policy.recommendedVersion,
+    "platform-tools pinnedVersion must equal recommendedVersion",
+  );
   assertSemver(
     "platform-tools warningBelowVersion",
     policy.warningBelowVersion,
@@ -655,11 +683,7 @@ function validatePlatformToolsPolicy() {
   for (const os of ["windows", "linux", "darwin"]) {
     const download = policy.downloads[os];
     assert(download && typeof download === "object", `missing ${os} download`);
-    assert(
-      download.url ===
-        `https://dl.google.com/android/repository/platform-tools-latest-${os}.zip`,
-      `${os} Platform Tools URL must be the official archive`,
-    );
+    validatePlatformToolsArchiveUrl(download.url, os, policy.pinnedVersion);
     assert(
       /^[0-9a-f]{64}$/u.test(download.sha256),
       `${os} Platform Tools SHA-256 must be pinned`,
@@ -700,7 +724,7 @@ function validatePlatformToolsPolicy() {
     const content = fs.readFileSync(script, "utf8");
     assert(
       content.includes("platform-tools-policy.json") &&
-        content.includes("recommendedVersion"),
+        content.includes("pinnedVersion"),
       `${path.basename(script)} must consume platform-tools-policy.json`,
     );
     assert(
