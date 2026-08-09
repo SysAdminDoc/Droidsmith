@@ -23,13 +23,6 @@ and Android, privacy-safe diagnostics, and the widest remaining product gap
 
 ### P2
 
-- [ ] IMP-122 P2 — Retire the local documents that mislead a reader
-  Why: four ignored/untracked documents or templates state things that are false, including a security contact that does not exist alongside a disclosure path that does.
-  Evidence: `SECURITY.md` (untracked) names `security@droidsmith.invalid`, a Discord absent from the README, a `0.0.x` supported line, and lists signing / SBOM publication / Ed25519 update verification as current hardening commitments while all are in `Roadmap_Blocked.md`; `.github/ISSUE_TEMPLATE/config.yml` already routes to GitHub private advisories; `Roadmap_Blocked.md` still carries a light-theme entry that IMP-112 shipped in v0.9.16; `.github/ISSUE_TEMPLATE/bug.md` and `feature.md` are untracked duplicates of the tracked `.yml` forms; `docs/DEVELOPMENT.md` is untracked, says Node 20+, and omits tuning/APK Analyzer routes.
-  Touches: `SECURITY.md`, `docs/DEVELOPMENT.md`, `Roadmap_Blocked.md`, `.github/ISSUE_TEMPLATE/bug.md`, `.github/ISSUE_TEMPLATE/feature.md`
-  Acceptance: `SECURITY.md` names the GitHub private-advisory path, states the real supported line, and separates shipped hardening from planned; `docs/DEVELOPMENT.md` either becomes the tracked accurate development guide or is removed from the contributor link; the stale light-theme entry is removed from `Roadmap_Blocked.md`; the duplicate `.md` issue templates are deleted.
-  Complexity: S
-
 - [ ] R-141 P2 — Make APK install failures legible ahead of developer-verification enforcement
   Why: enforcement starts 2026-09-30 in select regions, and store/non-ADB distribution may fail for reasons the current error surface cannot explain; Google's official FAQ now explicitly says ADB installs work without verification, so this item must not imply that ordinary local ADB installs are threatened.
   Evidence: https://developer.android.com/developer-verification and https://developer.android.com/developer-verification/guides/faq (enforcement date, limited-distribution 20-device cap, and the explicit ADB-install exemption); `src-tauri/src/install.rs` and `src/routes/apps/InstallPanels.tsx` classify install failures.

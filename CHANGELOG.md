@@ -23,6 +23,10 @@ each milestone tag.
 - **Repository discoverability metadata now matches the product.** GitHub topics
   cover the Tauri, TypeScript, ADB, scrcpy, and Android-debloat workflows, and
   the repository homepage points to the project. (IMP-121)
+- **Local contributor guidance no longer conflicts with the tracked policy.**
+  The local security policy points to private GitHub advisories and the current
+  `0.9.x` support line, while stale duplicate templates and development notes
+  were retired. (IMP-122)
 - **Fleet profile runs are available from the GUI.** Profiles can be planned or
   applied across the connected fleet with per-device progress, cancellation,
   safe transport screening, and an atomically saved schema-2 report rendered by
