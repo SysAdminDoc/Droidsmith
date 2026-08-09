@@ -21,13 +21,6 @@ and Android, privacy-safe diagnostics, and the widest remaining product gap
 
 ### P1
 
-- [ ] R-138 P1 — Fleet apply in the GUI
-  Why: `--all-devices` exists only in the CLI and the Profiles workspace can only *review* a saved report, so the one capability every commercial competitor paywalls is invisible to anyone who does not open a terminal.
-  Evidence: `--all-devices` appears in `src-tauri/src/bin/droidsmith_cli.rs` and in locale strings only; `src/routes/profiles/FleetReportPanel.tsx` is read-only; escrcpy 3.0.8 ships multi-device batch install/screenshot/input-broadcast; ADB AppControl gates batch operations behind "Extended", AirDroid Business behind per-device licensing.
-  Touches: `src/routes/Profiles.tsx`, `src/routes/profiles/`, `src-tauri/src/commands/profiles.rs`, `src-tauri/src/fleet_report.rs`
-  Acceptance: a profile can be planned and applied across every connected authorized device from the GUI, reusing the CLI's skip semantics (unauthorized/offline/unsafe-TCP are skipped, not aborted); progress is per-device and cancellable; the run writes the same schema-2 fleet report the CLI writes, and the existing report viewer opens it; resume stays a CLI operation and the GUI points at `--retry-from`.
-  Complexity: L
-
 ### P2
 
 - [ ] IMP-121 P2 — Fix the repository discoverability metadata
