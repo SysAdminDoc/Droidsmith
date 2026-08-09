@@ -11,8 +11,12 @@ import {
 import type { ChangeEvent, ComponentType, ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 
+import mitLicense from "../LICENSE?raw";
+import thirdPartyNotices from "../third-party-notices.json";
+
 import {
   callHeartbeat,
+  callOpenRepository,
   errorMessage,
   inTauri,
   type Heartbeat,
@@ -44,6 +48,8 @@ import SettingsDataControls from "./routes/SettingsDataControls";
 
 import { Button, StatePanel } from "./routes/common";
 import droidsmithLogo from "./assets/droidsmith-logo.png";
+
+const DROIDSMITH_REPOSITORY_URL = "https://github.com/SysAdminDoc/Droidsmith";
 
 declare global {
   interface Window {
@@ -606,6 +612,20 @@ function AboutModal({
 }) {
   const { t } = useTranslation();
   const trapRef = useFocusTrap<HTMLDivElement>();
+  const [repositoryError, setRepositoryError] = useState<string | null>(null);
+
+  const handleOpenRepository = async () => {
+    setRepositoryError(null);
+    if (!inTauri()) {
+      window.open(DROIDSMITH_REPOSITORY_URL, "_blank", "noopener,noreferrer");
+      return;
+    }
+    try {
+      await callOpenRepository();
+    } catch (error) {
+      setRepositoryError(errorMessage(error));
+    }
+  };
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -624,7 +644,7 @@ function AboutModal({
       tabIndex={-1}
       className="ds-overlay fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 outline-none backdrop-blur-sm"
     >
-      <div className="ds-dialog w-full max-w-md rounded-lg border border-white/10 bg-surface-dialog p-6 shadow-2xl">
+      <div className="ds-dialog max-h-[min(90vh,52rem)] w-full max-w-2xl overflow-y-auto rounded-lg border border-white/10 bg-surface-dialog p-6 shadow-2xl">
         <div className="flex items-start gap-4">
           <LogoMark />
           <div className="min-w-0">
@@ -641,9 +661,64 @@ function AboutModal({
           {t("app.aboutDescription")}
         </p>
         <AboutRuntime state={state} onRetry={onRetry} />
+        <section
+          aria-labelledby="about-licensing-title"
+          className="mt-6 border-t border-white/10 pt-5"
+        >
+          <h3
+            id="about-licensing-title"
+            className="text-sm font-semibold text-anvil-100"
+          >
+            {t("app.licensing")}
+          </h3>
+          <p className="mt-2 text-xs leading-5 text-anvil-400">
+            {t("app.licenseSummary")}
+          </p>
+          <details open className="mt-4 rounded-md border border-white/10">
+            <summary className="cursor-pointer px-3 py-2 text-xs font-medium text-anvil-200">
+              {t("app.mitLicense")}
+            </summary>
+            <pre className="max-h-44 overflow-auto whitespace-pre-wrap border-t border-white/10 bg-black/20 p-3 font-mono text-[0.68rem] leading-4 text-anvil-300">
+              {mitLicense.trim()}
+            </pre>
+          </details>
+          <h4 className="mt-5 text-xs font-semibold uppercase tracking-[0.14em] text-anvil-400">
+            {t("app.thirdPartyNotices")}
+          </h4>
+          <ul className="mt-2 grid gap-2">
+            {thirdPartyNotices.notices.map((notice) => (
+              <li
+                key={notice.id}
+                className="rounded-md border border-white/10 bg-black/10 p-3 text-xs"
+              >
+                <div className="flex flex-wrap items-baseline justify-between gap-2">
+                  <strong className="text-anvil-100">{notice.component}</strong>
+                  <span className="font-mono text-circuit-200">
+                    {notice.license}
+                  </span>
+                </div>
+                <p className="mt-1 leading-5 text-anvil-400">{notice.usage}</p>
+                <dl className="mt-2 grid gap-1 text-[0.68rem] text-anvil-500 sm:grid-cols-[4.5rem_minmax(0,1fr)]">
+                  <dt>{t("app.noticeStatus")}</dt>
+                  <dd className="break-words font-mono">{notice.status}</dd>
+                  <dt>{t("app.noticeSource")}</dt>
+                  <dd className="break-all font-mono">{notice.source}</dd>
+                </dl>
+              </li>
+            ))}
+          </ul>
+        </section>
+        {repositoryError && (
+          <p role="alert" className="mt-4 text-xs text-red-200">
+            {t("app.repositoryOpenFailed", { message: repositoryError })}
+          </p>
+        )}
         <div className="mt-6 flex flex-wrap justify-end gap-2 border-t border-white/10 pt-4">
           <Button type="button" variant="ghost" onClick={onDismiss}>
             {t("common.close")}
+          </Button>
+          <Button type="button" variant="ghost" onClick={handleOpenRepository}>
+            {t("app.openRepository")}
           </Button>
           <Button type="button" onClick={onOpenDiagnostics}>
             <DiagnosticsIcon />

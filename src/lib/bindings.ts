@@ -261,6 +261,14 @@ export const commands = {
     return await TAURI_INVOKE("reveal_diagnostics_directory");
   },
   /**
+   * Open the fixed repository URL in the operating system's browser. No URL is
+   * accepted from the renderer, so About cannot turn this command into an
+   * arbitrary external navigation primitive.
+   */
+  async openRepository(): Promise<null> {
+    return await TAURI_INVOKE("open_repository");
+  },
+  /**
    * Build a bounded, redacted support snapshot entirely on the local machine.
    * The payload deliberately excludes resolver paths and raw device targets.
    */

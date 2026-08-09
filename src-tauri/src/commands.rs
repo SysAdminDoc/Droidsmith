@@ -31,8 +31,8 @@ use crate::device_identity::DeviceIdentity;
 use crate::fleet_report;
 use crate::fs_util::{ArtifactError, ArtifactKind, HostArtifact, StagedArtifact};
 use crate::host_path::{
-    open_directory_command, open_with_command, reveal_command, validate_suggested_file_name,
-    HostPathGrant, HostPathPurpose, PathGrantError, PathGrantStore,
+    open_directory_command, open_url_command, open_with_command, reveal_command,
+    validate_suggested_file_name, HostPathGrant, HostPathPurpose, PathGrantError, PathGrantStore,
 };
 use crate::install;
 use crate::journal::{self, Journal, JournalEntry};

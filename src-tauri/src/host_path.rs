@@ -384,6 +384,19 @@ pub fn open_directory_command(path: &Path) -> (String, Vec<String>) {
     }
 }
 
+/// Resolve the OS browser invocation for a fixed, backend-owned URL. The
+/// caller must not pass renderer-authored URLs through this helper; keeping the
+/// argv construction pure makes the cross-platform behavior unit-testable.
+pub fn open_url_command(url: &str) -> (String, Vec<String>) {
+    if cfg!(target_os = "windows") {
+        ("explorer.exe".to_string(), vec![url.to_string()])
+    } else if cfg!(target_os = "macos") {
+        ("open".to_string(), vec![url.to_string()])
+    } else {
+        ("xdg-open".to_string(), vec![url.to_string()])
+    }
+}
+
 pub fn validate_suggested_file_name(
     name: Option<String>,
 ) -> Result<Option<String>, PathGrantError> {
@@ -616,6 +629,13 @@ mod tests {
                 "xdg-open"
             }
         );
+    }
+
+    #[test]
+    fn url_command_passes_the_fixed_url_as_one_argument() {
+        let url = "https://github.com/SysAdminDoc/Droidsmith";
+        let (_program, args) = open_url_command(url);
+        assert_eq!(args, vec![url.to_string()]);
     }
 
     #[test]

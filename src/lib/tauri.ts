@@ -496,6 +496,10 @@ export async function callOpenArtifactWith(path: string): Promise<void> {
   await commands.openArtifactWith(path);
 }
 
+export async function callOpenRepository(): Promise<void> {
+  await commands.openRepository();
+}
+
 export async function callRevealDiagnosticsDirectory(): Promise<void> {
   await commands.revealDiagnosticsDirectory();
 }

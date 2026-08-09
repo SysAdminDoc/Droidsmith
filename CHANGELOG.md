@@ -31,6 +31,10 @@ each milestone tag.
   generic PackageManager verification markers retain raw output, distinguish
   known signals from unknown policy causes, and link to Android's official FAQ;
   no unobserved install workaround is suggested. (R-141)
+- **About now includes local licensing and notice details.** The MIT license and
+  third-party manifest render offline, the manifest ships in the Tauri bundle,
+  and the repository action opens a fixed URL through the system browser without
+  accepting renderer-supplied navigation. (IMP-124)
 - **Fleet profile runs are available from the GUI.** Profiles can be planned or
   applied across the connected fleet with per-device progress, cancellation,
   safe transport screening, and an atomically saved schema-2 report rendered by

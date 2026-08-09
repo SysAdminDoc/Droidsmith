@@ -36,6 +36,7 @@ macro_rules! droidsmith_commands {
             reveal_in_folder,
             open_artifact_with,
             reveal_diagnostics_directory,
+            open_repository,
             preview_diagnostics,
             save_diagnostics,
             wipe_diagnostics,

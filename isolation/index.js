@@ -56,6 +56,7 @@
     reveal_in_folder: [["path"], []],
     open_artifact_with: [["path"], []],
     reveal_diagnostics_directory: [[], []],
+    open_repository: [[], []],
     initialize_settings: [["legacy"], []],
     set_settings_language: [["language"], []],
     get_settings_mirror_preset: [["deviceIdentity"], []],

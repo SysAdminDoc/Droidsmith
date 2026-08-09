@@ -2,6 +2,25 @@
 
 use super::*;
 
+const DROIDSMITH_REPOSITORY_URL: &str = "https://github.com/SysAdminDoc/Droidsmith";
+
+/// Open the fixed repository URL in the operating system's browser. No URL is
+/// accepted from the renderer, so About cannot turn this command into an
+/// arbitrary external navigation primitive.
+#[tauri::command]
+#[specta::specta]
+pub fn open_repository() -> Result<(), CommandError> {
+    let (program, args) = open_url_command(DROIDSMITH_REPOSITORY_URL);
+    std::process::Command::new(&program)
+        .args(&args)
+        .spawn()
+        .map_err(|error| CommandError {
+            code: "repository_open_failed",
+            message: format!("could not open the Droidsmith repository: {error}"),
+        })?;
+    Ok(())
+}
+
 /// Locate the fastboot binary on the system.
 #[tauri::command]
 #[specta::specta]

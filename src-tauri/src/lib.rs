@@ -61,7 +61,7 @@ use commands::{
     list_network_connections, list_packages, list_packs, list_permissions, list_processes,
     list_remote_files, list_running_services, list_users, list_wireless_debugging_risks,
     list_wireless_history, list_wireless_services, locate_fastboot, locate_gnirehtet,
-    locate_scrcpy, observe_device_fingerprint, open_artifact_with, pair_wireless,
+    locate_scrcpy, observe_device_fingerprint, open_artifact_with, open_repository, pair_wireless,
     perfetto_capabilities, plan_action, plan_action_batch, plan_pack, plan_remote_file_mutation,
     plan_shell_action, preflight_package_backup, preview_diagnostics, preview_settings_import,
     pull_file, push_file, put_device_setting, recover_adb, remove_imported_pack, reset_settings,

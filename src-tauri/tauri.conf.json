@@ -53,6 +53,7 @@
     ],
     "resources": {
       "../resources/device-names.json": "device-names.json",
+      "../third-party-notices.json": "third-party-notices.json",
       "../packs/amazon-fireos.yaml": "packs/amazon-fireos.yaml",
       "../packs/motorola.yaml": "packs/motorola.yaml",
       "../packs/nothing-os.yaml": "packs/nothing-os.yaml",

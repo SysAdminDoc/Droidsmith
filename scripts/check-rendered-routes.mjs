@@ -342,6 +342,14 @@ async function runDesktopFlow(browser) {
   await page.getByText("Internet sharing stopped.", { exact: true }).waitFor();
 
   await page.getByRole("button", { name: "About", exact: true }).click();
+  const aboutDialog = page.getByRole("dialog", { name: "Droidsmith" });
+  await aboutDialog.getByRole("heading", { name: "Licensing" }).waitFor();
+  await aboutDialog.getByText("MIT License", { exact: true }).waitFor();
+  await aboutDialog.getByText("Third-party notices", { exact: true }).waitFor();
+  await aboutDialog.getByText("adb", { exact: true }).waitFor();
+  await aboutDialog
+    .getByRole("button", { name: "Open repository in browser" })
+    .waitFor();
   await page.getByRole("button", { name: "Diagnostics", exact: true }).click();
   const diagnosticsDialog = page.getByRole("dialog", {
     name: "Diagnostics center",

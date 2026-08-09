@@ -23,13 +23,6 @@ and Android, privacy-safe diagnostics, and the widest remaining product gap
 
 ### P2
 
-- [ ] IMP-124 P2 — Surface licence and third-party notices in the About dialog
-  Why: the app bundles Apache-2.0 tooling and maintains a notices inventory, but neither the notices nor the project licence are reachable from the running application, and the notices file is not even shipped.
-  Evidence: `src/App.tsx:596-655` shows only name, tagline, version and runtime; `third-party-notices.json` is absent from `bundle.resources` in `src-tauri/tauri.conf.json`; `LICENSE-THIRD-PARTY.md` exists and `check-release-policy.mjs` validates it.
-  Touches: `src-tauri/tauri.conf.json`, `src/App.tsx`, `src-tauri/src/commands/system.rs`, `src/locales/*.json`
-  Acceptance: `third-party-notices.json` ships as a resource; About renders the MIT licence, the bundled-component notices with their licences, and a repository link opened in the system browser; no network request is made.
-  Complexity: S
-
 - [ ] R-143 P2 — Apply a debloat pack from the CLI
   Why: packs are the project's flagship content format and the headless surface cannot use them, so no fleet or CI workflow can apply curated vendor content.
   Evidence: `src-tauri/src/bin/droidsmith_cli.rs` dispatches only `devices`, `run`, `migrate-v1`, `migrate-v2`, `baseline-export`, `baseline-inspect`, `baseline-apply`, `help`; `src-tauri/src/commands/packs.rs` `plan_pack` is GUI-only and single-device.
