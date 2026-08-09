@@ -495,14 +495,16 @@ sha256sum -c provenance/SHA256SUMS
 ```
 
 The command writes a deterministic CycloneDX 1.6 SBOM and SHA-256 manifest
-under `provenance/` using only the npm and Cargo lockfiles plus the maintained
-third-party notices. It excludes npm development-only packages and walks the
-Cargo runtime/build graph without contacting a registry or requiring a built
-application bundle. `npm run provenance:check`, also included in the release
-gate, regenerates the inventory in memory, parses it, and requires exact
-package-URL parity with those lockfile graphs. The generated directory is
-ignored so release automation can attach fresh artifacts without dirtying the
-source tree.
+under `provenance/` using the npm and Cargo lockfiles, offline Cargo metadata,
+and the maintained third-party notices. Every component carries its declared
+license or an explicit `NOASSERTION` marker; the SBOM also records a
+reproducible serial number, timestamp, and generator metadata. It excludes npm
+development-only packages and walks the Cargo runtime/build graph without
+contacting a registry or requiring a built application bundle.
+`npm run provenance:check`, also included in the release gate, regenerates the
+inventory in memory, parses it, and requires exact package-URL parity with
+those lockfile graphs. The generated directory is ignored so release
+automation can attach fresh artifacts without dirtying the source tree.
 
 Seeded optional fuzz targets for ADB/OEM text, YAML documents, and journal
 JSONL live under `src-tauri/fuzz`. On a supported Unix-like host with nightly

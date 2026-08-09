@@ -86,6 +86,34 @@ const inputs = {
   packageLockText,
   cargoManifestText,
   cargoLockText,
+  cargoMetadataText: `${JSON.stringify({
+    packages: [
+      {
+        name: "droidsmith",
+        version: "1.2.3",
+        source: null,
+        license: "MIT",
+      },
+      {
+        name: "alpha",
+        version: "1.0.0",
+        source: "registry+https://github.com/rust-lang/crates.io-index",
+        license: "MIT OR Apache-2.0",
+      },
+      {
+        name: "actual-beta",
+        version: "2.0.0",
+        source: "registry+https://github.com/rust-lang/crates.io-index",
+        license: "Apache-2.0",
+      },
+      {
+        name: "shared",
+        version: "3.0.0",
+        source: "registry+https://github.com/rust-lang/crates.io-index",
+        license: null,
+      },
+    ],
+  })}\n`,
   noticesText: "{}\n",
 };
 
@@ -116,6 +144,19 @@ test("provenance output is deterministic, parseable, and bound to every input", 
   const second = generateProvenance(inputs);
   assert.deepEqual(first, second);
   assert.doesNotThrow(() => validateProvenance(first, inputs));
+  assert(
+    first.sbom.components.every(
+      (component) =>
+        Array.isArray(component.licenses) && component.licenses.length > 0,
+    ),
+    "every SBOM component must carry a license marker",
+  );
+  assert.deepEqual(
+    first.sbom.components.find((component) => component.name === "shared")
+      ?.licenses,
+    [{ license: { id: "NOASSERTION" } }],
+    "undeclared Cargo licenses must carry an explicit unknown marker",
+  );
   assert.match(first.checksumsText, /provenance\/SBOM\.cdx\.json/u);
 
   const changed = { ...inputs, noticesText: '{"changed":true}\n' };

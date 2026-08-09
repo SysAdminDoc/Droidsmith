@@ -53,6 +53,11 @@ each milestone tag.
   contract now states schema 3, the release gate checks that prose against the
   contribution schema policy, and all three README screenshots were refreshed
   through the mocked route capture. (IMP-117)
+- **Offline provenance now carries license and generator metadata.** The
+  deterministic CycloneDX SBOM sources npm licenses from `package-lock.json`
+  and Cargo licenses from offline metadata, marks undeclared licenses as
+  `NOASSERTION`, and includes reproducible serial, timestamp, and tool fields.
+  (R-136)
 
 ## [0.9.17] - 2026-08-02
 

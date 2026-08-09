@@ -1,5 +1,6 @@
 import { Buffer } from "node:buffer";
 import crypto from "node:crypto";
+import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { argv, stdout } from "node:process";
@@ -43,19 +44,34 @@ function main() {
 }
 
 export function readInputs(root) {
+  const cargoManifestPath = path.join(root, "src-tauri", "Cargo.toml");
   return {
     packageJsonText: fs.readFileSync(path.join(root, "package.json"), "utf8"),
     packageLockText: fs.readFileSync(
       path.join(root, "package-lock.json"),
       "utf8",
     ),
-    cargoManifestText: fs.readFileSync(
-      path.join(root, "src-tauri", "Cargo.toml"),
-      "utf8",
-    ),
+    cargoManifestText: fs.readFileSync(cargoManifestPath, "utf8"),
     cargoLockText: fs.readFileSync(
       path.join(root, "src-tauri", "Cargo.lock"),
       "utf8",
+    ),
+    cargoMetadataText: execFileSync(
+      "cargo",
+      [
+        "metadata",
+        "--manifest-path",
+        cargoManifestPath,
+        "--format-version",
+        "1",
+        "--locked",
+        "--offline",
+      ],
+      {
+        cwd: path.join(root, "src-tauri"),
+        encoding: "utf8",
+        maxBuffer: 32 * 1024 * 1024,
+      },
     ),
     noticesText: fs.readFileSync(
       path.join(root, "third-party-notices.json"),
@@ -80,26 +96,52 @@ export function generateProvenance(inputs) {
   const cargoComponents = collectCargoRuntimeComponents(
     canonicalInputs.cargoManifestText,
     canonicalInputs.cargoLockText,
+    canonicalInputs.cargoMetadataText,
   );
   const components = deduplicateComponents([
     ...npmComponents,
     ...cargoComponents,
   ]);
+  const inputDigest = provenanceInputDigest(canonicalInputs);
   const sbom = {
     bomFormat: "CycloneDX",
     specVersion: "1.6",
     version: 1,
+    serialNumber: deterministicSerialNumber(inputDigest),
     metadata: {
+      timestamp: deterministicTimestamp(inputDigest),
+      tools: [
+        {
+          vendor: "SysAdminDoc",
+          name: "Droidsmith offline provenance generator",
+          version: "1",
+        },
+      ],
       component: {
         type: "application",
         "bom-ref": `pkg:generic/droidsmith@${encodeURIComponent(packageJson.version)}`,
         name: packageJson.name,
         version: packageJson.version,
+        licenses: licenseEntries(packageJson.license),
       },
       properties: [
         {
           name: "droidsmith:provenance-mode",
           value: "offline-lockfiles",
+        },
+        {
+          name: "droidsmith:license-source",
+          value: "package-lock.json and cargo metadata --offline",
+        },
+        {
+          name: "droidsmith:cargo-metadata-sha256",
+          value: sha256(
+            stableCargoMetadataText(canonicalInputs.cargoMetadataText),
+          ),
+        },
+        {
+          name: "droidsmith:timestamp-source",
+          value: "sha256(canonical provenance inputs)",
         },
       ],
     },
@@ -123,6 +165,99 @@ export function generateProvenance(inputs) {
 function normalizeText(value) {
   assert(typeof value === "string", "provenance inputs must be text");
   return value.replace(/\r\n?/gu, "\n");
+}
+
+function provenanceInputDigest(inputs) {
+  const canonical = Object.entries(inputs)
+    .sort(([left], [right]) => compareText(left, right))
+    .map(
+      ([name, value]) =>
+        `${name}\u0000${name === "cargoMetadataText" ? stableCargoMetadataText(value) : value}`,
+    )
+    .join("\u0000");
+  return sha256(canonical);
+}
+
+function deterministicSerialNumber(digest) {
+  const hex = digest.slice(0, 32);
+  return `urn:uuid:${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
+function deterministicTimestamp(digest) {
+  // Keep the timestamp inside a fixed release-cycle year while deriving the
+  // actual day from the canonical input digest. This avoids wall-clock drift
+  // without publishing a surprising future date.
+  const base = Date.parse("2026-01-01T00:00:00.000Z");
+  const offsetDays = Number.parseInt(digest.slice(0, 8), 16) % 365;
+  return new Date(base + offsetDays * 24 * 60 * 60 * 1000).toISOString();
+}
+
+function unknownLicenseEntries() {
+  return [{ license: { id: "NOASSERTION" } }];
+}
+
+function licenseEntries(value) {
+  if (typeof value === "string" && value.trim().length > 0) {
+    return [{ expression: value.trim() }];
+  }
+  return unknownLicenseEntries();
+}
+
+function cargoMetadataLicenses(metadataText) {
+  if (typeof metadataText !== "string" || metadataText.trim().length === 0) {
+    return new Map();
+  }
+  const metadata = parseJson(metadataText, "cargo metadata");
+  assert(
+    Array.isArray(metadata.packages),
+    "cargo metadata packages are required",
+  );
+  const licenses = new Map();
+  for (const packageRecord of metadata.packages) {
+    assert(
+      typeof packageRecord.name === "string" &&
+        typeof packageRecord.version === "string",
+      "cargo metadata package identity is required",
+    );
+    licenses.set(
+      cargoIdentity({
+        name: packageRecord.name,
+        version: packageRecord.version,
+        source: packageRecord.source,
+      }),
+      typeof packageRecord.license === "string" &&
+        packageRecord.license.trim().length > 0
+        ? licenseEntries(packageRecord.license)
+        : packageRecord.license_file
+          ? [{ license: { name: "License file" } }]
+          : unknownLicenseEntries(),
+    );
+  }
+  return licenses;
+}
+
+function stableCargoMetadataText(metadataText) {
+  if (typeof metadataText !== "string" || metadataText.trim().length === 0) {
+    return "";
+  }
+  const metadata = parseJson(metadataText, "cargo metadata");
+  assert(
+    Array.isArray(metadata.packages),
+    "cargo metadata packages are required",
+  );
+  return JSON.stringify(
+    metadata.packages
+      .map((packageRecord) => ({
+        name: packageRecord.name,
+        version: packageRecord.version,
+        source: packageRecord.source ?? null,
+        license: packageRecord.license ?? null,
+        license_file: packageRecord.license_file ?? null,
+      }))
+      .sort((left, right) =>
+        compareText(cargoIdentity(left), cargoIdentity(right)),
+      ),
+  );
 }
 
 export function collectNpmRuntimeComponents(lock) {
@@ -159,6 +294,7 @@ export function collectNpmRuntimeComponents(lock) {
       version: record.version,
       purl,
       scope: record.optional === true ? "optional" : "required",
+      licenses: licenseEntries(record.license),
       properties: [
         { name: "droidsmith:ecosystem", value: "npm" },
         { name: "droidsmith:lock-path", value: packagePath },
@@ -171,10 +307,15 @@ export function collectNpmRuntimeComponents(lock) {
   return deduplicateComponents(components);
 }
 
-export function collectCargoRuntimeComponents(manifestText, lockText) {
+export function collectCargoRuntimeComponents(
+  manifestText,
+  lockText,
+  metadataText = undefined,
+) {
   const manifestPackage = parseCargoManifestPackage(manifestText);
   const directDependencies = parseCargoRuntimeDependencyNames(manifestText);
   const packages = parseCargoLock(lockText);
+  const licenses = cargoMetadataLicenses(metadataText);
   const byName = Map.groupBy(packages, (entry) => entry.name);
   const root = packages.find(
     (entry) =>
@@ -216,6 +357,7 @@ export function collectCargoRuntimeComponents(manifestText, lockText) {
         version: entry.version,
         purl,
         scope: "required",
+        licenses: licenses.get(cargoIdentity(entry)) ?? unknownLicenseEntries(),
         properties: [{ name: "droidsmith:ecosystem", value: "cargo" }],
       };
       if (entry.checksum) {
@@ -233,7 +375,29 @@ export function validateProvenance(generated, inputs) {
   assert(parsed.bomFormat === "CycloneDX", "SBOM bomFormat must be CycloneDX");
   assert(parsed.specVersion === "1.6", "SBOM specVersion must be 1.6");
   assert(parsed.version === 1, "SBOM version must be 1");
+  assert(
+    typeof parsed.serialNumber === "string" &&
+      /^urn:uuid:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u.test(
+        parsed.serialNumber,
+      ),
+    "SBOM serialNumber must be a deterministic UUID",
+  );
+  assert(
+    typeof parsed.metadata?.timestamp === "string" &&
+      !Number.isNaN(Date.parse(parsed.metadata.timestamp)),
+    "SBOM metadata.timestamp must be an RFC3339 timestamp",
+  );
+  assert(
+    Array.isArray(parsed.metadata?.tools) && parsed.metadata.tools.length > 0,
+    "SBOM metadata.tools must identify the generator",
+  );
   assert(Array.isArray(parsed.components), "SBOM components must be an array");
+  for (const component of [parsed.metadata.component, ...parsed.components]) {
+    assert(
+      Array.isArray(component?.licenses) && component.licenses.length > 0,
+      `SBOM component ${component?.purl ?? component?.name ?? "unknown"} is missing a license marker`,
+    );
+  }
 
   const expected = generateExpectedPurls(inputs);
   const actual = parsed.components.map((component) => component.purl);
@@ -245,6 +409,18 @@ export function validateProvenance(generated, inputs) {
     actual,
     expected,
     "SBOM components differ from runtime lock graphs",
+  );
+
+  const metadataProperties = new Map(
+    (parsed.metadata.properties ?? []).map((property) => [
+      property.name,
+      property.value,
+    ]),
+  );
+  assert(
+    metadataProperties.get("droidsmith:cargo-metadata-sha256") ===
+      sha256(stableCargoMetadataText(inputs.cargoMetadataText)),
+    "SBOM cargo metadata license source is not bound to the input",
   );
 
   const checksums = parseChecksums(generated.checksumsText);
@@ -272,6 +448,7 @@ function generateExpectedPurls(inputs) {
   const cargo = collectCargoRuntimeComponents(
     inputs.cargoManifestText,
     inputs.cargoLockText,
+    inputs.cargoMetadataText,
   );
   return deduplicateComponents([...npm, ...cargo]).map(
     (component) => component.purl,

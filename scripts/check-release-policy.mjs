@@ -181,7 +181,9 @@ export function validatePackagingInstallerHashes(wingetText, scoopText) {
   try {
     scoop = JSON.parse(scoopText);
   } catch (error) {
-    throw new Error(`Scoop installer manifest is not valid JSON: ${error}`);
+    throw new Error(`Scoop installer manifest is not valid JSON: ${error}`, {
+      cause: error,
+    });
   }
   const scoopHash = scoop?.architecture?.["64bit"]?.hash;
   assert(

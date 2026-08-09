@@ -28,13 +28,6 @@ and Android, privacy-safe diagnostics, and the widest remaining product gap
   Acceptance: the classifier additionally consults the device's Google Play system update level (module metadata) and returns `Patched` when it is at or after the floor; when the module level cannot be read the verdict stays `AuthBypassUnpatched` **and** the UI states that the Mainline path was not checked, rather than implying a complete judgement; transcript fixtures cover patched-via-Mainline, unpatched, and module-unreadable. The exact readable property needs live validation against a device before the fixture is treated as authoritative.
   Complexity: M
 
-- [ ] R-136 P1 — Emit licence, timestamp, tools and serial number in the SBOM
-  Why: the project maintains a strict license allowlist and a third-party notices file, but the machine-readable artifact meant to carry that information expresses none of it — every consumer's primary use of an SBOM is license and vulnerability correlation.
-  Evidence: `provenance/SBOM.cdx.json` — CycloneDX 1.6, 543 components, 543 with `hashes`, **0** with `licenses`; no `serialNumber`, no `metadata.timestamp`, no `metadata.tools`; `scripts/generate-provenance.mjs` contains no reference to any of them; `deny.toml` `[licenses].allow` and `LICENSE-THIRD-PARTY.md` already encode the policy.
-  Touches: `scripts/generate-provenance.mjs`, `scripts/generate-provenance.test.mjs`, `provenance/SBOM.cdx.json`
-  Acceptance: every component carries `licenses` sourced offline from `cargo metadata` and `package-lock.json`, with an explicit unknown marker where upstream declares none; the document carries `serialNumber`, `metadata.timestamp` and `metadata.tools`; a test fails if any component lacks a licence entry; the timestamp is derived from a reproducible input, not wall-clock, so `provenance:check` stays deterministic.
-  Complexity: M
-
 - [ ] R-137 P1 — Let a debloat pack choose its action
   Why: every pack entry is planned as `Disable`, so the reversible `suspend` rung shipped in v0.9.15 — the safest action the app has — is unreachable from the flagship content format, and so are uninstall-for-user and archive.
   Evidence: `src-tauri/src/commands/packs.rs:578` hardcodes `kind: actions::ActionKind::Disable`; `packs/schema.json` `PackEntry` carries a `removal` **risk tier** (Recommended/Advanced/Expert/Unsafe) but no action; UAD-NG issue #345 is the same request.
