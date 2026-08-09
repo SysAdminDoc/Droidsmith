@@ -12,9 +12,7 @@ import {
   errorMessage,
   callApplyAction,
   callApplyActionBatch,
-  callBackupPackage,
   callCancelOperation,
-  callExportPackageApks,
   callExportRecoveryBaseline,
   callInspectRecoveryBaseline,
   callGetPackageMetadata,
@@ -29,7 +27,6 @@ import {
   callAssessUninstallRecovery,
   callPlanAction,
   callPlanActionBatch,
-  callPreflightPackageBackup,
   callSelectHostPath,
   callGrantDroppedPath,
   inTauri,
@@ -46,7 +43,6 @@ import {
   type InstallOptions,
   type PackageFilter,
   type OperationEvent,
-  type PackageBackupPreflight,
 } from "../lib/tauri";
 import {
   useAuthorizedDevices,
@@ -58,11 +54,6 @@ import {
   useTargetOperationGroup,
 } from "../lib/targetOperation";
 
-import {
-  canRunLegacyExport,
-  packageExportDefaultFileName,
-  packageExportDisplayState,
-} from "./appsBackup";
 import { PackageTable } from "./apps/PackageTable";
 import { JournalPanel } from "./apps/JournalPanel";
 import { PermissionsPanel } from "./apps/PermissionsPanel";
@@ -80,9 +71,9 @@ import {
   InstallStatePanel,
 } from "./apps/InstallPanels";
 import { PackagesSkeleton } from "./apps/PackagesSkeleton";
+import { usePackageBackups } from "./apps/usePackageBackups";
 import type {
   ActionState,
-  BackupNotice,
   InstallState,
   JournalState,
   PackagesState,
@@ -136,7 +127,6 @@ export default function AppsRoute() {
   const [selectedPackages, setSelectedPackages] = useState<string[]>([]);
   const [search, setSearch] = useState("");
   const [inspectedPkg, setInspectedPkg] = useState<string | null>(null);
-  const [backupNotice, setBackupNotice] = useState<BackupNotice | null>(null);
   const [showAdvancedBackups, setShowAdvancedBackups] = useState(false);
   const [installState, setInstallState] = useState<InstallState>({
     kind: "idle",
@@ -146,8 +136,6 @@ export default function AppsRoute() {
     kind: "idle",
   });
   const [otaNotice, setOtaNotice] = useState(false);
-  const activeBackupRef = useRef<string | null>(null);
-  const backupGenerationRef = useRef(0);
   const activeInstallRef = useRef<string | null>(null);
   const installGenerationRef = useRef(0);
   const metadataRequestedRef = useRef(new Set<string>());
@@ -199,10 +187,6 @@ export default function AppsRoute() {
     authorizedTarget,
     `apps-action:${selectedUser}`,
   );
-  const backupOperation = useTargetOperation(
-    authorizedTarget,
-    `apps-backup:${selectedUser}`,
-  );
   const installOperation = useTargetOperation(authorizedTarget, "apps-install");
   const recoveryOperation = useTargetOperation(
     authorizedTarget,
@@ -212,6 +196,18 @@ export default function AppsRoute() {
     authorizedTarget,
     `apps-undo:${selectedUser}`,
   );
+  const {
+    backupNotice,
+    setBackupNotice,
+    runPackageExport,
+    inspectLegacyExport,
+    cancelBackup,
+  } = usePackageBackups({
+    target: authorizedTarget,
+    device: selectedDevice,
+    userId: selectedUser,
+    usersReady,
+  });
 
   // R-087: when a device's build fingerprint has changed since Droidsmith last
   // saw it (an OTA update), flag it so the user knows disabled/removed packages
@@ -402,13 +398,9 @@ export default function AppsRoute() {
         : authorizedDevices.length === 1
           ? authorizedDevices[0]!
           : null;
-    backupGenerationRef.current += 1;
     installGenerationRef.current += 1;
-    const operationId = activeBackupRef.current;
     const installOperationId = activeInstallRef.current;
-    activeBackupRef.current = null;
     activeInstallRef.current = null;
-    if (operationId) void callCancelOperation(operationId);
     if (installOperationId) void callCancelOperation(installOperationId);
     setSelectedSerial(next?.serial ?? null);
     setSelectedTransportId(next?.transport_id ?? null);
@@ -418,20 +410,15 @@ export default function AppsRoute() {
     // pruning effect keeps package names both devices share).
     setSelectedPackages([]);
     setInspectedPkg(null);
-    setBackupNotice(null);
     setInstallState({ kind: "idle" });
     setRecoveryState({ kind: "idle" });
   }, [authorizedDevices, selectedSerial, selectedTransportId]);
 
   useEffect(() => {
     return () => {
-      backupGenerationRef.current += 1;
       installGenerationRef.current += 1;
-      const operationId = activeBackupRef.current;
       const installOperationId = activeInstallRef.current;
-      activeBackupRef.current = null;
       activeInstallRef.current = null;
-      if (operationId) void callCancelOperation(operationId);
       if (installOperationId) void callCancelOperation(installOperationId);
     };
   }, []);
@@ -547,245 +534,6 @@ export default function AppsRoute() {
       usersReady,
     ],
   );
-
-  const runPackageExport = useCallback(
-    async (
-      pkg: string,
-      mode: "apk_export" | "legacy_data",
-      inspected?: PackageBackupPreflight,
-    ) => {
-      if (!selectedDevice || !authorizedTarget || !usersReady) return;
-      // One export at a time: claiming a fresh generation while another export
-      // runs would silently orphan its completion/failure handling and make it
-      // uncancellable.
-      if (activeBackupRef.current) return;
-      const lease = backupOperation.begin();
-      // Claim the generation before the first await so a device switch during
-      // the preflight/save dialog invalidates this export before it starts.
-      const generation = backupGenerationRef.current + 1;
-      backupGenerationRef.current = generation;
-      let startedOperationId: string | null = null;
-      try {
-        const preflight =
-          inspected ??
-          (await callPreflightPackageBackup(
-            authorizedTarget,
-            pkg,
-            selectedUser,
-          ));
-        if (backupGenerationRef.current !== generation || !lease.isCurrent())
-          return;
-        if (mode === "legacy_data" && !canRunLegacyExport(preflight)) {
-          setBackupNotice({
-            title: t("apps.legacyBlockedTitle"),
-            message: preflight.evidence.reason,
-            tone: "warning",
-            evidence: preflight.evidence,
-            showLimitations: true,
-          });
-          return;
-        }
-
-        const pathGrant = await callSelectHostPath(
-          mode === "apk_export" ? "package_export_save" : "backup_save",
-          packageExportDefaultFileName(pkg, mode),
-        );
-        if (backupGenerationRef.current !== generation || !lease.isCurrent())
-          return;
-        if (!pathGrant) {
-          setBackupNotice({
-            title: t("apps.exportCancelledTitle"),
-            message: t("apps.exportCancelled"),
-            tone: "neutral",
-          });
-          return;
-        }
-
-        const operationId = newOperationId(
-          mode === "apk_export" ? "package-export" : "legacy-backup",
-        );
-        startedOperationId = operationId;
-        activeBackupRef.current = operationId;
-        lease.registerCancellation(operationId);
-        setBackupNotice({
-          title:
-            mode === "apk_export"
-              ? t("apps.apkExportRunningTitle", { package: pkg })
-              : t("apps.legacyRunningTitle", { package: pkg }),
-          message:
-            mode === "apk_export"
-              ? t("apps.apkExportRunningBody", {
-                  count: preflight.apk_paths.length,
-                })
-              : t("apps.legacyLimitations"),
-          tone: "info",
-          path: pathGrant.local_path,
-          operationId,
-          progress: t("apps.exportStarting"),
-          evidence: preflight.evidence,
-          showLimitations: mode === "legacy_data",
-        });
-
-        const options = {
-          operationId,
-          onEvent: (event: OperationEvent) => {
-            if (
-              activeBackupRef.current !== operationId ||
-              backupGenerationRef.current !== generation ||
-              !lease.isCurrent()
-            )
-              return;
-            setBackupNotice((previous) => {
-              if (!previous || previous.operationId !== operationId)
-                return previous;
-              if (event.kind === "progress") {
-                return {
-                  ...previous,
-                  progress:
-                    event.message ??
-                    t("apps.exportProgress", {
-                      seconds: Math.max(
-                        1,
-                        Math.round((event.elapsed_ms ?? 0) / 1000),
-                      ),
-                    }),
-                };
-              }
-              if (event.kind === "output" && event.chunk) {
-                return {
-                  ...previous,
-                  output: `${previous.output ?? ""}${event.chunk}`.slice(
-                    -64 * 1024,
-                  ),
-                };
-              }
-              return previous;
-            });
-          },
-        };
-        const result =
-          mode === "apk_export"
-            ? await callExportPackageApks(
-                authorizedTarget,
-                pkg,
-                selectedUser,
-                pathGrant.id,
-                options,
-              )
-            : await callBackupPackage(
-                authorizedTarget,
-                pkg,
-                selectedUser,
-                pathGrant.id,
-                options,
-              );
-        if (backupGenerationRef.current !== generation || !lease.isCurrent())
-          return;
-        activeBackupRef.current = null;
-        const displayState = packageExportDisplayState(result);
-        const titleByState: Record<typeof displayState, string> = {
-          apk_exported: t("apps.apkExportSavedTitle"),
-          legacy_entries_detected: t("apps.legacyInspectedTitle"),
-          legacy_no_data: t("apps.legacyNoDataTitle"),
-        };
-        const messageByState: Record<typeof displayState, string> = {
-          apk_exported: t("apps.apkExportSaved", {
-            file: result.artifact.local_path,
-            count: result.manifest.artifacts.length,
-          }),
-          legacy_entries_detected: t("apps.legacyEntriesDetected", {
-            file: result.artifact.local_path,
-          }),
-          legacy_no_data: t("apps.legacyNoDataBody", {
-            file: result.artifact.local_path,
-          }),
-        };
-        setBackupNotice({
-          title: titleByState[displayState],
-          message: messageByState[displayState],
-          tone: displayState === "apk_exported" ? "success" : "warning",
-          path: result.artifact.local_path,
-          sizeBytes: result.artifact.size_bytes,
-          showLimitations: mode === "legacy_data",
-          evidence: result.manifest.eligibility,
-        });
-      } catch (e) {
-        if (backupGenerationRef.current !== generation || !lease.isCurrent())
-          return;
-        if (
-          startedOperationId &&
-          activeBackupRef.current !== startedOperationId
-        )
-          return;
-        activeBackupRef.current = null;
-        setBackupNotice({
-          title: t("apps.exportFailedTitle"),
-          message: t("apps.exportFailed", {
-            message: errorMessage(e),
-          }),
-          tone: "danger",
-        });
-      }
-    },
-    [
-      authorizedTarget,
-      backupOperation,
-      selectedDevice,
-      selectedUser,
-      t,
-      usersReady,
-    ],
-  );
-
-  const inspectLegacyExport = useCallback(
-    async (pkg: string) => {
-      if (!authorizedTarget || !usersReady) return;
-      const lease = backupOperation.begin();
-      try {
-        const preflight = await callPreflightPackageBackup(
-          authorizedTarget,
-          pkg,
-          selectedUser,
-        );
-        const runnable = canRunLegacyExport(preflight);
-        lease.commit(() =>
-          setBackupNotice({
-            title: runnable
-              ? t("apps.legacyReviewTitle")
-              : t("apps.legacyBlockedTitle"),
-            message: preflight.evidence.reason,
-            tone:
-              preflight.legacy_capability === "legacy_data_eligible"
-                ? "info"
-                : "warning",
-            evidence: preflight.evidence,
-            showLimitations: true,
-            pendingLegacy: runnable ? { package: pkg, preflight } : undefined,
-          }),
-        );
-      } catch (error) {
-        lease.commit(() =>
-          setBackupNotice({
-            title: t("apps.exportFailedTitle"),
-            message: t("apps.exportFailed", {
-              message: errorMessage(error),
-            }),
-            tone: "danger",
-          }),
-        );
-      }
-    },
-    [authorizedTarget, backupOperation, selectedUser, t, usersReady],
-  );
-
-  const cancelBackup = useCallback(async () => {
-    const operationId = activeBackupRef.current;
-    if (!operationId) return;
-    setBackupNotice((previous) =>
-      previous ? { ...previous, progress: t("apps.backupCancelling") } : null,
-    );
-    await callCancelOperation(operationId);
-  }, [t]);
 
   const runInstall = useCallback(
     async (
@@ -1463,13 +1211,9 @@ export default function AppsRoute() {
             selected={selectedTransportId}
             selectedSerial={selectedSerial}
             onSelect={(device) => {
-              backupGenerationRef.current += 1;
               installGenerationRef.current += 1;
-              const operationId = activeBackupRef.current;
               const installOperationId = activeInstallRef.current;
-              activeBackupRef.current = null;
               activeInstallRef.current = null;
-              if (operationId) void callCancelOperation(operationId);
               if (installOperationId)
                 void callCancelOperation(installOperationId);
               setSelectedSerial(device.serial);
@@ -1477,7 +1221,6 @@ export default function AppsRoute() {
               setActionState({ kind: "idle" });
               setSelectedPackages([]);
               setInspectedPkg(null);
-              setBackupNotice(null);
               setInstallState({ kind: "idle" });
               setRecoveryState({ kind: "idle" });
             }}
