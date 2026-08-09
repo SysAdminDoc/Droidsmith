@@ -1135,6 +1135,21 @@ export type ActionKind =
    */
   | "unsuspend"
   /**
+   * `pm unstop --user 0 <pkg>` — clears Android's stopped bit. The
+   * journal inverse uses `am force-stop` only after verifying the package
+   * returned to the unstopped state.
+   */
+  | "unstop"
+  /**
+   * `pm hide --user 0 <pkg>` — hides a package for one Android user while
+   * retaining its APK and data.
+   */
+  | "hide"
+  /**
+   * `pm unhide --user 0 <pkg>` — reverses Hide.
+   */
+  | "unhide"
+  /**
    * `pm disable-user --user 0 <pkg>` — reversible with `pm enable`.
    */
   | "disable"
@@ -1142,6 +1157,22 @@ export type ActionKind =
    * `pm enable <pkg>` — reverses Disable.
    */
   | "enable"
+  /**
+   * `pm disable-until-used --user 0 <pkg>` — moves a package into the
+   * platform's lazy-disabled state. The verified inverse is DefaultState.
+   */
+  | "disable_until_used"
+  /**
+   * `pm default-state --user 0 <pkg>` — restores a package from the
+   * verified disabled-until-used state to its manifest default.
+   */
+  | "default_state"
+  /**
+   * `pm suspend-quarantine --user 0 <pkg>` — the quarantine-flavoured
+   * suspension command. AOSP currently does not publish this command in
+   * `pm help`, so it is only available when the device advertises it.
+   */
+  | "suspend_quarantine"
   /**
    * Android 15+ `pm archive` keeps user data while removing APK/cache.
    */
@@ -2709,8 +2740,20 @@ export type PackageActionCapabilities = {
   disable: PackageSubcommandCapability;
   suspend: PackageSubcommandCapability;
   unsuspend: PackageSubcommandCapability;
+  hide: PackageSubcommandCapability;
+  unhide: PackageSubcommandCapability;
+  unstop: PackageSubcommandCapability;
+  disable_until_used: PackageSubcommandCapability;
+  default_state: PackageSubcommandCapability;
+  suspend_quarantine: PackageSubcommandCapability;
   archive: PackageSubcommandCapability;
   uninstall_for_user: PackageSubcommandCapability;
+  /**
+   * Read-only archive metadata probing is separate from the API-level
+   * archive capability because OEM builds can expose one surface without
+   * the other.
+   */
+  archived_package_metadata: PackageSubcommandCapability;
   /**
    * `pm get-package-storage-stats`. Probed the same way as the mutating
    * subcommands because OEMs drop it just as freely; API level is not an

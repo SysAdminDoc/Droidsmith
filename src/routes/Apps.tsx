@@ -1602,6 +1602,18 @@ export default function AppsRoute() {
                   archiveSupported={pkgState.archive.supported}
                   suspendSupported={pkgState.actions.suspend.supported}
                   unsuspendSupported={pkgState.actions.unsuspend.supported}
+                  hideSupported={pkgState.actions.hide.supported}
+                  unhideSupported={pkgState.actions.unhide.supported}
+                  unstopSupported={pkgState.actions.unstop.supported}
+                  disableUntilUsedSupported={
+                    pkgState.actions.disable_until_used.supported
+                  }
+                  defaultStateSupported={
+                    pkgState.actions.default_state.supported
+                  }
+                  suspendQuarantineSupported={
+                    pkgState.actions.suspend_quarantine.supported
+                  }
                   selectedPackages={selectedPackageSet}
                   onToggleSelected={(pkg) =>
                     setSelectedPackages((previous) =>
@@ -1765,9 +1777,18 @@ function ActionOverlay({
     const description = state.plan.description;
     const portableBaselineSupported = plans.every(
       (plan) =>
-        !["suspend", "unsuspend", "archive", "request_unarchive"].includes(
-          plan.request.kind,
-        ),
+        ![
+          "suspend",
+          "unsuspend",
+          "unstop",
+          "hide",
+          "unhide",
+          "disable_until_used",
+          "default_state",
+          "suspend_quarantine",
+          "archive",
+          "request_unarchive",
+        ].includes(plan.request.kind),
     );
     const tier = actionTier(plans[0]?.request.kind);
     const recovery =

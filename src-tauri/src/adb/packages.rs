@@ -68,8 +68,18 @@ pub struct PackageActionCapabilities {
     pub disable: PackageSubcommandCapability,
     pub suspend: PackageSubcommandCapability,
     pub unsuspend: PackageSubcommandCapability,
+    pub hide: PackageSubcommandCapability,
+    pub unhide: PackageSubcommandCapability,
+    pub unstop: PackageSubcommandCapability,
+    pub disable_until_used: PackageSubcommandCapability,
+    pub default_state: PackageSubcommandCapability,
+    pub suspend_quarantine: PackageSubcommandCapability,
     pub archive: PackageSubcommandCapability,
     pub uninstall_for_user: PackageSubcommandCapability,
+    /// Read-only archive metadata probing is separate from the API-level
+    /// archive capability because OEM builds can expose one surface without
+    /// the other.
+    pub archived_package_metadata: PackageSubcommandCapability,
     /// `pm get-package-storage-stats`. Probed the same way as the mutating
     /// subcommands because OEMs drop it just as freely; API level is not an
     /// authority.
@@ -549,11 +559,39 @@ pub fn package_action_capabilities(
                     supported: false,
                     reason: reason.clone(),
                 },
+                hide: PackageSubcommandCapability {
+                    supported: false,
+                    reason: reason.clone(),
+                },
+                unhide: PackageSubcommandCapability {
+                    supported: false,
+                    reason: reason.clone(),
+                },
+                unstop: PackageSubcommandCapability {
+                    supported: false,
+                    reason: reason.clone(),
+                },
+                disable_until_used: PackageSubcommandCapability {
+                    supported: false,
+                    reason: reason.clone(),
+                },
+                default_state: PackageSubcommandCapability {
+                    supported: false,
+                    reason: reason.clone(),
+                },
+                suspend_quarantine: PackageSubcommandCapability {
+                    supported: false,
+                    reason: reason.clone(),
+                },
                 archive: PackageSubcommandCapability {
                     supported: false,
                     reason: reason.clone(),
                 },
                 uninstall_for_user: PackageSubcommandCapability {
+                    supported: false,
+                    reason: reason.clone(),
+                },
+                archived_package_metadata: PackageSubcommandCapability {
                     supported: false,
                     reason: reason.clone(),
                 },
@@ -584,12 +622,30 @@ pub fn parse_package_action_capabilities(help: &str) -> PackageActionCapabilitie
             },
         }
     };
+    let capability_with_aosp_help_note = |command: &str| {
+        let mut capability = capability(command);
+        capability.reason = if capability.supported {
+            format!("pm {command} is advertised by this device; AOSP publishes no help text for it")
+        } else {
+            format!(
+                "pm {command} is not advertised by this device; AOSP publishes no help text for it"
+            )
+        };
+        capability
+    };
     PackageActionCapabilities {
         disable: capability("disable-user"),
         suspend: capability("suspend"),
         unsuspend: capability("unsuspend"),
+        hide: capability("hide"),
+        unhide: capability("unhide"),
+        unstop: capability_with_aosp_help_note("unstop"),
+        disable_until_used: capability("disable-until-used"),
+        default_state: capability("default-state"),
+        suspend_quarantine: capability_with_aosp_help_note("suspend-quarantine"),
         archive: capability("archive"),
         uninstall_for_user: capability("uninstall"),
+        archived_package_metadata: capability("get-archived-package-metadata"),
         storage_stats: capability("get-package-storage-stats"),
     }
 }
@@ -817,11 +873,22 @@ package:/system/app/FacebookStub/FacebookStub.apk=com.facebook.appmanager uid:10
         );
         assert!(with_stats.storage_stats.supported);
         let with_mutations = parse_package_action_capabilities(
-            "  disable-user [--user USER_ID] PACKAGE\n  archive [--user USER_ID] PACKAGE\n  uninstall [--user USER_ID] PACKAGE\n",
+            "  disable-user [--user USER_ID] PACKAGE\n  hide [--user USER_ID] PACKAGE\n  unhide [--user USER_ID] PACKAGE\n  unstop [--user USER_ID] PACKAGE\n  disable-until-used [--user USER_ID] PACKAGE\n  default-state [--user USER_ID] PACKAGE\n  suspend-quarantine [--user USER_ID] PACKAGE\n  archive [--user USER_ID] PACKAGE\n  uninstall [--user USER_ID] PACKAGE\n  get-archived-package-metadata [--user USER_ID] PACKAGE\n",
         );
         assert!(with_mutations.disable.supported);
+        assert!(with_mutations.hide.supported);
+        assert!(with_mutations.unhide.supported);
+        assert!(with_mutations.unstop.supported);
+        assert!(with_mutations.disable_until_used.supported);
+        assert!(with_mutations.default_state.supported);
+        assert!(with_mutations.suspend_quarantine.supported);
+        assert!(with_mutations
+            .suspend_quarantine
+            .reason
+            .contains("AOSP publishes no help text"));
         assert!(with_mutations.archive.supported);
         assert!(with_mutations.uninstall_for_user.supported);
+        assert!(with_mutations.archived_package_metadata.supported);
     }
 
     #[test]

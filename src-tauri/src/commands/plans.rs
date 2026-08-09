@@ -14,8 +14,14 @@ pub fn plan_action(
         request.kind,
         actions::ActionKind::Suspend
             | actions::ActionKind::Unsuspend
+            | actions::ActionKind::Unstop
+            | actions::ActionKind::Hide
+            | actions::ActionKind::Unhide
             | actions::ActionKind::Disable
             | actions::ActionKind::Enable
+            | actions::ActionKind::DisableUntilUsed
+            | actions::ActionKind::DefaultState
+            | actions::ActionKind::SuspendQuarantine
             | actions::ActionKind::Archive
             | actions::ActionKind::RequestUnarchive
             | actions::ActionKind::UninstallForUser

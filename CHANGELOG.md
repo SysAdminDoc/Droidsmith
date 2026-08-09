@@ -42,6 +42,10 @@ each milestone tag.
 - **Debloat packs are available from the CLI.** `pack list`, `pack plan`, and
   `pack apply` share the GUI planner's device checks, user scoping, journal
   writes, fleet-report schema, and explicit unsafe-tier acknowledgement. (R-143)
+- **More reversible package-manager rungs are available.** Apps now expose
+  device-advertised `unstop`, hide/unhide, lazy-disable/default-state, and
+  quarantine-suspend actions with exact live-state transitions and verified
+  journal inverses; unsupported commands stay hidden. (R-144)
 - **Remote file mutations quote shell-sensitive device paths.** Absolute paths
   containing whitespace, punctuation, or quotes are protected at the `adb
   shell` boundary, while the structured plan remains available for exact

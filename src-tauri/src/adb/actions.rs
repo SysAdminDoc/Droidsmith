@@ -31,10 +31,29 @@ pub enum ActionKind {
     Suspend,
     /// `pm unsuspend --user 0 <pkg>` — reverses Suspend.
     Unsuspend,
+    /// `pm unstop --user 0 <pkg>` — clears Android's stopped bit. The
+    /// journal inverse uses `am force-stop` only after verifying the package
+    /// returned to the unstopped state.
+    Unstop,
+    /// `pm hide --user 0 <pkg>` — hides a package for one Android user while
+    /// retaining its APK and data.
+    Hide,
+    /// `pm unhide --user 0 <pkg>` — reverses Hide.
+    Unhide,
     /// `pm disable-user --user 0 <pkg>` — reversible with `pm enable`.
     Disable,
     /// `pm enable <pkg>` — reverses Disable.
     Enable,
+    /// `pm disable-until-used --user 0 <pkg>` — moves a package into the
+    /// platform's lazy-disabled state. The verified inverse is DefaultState.
+    DisableUntilUsed,
+    /// `pm default-state --user 0 <pkg>` — restores a package from the
+    /// verified disabled-until-used state to its manifest default.
+    DefaultState,
+    /// `pm suspend-quarantine --user 0 <pkg>` — the quarantine-flavoured
+    /// suspension command. AOSP currently does not publish this command in
+    /// `pm help`, so it is only available when the device advertises it.
+    SuspendQuarantine,
     /// Android 15+ `pm archive` keeps user data while removing APK/cache.
     Archive,
     /// Android 15+ `pm request-unarchive` asks the responsible installer to
@@ -225,8 +244,14 @@ impl ActionKind {
             self,
             Self::Suspend
                 | Self::Unsuspend
+                | Self::Unstop
+                | Self::Hide
+                | Self::Unhide
                 | Self::Disable
                 | Self::Enable
+                | Self::DisableUntilUsed
+                | Self::DefaultState
+                | Self::SuspendQuarantine
                 | Self::Archive
                 | Self::RequestUnarchive
                 | Self::GrantPermission
@@ -238,8 +263,14 @@ impl ActionKind {
         match self {
             Self::Suspend => Some(Self::Unsuspend),
             Self::Unsuspend => Some(Self::Suspend),
+            Self::Unstop => Some(Self::ForceStop),
+            Self::Hide => Some(Self::Unhide),
+            Self::Unhide => Some(Self::Hide),
             Self::Disable => Some(Self::Enable),
             Self::Enable => Some(Self::Disable),
+            Self::DisableUntilUsed => Some(Self::DefaultState),
+            Self::DefaultState => Some(Self::DisableUntilUsed),
+            Self::SuspendQuarantine => Some(Self::Unsuspend),
             Self::Archive => Some(Self::RequestUnarchive),
             Self::RequestUnarchive => Some(Self::Archive),
             Self::GrantPermission => Some(Self::RevokePermission),
@@ -395,9 +426,51 @@ fn synth_args(r: &ActionRequest) -> Vec<String> {
             user,
             r.package.clone(),
         ],
+        ActionKind::Unstop => vec![
+            "pm".into(),
+            "unstop".into(),
+            "--user".into(),
+            user,
+            r.package.clone(),
+        ],
+        ActionKind::Hide => vec![
+            "pm".into(),
+            "hide".into(),
+            "--user".into(),
+            user,
+            r.package.clone(),
+        ],
+        ActionKind::Unhide => vec![
+            "pm".into(),
+            "unhide".into(),
+            "--user".into(),
+            user,
+            r.package.clone(),
+        ],
         ActionKind::Disable => vec![
             "pm".into(),
             "disable-user".into(),
+            "--user".into(),
+            user,
+            r.package.clone(),
+        ],
+        ActionKind::DisableUntilUsed => vec![
+            "pm".into(),
+            "disable-until-used".into(),
+            "--user".into(),
+            user,
+            r.package.clone(),
+        ],
+        ActionKind::DefaultState => vec![
+            "pm".into(),
+            "default-state".into(),
+            "--user".into(),
+            user,
+            r.package.clone(),
+        ],
+        ActionKind::SuspendQuarantine => vec![
+            "pm".into(),
+            "suspend-quarantine".into(),
             "--user".into(),
             user,
             r.package.clone(),
@@ -476,8 +549,29 @@ fn describe(r: &ActionRequest) -> String {
             r.package
         ),
         ActionKind::Unsuspend => format!("Unsuspend {} for user {u}", r.package),
+        ActionKind::Unstop => format!(
+            "Clear the stopped state for {} and user {u}; AOSP publishes no help text for pm unstop, so support is device-advertised only",
+            r.package
+        ),
+        ActionKind::Hide => format!(
+            "Hide {} for user {u}; the APK and data remain on the device",
+            r.package
+        ),
+        ActionKind::Unhide => format!("Unhide {} for user {u}", r.package),
         ActionKind::Disable => format!("Disable {} for user {u}", r.package),
         ActionKind::Enable => format!("Re-enable {} for user {u}", r.package),
+        ActionKind::DisableUntilUsed => format!(
+            "Set {} to disabled-until-used for user {u}; Android may re-enable it when used",
+            r.package
+        ),
+        ActionKind::DefaultState => format!(
+            "Restore {} to its manifest default state for user {u}",
+            r.package
+        ),
+        ActionKind::SuspendQuarantine => format!(
+            "Quarantine-suspend {} for user {u}; AOSP publishes no help text for pm suspend-quarantine, so support is device-advertised only",
+            r.package
+        ),
         ActionKind::Archive => format!(
             "Archive {} for user {u}; Android removes APK/cache but keeps user data",
             r.package
@@ -538,18 +632,47 @@ pub fn apply(
         && is_reversible_device_control_argv(&plan.request.context.shell_argv);
     let suspension_action = matches!(
         plan.request.kind,
-        ActionKind::Suspend | ActionKind::Unsuspend
+        ActionKind::Suspend | ActionKind::Unsuspend | ActionKind::SuspendQuarantine
     );
-    if suspension_action {
+    let journal_stop_inverse = plan.request.kind == ActionKind::ForceStop
+        && plan.request.context.confirmation_source == ConfirmationSource::JournalUndo;
+    let verified_state_action = suspension_action
+        || journal_stop_inverse
+        || matches!(
+            plan.request.kind,
+            ActionKind::Unstop
+                | ActionKind::Hide
+                | ActionKind::Unhide
+                | ActionKind::DisableUntilUsed
+                | ActionKind::DefaultState
+        );
+    let package_action_capability = match plan.request.kind {
+        ActionKind::Suspend => Some("suspend"),
+        ActionKind::Unsuspend => Some("unsuspend"),
+        ActionKind::Unstop => Some("unstop"),
+        ActionKind::Hide => Some("hide"),
+        ActionKind::Unhide => Some("unhide"),
+        ActionKind::DisableUntilUsed => Some("disable_until_used"),
+        ActionKind::DefaultState => Some("default_state"),
+        ActionKind::SuspendQuarantine => Some("suspend_quarantine"),
+        _ => None,
+    };
+    if let Some(capability_name) = package_action_capability {
         let capabilities =
             crate::adb::packages::package_action_capabilities(transport, &plan.request.target);
-        let capability = if plan.request.kind == ActionKind::Suspend {
-            capabilities.suspend
-        } else {
-            capabilities.unsuspend
+        let capability = match capability_name {
+            "suspend" => &capabilities.suspend,
+            "unsuspend" => &capabilities.unsuspend,
+            "unstop" => &capabilities.unstop,
+            "hide" => &capabilities.hide,
+            "unhide" => &capabilities.unhide,
+            "disable_until_used" => &capabilities.disable_until_used,
+            "default_state" => &capabilities.default_state,
+            "suspend_quarantine" => &capabilities.suspend_quarantine,
+            _ => unreachable!("capability name is matched above"),
         };
         if !capability.supported {
-            return Err(TransportError::Parse(capability.reason));
+            return Err(TransportError::Parse(capability.reason.clone()));
         }
     }
     let before_state = if reversible_device_control {
@@ -575,8 +698,8 @@ pub fn apply(
             )));
         }
         captured
-    } else if suspension_action {
-        package_suspension_state(transport, &plan.request)?
+    } else if verified_state_action {
+        capture_verified_state(transport, &plan.request)?
     } else if plan.before_state.is_empty() {
         capture_state(transport, &plan.request)
     } else {
@@ -614,8 +737,8 @@ pub fn apply(
     // `pm disable-user --user 0 com.foo` prints "Package com.foo new
     // state: disabled" on success and "Failure [...]" on failure. We
     // surface the raw text and let UI / journal layers decide.
-    let after_state = if suspension_action {
-        package_suspension_state(transport, &plan.request)?
+    let after_state = if verified_state_action {
+        capture_verified_state(transport, &plan.request)?
     } else if matches!(
         plan.request.kind,
         ActionKind::Archive | ActionKind::RequestUnarchive
@@ -631,11 +754,12 @@ pub fn apply(
             "display control readback did not match the requested state: {after_state}"
         )));
     }
-    if suspension_action
-        && !verified_batch_transition(plan.request.kind, &before_state, &after_state)
+    if verified_state_action
+        && !verified_state_transition(plan.request.kind, &before_state, &after_state)
     {
         return Err(TransportError::Parse(format!(
-            "package suspension did not complete the required reversible state transition: {before_state} -> {after_state}"
+            "package action {:?} did not complete the required reversible state transition: {before_state} -> {after_state}",
+            plan.request.kind
         )));
     }
     if plan.request.context.batch_id.is_some()
@@ -671,10 +795,14 @@ pub fn apply(
 
 pub fn reversible_batch_before_state(kind: ActionKind, state: &str) -> bool {
     match kind {
-        ActionKind::Suspend => state == "unsuspended",
+        ActionKind::Suspend | ActionKind::SuspendQuarantine => state == "unsuspended",
         ActionKind::Unsuspend => state == "suspended",
+        ActionKind::Hide => state == "visible",
+        ActionKind::Unhide => state == "hidden",
         ActionKind::Disable => state.ends_with("_enabled"),
         ActionKind::Enable => state.ends_with("_disabled"),
+        ActionKind::DisableUntilUsed => state == "enabled:default",
+        ActionKind::DefaultState => state == "enabled:disabled_until_used",
         ActionKind::Archive => {
             matches!(state, "user_installed_enabled" | "user_installed_disabled")
         }
@@ -688,10 +816,14 @@ fn verified_batch_transition(kind: ActionKind, before: &str, after: &str) -> boo
         return false;
     }
     match kind {
-        ActionKind::Suspend => after == "suspended",
+        ActionKind::Suspend | ActionKind::SuspendQuarantine => after == "suspended",
         ActionKind::Unsuspend => after == "unsuspended",
+        ActionKind::Hide => after == "hidden",
+        ActionKind::Unhide => after == "visible",
         ActionKind::Disable => after.ends_with("_disabled"),
         ActionKind::Enable => after.ends_with("_enabled"),
+        ActionKind::DisableUntilUsed => after == "enabled:disabled_until_used",
+        ActionKind::DefaultState => after == "enabled:default",
         ActionKind::Archive => after == "archived",
         ActionKind::RequestUnarchive => {
             matches!(after, "user_installed_enabled" | "user_installed_disabled")
@@ -700,15 +832,52 @@ fn verified_batch_transition(kind: ActionKind, before: &str, after: &str) -> boo
     }
 }
 
+/// Starting state required by one of the independently verified reversible
+/// package transitions. Single-action execution uses this in addition to the
+/// batch planner so stale previews cannot mutate a package that changed while
+/// the confirmation dialog was open.
+pub fn reversible_action_before_state(kind: ActionKind, state: &str) -> bool {
+    match kind {
+        ActionKind::Unstop => state == "stopped",
+        ActionKind::ForceStop => state == "unstopped",
+        _ => reversible_batch_before_state(kind, state),
+    }
+}
+
+fn verified_state_transition(kind: ActionKind, before: &str, after: &str) -> bool {
+    if !reversible_action_before_state(kind, before) {
+        return false;
+    }
+    match kind {
+        ActionKind::Unstop => after == "unstopped",
+        ActionKind::ForceStop => after == "stopped",
+        _ => verified_batch_transition(kind, before, after),
+    }
+}
+
 pub fn capture_state(transport: &dyn AdbTransport, request: &ActionRequest) -> String {
     match request.kind {
-        ActionKind::Suspend | ActionKind::Unsuspend => {
+        ActionKind::Suspend | ActionKind::Unsuspend | ActionKind::SuspendQuarantine => {
             package_suspension_state(transport, request).unwrap_or_else(|_| "unknown".to_string())
+        }
+        ActionKind::Unstop => {
+            package_stopped_state(transport, request).unwrap_or_else(|_| "unknown".to_string())
+        }
+        ActionKind::Hide | ActionKind::Unhide => {
+            package_hidden_state(transport, request).unwrap_or_else(|_| "unknown".to_string())
         }
         ActionKind::Disable
         | ActionKind::Enable
+        | ActionKind::DisableUntilUsed
+        | ActionKind::DefaultState
         | ActionKind::ClearData
         | ActionKind::ForceStop => {
+            if request.kind == ActionKind::ForceStop
+                && request.context.confirmation_source == ConfirmationSource::JournalUndo
+            {
+                return package_stopped_state(transport, request)
+                    .unwrap_or_else(|_| "unknown".to_string());
+            }
             package_state(transport, request).unwrap_or_else(|_| "unknown".to_string())
         }
         ActionKind::UninstallForUser | ActionKind::RestoreExistingForUser => {
@@ -743,6 +912,26 @@ pub fn capture_state(transport: &dyn AdbTransport, request: &ActionRequest) -> S
     }
 }
 
+fn capture_verified_state(
+    transport: &dyn AdbTransport,
+    request: &ActionRequest,
+) -> Result<String, TransportError> {
+    match request.kind {
+        ActionKind::Suspend | ActionKind::Unsuspend | ActionKind::SuspendQuarantine => {
+            package_suspension_state(transport, request)
+        }
+        ActionKind::Unstop | ActionKind::ForceStop => package_stopped_state(transport, request),
+        ActionKind::Hide | ActionKind::Unhide => package_hidden_state(transport, request),
+        ActionKind::DisableUntilUsed | ActionKind::DefaultState => {
+            package_enabled_state(transport, request)
+        }
+        _ => Err(TransportError::Parse(format!(
+            "package action {:?} does not have a verified state reader",
+            request.kind
+        ))),
+    }
+}
+
 fn package_suspension_state(
     transport: &dyn AdbTransport,
     request: &ActionRequest,
@@ -766,7 +955,67 @@ fn package_suspension_state(
         })
 }
 
+fn package_hidden_state(
+    transport: &dyn AdbTransport,
+    request: &ActionRequest,
+) -> Result<String, TransportError> {
+    let output =
+        transport.shell_target(&request.target, &["dumpsys", "package", &request.package])?;
+    parse_package_hidden_state(&output, request.user_id)
+        .map(|hidden| if hidden { "hidden" } else { "visible" }.to_string())
+        .ok_or_else(|| {
+            TransportError::Parse(format!(
+                "could not verify hidden state for {} and Android user {}",
+                request.package, request.user_id
+            ))
+        })
+}
+
+fn package_stopped_state(
+    transport: &dyn AdbTransport,
+    request: &ActionRequest,
+) -> Result<String, TransportError> {
+    let output =
+        transport.shell_target(&request.target, &["dumpsys", "package", &request.package])?;
+    parse_package_stopped_state(&output, request.user_id)
+        .map(|stopped| if stopped { "stopped" } else { "unstopped" }.to_string())
+        .ok_or_else(|| {
+            TransportError::Parse(format!(
+                "could not verify stopped state for {} and Android user {}",
+                request.package, request.user_id
+            ))
+        })
+}
+
+fn package_enabled_state(
+    transport: &dyn AdbTransport,
+    request: &ActionRequest,
+) -> Result<String, TransportError> {
+    let output =
+        transport.shell_target(&request.target, &["dumpsys", "package", &request.package])?;
+    parse_package_enabled_state(&output, request.user_id)
+        .map(str::to_string)
+        .ok_or_else(|| {
+            TransportError::Parse(format!(
+                "could not verify enabled state for {} and Android user {}",
+                request.package, request.user_id
+            ))
+        })
+}
+
 pub fn parse_package_suspension_state(output: &str, user_id: u32) -> Option<bool> {
+    parse_package_bool_state(output, user_id, "suspended")
+}
+
+pub fn parse_package_hidden_state(output: &str, user_id: u32) -> Option<bool> {
+    parse_package_bool_state(output, user_id, "hidden")
+}
+
+pub fn parse_package_stopped_state(output: &str, user_id: u32) -> Option<bool> {
+    parse_package_bool_state(output, user_id, "stopped")
+}
+
+fn parse_package_bool_state(output: &str, user_id: u32, key: &str) -> Option<bool> {
     let marker = format!("User {user_id}:");
     let mut in_target_user = false;
     for line in output.lines() {
@@ -778,11 +1027,48 @@ pub fn parse_package_suspension_state(output: &str, user_id: u32) -> Option<bool
             continue;
         }
         for token in line.split_whitespace() {
-            match token.trim_end_matches(',') {
-                "suspended=true" => return Some(true),
-                "suspended=false" => return Some(false),
-                _ => {}
+            let token = token.trim_end_matches(',');
+            if let Some(value) = token.strip_prefix(&format!("{key}=")) {
+                return match value {
+                    "true" => Some(true),
+                    "false" => Some(false),
+                    _ => None,
+                };
             }
+        }
+    }
+    None
+}
+
+/// Parse the enabled-setting integer emitted in a package's per-user dump.
+/// These values are the public `PackageManager.COMPONENT_ENABLED_STATE_*`
+/// constants, not an inferred enabled/disabled boolean.
+pub fn parse_package_enabled_state(output: &str, user_id: u32) -> Option<&'static str> {
+    let marker = format!("User {user_id}:");
+    let mut in_target_user = false;
+    for line in output.lines() {
+        let line = line.trim();
+        if line.starts_with("User ") {
+            in_target_user = line.starts_with(&marker);
+        }
+        if !in_target_user {
+            continue;
+        }
+        for token in line.split_whitespace() {
+            let token = token.trim_end_matches(',');
+            let Some(value) = token.strip_prefix("enabled=") else {
+                continue;
+            };
+            return match value {
+                "0" | "default" => Some("enabled:default"),
+                "1" | "enabled" => Some("enabled:enabled"),
+                "2" | "disabled" => Some("enabled:disabled"),
+                "3" | "disabled-user" | "disabled_user" => Some("enabled:disabled_user"),
+                "4" | "disabled-until-used" | "disabled_until_used" => {
+                    Some("enabled:disabled_until_used")
+                }
+                _ => None,
+            };
         }
     }
     None
@@ -1642,6 +1928,75 @@ mod tests {
     }
 
     #[test]
+    fn remaining_pm_rungs_are_user_scoped_and_have_verified_inverses() {
+        let request = |kind| ActionRequest {
+            serial: "abc".into(),
+            target: target("abc"),
+            package: "com.example.app".into(),
+            kind,
+            user_id: 10,
+            pack_context: None,
+            context: ActionContext::default(),
+        };
+        let cases = [
+            (
+                ActionKind::Unstop,
+                vec!["pm", "unstop", "--user", "10", "com.example.app"],
+                Some(ActionKind::ForceStop),
+            ),
+            (
+                ActionKind::Hide,
+                vec!["pm", "hide", "--user", "10", "com.example.app"],
+                Some(ActionKind::Unhide),
+            ),
+            (
+                ActionKind::Unhide,
+                vec!["pm", "unhide", "--user", "10", "com.example.app"],
+                Some(ActionKind::Hide),
+            ),
+            (
+                ActionKind::DisableUntilUsed,
+                vec![
+                    "pm",
+                    "disable-until-used",
+                    "--user",
+                    "10",
+                    "com.example.app",
+                ],
+                Some(ActionKind::DefaultState),
+            ),
+            (
+                ActionKind::DefaultState,
+                vec!["pm", "default-state", "--user", "10", "com.example.app"],
+                Some(ActionKind::DisableUntilUsed),
+            ),
+            (
+                ActionKind::SuspendQuarantine,
+                vec![
+                    "pm",
+                    "suspend-quarantine",
+                    "--user",
+                    "10",
+                    "com.example.app",
+                ],
+                Some(ActionKind::Unsuspend),
+            ),
+        ];
+        for (kind, expected_args, inverse) in cases {
+            assert_eq!(
+                plan(request(kind))
+                    .args
+                    .iter()
+                    .map(String::as_str)
+                    .collect::<Vec<_>>(),
+                expected_args
+            );
+            assert_eq!(kind.inverse(), inverse);
+            assert!(kind.is_reversible());
+        }
+    }
+
+    #[test]
     fn parses_suspension_state_for_only_the_requested_android_user() {
         let output = "\
 Package [com.example.app]:\n\
@@ -1651,6 +2006,27 @@ Package [com.example.app]:\n\
         assert_eq!(parse_package_suspension_state(output, 0), Some(false));
         assert_eq!(parse_package_suspension_state(output, 10), Some(true));
         assert_eq!(parse_package_suspension_state(output, 11), None);
+    }
+
+    #[test]
+    fn parses_remaining_package_user_state_fields_without_crossing_users() {
+        let output = "\
+Package [com.example.app]:\n\
+  User 0: installed=true hidden=false suspended=false stopped=true enabled=0\n\
+  User 10: installed=true hidden=true suspended=true stopped=false enabled=4\n";
+        assert_eq!(parse_package_hidden_state(output, 0), Some(false));
+        assert_eq!(parse_package_hidden_state(output, 10), Some(true));
+        assert_eq!(parse_package_stopped_state(output, 0), Some(true));
+        assert_eq!(parse_package_stopped_state(output, 10), Some(false));
+        assert_eq!(
+            parse_package_enabled_state(output, 0),
+            Some("enabled:default")
+        );
+        assert_eq!(
+            parse_package_enabled_state(output, 10),
+            Some("enabled:disabled_until_used")
+        );
+        assert_eq!(parse_package_hidden_state(output, 11), None);
     }
 
     #[test]

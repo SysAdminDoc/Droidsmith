@@ -23,13 +23,6 @@ and Android, privacy-safe diagnostics, and the widest remaining product gap
 
 ### P2
 
-- [ ] R-144 P2 — Add the remaining reversible `pm` rungs
-  Why: several verified-present subcommands sit between "leave it alone" and "disable", which is exactly the safety gradient the bootloop evidence calls for.
-  Evidence: AOSP `PackageManagerShellCommand.java` on `main` dispatches `unstop`, `hide`/`unhide`, `disable-until-used`, `default-state`, `suspend-quarantine`, `get-archived-package-metadata`; `src-tauri/src/adb/actions.rs` `ActionKind` covers disable, uninstall-for-user, clear, force-stop, archive, unarchive, suspend/unsuspend.
-  Touches: `src-tauri/src/adb/actions.rs`, `src-tauri/src/adb/packages.rs`, `src-tauri/src/commands/actions_commands.rs`, `src/routes/apps/`
-  Acceptance: each new action is runtime-probed from the device's own `pm help` exactly as suspension is, captures before/after state, requires an exact transition, and records a verified journal inverse; a device that does not advertise a subcommand never shows it; `unstop` and `suspend-quarantine` carry explicit copy noting AOSP publishes no help text for them.
-  Complexity: M
-
 - [ ] R-145 P2 — Record per-entry "verified removable on" provenance in packs
   Why: the most-discussed unmet ask in the debloat space is knowing which ROM a removal was actually proven safe on, and the pack schema records provenance only at pack level.
   Evidence: UAD-NG issue #1164 (13 comments); `packs/schema.json` `PackEntry` has `id`, `removal`, `description`, `depends_on`, `needed_by`, `labels` — no verification record; pack-level `targets` and `provenance` exist but describe the whole document.

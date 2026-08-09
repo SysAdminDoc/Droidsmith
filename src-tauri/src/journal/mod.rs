@@ -906,6 +906,40 @@ pub fn undo_request_for(journal: &Journal, entry_id: u64) -> Option<ActionReques
         {
             return None;
         }
+        crate::adb::actions::ActionKind::Unstop
+            if entry.applied.before_state != "stopped"
+                || entry.applied.after_state != "unstopped" =>
+        {
+            return None;
+        }
+        crate::adb::actions::ActionKind::Hide
+            if entry.applied.before_state != "visible" || entry.applied.after_state != "hidden" =>
+        {
+            return None;
+        }
+        crate::adb::actions::ActionKind::Unhide
+            if entry.applied.before_state != "hidden" || entry.applied.after_state != "visible" =>
+        {
+            return None;
+        }
+        crate::adb::actions::ActionKind::DisableUntilUsed
+            if entry.applied.before_state != "enabled:default"
+                || entry.applied.after_state != "enabled:disabled_until_used" =>
+        {
+            return None;
+        }
+        crate::adb::actions::ActionKind::DefaultState
+            if entry.applied.before_state != "enabled:disabled_until_used"
+                || entry.applied.after_state != "enabled:default" =>
+        {
+            return None;
+        }
+        crate::adb::actions::ActionKind::SuspendQuarantine
+            if entry.applied.before_state != "unsuspended"
+                || entry.applied.after_state != "suspended" =>
+        {
+            return None;
+        }
         crate::adb::actions::ActionKind::Disable
             if entry.applied.plan.request.context.batch_id.is_some()
                 && !(entry.applied.before_state.ends_with("_enabled")
@@ -1271,6 +1305,50 @@ mod tests {
         unverified.after_state = "suspended".into();
         journal.record(unverified).unwrap();
         assert!(undo_request_for(&journal, 2).is_none());
+    }
+
+    #[test]
+    fn remaining_pm_rungs_only_expose_verified_journal_inverses() {
+        let cases = [
+            (
+                ActionKind::Unstop,
+                "stopped",
+                "unstopped",
+                ActionKind::ForceStop,
+            ),
+            (ActionKind::Hide, "visible", "hidden", ActionKind::Unhide),
+            (ActionKind::Unhide, "hidden", "visible", ActionKind::Hide),
+            (
+                ActionKind::DisableUntilUsed,
+                "enabled:default",
+                "enabled:disabled_until_used",
+                ActionKind::DefaultState,
+            ),
+            (
+                ActionKind::DefaultState,
+                "enabled:disabled_until_used",
+                "enabled:default",
+                ActionKind::DisableUntilUsed,
+            ),
+            (
+                ActionKind::SuspendQuarantine,
+                "unsuspended",
+                "suspended",
+                ActionKind::Unsuspend,
+            ),
+        ];
+        let dir = fresh_tmp_dir("remaining-rung-inverses");
+        let mut journal = Journal::open(&dir, &identity("abc")).unwrap();
+        for (index, (kind, before, after, inverse)) in cases.into_iter().enumerate() {
+            let mut applied = fake_applied("abc", &format!("com.example.{index}"), kind);
+            applied.before_state = before.into();
+            applied.after_state = after.into();
+            journal.record(applied).unwrap();
+            assert_eq!(
+                undo_request_for(&journal, (index + 1) as u64).unwrap().kind,
+                inverse
+            );
+        }
     }
 
     #[test]

@@ -156,6 +156,12 @@ export function PackageTable({
   archiveSupported,
   suspendSupported,
   unsuspendSupported,
+  hideSupported,
+  unhideSupported,
+  unstopSupported,
+  disableUntilUsedSupported,
+  defaultStateSupported,
+  suspendQuarantineSupported,
   selectedPackages,
   onToggleSelected,
   onToggleAll,
@@ -172,6 +178,12 @@ export function PackageTable({
   archiveSupported: boolean;
   suspendSupported: boolean;
   unsuspendSupported: boolean;
+  hideSupported: boolean;
+  unhideSupported: boolean;
+  unstopSupported: boolean;
+  disableUntilUsedSupported: boolean;
+  defaultStateSupported: boolean;
+  suspendQuarantineSupported: boolean;
   selectedPackages: Set<string>;
   onToggleSelected: (pkg: string) => void;
   onToggleAll: () => void;
@@ -367,6 +379,14 @@ export function PackageTable({
                           archiveSupported={archiveSupported}
                           suspendSupported={suspendSupported}
                           unsuspendSupported={unsuspendSupported}
+                          hideSupported={hideSupported}
+                          unhideSupported={unhideSupported}
+                          unstopSupported={unstopSupported}
+                          disableUntilUsedSupported={disableUntilUsedSupported}
+                          defaultStateSupported={defaultStateSupported}
+                          suspendQuarantineSupported={
+                            suspendQuarantineSupported
+                          }
                           showLegacyExport={showLegacyExport}
                           onAction={onAction}
                           onInspect={onInspect}
@@ -475,6 +495,12 @@ function PackageActionMenu({
   archiveSupported,
   suspendSupported,
   unsuspendSupported,
+  hideSupported,
+  unhideSupported,
+  unstopSupported,
+  disableUntilUsedSupported,
+  defaultStateSupported,
+  suspendQuarantineSupported,
   showLegacyExport,
   onAction,
   onInspect,
@@ -485,6 +511,12 @@ function PackageActionMenu({
   archiveSupported: boolean;
   suspendSupported: boolean;
   unsuspendSupported: boolean;
+  hideSupported: boolean;
+  unhideSupported: boolean;
+  unstopSupported: boolean;
+  disableUntilUsedSupported: boolean;
+  defaultStateSupported: boolean;
+  suspendQuarantineSupported: boolean;
   showLegacyExport: boolean;
   onAction: (pkg: string, kind: ActionKind) => void;
   onInspect: (pkg: string) => void;
@@ -508,6 +540,68 @@ function PackageActionMenu({
         role="menu"
         className="mt-1 min-w-40 rounded-lg border border-white/10 bg-surface-dialog p-1.5 shadow-2xl"
       >
+        {unstopSupported && (
+          <MenuAction
+            title={t("apps.unstopHelp")}
+            onClick={(button) => {
+              close(button);
+              onAction(pkg.package, "unstop");
+            }}
+          >
+            {t("apps.unstop")}
+          </MenuAction>
+        )}
+        {hideSupported && (
+          <MenuAction
+            onClick={(button) => {
+              close(button);
+              onAction(pkg.package, "hide");
+            }}
+          >
+            {t("apps.hide")}
+          </MenuAction>
+        )}
+        {unhideSupported && (
+          <MenuAction
+            onClick={(button) => {
+              close(button);
+              onAction(pkg.package, "unhide");
+            }}
+          >
+            {t("apps.unhide")}
+          </MenuAction>
+        )}
+        {disableUntilUsedSupported && pkg.enabled && (
+          <MenuAction
+            onClick={(button) => {
+              close(button);
+              onAction(pkg.package, "disable_until_used");
+            }}
+          >
+            {t("apps.disableUntilUsed")}
+          </MenuAction>
+        )}
+        {defaultStateSupported && !pkg.enabled && (
+          <MenuAction
+            onClick={(button) => {
+              close(button);
+              onAction(pkg.package, "default_state");
+            }}
+          >
+            {t("apps.defaultState")}
+          </MenuAction>
+        )}
+        {suspendQuarantineSupported && pkg.enabled && (
+          <MenuAction
+            title={t("apps.suspendQuarantineHelp")}
+            onClick={(button) => {
+              close(button);
+              onAction(pkg.package, "suspend_quarantine");
+            }}
+          >
+            {t("apps.suspendQuarantine")}
+          </MenuAction>
+        )}
         {unsuspendSupported && pkg.enabled && (
           <MenuAction
             onClick={(button) => {
@@ -522,10 +616,10 @@ function PackageActionMenu({
           <MenuAction
             onClick={(button) => {
               close(button);
-              onAction(pkg.package, "disable");
+              onAction(pkg.package, "suspend");
             }}
           >
-            {t("apps.disable")}
+            {t("apps.suspend")}
           </MenuAction>
         )}
         {archiveSupported && !pkg.system && (
@@ -590,15 +684,18 @@ function MenuAction({
   children,
   onClick,
   danger = false,
+  title,
 }: {
   children: ReactNode;
   onClick: (button: HTMLButtonElement) => void;
   danger?: boolean;
+  title?: string;
 }) {
   return (
     <button
       type="button"
       role="menuitem"
+      title={title}
       onClick={(event) => onClick(event.currentTarget)}
       className={cn(
         "block w-full rounded-sm px-3 py-2 text-start text-sm transition hover:bg-white/[0.06] focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-circuit-300",
