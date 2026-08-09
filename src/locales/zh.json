@@ -386,6 +386,9 @@
       "reviewRecovery": "查看恢复",
       "client": "客户端版本",
       "server": "服务器版本",
+      "killServerBlame": "kill-server 归因",
+      "available": "可用",
+      "unavailable": "不可用",
       "compatibility": "兼容性",
       "compatibilityStatus": {
         "supported": "支持",
@@ -394,6 +397,8 @@
       },
       "policyLink": "官方策略来源（审查于 {{date}}）",
       "usbBackend": "USB 后端",
+      "usbBackendExpected": "预期 USB 后端",
+      "backendPolicyUnavailable": "版本策略不可用",
       "mdnsBackend": "mDNS 后端",
       "mdnsBackendUnreliable": "此 Platform Tools 版本报告的值不可靠",
       "mdns": "mDNS 发现",
@@ -413,6 +418,9 @@
       "recoveryTitle": "查看 ADB 重启和重新连接",
       "recoveryBody": "此主机级操作将重启本地 ADB 服务器，然后仅请求离线传输重新连接。确切的操作序列如下所示，在第一个命令运行之前会写入持久的操作记录。",
       "recoveryWarning": "所有共享此 ADB 服务器的已连接工具可能会短暂断开。不会更改设备数据，但活动的传输和 shell 会话可能会中断。",
+      "recoveryBlameTitle": "kill-server 请求进程链",
+      "recoveryBlameUnavailable": "不可用：服务器版本早于 Platform Tools 37.0.1，或无法验证版本。",
+      "recoveryBlameNotReported": "此服务器支持该功能，但本次恢复没有报告请求进程链。",
       "copied": "诊断信息已复制到剪贴板。",
       "copyFallback": "剪贴板访问不可用。请手动选择并复制诊断文本。",
       "recoveryOutcome": {
@@ -1691,7 +1699,8 @@
     "dynamicSummary": {
       "no_version": "Platform Tools 未报告版本，因此兼容性未经验证。建议使用版本 {{recommended}}。",
       "below_floor": "Platform Tools {{version}} 早于可靠性下限 {{floor}}；请升级到 {{recommended}}。除非检测到已知有问题的版本，否则现有操作仍可使用。",
-      "unrecognized": "Platform Tools 报告了无法识别的版本（{{version}}）；未被阻止。建议使用版本 {{recommended}}。"
+      "unrecognized": "Platform Tools 报告了无法识别的版本（{{version}}）；未被阻止。建议使用版本 {{recommended}}。",
+      "usb_backend_policy": "Platform Tools {{version}} 在 {{platform}} 上预期使用 {{expected}} USB 后端。如果设备检测失败，{{override}}={{value}} 可选择 {{alternate}} 后端；更改后请重启 ADB。"
     },
     "title": "主机连接医生",
     "readOnly": "只读",

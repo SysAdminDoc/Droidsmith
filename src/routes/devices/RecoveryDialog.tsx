@@ -116,6 +116,37 @@ export function RecoveryDialog({
           </p>
         )}
 
+        {state.kind === "done" && (
+          <section
+            className="mt-4 border-s-2 border-circuit-300/60 ps-3"
+            aria-labelledby="adb-recovery-blame-title"
+          >
+            <h4
+              id="adb-recovery-blame-title"
+              className="text-xs font-semibold uppercase tracking-[0.16em] text-anvil-300"
+            >
+              {t("devices.health.recoveryBlameTitle")}
+            </h4>
+            {state.result.record.kill_server_blame == null ? (
+              <p className="mt-1 text-xs text-anvil-400">
+                {t("devices.health.recoveryBlameUnavailable")}
+              </p>
+            ) : state.result.record.kill_server_blame.length === 0 ? (
+              <p className="mt-1 text-xs text-anvil-400">
+                {t("devices.health.recoveryBlameNotReported")}
+              </p>
+            ) : (
+              <ol className="mt-2 space-y-1 font-mono text-xs text-anvil-200">
+                {state.result.record.kill_server_blame.map((line, index) => (
+                  <li key={`${line}-${index}`} className="break-words">
+                    {line}
+                  </li>
+                ))}
+              </ol>
+            )}
+          </section>
+        )}
+
         {(state.kind === "done" || state.kind === "error") && (
           <div className="mt-4">
             <label

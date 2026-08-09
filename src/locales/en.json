@@ -386,6 +386,9 @@
       "reviewRecovery": "Review recovery",
       "client": "Client version",
       "server": "Server version",
+      "killServerBlame": "kill-server blame",
+      "available": "Available",
+      "unavailable": "Unavailable",
       "compatibility": "Compatibility",
       "compatibilityStatus": {
         "supported": "Supported",
@@ -394,6 +397,8 @@
       },
       "policyLink": "Official policy source (reviewed {{date}})",
       "usbBackend": "USB backend",
+      "usbBackendExpected": "Expected USB backend",
+      "backendPolicyUnavailable": "Version policy unavailable",
       "mdnsBackend": "mDNS backend",
       "mdnsBackendUnreliable": "reported value is unreliable on this platform-tools version",
       "mdns": "mDNS discovery",
@@ -413,6 +418,9 @@
       "recoveryTitle": "Review ADB restart and reconnect",
       "recoveryBody": "This host-wide action restarts the local ADB server, then asks only offline transports to reconnect. The exact sequence is shown below and a durable operation record is written before the first command runs.",
       "recoveryWarning": "All connected tools that share this ADB server may briefly disconnect. No device data is changed, but active transfers and shell sessions can be interrupted.",
+      "recoveryBlameTitle": "kill-server requester chain",
+      "recoveryBlameUnavailable": "Unavailable: the server is older than Platform Tools 37.0.1 or its version could not be verified.",
+      "recoveryBlameNotReported": "Supported by this server, but no requester chain was reported during recovery.",
       "copied": "Diagnostics copied to the clipboard.",
       "copyFallback": "Clipboard access was unavailable. Select and copy the diagnostics text manually.",
       "recoveryOutcome": {
@@ -1691,7 +1699,8 @@
     "dynamicSummary": {
       "no_version": "Platform Tools did not report a version, so compatibility is unverified. Version {{recommended}} is recommended.",
       "below_floor": "Platform Tools {{version}} predates the {{floor}} reliability floor; upgrade to {{recommended}}. Existing operations remain available unless a known-bad release is detected.",
-      "unrecognized": "Platform Tools reported an unrecognized version ({{version}}); it was not blocked. Version {{recommended}} is recommended."
+      "unrecognized": "Platform Tools reported an unrecognized version ({{version}}); it was not blocked. Version {{recommended}} is recommended.",
+      "usb_backend_policy": "Platform Tools {{version}} on {{platform}} expects the {{expected}} USB backend. If detection fails, {{override}}={{value}} selects the {{alternate}} backend; restart ADB after changing it."
     },
     "title": "Host connection doctor",
     "readOnly": "Read-only",

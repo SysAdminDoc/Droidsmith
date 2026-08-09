@@ -26,6 +26,7 @@ export function formatAdbDiagnostics({
     `Platform Tools rationale: ${health?.platform_tools.rationale ?? "not available"}`,
     `Platform Tools policy: ${health?.platform_tools.source_url ?? "not available"}`,
     `Server build: ${health?.server_build ?? "not available"}`,
+    `kill-server blame capability: ${health?.kill_server_blame_supported ? "available" : "unavailable"}`,
     `USB backend: ${health?.usb_backend ?? "not available"}`,
     `mDNS enabled: ${formatOptionalBoolean(health?.mdns_enabled)}`,
     `mDNS backend: ${formatMdnsBackend(health)}`,
@@ -48,6 +49,20 @@ export function formatAdbDiagnostics({
       "Commands:",
       ...recovery.record.commands.map((args) => `  adb ${args.join(" ")}`),
     );
+    if (recovery.record.kill_server_blame == null) {
+      lines.push(
+        "kill-server blame: unavailable (server version is older than 37.0.1 or unknown)",
+      );
+    } else if (recovery.record.kill_server_blame.length === 0) {
+      lines.push(
+        "kill-server blame: supported, but no requester chain was reported",
+      );
+    } else {
+      lines.push(
+        "kill-server blame:",
+        ...recovery.record.kill_server_blame.map((line) => `  ${line}`),
+      );
+    }
   }
 
   return `${lines.join("\n")}\n`;

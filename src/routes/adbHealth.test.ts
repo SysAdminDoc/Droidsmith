@@ -8,7 +8,9 @@ const health: AdbHealth = {
   client_version: "37.0.0",
   server_version: "37.0.0",
   server_build: "123456",
+  kill_server_blame_supported: false,
   usb_backend: "NATIVE",
+  usb_backend_expectation: null,
   mdns_backend: "LIBADBMDNS",
   // server_version is 37.0.0, where the field stops tracking the live backend.
   mdns_backend_reliable: false,
@@ -45,6 +47,7 @@ describe("formatAdbDiagnostics", () => {
         commands: [["kill-server"], ["start-server"], ["reconnect", "offline"]],
         health_before: health,
         health_after: health,
+        kill_server_blame: null,
         failure: null,
       },
     };
@@ -59,7 +62,37 @@ describe("formatAdbDiagnostics", () => {
     expect(output).toContain("Wi-Fi 2.0 devices: Pixel 10");
     expect(output).toContain("Recovery outcome: succeeded");
     expect(output).toContain("adb reconnect offline");
+    expect(output).toContain("kill-server blame: unavailable");
     expect(output).not.toContain("undefined");
+  });
+
+  it("includes a bounded requester chain when the server reports one", () => {
+    const output = formatAdbDiagnostics({
+      health: {
+        ...health,
+        kill_server_blame_supported: true,
+      },
+      observedAt: null,
+      recovery: {
+        record_path: "C:\\AppData\\Droidsmith\\host-operations.jsonl",
+        record: {
+          schema_version: 1,
+          operation_id: "adb-recovery-chain",
+          operation: "adb_server_recovery",
+          confirmation_source: "devices_health_review",
+          outcome: "succeeded",
+          started_at: "2026-07-14T18:00:00Z",
+          completed_at: "2026-07-14T18:00:02Z",
+          commands: [["kill-server"]],
+          health_before: health,
+          health_after: health,
+          kill_server_blame: ["Android Studio", "adb.exe start-server"],
+          failure: null,
+        },
+      },
+    });
+    expect(output).toContain("kill-server blame:");
+    expect(output).toContain("  Android Studio");
   });
 });
 

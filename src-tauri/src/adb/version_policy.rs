@@ -187,6 +187,69 @@ pub fn mdns_backend_is_reliable(server_version: Option<&str>) -> bool {
         .is_none_or(|ordering| ordering == Ordering::Less)
 }
 
+/// The first Platform Tools release that reports which process requested an
+/// ADB server shutdown. Older servers have no blame signal, and an unknown
+/// version must stay fail-closed rather than presenting an empty chain.
+pub fn kill_server_blame_is_supported(server_version: Option<&str>) -> bool {
+    server_version
+        .and_then(|version| compare_versions(version, "37.0.1"))
+        .is_some_and(|ordering| ordering != Ordering::Less)
+}
+
+/// Describe the USB backend policy introduced by Platform Tools 37.0.1 for
+/// this host. The release changed Windows and macOS in opposite directions;
+/// Linux retains its legacy default from 36.0.2 but can still opt into
+/// libusb. Unknown and older server versions return `None` so Host Doctor does
+/// not suggest a toggle without version evidence.
+#[derive(specta::Type, Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct UsbBackendExpectation {
+    pub expected_backend: String,
+    pub override_variable: String,
+    pub override_value: String,
+    pub override_backend: String,
+}
+
+pub fn usb_backend_expectation(server_version: Option<&str>) -> Option<UsbBackendExpectation> {
+    let supported = server_version
+        .and_then(|version| compare_versions(version, "37.0.1"))
+        .is_some_and(|ordering| ordering != Ordering::Less);
+    if !supported {
+        return None;
+    }
+
+    #[cfg(windows)]
+    {
+        Some(UsbBackendExpectation {
+            expected_backend: "libadbusb".to_string(),
+            override_variable: "ADB_USB_LEGACY".to_string(),
+            override_value: "1".to_string(),
+            override_backend: "legacy".to_string(),
+        })
+    }
+    #[cfg(target_os = "macos")]
+    {
+        Some(UsbBackendExpectation {
+            expected_backend: "legacy".to_string(),
+            override_variable: "ADB_LIBUSB".to_string(),
+            override_value: "1".to_string(),
+            override_backend: "libusb".to_string(),
+        })
+    }
+    #[cfg(target_os = "linux")]
+    {
+        Some(UsbBackendExpectation {
+            expected_backend: "legacy".to_string(),
+            override_variable: "ADB_LIBUSB".to_string(),
+            override_value: "1".to_string(),
+            override_backend: "libusb".to_string(),
+        })
+    }
+    #[cfg(not(any(windows, target_os = "macos", target_os = "linux")))]
+    {
+        None
+    }
+}
+
 fn assessment(
     policy: &PlatformToolsPolicy,
     status: PlatformToolsStatus,
@@ -291,5 +354,22 @@ mod tests {
         assert!(!is_recommended("37.0.0"));
         assert!(is_recommended("37.0.1"));
         assert!(is_recommended("38.0.0"));
+    }
+
+    #[test]
+    fn kill_server_blame_requires_platform_tools_37_0_1() {
+        assert!(!kill_server_blame_is_supported(None));
+        assert!(!kill_server_blame_is_supported(Some("37.0.0")));
+        assert!(kill_server_blame_is_supported(Some("37.0.1")));
+        assert!(kill_server_blame_is_supported(Some("37.0.1-123456")));
+        assert!(kill_server_blame_is_supported(Some("38.0.0")));
+        assert!(!kill_server_blame_is_supported(Some("unknown")));
+    }
+
+    #[test]
+    fn usb_backend_expectation_requires_the_release_that_changed_defaults() {
+        assert!(usb_backend_expectation(None).is_none());
+        assert!(usb_backend_expectation(Some("37.0.0")).is_none());
+        assert!(usb_backend_expectation(Some("37.0.1")).is_some());
     }
 }

@@ -7,7 +7,7 @@ use std::time::Duration;
 use serde::Serialize;
 
 use crate::adb::transport::ShellTransport;
-use crate::adb::version_policy::{self, PlatformToolsAssessment};
+use crate::adb::version_policy::{self, PlatformToolsAssessment, UsbBackendExpectation};
 
 #[derive(specta::Type, Debug, Clone, Default, PartialEq, Eq, Serialize)]
 pub struct AdbHealth {
@@ -15,7 +15,13 @@ pub struct AdbHealth {
     pub client_version: Option<String>,
     pub server_version: Option<String>,
     pub server_build: Option<String>,
+    /// Whether the running server can report the process chain that requested
+    /// `kill-server`. This is deliberately false for unknown versions.
+    pub kill_server_blame_supported: bool,
     pub usb_backend: Option<String>,
+    /// Version- and host-specific USB backend policy. None means the server
+    /// version is too old or unknown, so no toggle guidance is safe.
+    pub usb_backend_expectation: Option<UsbBackendExpectation>,
     pub mdns_backend: Option<String>,
     /// Whether [`AdbHealth::mdns_backend`] can be presented as fact. False from
     /// platform-tools 37.0.0, where the reported value no longer tracks the
@@ -61,6 +67,11 @@ pub fn probe(transport: &ShellTransport, client_version: Option<String>) -> AdbH
             health.warning = Some(format!("ADB server-status unavailable: {error}"));
         }
     }
+
+    health.kill_server_blame_supported =
+        version_policy::kill_server_blame_is_supported(health.server_version.as_deref());
+    health.usb_backend_expectation =
+        version_policy::usb_backend_expectation(health.server_version.as_deref());
 
     health.mdns_backend_reliable =
         version_policy::mdns_backend_is_reliable(health.server_version.as_deref());
@@ -142,6 +153,20 @@ fn first_nonempty_line(output: &str) -> Option<String> {
         .map(str::trim)
         .find(|line| !line.is_empty())
         .map(|line| line.chars().take(240).collect())
+}
+
+/// Keep the bounded output from the first recovery stage as individual lines.
+/// Platform Tools does not promise a machine-readable marker for the blame
+/// chain, so preserving its short human-readable chain is safer than guessing
+/// at a format and silently dropping the evidence.
+pub fn parse_kill_server_blame(output: &str) -> Vec<String> {
+    output
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .take(32)
+        .map(|line| line.chars().take(512).collect())
+        .collect()
 }
 
 fn version_at_least(version: &str, required_major: u32) -> bool {
@@ -279,6 +304,16 @@ mdns_enabled: true
         assert_eq!(
             version_policy::assess(Some("37.0.0")).status,
             crate::adb::version_policy::PlatformToolsStatus::Supported
+        );
+        assert!(!version_policy::kill_server_blame_is_supported(Some(
+            "37.0.0"
+        )));
+        assert!(version_policy::kill_server_blame_is_supported(Some(
+            "37.0.1"
+        )));
+        assert_eq!(
+            parse_kill_server_blame("\nparent.exe --worker\n  adb.exe kill-server\n"),
+            vec!["parent.exe --worker", "adb.exe kill-server"]
         );
     }
 

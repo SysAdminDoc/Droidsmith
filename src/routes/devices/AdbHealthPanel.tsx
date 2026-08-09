@@ -64,8 +64,24 @@ export function AdbHealthPanel({
             value={health.server_version ?? t("common.notReported")}
           />
           <HealthMetric
+            label={t("devices.health.killServerBlame")}
+            value={
+              health.kill_server_blame_supported
+                ? t("devices.health.available")
+                : t("devices.health.unavailable")
+            }
+          />
+          <HealthMetric
             label={t("devices.health.usbBackend")}
             value={health.usb_backend ?? t("common.notReported")}
+          />
+          <HealthMetric
+            label={t("devices.health.usbBackendExpected")}
+            value={
+              health.usb_backend_expectation
+                ? `${health.usb_backend_expectation.expected_backend} (${health.usb_backend_expectation.override_variable}=${health.usb_backend_expectation.override_value} → ${health.usb_backend_expectation.override_backend})`
+                : t("devices.health.backendPolicyUnavailable")
+            }
           />
           <HealthMetric
             label={t("devices.health.mdnsBackend")}

@@ -167,7 +167,7 @@ async function runDesktopFlow(browser) {
   await page.getByRole("heading", { name: "Droidsmith" }).waitFor();
   await page.getByText("ADB lifecycle health", { exact: true }).waitFor();
   await page.getByText("ADB ready", { exact: true }).waitFor();
-  await page.getByText(/Platform Tools 37\.0\.0 makes libadbmdns/).waitFor();
+  await page.getByText(/Platform Tools 37\.0\.1 makes libadbmdns/).waitFor();
   await page.getByRole("button", { name: "Select Pixel QA" }).waitFor();
   await page.getByText("Negotiated 5.0 Gbps", { exact: true }).waitFor();
   await page.getByText("Maximum 10.0 Gbps", { exact: true }).waitFor();
@@ -185,6 +185,12 @@ async function runDesktopFlow(browser) {
   await page.getByRole("button", { name: "Confirm and run" }).click();
   await page
     .getByText("ADB restarted and the offline reconnect request completed.")
+    .waitFor();
+  await page
+    .getByText("kill-server requester chain", { exact: true })
+    .waitFor();
+  await page
+    .getByText("Android Studio --device-manager", { exact: true })
     .waitFor();
   await page.getByLabel("Copyable diagnostics").waitFor({ state: "visible" });
   await page.screenshot({
@@ -2317,18 +2323,25 @@ async function installTauriMock(
     const platformToolsPolicy = {
       status: "supported",
       rationale:
-        "Platform Tools 37.0.0 makes libadbmdns the default mDNS backend.",
-      recommended_version: "37.0.0",
+        "Platform Tools 37.0.1 makes libadbmdns the default mDNS backend.",
+      recommended_version: "37.0.1",
       warning_below_version: "36.0.2",
-      policy_reviewed_on: "2026-07-15",
+      policy_reviewed_on: "2026-08-08",
       source_url: "https://developer.android.com/tools/releases/platform-tools",
     };
     const adbHealth = {
       server_status_supported: true,
-      client_version: "37.0.0",
-      server_version: "37.0.0",
+      client_version: "37.0.1",
+      server_version: "37.0.1",
       server_build: "123456",
+      kill_server_blame_supported: true,
       usb_backend: "NATIVE",
+      usb_backend_expectation: {
+        expected_backend: "libadbusb",
+        override_variable: "ADB_USB_LEGACY",
+        override_value: "1",
+        override_backend: "legacy",
+      },
       mdns_backend: "LIBADBMDNS",
       mdns_enabled: true,
       mdns_check: "mDNS responder available",
@@ -2919,6 +2932,10 @@ async function installTauriMock(
               ],
               health_before: adbHealth,
               health_after: adbHealth,
+              kill_server_blame: [
+                "Android Studio --device-manager",
+                "adb.exe start-server",
+              ],
               failure: null,
             },
           };

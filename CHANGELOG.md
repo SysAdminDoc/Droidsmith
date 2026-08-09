@@ -63,6 +63,13 @@ each milestone tag.
   safer overrides, the planner probes the device's advertised capabilities,
   and the queue verifies each journaled post-state. Existing packs retain the
   historical disable default. (R-137)
+- **ADB 37.0.1 recovery diagnostics now preserve the requester chain.** The
+  guided restart records the bounded `kill-server` blame output when the
+  server advertises the capability, reports older or unknown versions as
+  unavailable, and shows the chain beside the copyable recovery diagnostics.
+  Host Doctor also explains the OS-specific USB backend default and exact
+  environment override only when a verified 37.0.1+ server supports it.
+  (R-139, R-140)
 
 ## [0.9.17] - 2026-08-02
 

@@ -336,6 +336,17 @@ versions are refused with the same migration guidance the CLI gives. Reviewing
 is all the app does — resuming remains `--retry-from` on the CLI, and the
 review points at that command.
 
+### ADB host recovery evidence
+
+The Devices health panel records the Platform Tools server version, USB/mDNS
+backends, and the exact backend override supported by the host OS. On a
+verified 37.0.1-or-newer server, the reviewed ADB recovery sequence also keeps
+the bounded `kill-server` requester chain in the local host-operation record
+and shows it beside the copyable diagnostics. Older or unknown server
+versions report that capability as unavailable instead of displaying an empty
+chain. Host Doctor suppresses backend-toggle advice when it cannot verify the
+server version.
+
 ## Portable recovery baselines
 
 Before applying a package action in Apps or a selected Debloat batch, export a

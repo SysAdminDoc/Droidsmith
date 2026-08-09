@@ -30,8 +30,8 @@ community, and security review:
 3. **P0 accessibility:** replace enumerated light-theme utility overrides with
    semantic tokens and run the rendered/axe gate in both themes (IMP-114).
 4. **P1 platform truth:** pin platform-tools archives to a versioned URL before
-   hashing them (R-134), then surface the 37.0.1 USB-backend and `kill-server`
-   diagnostics (R-139/R-140).
+   hashing them (R-134); the 37.0.1 USB-backend and `kill-server` diagnostics
+   are now shipped (R-139/R-140).
 5. **P1 security truth:** account for Project Mainline in the CVE-2026-0073
    verdict (R-135), redact native panic payloads before writing `crash.log`
    (IMP-133), and keep raw OEM detail behind a typed/localized error envelope
@@ -199,8 +199,8 @@ wall-clock value.
 
 - Platform-tools 37.0.1 changes USB backend defaults per OS, removes the
   openscreen mDNS implementation, and adds a `kill-server` requester chain.
-  Existing health parsing can surface these facts (R-139/R-140), but the policy
-  still hashes rolling `-latest-` URLs (R-134).
+  Droidsmith now surfaces the verified USB policy and bounded recovery chain
+  (R-139/R-140); the policy still hashes rolling `-latest-` URLs (R-134).
 - The Android 2026-05-01 bulletin places CVE-2026-0073 in an ADB Mainline
   component. `security_patch.rs` reads only `ro.build.version.security_patch`,
   so the verdict can be a false positive until a device's Google Play system

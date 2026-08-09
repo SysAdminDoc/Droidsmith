@@ -65,20 +65,6 @@ and Android, privacy-safe diagnostics, and the widest remaining product gap
   Acceptance: `SECURITY.md` names the GitHub private-advisory path, states the real supported line, and separates shipped hardening from planned; `docs/DEVELOPMENT.md` either becomes the tracked accurate development guide or is removed from the contributor link; the stale light-theme entry is removed from `Roadmap_Blocked.md`; the duplicate `.md` issue templates are deleted.
   Complexity: S
 
-- [ ] R-139 P2 — Surface the `adb kill-server` blame chain
-  Why: platform-tools 37.0.1 makes `kill-server` report which process requested it, which is the missing half of the most common ADB failure — another tool restarting the server underneath Droidsmith.
-  Evidence: platform-tools 37.0.1 release notes, "`kill-server` prints the requesting process command-line chain"; `src-tauri/src/adb/health.rs` already parses `server-status`; UAD-NG issue #67 asks for a safe disconnect.
-  Touches: `src-tauri/src/adb/health.rs`, `src/routes/HostDoctor.tsx`, `src/routes/devices/AdbHealthPanel.tsx`
-  Acceptance: guided ADB recovery captures and displays the blame chain when the server version is 37.0.1 or newer; older servers report the capability as unavailable rather than showing an empty field.
-  Complexity: S
-
-- [ ] R-140 P2 — Report the platform-tools 37.0.1 USB backend flip per OS
-  Why: 37.0.1 moves Windows onto `libadbusb` and *disables* `libusb` on macOS — opposite directions in one release — and only `adb server-status` reveals which backend is live, so a user diagnosing a detection failure has no way to know what changed.
-  Evidence: platform-tools 37.0.1 release notes (`libadbusb` replaces `libusb` on Windows, `ADB_USB_LEGACY=1` to disable; `libusb` disabled on macOS, `ADB_LIBUSB=1` to re-enable); `src-tauri/src/adb/health.rs` already reads `usb_backend`; the equivalent mDNS reliability gate at `health.rs:65` is the pattern to copy.
-  Touches: `src-tauri/src/adb/version_policy.rs`, `src-tauri/src/adb/health.rs`, `src/routes/HostDoctor.tsx`
-  Acceptance: Host Doctor states the expected backend for the host OS and server version and names the exact environment variable that changes it; the guidance is suppressed when the version cannot be determined, matching how `mdns_backend_reliable` behaves.
-  Complexity: S
-
 - [ ] R-141 P2 — Make APK install failures legible ahead of developer-verification enforcement
   Why: enforcement starts 2026-09-30 in select regions, and store/non-ADB distribution may fail for reasons the current error surface cannot explain; Google's official FAQ now explicitly says ADB installs work without verification, so this item must not imply that ordinary local ADB installs are threatened.
   Evidence: https://developer.android.com/developer-verification and https://developer.android.com/developer-verification/guides/faq (enforcement date, limited-distribution 20-device cap, and the explicit ADB-install exemption); `src-tauri/src/install.rs` and `src/routes/apps/InstallPanels.tsx` classify install failures.

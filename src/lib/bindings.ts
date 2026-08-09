@@ -1194,7 +1194,17 @@ export type AdbHealth = {
   client_version: string | null;
   server_version: string | null;
   server_build: string | null;
+  /**
+   * Whether the running server can report the process chain that requested
+   * `kill-server`. This is deliberately false for unknown versions.
+   */
+  kill_server_blame_supported: boolean;
   usb_backend: string | null;
+  /**
+   * Version- and host-specific USB backend policy. None means the server
+   * version is too old or unknown, so no toggle guidance is safe.
+   */
+  usb_backend_expectation: UsbBackendExpectation | null;
   mdns_backend: string | null;
   /**
    * Whether [`AdbHealth::mdns_backend`] can be presented as fact. False from
@@ -1227,6 +1237,12 @@ export type AdbRecoveryRecord = {
   commands: string[][];
   health_before: AdbHealth | null;
   health_after: AdbHealth | null;
+  /**
+   * `None` means the server version was older/unknown and the capability
+   * was unavailable. `Some(vec![])` means a 37.0.1+ server was eligible but
+   * did not emit a chain during this recovery.
+   */
+  kill_server_blame: string[] | null;
   failure: string | null;
 };
 export type AdbRecoveryResult = {
@@ -3361,6 +3377,19 @@ export type UninstallRecoveryEvidence = {
    * disputed.
    */
   apk_path: string | null;
+};
+/**
+ * Describe the USB backend policy introduced by Platform Tools 37.0.1 for
+ * this host. The release changed Windows and macOS in opposite directions;
+ * Linux retains its legacy default from 36.0.2 but can still opt into
+ * libusb. Unknown and older server versions return `None` so Host Doctor does
+ * not suggest a toggle without version evidence.
+ */
+export type UsbBackendExpectation = {
+  expected_backend: string;
+  override_variable: string;
+  override_value: string;
+  override_backend: string;
 };
 export type UserScope = "unspecified" | "owner" | "current" | "any";
 export type VideoCodec = "h264" | "h265" | "av1" | "vp8" | "vp9";

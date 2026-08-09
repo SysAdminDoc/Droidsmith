@@ -386,6 +386,9 @@
       "reviewRecovery": "Wiederherstellung prüfen",
       "client": "Client-Version",
       "server": "Server-Version",
+      "killServerBlame": "kill-server-Verursacher",
+      "available": "Verfügbar",
+      "unavailable": "Nicht verfügbar",
       "compatibility": "Kompatibilität",
       "compatibilityStatus": {
         "supported": "Unterstützt",
@@ -394,6 +397,8 @@
       },
       "policyLink": "Offizielle Richtlinienquelle (geprüft {{date}})",
       "usbBackend": "USB-Backend",
+      "usbBackendExpected": "Erwartetes USB-Backend",
+      "backendPolicyUnavailable": "Versionsrichtlinie nicht verfügbar",
       "mdnsBackend": "mDNS-Backend",
       "mdnsBackendUnreliable": "Gemeldeter Wert ist in dieser Platform-Tools-Version unzuverlässig",
       "mdns": "mDNS-Erkennung",
@@ -413,6 +418,9 @@
       "recoveryTitle": "ADB-Neustart und Wiederverbindung prüfen",
       "recoveryBody": "Diese hostweite Aktion startet den lokalen ADB-Server neu und fordert dann nur Offline-Transporte zur Wiederverbindung auf. Die genaue Sequenz wird unten angezeigt und ein dauerhafter Operationseintrag wird vor dem ersten Befehl geschrieben.",
       "recoveryWarning": "Alle verbundenen Tools, die diesen ADB-Server teilen, können kurzzeitig die Verbindung verlieren. Keine Gerätedaten werden geändert, aber aktive Übertragungen und Shell-Sitzungen können unterbrochen werden.",
+      "recoveryBlameTitle": "Anforderungskette von kill-server",
+      "recoveryBlameUnavailable": "Nicht verfügbar: Der Server ist älter als Platform Tools 37.0.1 oder seine Version konnte nicht verifiziert werden.",
+      "recoveryBlameNotReported": "Von diesem Server unterstützt, aber während der Wiederherstellung wurde keine Anforderungskette gemeldet.",
       "copied": "Diagnose in die Zwischenablage kopiert.",
       "copyFallback": "Zugriff auf die Zwischenablage war nicht verfügbar. Wählen und kopieren Sie den Diagnosetext manuell.",
       "recoveryOutcome": {
@@ -1691,7 +1699,8 @@
     "dynamicSummary": {
       "no_version": "Platform Tools meldete keine Version, daher ist die Kompatibilität unbestätigt. Version {{recommended}} wird empfohlen.",
       "below_floor": "Platform Tools {{version}} liegt unter der Zuverlässigkeitsgrenze {{floor}}; aktualisiere auf {{recommended}}. Bestehende Vorgänge bleiben verfügbar, sofern keine bekannt fehlerhafte Version erkannt wird.",
-      "unrecognized": "Platform Tools meldete eine unbekannte Version ({{version}}); sie wurde nicht blockiert. Version {{recommended}} wird empfohlen."
+      "unrecognized": "Platform Tools meldete eine unbekannte Version ({{version}}); sie wurde nicht blockiert. Version {{recommended}} wird empfohlen.",
+      "usb_backend_policy": "Platform Tools {{version}} erwartet unter {{platform}} das USB-Backend {{expected}}. Falls die Erkennung fehlschlägt, wählt {{override}}={{value}} das Backend {{alternate}}; starten Sie ADB danach neu."
     },
     "title": "Host-Verbindungsarzt",
     "readOnly": "Schreibgeschützt",

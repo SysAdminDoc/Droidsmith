@@ -300,6 +300,10 @@ pub struct AdbRecoveryRecord {
     pub commands: Vec<Vec<String>>,
     pub health_before: Option<adb::health::AdbHealth>,
     pub health_after: Option<adb::health::AdbHealth>,
+    /// `None` means the server version was older/unknown and the capability
+    /// was unavailable. `Some(vec![])` means a 37.0.1+ server was eligible but
+    /// did not emit a chain during this recovery.
+    pub kill_server_blame: Option<Vec<String>>,
     pub failure: Option<String>,
 }
 
@@ -364,6 +368,7 @@ pub async fn recover_adb(
             commands: commands.clone(),
             health_before: None,
             health_after: None,
+            kill_server_blame: None,
             failure: None,
         };
         append_host_operation(&record_path, &record)?;
@@ -386,6 +391,23 @@ pub async fn recover_adb(
 
         match sequence {
             Ok(outputs) => {
+                if record
+                    .health_before
+                    .as_ref()
+                    .is_some_and(|health| health.kill_server_blame_supported)
+                {
+                    record.kill_server_blame = Some(
+                        outputs
+                            .first()
+                            .map(|output| {
+                                adb::health::parse_kill_server_blame(&format!(
+                                    "{}\n{}",
+                                    output.stdout, output.stderr
+                                ))
+                            })
+                            .unwrap_or_default(),
+                    );
+                }
                 if let Some((index, output)) = outputs
                     .iter()
                     .enumerate()
@@ -407,6 +429,13 @@ pub async fn recover_adb(
                 }
             }
             Err(error) => {
+                if record
+                    .health_before
+                    .as_ref()
+                    .is_some_and(|health| health.kill_server_blame_supported)
+                {
+                    record.kill_server_blame = Some(Vec::new());
+                }
                 record.outcome = if matches!(error, operations::OperationError::Cancelled) {
                     AdbRecoveryOutcome::Cancelled
                 } else {

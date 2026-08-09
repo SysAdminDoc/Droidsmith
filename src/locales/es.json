@@ -752,6 +752,9 @@
     "health": {
       "cancelling": "Cancelando y esperando a que el proceso ADB actual finalice…",
       "client": "Versión del cliente",
+      "killServerBlame": "atribución de kill-server",
+      "available": "Disponible",
+      "unavailable": "No disponible",
       "compatibility": "Compatibilidad",
       "compatibilityStatus": {
         "blocked": "Versión problemática conocida",
@@ -782,6 +785,9 @@
         "succeeded": "ADB se reinició y la solicitud de reconexión de transportes fuera de línea se completó."
       },
       "recoveryTitle": "Revisar reinicio y reconexión de ADB",
+      "recoveryBlameTitle": "Cadena del solicitante de kill-server",
+      "recoveryBlameUnavailable": "No disponible: el servidor es anterior a Platform Tools 37.0.1 o no se pudo verificar su versión.",
+      "recoveryBlameNotReported": "El servidor admite esta función, pero no informó ninguna cadena durante la recuperación.",
       "recoveryWarning": "Todas las herramientas conectadas que comparten este servidor ADB pueden desconectarse brevemente. No se modifican datos del dispositivo, pero las transferencias activas y las sesiones de shell pueden interrumpirse.",
       "reviewRecovery": "Revisar recuperación",
       "server": "Versión del servidor",
@@ -789,6 +795,8 @@
       "stopped": "Monitor detenido",
       "title": "Estado del ciclo de vida de ADB",
       "usbBackend": "Backend USB",
+      "usbBackendExpected": "Backend USB esperado",
+      "backendPolicyUnavailable": "Política de versión no disponible",
       "wifiTwo": "Android 17 Wi-Fi 2.0",
       "wifiTwoDetected": "Wi-Fi 2.0 detectado",
       "wifiTwoDevices": "Dispositivos Wi-Fi 2.0",
@@ -1058,7 +1066,8 @@
     "dynamicSummary": {
       "no_version": "Platform Tools no informó una versión, por lo que la compatibilidad no está verificada. Se recomienda la versión {{recommended}}.",
       "below_floor": "Platform Tools {{version}} es anterior al umbral de fiabilidad {{floor}}; actualiza a {{recommended}}. Las operaciones existentes siguen disponibles salvo que se detecte una versión defectuosa conocida.",
-      "unrecognized": "Platform Tools informó una versión no reconocida ({{version}}); no se bloqueó. Se recomienda la versión {{recommended}}."
+      "unrecognized": "Platform Tools informó una versión no reconocida ({{version}}); no se bloqueó. Se recomienda la versión {{recommended}}.",
+      "usb_backend_policy": "Platform Tools {{version}} en {{platform}} espera el backend USB {{expected}}. Si falla la detección, {{override}}={{value}} selecciona el backend {{alternate}}; reinicia ADB después de cambiarlo."
     },
     "adbUnverified": "ADB no verificado",
     "adbVersion": "ADB {{version}}",

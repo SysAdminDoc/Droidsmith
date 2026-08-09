@@ -918,6 +918,7 @@ mod tests {
             commands: vec![vec!["kill-server".to_string()]],
             health_before: None,
             health_after: None,
+            kill_server_blame: None,
             failure: None,
         };
         append_host_operation(&path, &record).unwrap();
