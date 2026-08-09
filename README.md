@@ -275,6 +275,25 @@ droidsmith-cli run profile-v3.yaml --device SERIAL --dry-run --json
 droidsmith-cli run profile-v3.yaml --device SERIAL --apply --json
 ```
 
+Debloat packs are also available from the headless surface. `list` is offline;
+`plan` always performs a read-only device assessment, while `apply` requires an
+explicit `--dry-run` or `--apply`. Pack compatibility mismatches require
+`--accept-compatibility`, and unsafe-tier entries require
+`--allow-unsafe-tier` after reviewing the plan. The pack's declared Android
+user scope is used unless `--user ID` is supplied.
+
+```bash
+droidsmith-cli pack list --json
+droidsmith-cli pack plan pixel-stock --device SERIAL --json
+droidsmith-cli pack apply pixel-stock --all-devices --dry-run --json > pack-report.json
+droidsmith-cli pack apply pixel-stock --device SERIAL --apply --json
+```
+
+Pack apply uses the same per-device journal as GUI actions. Fleet mode emits
+the same schema-2 report shape as profile runs; pack reports can be opened in
+the app's read-only Fleet report viewer, but are not accepted by profile
+resume.
+
 Pass `--all-devices` instead of `--device SERIAL` to fan a run over every
 connected, authorized device ("fleet mode"). Each device is planned and applied
 independently, and `--json` emits a `devices[]` array with one entry per device

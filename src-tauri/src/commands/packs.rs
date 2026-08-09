@@ -39,6 +39,19 @@ pub struct PlanPackRequest {
     pub override_compatibility: bool,
 }
 
+/// Device-independent inputs for the shared pack planner. Keeping these in a
+/// value object makes the GUI and CLI boundary hard to call with an omitted
+/// safety switch and keeps clippy's argument-count guard meaningful.
+#[derive(Debug, Clone)]
+pub struct PackPlanOptions {
+    pub revision: u32,
+    pub selected: Vec<String>,
+    pub action_overrides: Vec<PackActionOverride>,
+    pub override_compatibility: bool,
+    pub enforce_unsafe_tier: bool,
+    pub allow_unsafe_tier: bool,
+}
+
 #[derive(specta::Type, Debug, Clone, Deserialize)]
 pub struct PackActionOverride {
     pub package: String,
@@ -78,59 +91,24 @@ pub(crate) fn pack_error_to_load_error(
 pub(crate) fn load_runtime_packs(
     packs_dir: &std::path::Path,
 ) -> Result<(Vec<crate::packs::Pack>, Vec<PackLoadError>), CommandError> {
-    if !packs_dir.is_dir() {
-        return Ok((Vec::new(), Vec::new()));
-    }
-    let entries = std::fs::read_dir(packs_dir).map_err(|e| CommandError {
-        code: "io_error",
-        message: format!("could not read packs directory: {e}"),
-    })?;
-    let mut loaded = Vec::new();
-    let mut errors = Vec::new();
-    for entry in entries {
-        let Ok(entry) = entry else { continue };
-        let path = entry.path();
-        let file = path
-            .file_name()
-            .map(|name| name.to_string_lossy().into_owned())
-            .unwrap_or_default();
-        if file.starts_with('_') {
-            continue;
-        }
-        if path
-            .extension()
-            .is_some_and(|ext| ext == "yaml" || ext == "yml")
-        {
-            match crate::packs::load(&path) {
-                Ok(pack) => loaded.push((file, pack)),
-                Err(err) => errors.push(pack_error_to_load_error(file, &err)),
-            }
-        }
-    }
-    let id_counts = loaded.iter().fold(
-        std::collections::HashMap::<String, usize>::new(),
-        |mut counts, (_, pack)| {
-            *counts.entry(pack.id.clone()).or_default() += 1;
-            counts
-        },
-    );
-    let mut packs = Vec::new();
-    for (file, pack) in loaded {
-        if id_counts.get(pack.id.as_str()).copied().unwrap_or_default() > 1 {
-            errors.push(PackLoadError {
-                file,
-                code: "pack_duplicate_id",
-                message: format!(
-                    "stable pack id {:?} is declared by more than one runtime pack",
-                    pack.id
-                ),
-            });
-        } else {
-            packs.push(pack);
-        }
-    }
-    packs.sort_by(|a, b| a.id.cmp(&b.id));
-    errors.sort_by(|a, b| a.file.cmp(&b.file));
+    let (packs, directory_errors) =
+        crate::packs::load_directory(packs_dir).map_err(|error| CommandError {
+            code: "io_error",
+            message: format!("could not read packs directory: {error}"),
+        })?;
+    let errors = directory_errors
+        .into_iter()
+        .map(|error| PackLoadError {
+            file: error.file,
+            code: match error.code.as_str() {
+                "pack_read" => "pack_read",
+                "pack_parse" => "pack_parse",
+                "pack_duplicate_id" => "pack_duplicate_id",
+                _ => "pack_validate",
+            },
+            message: error.message,
+        })
+        .collect();
     Ok((packs, errors))
 }
 
@@ -526,44 +504,34 @@ fn pack_action_capability(
     Ok(())
 }
 
-#[tauri::command]
-#[specta::specta]
-pub fn plan_pack(
-    app: tauri::AppHandle,
-    request: PlanPackRequest,
+/// Shared pack planner used by the GUI command and the headless CLI. The
+/// caller supplies the already-resolved pack so both surfaces use the same
+/// revision, compatibility, dependency, capability, and provenance checks.
+pub fn plan_pack_for_device(
+    transport: &adb::ShellTransport,
+    target: &adb::DeviceTarget,
+    user_id: u32,
+    pack: &crate::packs::Pack,
+    options: PackPlanOptions,
 ) -> Result<PlannedPack, CommandError> {
-    if request.selected.is_empty() {
+    if options.selected.is_empty() {
         return Err(CommandError {
             code: "pack_selection_empty",
             message: "select at least one pack entry".to_string(),
         });
     }
-    let resource_dir = app.path().resource_dir().map_err(|e| CommandError {
-        code: "no_resource_dir",
-        message: e.to_string(),
-    })?;
-    let (packs, _) = load_all_packs(&resource_dir.join("packs"), &user_packs_dir(&app)?)?;
-    let pack = packs
-        .into_iter()
-        .map(|(pack, _)| pack)
-        .find(|pack| pack.id == request.pack_id)
-        .ok_or(CommandError {
-            code: "pack_not_found",
-            message: format!("debloat pack {:?} is not available", request.pack_id),
-        })?;
-    if pack.revision != request.revision {
+    if pack.revision != options.revision {
         return Err(CommandError {
             code: "pack_revision_changed",
             message: format!(
                 "pack {} changed from revision {} to {}; review it again",
-                pack.id, request.revision, pack.revision
+                pack.id, options.revision, pack.revision
             ),
         });
     }
-    let transport = validated_transport(&request.target)?;
-    let context = pack_context(&transport, &request.target, request.user_id)?;
-    let mut assessment = crate::packs::assess(&pack, &context);
-    if assessment.override_required && !request.override_compatibility {
+    let context = pack_context(transport, target, user_id)?;
+    let mut assessment = crate::packs::assess(pack, &context);
+    if assessment.override_required && !options.override_compatibility {
         return Err(CommandError {
             code: "pack_compatibility_override_required",
             message: format!(
@@ -573,15 +541,34 @@ pub fn plan_pack(
         });
     }
     let selected =
-        crate::packs::expand_dependencies(&pack, request.selected).map_err(|message| {
+        crate::packs::expand_dependencies(pack, options.selected).map_err(|message| {
             CommandError {
                 code: "pack_selection_invalid",
                 message,
             }
         })?;
 
+    if options.enforce_unsafe_tier && !options.allow_unsafe_tier {
+        let unsafe_ids: Vec<String> = assessment
+            .entries
+            .iter()
+            .filter(|entry| selected.contains(&entry.id) && entry.effective_removal.is_unsafe())
+            .map(|entry| entry.id.clone())
+            .collect();
+        if !unsafe_ids.is_empty() {
+            return Err(CommandError {
+                code: "pack_unsafe_tier_confirmation_required",
+                message: format!(
+                    "pack {} selects unsafe-tier entries: {}; pass --allow-unsafe-tier only after reviewing them",
+                    pack.id,
+                    unsafe_ids.join(", ")
+                ),
+            });
+        }
+    }
+
     let mut action_overrides = HashMap::<String, crate::packs::PackAction>::new();
-    for override_entry in request.action_overrides {
+    for override_entry in options.action_overrides {
         if !valid_package_name(&override_entry.package) {
             return Err(CommandError {
                 code: "pack_action_package_invalid",
@@ -628,8 +615,8 @@ pub fn plan_pack(
         }
     }
 
-    let action_capabilities = adb::package_action_capabilities(&transport, &request.target);
-    let archive_capability = pack.packages.iter().any(|entry| {
+    let action_capabilities = adb::package_action_capabilities(transport, target);
+    let archive_needed = pack.packages.iter().any(|entry| {
         selected.contains(&entry.id)
             && action_overrides
                 .get(&entry.id)
@@ -637,8 +624,7 @@ pub fn plan_pack(
                 .unwrap_or_else(|| entry.action.unwrap_or_default())
                 == crate::packs::PackAction::Archive
     });
-    let archive_capability =
-        archive_capability.then(|| adb::archive_capability(&transport, &request.target));
+    let archive_capability = archive_needed.then(|| adb::archive_capability(transport, target));
     for entry in pack
         .packages
         .iter()
@@ -693,18 +679,18 @@ pub fn plan_pack(
         }
         selected_ids.push(entry.id.clone());
         plans.push(actions::plan(actions::ActionRequest {
-            serial: request.target.serial.clone(),
-            target: request.target.clone(),
+            serial: target.serial.clone(),
+            target: target.clone(),
             package: entry.id.clone(),
             kind: support.resolved_action.action_kind(),
-            user_id: request.user_id,
+            user_id,
             pack_context: Some(actions::PackActionContext {
                 pack_id: pack.id.clone(),
                 revision: pack.revision,
                 provenance_source: pack.provenance.source.clone(),
                 provenance_license: pack.provenance.license.clone(),
                 compatibility_status: format!("{:?}", assessment.status).to_lowercase(),
-                override_accepted: request.override_compatibility,
+                override_accepted: options.override_compatibility,
             }),
             context: actions::ActionContext {
                 confirmation_source: actions::ConfirmationSource::DebloatPreview,
@@ -713,13 +699,49 @@ pub fn plan_pack(
         }));
     }
     Ok(PlannedPack {
-        pack_id: pack.id,
+        pack_id: pack.id.clone(),
         revision: pack.revision,
         assessment,
         selected_ids,
         plans,
         skipped,
     })
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn plan_pack(
+    app: tauri::AppHandle,
+    request: PlanPackRequest,
+) -> Result<PlannedPack, CommandError> {
+    let resource_dir = app.path().resource_dir().map_err(|e| CommandError {
+        code: "no_resource_dir",
+        message: e.to_string(),
+    })?;
+    let (packs, _) = load_all_packs(&resource_dir.join("packs"), &user_packs_dir(&app)?)?;
+    let pack = packs
+        .into_iter()
+        .map(|(pack, _)| pack)
+        .find(|pack| pack.id == request.pack_id)
+        .ok_or(CommandError {
+            code: "pack_not_found",
+            message: format!("debloat pack {:?} is not available", request.pack_id),
+        })?;
+    let transport = validated_transport(&request.target)?;
+    plan_pack_for_device(
+        &transport,
+        &request.target,
+        request.user_id,
+        &pack,
+        PackPlanOptions {
+            revision: request.revision,
+            selected: request.selected,
+            action_overrides: request.action_overrides,
+            override_compatibility: request.override_compatibility,
+            enforce_unsafe_tier: false,
+            allow_unsafe_tier: false,
+        },
+    )
 }
 
 fn missing_pack_assessment(entry: &crate::packs::PackEntry) -> crate::packs::PackEntryAssessment {

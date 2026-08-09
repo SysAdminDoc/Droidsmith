@@ -266,6 +266,17 @@ pub struct LoadedReport {
 }
 
 pub fn load(path: &Path) -> Result<LoadedReport, FleetReportError> {
+    load_with_mode(path, false)
+}
+
+/// Load a fleet report for the GUI's read-only viewer. Pack fleet reports use
+/// the same schema and redaction path as profile runs but are intentionally
+/// not accepted by `run --retry-from`.
+pub fn load_for_view(path: &Path) -> Result<LoadedReport, FleetReportError> {
+    load_with_mode(path, true)
+}
+
+fn load_with_mode(path: &Path, allow_pack: bool) -> Result<LoadedReport, FleetReportError> {
     let metadata = std::fs::metadata(path).map_err(|source| FleetReportError::Read {
         path: path.to_path_buf(),
         source,
@@ -280,11 +291,25 @@ pub fn load(path: &Path) -> Result<LoadedReport, FleetReportError> {
         path: path.to_path_buf(),
         source,
     })?;
-    parse(path, &bytes)
+    parse_internal(path, &bytes, allow_pack)
 }
 
 /// Split out from [`load`] so validation is testable without a filesystem.
 pub fn parse(path: &Path, bytes: &[u8]) -> Result<LoadedReport, FleetReportError> {
+    parse_internal(path, bytes, false)
+}
+
+/// Parse a report for read-only rendering. This accepts the CLI's pack report
+/// command while leaving the resume parser strict.
+pub fn parse_for_view(path: &Path, bytes: &[u8]) -> Result<LoadedReport, FleetReportError> {
+    parse_internal(path, bytes, true)
+}
+
+fn parse_internal(
+    path: &Path,
+    bytes: &[u8],
+    allow_pack: bool,
+) -> Result<LoadedReport, FleetReportError> {
     #[derive(Deserialize)]
     struct VersionProbe {
         #[serde(default)]
@@ -300,7 +325,8 @@ pub fn parse(path: &Path, bytes: &[u8]) -> Result<LoadedReport, FleetReportError
             path: path.to_path_buf(),
             message: error.to_string(),
         })?;
-    if probe.command != "run" {
+    let command_allowed = probe.command == "run" || (allow_pack && probe.command == "pack");
+    if !command_allowed {
         return Err(FleetReportError::Validate {
             path: path.to_path_buf(),
             message: format!(
@@ -1094,6 +1120,28 @@ mod tests {
             .unwrap_err()
             .to_string()
             .contains("--device"));
+    }
+
+    #[test]
+    fn pack_reports_are_viewable_but_not_resumable() {
+        let source = profile(&[(ActionKind::Disable, "com.a")]);
+        let mut loaded = report(
+            false,
+            vec![ran(
+                "USB1",
+                "a".repeat(64).as_str(),
+                0,
+                vec![("com.a", ActionKind::Disable, ActionStatus::Skipped)],
+                true,
+            )],
+            &source,
+        );
+        loaded.report.command = "pack".to_string();
+        let bytes = serde_json::to_vec(&loaded.report).expect("pack report serializes");
+        assert!(parse(Path::new("pack.json"), &bytes).is_err());
+        let viewed = parse_for_view(Path::new("pack.json"), &bytes)
+            .expect("pack reports remain readable in the viewer");
+        assert_eq!(viewed.report.command, "pack");
     }
 
     #[test]

@@ -60,7 +60,7 @@ pub fn inspect_fleet_report(
     path_grant: String,
 ) -> Result<fleet_report::FleetReportView, CommandError> {
     let path = grants.consume(&path_grant, HostPathPurpose::FleetReportOpen)?;
-    let loaded = fleet_report::load(&path)?;
+    let loaded = fleet_report::load_for_view(&path)?;
     Ok(fleet_report::view(&loaded.report))
 }
 

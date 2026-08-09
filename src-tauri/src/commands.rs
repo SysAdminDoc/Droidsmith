@@ -72,7 +72,21 @@ pub(crate) use mirror::*;
 mod installs;
 pub(crate) use installs::*;
 mod packs;
-pub(crate) use packs::*;
+pub use packs::*;
+
+/// Public library boundary for the headless CLI's pack planner. The Tauri
+/// command remains responsible for loading app resources; this wrapper keeps
+/// the device-bound planning path available without exposing an AppHandle to
+/// the CLI binary.
+pub fn plan_pack_for_device(
+    transport: &adb::ShellTransport,
+    target: &adb::DeviceTarget,
+    user_id: u32,
+    pack: &crate::packs::Pack,
+    options: PackPlanOptions,
+) -> Result<PlannedPack, CommandError> {
+    packs::plan_pack_for_device(transport, target, user_id, pack, options)
+}
 
 /// Generic Tauri-command error envelope so the JS side gets the same
 /// shape regardless of whether the underlying failure was a transport

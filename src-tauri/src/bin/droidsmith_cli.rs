@@ -4,6 +4,9 @@
 //!
 //! ```text
 //! droidsmith-cli devices                        # list ADB devices
+//! droidsmith-cli pack list --json                # list bundled/imported packs
+//! droidsmith-cli pack plan pixel-stock --device SERIAL --json
+//! droidsmith-cli pack apply pixel-stock --all-devices --dry-run --json
 //! droidsmith-cli run <profile.yaml> --device <serial> [--dry-run|--apply] [--json]
 //! droidsmith-cli run <profile.yaml> --retry-from <report.json> [--dry-run|--apply]
 //! droidsmith-cli migrate-v1 <profile.yaml> --output <profile-v2.yaml> [--json]
@@ -21,7 +24,7 @@
 //! No flags are positional after the subcommand to keep the parser
 //! tiny; the dependency surface is `clap`-free on purpose.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use serde::Serialize;
@@ -38,8 +41,10 @@ use droidsmith_lib::fleet_report::{
     RetryTarget, RunApplyOutput, RunOutput, RunPlanOutput, FLEET_REPORT_SCHEMA_VERSION,
 };
 use droidsmith_lib::journal;
+use droidsmith_lib::packs;
 use droidsmith_lib::profile;
 use droidsmith_lib::recovery_baseline::{self, BaselineActionInput, BaselineRoundTrip};
+use droidsmith_lib::{PackPlanOptions, PlannedPack};
 
 /// Exit code for a resume the operator has to review before it can proceed.
 /// Distinct from `2` so a batch runner can tell "you passed the wrong flags"
@@ -55,6 +60,7 @@ fn main() -> ExitCode {
 
     match argv[0].as_str() {
         "devices" => cmd_devices(&argv[1..]),
+        "pack" => cmd_pack(&argv[1..]),
         "run" => cmd_run(&argv[1..]),
         "migrate-v1" => cmd_migrate(&argv[1..], MigrateFrom::V1),
         "migrate-v2" => cmd_migrate(&argv[1..], MigrateFrom::V2),
@@ -78,6 +84,9 @@ fn print_help() {
         "droidsmith-cli — headless ADB action runner\n\n\
          USAGE\n  \
          droidsmith-cli devices [--json]\n  \
+         droidsmith-cli pack list [--json]\n  \
+         droidsmith-cli pack plan <pack-id|pack.yaml> (--device <serial> | --all-devices) [--json] [--allow-unsafe-transport] [--allow-unsafe-tier] [--accept-compatibility]\n  \
+         droidsmith-cli pack apply <pack-id|pack.yaml> (--device <serial> | --all-devices) (--dry-run|--apply) [--json] [--allow-unsafe-transport] [--allow-unsafe-tier] [--accept-compatibility]\n  \
          droidsmith-cli run <profile.yaml> (--device <serial> | --all-devices | --retry-from <report.json>) [--dry-run|--apply] [--json] [--allow-unsafe-transport] [--accept-drift]\n  \
          droidsmith-cli migrate-v1 <profile-v1.yaml> --output <profile-v3.yaml> [--json]\n  \
          droidsmith-cli migrate-v2 <profile-v2.yaml> --output <profile-v3.yaml> [--json]\n  \
@@ -100,8 +109,12 @@ fn print_help() {
          proves applied are never replayed. Drift in the profile, the action set, the\n  \
          device identity, the Android user, or the transport blocks --apply with exit 4\n  \
          until it is reviewed with --dry-run and accepted with --accept-drift.\n\n\
+         Pack commands select every entry in the named pack. A pack's declared\n  \
+         Android-user scope chooses the user unless --user <id> is supplied.\n  \
+         Compatibility mismatches require --accept-compatibility, and unsafe-tier\n  \
+         entries require --allow-unsafe-tier after the operator reviews the plan.\n  \
          EXIT CODES\n  \
-         0 success, 1 apply/fleet failure, 2 usage/parse, 3 adb not found, 4 resume drift"
+         0 success / dry-run plan, 1 apply/fleet failure, 2 usage/parse, 3 adb not found, 4 resume drift"
     );
 }
 
@@ -1218,6 +1231,851 @@ fn cmd_devices(argv: &[String]) -> ExitCode {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum PackOperation {
+    Plan,
+    Apply,
+}
+
+impl PackOperation {
+    fn label(self) -> &'static str {
+        match self {
+            Self::Plan => "plan",
+            Self::Apply => "apply",
+        }
+    }
+}
+
+#[derive(Debug)]
+struct PackArgs {
+    selector: String,
+    serial: Option<String>,
+    all_devices: bool,
+    user_id: Option<u32>,
+    apply: bool,
+    json: bool,
+    allow_unsafe_transport: bool,
+    allow_unsafe_tier: bool,
+    override_compatibility: bool,
+}
+
+#[derive(Debug, Clone)]
+struct CliPack {
+    pack: packs::Pack,
+    imported: bool,
+}
+
+#[derive(Serialize)]
+struct PackSummary {
+    id: String,
+    revision: u32,
+    name: String,
+    version: String,
+    description: String,
+    package_count: usize,
+    imported: bool,
+}
+
+fn pack_summary(pack: &CliPack) -> PackSummary {
+    PackSummary {
+        id: pack.pack.id.clone(),
+        revision: pack.pack.revision,
+        name: pack.pack.name.clone(),
+        version: pack.pack.version.clone(),
+        description: pack.pack.description.clone(),
+        package_count: pack.pack.packages.len(),
+        imported: pack.imported,
+    }
+}
+
+#[derive(Serialize)]
+struct PackListOutput {
+    schema_version: u32,
+    command: &'static str,
+    operation: &'static str,
+    packs: Vec<PackSummary>,
+    errors: Vec<packs::PackDirectoryError>,
+    success: bool,
+}
+
+#[derive(Serialize)]
+struct PackSinglePlanOutput {
+    schema_version: u32,
+    command: &'static str,
+    operation: &'static str,
+    pack: PackSummary,
+    device_serial: String,
+    user_id: u32,
+    plan: PlannedPack,
+    success: bool,
+}
+
+#[derive(Serialize)]
+struct PackErrorOutput {
+    schema_version: u32,
+    command: &'static str,
+    operation: &'static str,
+    code: String,
+    message: String,
+    exit_code: u8,
+}
+
+fn pack_error(
+    json: bool,
+    operation: PackOperation,
+    exit_code: u8,
+    code: impl Into<String>,
+    message: impl Into<String>,
+) -> ExitCode {
+    let code = code.into();
+    let message = message.into();
+    if json {
+        eprintln!(
+            "{}",
+            serde_json::to_string(&PackErrorOutput {
+                schema_version: 1,
+                command: "pack",
+                operation: operation.label(),
+                code,
+                message,
+                exit_code,
+            })
+            .expect("serializable pack error")
+        );
+    } else {
+        eprintln!("[droidsmith-cli] {message}");
+    }
+    ExitCode::from(exit_code)
+}
+
+fn add_pack_root(roots: &mut Vec<(PathBuf, bool)>, candidate: PathBuf, imported: bool) {
+    let normalized = std::fs::canonicalize(&candidate).unwrap_or_else(|_| candidate.clone());
+    if roots.iter().any(|(existing, _)| {
+        std::fs::canonicalize(existing).unwrap_or_else(|_| existing.clone()) == normalized
+    }) {
+        return;
+    }
+    roots.push((candidate, imported));
+}
+
+/// Resolve the development tree, a Tauri-style resources directory, and the
+/// shared app-data import directory. The first existing bundled root wins over
+/// an imported pack with the same stable id, matching the GUI's precedence.
+fn cli_pack_roots() -> Vec<(PathBuf, bool)> {
+    let mut roots = Vec::new();
+    let mut bundled_candidates = vec![PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../packs")];
+    if let Ok(executable) = std::env::current_exe() {
+        if let Some(parent) = executable.parent() {
+            bundled_candidates.push(parent.join("resources").join("packs"));
+            bundled_candidates.push(parent.join("packs"));
+        }
+    }
+    if let Ok(current) = std::env::current_dir() {
+        bundled_candidates.push(current.join("packs"));
+    }
+    if let Some(candidate) = bundled_candidates.into_iter().find(|path| path.is_dir()) {
+        add_pack_root(&mut roots, candidate, false);
+    }
+    if let Ok(journal_dir) = journal::default_journal_dir() {
+        if let Some(app_data) = journal_dir.parent() {
+            add_pack_root(&mut roots, app_data.join("packs"), true);
+        }
+    }
+    roots
+}
+
+fn load_cli_packs() -> Result<(Vec<CliPack>, Vec<packs::PackDirectoryError>), String> {
+    let mut loaded = Vec::new();
+    let mut errors = Vec::new();
+    let mut ids = std::collections::HashSet::new();
+    for (directory, imported) in cli_pack_roots() {
+        let (packs, directory_errors) = packs::load_directory(&directory)
+            .map_err(|error| format!("could not read pack directory {:?}: {error}", directory))?;
+        errors.extend(directory_errors);
+        for pack in packs {
+            if !ids.insert(pack.id.clone()) {
+                errors.push(packs::PackDirectoryError {
+                    file: format!("{}.yaml", pack.id),
+                    code: "pack_duplicate_id".to_string(),
+                    message: format!(
+                        "pack id {:?} is provided by more than one bundled or imported directory",
+                        pack.id
+                    ),
+                });
+                continue;
+            }
+            loaded.push(CliPack { pack, imported });
+        }
+    }
+    loaded.sort_by(|left, right| left.pack.id.cmp(&right.pack.id));
+    errors.sort_by(|left, right| left.file.cmp(&right.file));
+    Ok((loaded, errors))
+}
+
+fn resolve_cli_pack(selector: &str) -> Result<(CliPack, Vec<packs::PackDirectoryError>), String> {
+    let path = Path::new(selector);
+    if path.is_file() {
+        let pack = packs::load(path).map_err(|error| error.to_string())?;
+        return Ok((
+            CliPack {
+                pack,
+                imported: true,
+            },
+            Vec::new(),
+        ));
+    }
+    let (available, errors) = load_cli_packs()?;
+    let pack = available
+        .into_iter()
+        .find(|candidate| candidate.pack.id == selector)
+        .ok_or_else(|| format!("debloat pack {selector:?} is not available"))?;
+    Ok((pack, errors))
+}
+
+fn parse_pack_args(argv: &[String], operation: PackOperation) -> Result<PackArgs, String> {
+    if argv.is_empty() {
+        return Err(format!(
+            "pack {} requires <pack-id|pack.yaml>",
+            operation.label()
+        ));
+    }
+    let selector = argv[0].clone();
+    let mut serial = None;
+    let mut all_devices = false;
+    let mut user_id = None;
+    let mut apply = None;
+    let mut json = false;
+    let mut allow_unsafe_transport = false;
+    let mut allow_unsafe_tier = false;
+    let mut override_compatibility = false;
+    let mut index = 1;
+    while index < argv.len() {
+        match argv[index].as_str() {
+            "--device" => {
+                index += 1;
+                if index >= argv.len() {
+                    return Err("--device requires an argument".to_string());
+                }
+                serial = Some(argv[index].clone());
+            }
+            "--all-devices" => all_devices = true,
+            "--user" => {
+                index += 1;
+                if index >= argv.len() {
+                    return Err("--user requires an argument".to_string());
+                }
+                user_id = Some(
+                    argv[index]
+                        .parse::<u32>()
+                        .map_err(|_| "--user must be an Android numeric user id".to_string())?,
+                );
+            }
+            "--dry-run" => {
+                if operation == PackOperation::Plan {
+                    apply = Some(false);
+                } else if apply.replace(false).is_some() {
+                    return Err("pass exactly one of --dry-run or --apply".to_string());
+                }
+            }
+            "--apply" => {
+                if operation == PackOperation::Plan {
+                    return Err("pack plan is read-only; use pack apply for mutations".to_string());
+                }
+                if apply.replace(true).is_some() {
+                    return Err("pass exactly one of --dry-run or --apply".to_string());
+                }
+            }
+            "--json" => json = true,
+            "--allow-unsafe-transport" => allow_unsafe_transport = true,
+            "--allow-unsafe-tier" => allow_unsafe_tier = true,
+            "--accept-compatibility" | "--override-compatibility" => override_compatibility = true,
+            other => return Err(format!("unknown flag: {other}")),
+        }
+        index += 1;
+    }
+    let serial = resolve_device_selector(serial, all_devices)?;
+    let apply = match operation {
+        PackOperation::Plan => false,
+        PackOperation::Apply => apply.ok_or("pass exactly one of --dry-run or --apply")?,
+    };
+    Ok(PackArgs {
+        selector,
+        serial,
+        all_devices,
+        user_id,
+        apply,
+        json,
+        allow_unsafe_transport,
+        allow_unsafe_tier,
+        override_compatibility,
+    })
+}
+
+fn cmd_pack(argv: &[String]) -> ExitCode {
+    if argv.first().map(String::as_str) == Some("list") {
+        return cmd_pack_list(&argv[1..]);
+    }
+    let Some(subcommand) = argv.first().map(String::as_str) else {
+        return pack_error(
+            false,
+            PackOperation::Plan,
+            2,
+            "usage",
+            "pack requires list, plan, or apply",
+        );
+    };
+    let operation = match subcommand {
+        "plan" => PackOperation::Plan,
+        "apply" => PackOperation::Apply,
+        other => {
+            return pack_error(
+                argv.iter().any(|value| value == "--json"),
+                PackOperation::Plan,
+                2,
+                "usage",
+                format!("unknown pack operation: {other}"),
+            )
+        }
+    };
+    cmd_pack_operation(&argv[1..], operation)
+}
+
+fn cmd_pack_list(argv: &[String]) -> ExitCode {
+    let json = match argv {
+        [] => false,
+        [flag] if flag == "--json" => true,
+        _ => {
+            return pack_error(
+                argv.iter().any(|value| value == "--json"),
+                PackOperation::Plan,
+                2,
+                "usage",
+                "pack list accepts only --json",
+            )
+        }
+    };
+    let (available, errors) = match load_cli_packs() {
+        Ok(result) => result,
+        Err(error) => return pack_error(json, PackOperation::Plan, 1, "pack_read", error),
+    };
+    let success = errors.is_empty();
+    if json {
+        println!(
+            "{}",
+            serde_json::to_string(&PackListOutput {
+                schema_version: 1,
+                command: "pack",
+                operation: "list",
+                packs: available.iter().map(pack_summary).collect(),
+                errors,
+                success,
+            })
+            .expect("serializable pack list")
+        );
+    } else {
+        if available.is_empty() {
+            println!("(no debloat packs found)");
+        } else {
+            println!("ID\tREVISION\tPACKAGES\tNAME");
+            for pack in &available {
+                println!(
+                    "{}\t{}\t{}\t{}{}",
+                    pack.pack.id,
+                    pack.pack.revision,
+                    pack.pack.packages.len(),
+                    pack.pack.name,
+                    if pack.imported { " (imported)" } else { "" }
+                );
+            }
+        }
+        for error in &errors {
+            eprintln!("[droidsmith-cli] {}: {}", error.file, error.message);
+        }
+    }
+    if success {
+        ExitCode::SUCCESS
+    } else {
+        ExitCode::from(1)
+    }
+}
+
+fn resolve_pack_user(
+    transport: &ShellTransport,
+    target: &DeviceTarget,
+    pack: &packs::Pack,
+    requested: Option<u32>,
+) -> Result<u32, String> {
+    let users = adb::list_users(transport, target).map_err(|error| error.to_string())?;
+    if let Some(user_id) = requested {
+        if users.iter().any(|user| user.id == user_id) {
+            return Ok(user_id);
+        }
+        return Err(format!(
+            "Android user {user_id} is not available on device {}",
+            target.serial
+        ));
+    }
+    match pack.targets.user_scope {
+        packs::UserScope::Owner => users
+            .iter()
+            .find(|user| user.id == 0)
+            .map(|user| user.id)
+            .ok_or_else(|| "pack targets owner user 0, which is not available".to_string()),
+        packs::UserScope::Current | packs::UserScope::Any => users
+            .iter()
+            .find(|user| user.current)
+            .or_else(|| users.iter().find(|user| user.id == 0))
+            .map(|user| user.id)
+            .ok_or_else(|| "pack could not resolve an Android user".to_string()),
+        packs::UserScope::Unspecified => Err(
+            "pack has no explicit Android-user scope; pass --user after reviewing the pack".into(),
+        ),
+    }
+}
+
+fn plan_pack_target(
+    transport: &ShellTransport,
+    target: &DeviceTarget,
+    pack: &packs::Pack,
+    args: &PackArgs,
+) -> Result<(u32, PlannedPack), DeviceErrorOutput> {
+    let fail = |code: &str, message: String| DeviceErrorOutput {
+        device_serial: target.serial.clone(),
+        code: code.to_string(),
+        message,
+    };
+    let user_id = resolve_pack_user(transport, target, pack, args.user_id)
+        .map_err(|error| fail("pack_user_unavailable", error))?;
+    let mut planned = droidsmith_lib::plan_pack_for_device(
+        transport,
+        target,
+        user_id,
+        pack,
+        PackPlanOptions {
+            revision: pack.revision,
+            selected: pack.packages.iter().map(|entry| entry.id.clone()).collect(),
+            action_overrides: Vec::new(),
+            override_compatibility: args.override_compatibility,
+            enforce_unsafe_tier: true,
+            allow_unsafe_tier: args.allow_unsafe_tier,
+        },
+    )
+    .map_err(|error| fail(error.code, error.message))?;
+    for plan in &mut planned.plans {
+        plan.request.context.confirmation_source = actions::ConfirmationSource::CliApply;
+        plan.before_state = actions::capture_state(transport, &plan.request);
+    }
+    Ok((user_id, planned))
+}
+
+struct PackRunTarget<'a> {
+    transport: &'a ShellTransport,
+    pack: &'a packs::Pack,
+    target: &'a DeviceTarget,
+    serial: &'a str,
+    user_id: u32,
+}
+
+fn run_pack_on_target(
+    context: PackRunTarget<'_>,
+    planned: PlannedPack,
+    apply: bool,
+    print_human: bool,
+) -> Result<RunOutput, DeviceErrorOutput> {
+    let PackRunTarget {
+        transport,
+        pack,
+        target,
+        serial,
+        user_id,
+    } = context;
+    let fail = |code: &str, message: String| DeviceErrorOutput {
+        device_serial: serial.to_string(),
+        code: code.to_string(),
+        message,
+    };
+    let plan_output = planned
+        .plans
+        .iter()
+        .enumerate()
+        .map(|(index, plan)| RunPlanOutput {
+            index: index + 1,
+            package: plan.request.package.clone(),
+            action: plan.request.kind,
+            user_id: plan.request.user_id,
+            before_state: plan.before_state.clone(),
+            description: plan.description.clone(),
+            adb_args: plan
+                .request
+                .target
+                .adb_selector()
+                .into_iter()
+                .chain(["shell".to_string()])
+                .chain(plan.args.clone())
+                .collect(),
+        })
+        .collect::<Vec<_>>();
+    let mut success = !planned.plans.is_empty() && planned.skipped.is_empty();
+    if print_human {
+        println!("Pack: {} (revision {})", pack.name, pack.revision);
+        println!("Target device: {serial} / Android user {user_id}");
+        for skipped in &planned.skipped {
+            println!(
+                "  skipped {} [{:?}]: {}",
+                skipped.id,
+                skipped.effective_removal,
+                skipped.detail.as_deref().unwrap_or("not ready")
+            );
+        }
+        for plan in &plan_output {
+            println!(
+                "  [{:>2}] {} [{}] -> adb {}",
+                plan.index,
+                plan.description,
+                plan.before_state,
+                plan.adb_args.join(" ")
+            );
+        }
+    }
+
+    let mut results = Vec::new();
+    if apply {
+        let journal_dir = journal::default_journal_dir()
+            .map_err(|error| fail("journal_unavailable", error.to_string()))?;
+        let identity = DeviceIdentity::from_target(target);
+        for (index, mut plan) in planned.plans.into_iter().enumerate() {
+            let package = plan.request.package.clone();
+            let kind = plan.request.kind;
+            if kind == actions::ActionKind::UninstallForUser {
+                plan.recovery = Some(adb::packages::assess_uninstall_recovery(
+                    transport, target, user_id, &package,
+                ));
+            }
+            let now = iso_now();
+            let result = journal::with_journal(&journal_dir, &identity, |journal| {
+                journal.execute(plan, None, &now, |plan| {
+                    actions::apply(transport, plan, &iso_now())
+                })
+            });
+            match result {
+                Ok(_) => {
+                    if print_human {
+                        println!("  [{:>2}] ok", index + 1);
+                    }
+                    results.push(RunApplyOutput {
+                        index: index + 1,
+                        package,
+                        action: kind,
+                        status: ActionStatus::Applied,
+                        error: None,
+                    });
+                }
+                Err(journal::ExecuteError::Operation(error)) => {
+                    success = false;
+                    let message = actions::package_action_failure_message(&error.to_string());
+                    if print_human {
+                        eprintln!("  [{:>2}] FAILED: {message}", index + 1);
+                    }
+                    results.push(RunApplyOutput {
+                        index: index + 1,
+                        package,
+                        action: kind,
+                        status: ActionStatus::Failed,
+                        error: Some(message),
+                    });
+                }
+                Err(journal::ExecuteError::Journal(error)) => {
+                    return Err(fail("journal_failed", error.to_string()));
+                }
+            }
+        }
+    }
+    if print_human {
+        if apply && success {
+            println!("\nPack applied successfully.");
+        } else if !apply {
+            println!("\n(dry-run; read-only state captured; nothing was changed)");
+        } else {
+            println!("\nPack completed with skipped or failed entries.");
+        }
+    }
+    Ok(RunOutput {
+        schema_version: FLEET_REPORT_SCHEMA_VERSION,
+        command: "pack".to_string(),
+        mode: if apply { "apply" } else { "dry_run" }.to_string(),
+        profile_name: pack.name.clone(),
+        profile_version: pack.version.clone(),
+        device_serial: serial.to_string(),
+        device_identity_sha256: fleet_report::hashed_identity(&DeviceIdentity::from_target(target)),
+        transport_kind: target.transport_kind,
+        android_user: user_id,
+        compatible: true,
+        plans: plan_output,
+        results,
+        filter_exclusions: Vec::new(),
+        success,
+    })
+}
+
+fn pack_report_profile(pack: &packs::Pack) -> profile::Profile {
+    profile::Profile {
+        name: pack.name.clone(),
+        version: pack.version.clone(),
+        description: pack.description.clone(),
+        device: Default::default(),
+        user: Default::default(),
+        actions: pack
+            .packages
+            .iter()
+            .map(|entry| profile::ProfileAction {
+                kind: entry.action.unwrap_or_default().action_kind(),
+                package: entry.id.clone(),
+                filter: String::new(),
+                note: entry.description.clone(),
+            })
+            .collect(),
+    }
+}
+
+fn pack_fleet_report(
+    pack: &packs::Pack,
+    apply: bool,
+    devices: Vec<DeviceRunResult>,
+    success: bool,
+) -> FleetRunReport {
+    FleetRunReport {
+        schema_version: FLEET_REPORT_SCHEMA_VERSION,
+        command: "pack".to_string(),
+        mode: "all_devices".to_string(),
+        apply,
+        generated_at: iso_now(),
+        profile: fleet_report::describe_profile(&pack_report_profile(pack)),
+        lineage: None,
+        devices,
+        success,
+    }
+}
+
+fn cmd_pack_fleet(
+    transport: &ShellTransport,
+    pack: &packs::Pack,
+    args: &PackArgs,
+) -> Result<FleetRunReport, String> {
+    let devices = list_fleet(transport)?;
+    let screened = screen_fleet_devices(devices, args.allow_unsafe_transport);
+    let mut results = Vec::new();
+    let mut success = true;
+    for screen in screened {
+        match screen {
+            FleetScreen::Skipped { serial, reason } => {
+                success = false;
+                if !args.json {
+                    eprintln!("[droidsmith-cli] skipped {serial}: {reason}");
+                }
+                results.push(DeviceRunResult::Skipped {
+                    device_serial: serial,
+                    reason,
+                });
+            }
+            FleetScreen::Eligible(device) => {
+                let serial = device.serial.clone();
+                let mut target = match finalize_target(transport, device) {
+                    Ok(target) => target,
+                    Err(error) => {
+                        success = false;
+                        results.push(DeviceRunResult::Error(DeviceErrorOutput {
+                            device_serial: serial,
+                            code: "device_unavailable".to_string(),
+                            message: error,
+                        }));
+                        continue;
+                    }
+                };
+                if let Err(error) =
+                    authorize_cli_transport(&mut target, args.allow_unsafe_transport)
+                {
+                    success = false;
+                    results.push(DeviceRunResult::Error(DeviceErrorOutput {
+                        device_serial: serial,
+                        code: "transport_confirmation_required".to_string(),
+                        message: error,
+                    }));
+                    continue;
+                }
+                if !args.json {
+                    println!("\n=== {serial} ===");
+                }
+                let (user_id, planned) = match plan_pack_target(transport, &target, pack, args) {
+                    Ok(result) => result,
+                    Err(error) => {
+                        success = false;
+                        results.push(DeviceRunResult::Error(error));
+                        continue;
+                    }
+                };
+                match run_pack_on_target(
+                    PackRunTarget {
+                        transport,
+                        pack,
+                        target: &target,
+                        serial: &serial,
+                        user_id,
+                    },
+                    planned,
+                    args.apply,
+                    !args.json,
+                ) {
+                    Ok(output) => {
+                        if !output.success {
+                            success = false;
+                        }
+                        results.push(DeviceRunResult::Ran(Box::new(output)));
+                    }
+                    Err(error) => {
+                        success = false;
+                        results.push(DeviceRunResult::Error(error));
+                    }
+                }
+            }
+        }
+    }
+    if results.is_empty() {
+        success = false;
+        if !args.json {
+            eprintln!("[droidsmith-cli] no devices connected");
+        }
+    }
+    Ok(pack_fleet_report(pack, args.apply, results, success))
+}
+
+fn cmd_pack_operation(argv: &[String], operation: PackOperation) -> ExitCode {
+    let json_requested = argv.iter().any(|value| value == "--json");
+    let args = match parse_pack_args(argv, operation) {
+        Ok(args) => args,
+        Err(error) => return pack_error(json_requested, operation, 2, "usage", error),
+    };
+    let (cli_pack, load_errors) = match resolve_cli_pack(&args.selector) {
+        Ok(result) => result,
+        Err(error) => return pack_error(args.json, operation, 2, "pack_not_found", error),
+    };
+    if !load_errors.is_empty() && !args.json {
+        for error in &load_errors {
+            eprintln!("[droidsmith-cli] {}: {}", error.file, error.message);
+        }
+    }
+    let Some(transport) = resolve_or_fail() else {
+        return pack_error(
+            args.json,
+            operation,
+            3,
+            "adb_not_found",
+            "adb binary not found",
+        );
+    };
+    if args.all_devices {
+        let report = match cmd_pack_fleet(&transport, &cli_pack.pack, &args) {
+            Ok(report) => report,
+            Err(error) => return pack_error(args.json, operation, 1, "device_list_failed", error),
+        };
+        if args.json {
+            println!(
+                "{}",
+                serde_json::to_string(&report).expect("serializable pack fleet report")
+            );
+        } else {
+            let ran = report
+                .devices
+                .iter()
+                .filter(|device| matches!(device, DeviceRunResult::Ran(_)))
+                .count();
+            println!(
+                "\nPack {}: {ran} device(s) processed{}.",
+                if args.apply { "apply" } else { "dry-run" },
+                if report.success {
+                    ""
+                } else {
+                    " — review skips/errors above"
+                }
+            );
+        }
+        return if report.success {
+            ExitCode::SUCCESS
+        } else {
+            ExitCode::from(1)
+        };
+    }
+
+    let serial = args
+        .serial
+        .as_deref()
+        .expect("single-device pack mode always carries a serial");
+    let mut target = match target_for_serial(&transport, serial) {
+        Ok(target) => target,
+        Err(error) => return pack_error(args.json, operation, 1, "device_unavailable", error),
+    };
+    if let Err(error) = authorize_cli_transport(&mut target, args.allow_unsafe_transport) {
+        return pack_error(
+            args.json,
+            operation,
+            2,
+            "transport_confirmation_required",
+            error,
+        );
+    }
+    let (user_id, planned) = match plan_pack_target(&transport, &target, &cli_pack.pack, &args) {
+        Ok(result) => result,
+        Err(error) => return pack_error(args.json, operation, 1, error.code, error.message),
+    };
+    if operation == PackOperation::Plan && args.json {
+        let success = !planned.plans.is_empty() && planned.skipped.is_empty();
+        println!(
+            "{}",
+            serde_json::to_string(&PackSinglePlanOutput {
+                schema_version: 1,
+                command: "pack",
+                operation: "plan",
+                pack: pack_summary(&cli_pack),
+                device_serial: serial.to_string(),
+                user_id,
+                plan: planned,
+                success,
+            })
+            .expect("serializable pack plan")
+        );
+        return if success {
+            ExitCode::SUCCESS
+        } else {
+            ExitCode::from(1)
+        };
+    }
+    let output = match run_pack_on_target(
+        PackRunTarget {
+            transport: &transport,
+            pack: &cli_pack.pack,
+            target: &target,
+            serial,
+            user_id,
+        },
+        planned,
+        args.apply,
+        !args.json,
+    ) {
+        Ok(output) => output,
+        Err(error) => return pack_error(args.json, operation, 1, error.code, error.message),
+    };
+    if args.json {
+        println!(
+            "{}",
+            serde_json::to_string(&output).expect("serializable pack result")
+        );
+    }
+    if output.success {
+        ExitCode::SUCCESS
+    } else {
+        ExitCode::from(1)
+    }
+}
+
 #[derive(Debug)]
 struct RunArgs {
     profile_path: PathBuf,
@@ -2255,6 +3113,52 @@ mod tests {
             "--apply",
         ]))
         .is_err());
+    }
+
+    #[test]
+    fn pack_parser_supports_fleet_safety_and_apply_modes() {
+        let args = parse_pack_args(
+            &strings(&[
+                "pixel-stock",
+                "--all-devices",
+                "--dry-run",
+                "--json",
+                "--allow-unsafe-transport",
+                "--allow-unsafe-tier",
+                "--accept-compatibility",
+                "--user",
+                "10",
+            ]),
+            PackOperation::Apply,
+        )
+        .unwrap();
+        assert!(args.all_devices);
+        assert!(args.serial.is_none());
+        assert!(!args.apply);
+        assert!(args.json);
+        assert!(args.allow_unsafe_transport);
+        assert!(args.allow_unsafe_tier);
+        assert!(args.override_compatibility);
+        assert_eq!(args.user_id, Some(10));
+
+        assert!(parse_pack_args(
+            &strings(&["pixel-stock", "--device", "QA1", "--apply"]),
+            PackOperation::Plan,
+        )
+        .unwrap_err()
+        .contains("read-only"));
+        assert!(parse_pack_args(
+            &strings(&[
+                "pixel-stock",
+                "--all-devices",
+                "--device",
+                "QA1",
+                "--dry-run",
+            ]),
+            PackOperation::Apply,
+        )
+        .unwrap_err()
+        .contains("not both"));
     }
 
     #[test]

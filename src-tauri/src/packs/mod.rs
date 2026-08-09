@@ -230,6 +230,16 @@ pub enum RemovalLevel {
     Unsafe,
 }
 
+impl RemovalLevel {
+    /// Whether applying an entry requires an explicit operator acknowledgement
+    /// on a headless command line. The GUI has a separate review checkbox;
+    /// keeping this predicate in the pack domain prevents CLI callers from
+    /// duplicating the tier spelling.
+    pub fn is_unsafe(self) -> bool {
+        self == Self::Unsafe
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct DevicePackContext {
     pub manufacturer: Option<String>,
@@ -318,6 +328,84 @@ pub enum PackError {
     },
     #[error("pack {path} failed validation: {reasons}")]
     Validate { path: PathBuf, reasons: String },
+}
+
+/// A single malformed or duplicated file found while loading a pack directory.
+/// The path is reduced to its file name so a CLI or renderer can report the
+/// problem without disclosing the host's directory layout.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct PackDirectoryError {
+    pub file: String,
+    pub code: String,
+    pub message: String,
+}
+
+/// Load every YAML pack in a directory, retaining per-file failures instead of
+/// making one bad contribution hide the healthy packs. The loader is shared by
+/// the GUI's resource model and the headless CLI so both surfaces resolve the
+/// same schema and duplicate-id rules.
+pub fn load_directory(
+    directory: &Path,
+) -> Result<(Vec<Pack>, Vec<PackDirectoryError>), std::io::Error> {
+    if !directory.is_dir() {
+        return Ok((Vec::new(), Vec::new()));
+    }
+    let mut loaded = Vec::new();
+    let mut errors = Vec::new();
+    for entry in std::fs::read_dir(directory)? {
+        let Ok(entry) = entry else { continue };
+        let path = entry.path();
+        let file = path
+            .file_name()
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        if file.starts_with('_')
+            || !path
+                .extension()
+                .is_some_and(|extension| extension == "yaml" || extension == "yml")
+        {
+            continue;
+        }
+        match load(&path) {
+            Ok(pack) => loaded.push(pack),
+            Err(error) => errors.push(PackDirectoryError {
+                file,
+                code: pack_error_code(&error).to_string(),
+                message: error.to_string(),
+            }),
+        }
+    }
+
+    let mut id_counts = HashMap::<String, usize>::new();
+    for pack in &loaded {
+        *id_counts.entry(pack.id.clone()).or_default() += 1;
+    }
+    loaded.retain(|pack| {
+        if id_counts.get(&pack.id).copied().unwrap_or_default() > 1 {
+            errors.push(PackDirectoryError {
+                file: format!("{}.yaml", pack.id),
+                code: "pack_duplicate_id".to_string(),
+                message: format!(
+                    "stable pack id {:?} is declared by more than one runtime pack",
+                    pack.id
+                ),
+            });
+            false
+        } else {
+            true
+        }
+    });
+    loaded.sort_by(|left, right| left.id.cmp(&right.id));
+    errors.sort_by(|left, right| left.file.cmp(&right.file));
+    Ok((loaded, errors))
+}
+
+fn pack_error_code(error: &PackError) -> &'static str {
+    match error {
+        PackError::Read { .. } => "pack_read",
+        PackError::Parse { .. } => "pack_parse",
+        PackError::Validate { .. } => "pack_validate",
+    }
 }
 
 pub fn load(path: &Path) -> Result<Pack, PackError> {

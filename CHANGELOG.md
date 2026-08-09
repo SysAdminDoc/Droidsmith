@@ -39,6 +39,9 @@ each milestone tag.
   applied across the connected fleet with per-device progress, cancellation,
   safe transport screening, and an atomically saved schema-2 report rendered by
   the existing offline report viewer. (R-138)
+- **Debloat packs are available from the CLI.** `pack list`, `pack plan`, and
+  `pack apply` share the GUI planner's device checks, user scoping, journal
+  writes, fleet-report schema, and explicit unsafe-tier acknowledgement. (R-143)
 - **Remote file mutations quote shell-sensitive device paths.** Absolute paths
   containing whitespace, punctuation, or quotes are protected at the `adb
   shell` boundary, while the structured plan remains available for exact

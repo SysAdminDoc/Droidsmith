@@ -73,6 +73,13 @@ use commands::{
     stop_gnirehtet, stop_scrcpy, stream_logcat, take_screenshot, watch_devices, wipe_diagnostics,
 };
 
+// The CLI links the same validated pack planner as the GUI command. Keep the
+// AppHandle-bound resource loader private while exposing only this device-side
+// planning boundary and its data types.
+pub use commands::{
+    plan_pack_for_device, CommandError, PackActionOverride, PackPlanOptions, PlannedPack,
+};
+
 fn ipc_builder() -> tauri_specta::Builder<tauri::Wry> {
     macro_rules! collect_registered_commands {
         ($($command:ident),* $(,)?) => {

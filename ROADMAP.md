@@ -23,13 +23,6 @@ and Android, privacy-safe diagnostics, and the widest remaining product gap
 
 ### P2
 
-- [ ] R-143 P2 — Apply a debloat pack from the CLI
-  Why: packs are the project's flagship content format and the headless surface cannot use them, so no fleet or CI workflow can apply curated vendor content.
-  Evidence: `src-tauri/src/bin/droidsmith_cli.rs` dispatches only `devices`, `run`, `migrate-v1`, `migrate-v2`, `baseline-export`, `baseline-inspect`, `baseline-apply`, `help`; `src-tauri/src/commands/packs.rs` `plan_pack` is GUI-only and single-device.
-  Touches: `src-tauri/src/bin/droidsmith_cli.rs`, `src-tauri/src/packs/mod.rs`, `src-tauri/tests/cli_smoke.rs`
-  Acceptance: `droidsmith-cli pack list|plan|apply` exists with `--device`/`--all-devices`, `--dry-run`/`--apply`, `--json` and the same exit codes; unsafe-tier entries require an explicit flag; a run writes the same journal and fleet report the GUI and `run` produce.
-  Complexity: M
-
 - [ ] R-144 P2 — Add the remaining reversible `pm` rungs
   Why: several verified-present subcommands sit between "leave it alone" and "disable", which is exactly the safety gradient the bootloop evidence calls for.
   Evidence: AOSP `PackageManagerShellCommand.java` on `main` dispatches `unstop`, `hide`/`unhide`, `disable-until-used`, `default-state`, `suspend-quarantine`, `get-archived-package-metadata`; `src-tauri/src/adb/actions.rs` `ActionKind` covers disable, uninstall-for-user, clear, force-stop, archive, unarchive, suspend/unsuspend.

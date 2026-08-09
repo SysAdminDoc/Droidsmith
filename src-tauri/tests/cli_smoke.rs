@@ -54,6 +54,19 @@ fn no_args_exits_two() {
 }
 
 #[test]
+fn pack_list_is_offline_and_returns_pack_summaries() {
+    let (code, stdout, stderr) = run(&["pack", "list", "--json"]);
+    assert_eq!(code, 0, "stderr: {stderr}");
+    let parsed: serde_json::Value = serde_json::from_str(&stdout).expect("valid JSON output");
+    assert_eq!(parsed["command"], "pack");
+    assert_eq!(parsed["operation"], "list");
+    assert!(parsed["success"].as_bool().unwrap_or(false));
+    assert!(parsed["packs"]
+        .as_array()
+        .is_some_and(|packs| { packs.iter().any(|pack| pack["id"] == "pixel-stock") }));
+}
+
+#[test]
 fn migrate_v1_succeeds_with_fixture() {
     let input = fixtures().join("profiles").join("v1-valid.yaml");
     let dir = std::env::temp_dir().join(format!("droidsmith-cli-smoke-{}", std::process::id()));
