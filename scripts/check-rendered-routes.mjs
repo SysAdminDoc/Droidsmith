@@ -532,9 +532,7 @@ async function runDesktopFlow(browser) {
     .waitFor();
   await page.getByLabel("ADB shell command").fill("getprop ro.product.model");
   await page.getByRole("button", { name: "Run", exact: true }).click();
-  await page
-    .getByText("untrusted_transport_override_required", { exact: true })
-    .waitFor();
+  await page.getByText(/untrusted_transport_override_required/).waitFor();
   await page
     .getByLabel(
       "Allow privileged operations over this connection until I select another device.",
@@ -3978,7 +3976,10 @@ async function installTauriMock(
             ) &&
             !args.request.target.untrusted_transport_override
           ) {
-            throw new Error("untrusted_transport_override_required");
+            throw {
+              code: "untrusted_transport_override_required",
+              message: "untrusted_transport_override_required",
+            };
           }
           const shellArgv = args.request.argv;
           const readOnly = shellArgv[0] === "getprop";

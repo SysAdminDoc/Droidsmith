@@ -94,7 +94,25 @@
     "copied": "已复制脱敏错误摘要。",
     "copyFailed": "无法访问剪贴板。请手动选择并复制摘要。",
     "logsOpened": "已打开本地诊断文件夹。",
-    "openFailed": "无法打开本地诊断文件夹。"
+    "openFailed": "无法打开本地诊断文件夹。",
+    "fallbackTitle": "Droidsmith 无法显示恢复控件。",
+    "fallbackBody": "请关闭并重新打开 Droidsmith 后继续。"
+  },
+  "errors": {
+    "technicalDetails": "技术详情",
+    "technicalDetailsUnavailable": "技术详情不可用。",
+    "command": {
+      "generic": "无法完成此操作。",
+      "transport": "Droidsmith 无法与 Android 工具或设备通信。",
+      "mirror": "Droidsmith 无法启动或控制镜像会话。",
+      "profile": "Droidsmith 无法读取或应用配置文件。",
+      "pack": "Droidsmith 无法加载或应用去臃肿包。",
+      "validation": "请求未被接受，因为一个或多个输入无效。",
+      "operation": "请求的操作未完成。",
+      "files": "Droidsmith 无法完成文件操作。",
+      "device": "设备拒绝了请求的软件包或设备操作。",
+      "storage": "Droidsmith 无法访问本地操作数据。"
+    }
   },
   "runtime": {
     "desktop": "桌面运行时",

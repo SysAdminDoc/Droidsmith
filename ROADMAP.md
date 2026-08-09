@@ -42,13 +42,6 @@ and Android, privacy-safe diagnostics, and the widest remaining product gap
   Acceptance: a profile can be planned and applied across every connected authorized device from the GUI, reusing the CLI's skip semantics (unauthorized/offline/unsafe-TCP are skipped, not aborted); progress is per-device and cancellable; the run writes the same schema-2 fleet report the CLI writes, and the existing report viewer opens it; resume stays a CLI operation and the GUI points at `--retry-from`.
   Complexity: L
 
-- [ ] IMP-130 P1 — Make native and renderer failures locale-safe without hiding OEM detail
-  Why: the locale catalogs have exact static-key parity, but the renderer recovery fallback is hard-coded English and most routes render raw `CommandError.message` strings directly, so a failure can be both untranslated and more revealing than its surrounding UI.
-  Evidence: `src/RendererErrorBoundary.tsx:63-66`; `src/lib/tauri.ts:568-579`; direct render sites include `src/routes/Apps.tsx`, `src/routes/Devices.tsx`, `src/routes/ApkAnalyzer.tsx`, `src/routes/Logcat.tsx`, and `src/routes/Wireless.tsx`; `src-tauri/src/commands.rs:77-88` already supplies stable error codes; i18next fallback guidance recommends an explicit production fallback language.
-  Touches: `src/lib/tauri.ts`, `src/lib/rendererError.ts`, `src/RendererErrorBoundary.tsx`, `src/locales/*.json`, route error surfaces, tests
-  Acceptance: known command codes map to localized summaries in all five locales; exact OEM/device text remains verbatim in a labelled technical-details disclosure while renderer-added host paths/identifiers are separately redacted; the nested recovery fallback has locale-safe static copy and a test exercises it when the i18n tree itself fails.
-  Complexity: M
-
 ### P2
 
 - [ ] IMP-121 P2 — Fix the repository discoverability metadata

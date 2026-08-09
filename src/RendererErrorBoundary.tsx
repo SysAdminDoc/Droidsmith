@@ -8,6 +8,7 @@ import {
 import { useTranslation } from "react-i18next";
 
 import { createRedactedRendererErrorSummary } from "./lib/rendererError";
+import { getRendererRecoveryFallbackCopy } from "./lib/rendererRecovery";
 import { callRevealDiagnosticsDirectory } from "./lib/tauri";
 
 declare global {
@@ -59,10 +60,11 @@ class RecoveryFallbackBoundary extends Component<
 
   render(): ReactNode {
     if (this.state.failed) {
+      const copy = getRendererRecoveryFallbackCopy();
       return (
         <main role="alert">
-          <h1>Droidsmith could not render its recovery controls.</h1>
-          <p>Close and reopen Droidsmith to continue.</p>
+          <h1>{copy.title}</h1>
+          <p>{copy.body}</p>
         </main>
       );
     }

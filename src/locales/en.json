@@ -94,7 +94,25 @@
     "copied": "Redacted error summary copied.",
     "copyFailed": "Clipboard access failed. Select and copy the summary manually.",
     "logsOpened": "Opened the local diagnostics folder.",
-    "openFailed": "Could not open the local diagnostics folder."
+    "openFailed": "Could not open the local diagnostics folder.",
+    "fallbackTitle": "Droidsmith could not render its recovery controls.",
+    "fallbackBody": "Close and reopen Droidsmith to continue."
+  },
+  "errors": {
+    "technicalDetails": "Technical details",
+    "technicalDetailsUnavailable": "Technical details are unavailable.",
+    "command": {
+      "generic": "The operation could not be completed.",
+      "transport": "Droidsmith could not communicate with Android tooling or the device.",
+      "mirror": "Droidsmith could not start or control the mirror session.",
+      "profile": "Droidsmith could not read or apply the profile.",
+      "pack": "Droidsmith could not load or apply the debloat pack.",
+      "validation": "The request was not accepted because one or more inputs were invalid.",
+      "operation": "The requested operation did not complete.",
+      "files": "Droidsmith could not complete the file operation.",
+      "device": "The device rejected the requested package or device action.",
+      "storage": "Droidsmith could not access its local operation data."
+    }
   },
   "runtime": {
     "desktop": "Desktop runtime",

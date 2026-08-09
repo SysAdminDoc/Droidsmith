@@ -34,7 +34,7 @@ community, and security review:
    are now shipped (R-139/R-140).
 5. **P1 security truth:** account for Project Mainline in the CVE-2026-0073
    verdict (R-135), redact native panic payloads before writing `crash.log`
-   (IMP-133), and keep raw OEM detail behind a typed/localized error envelope
+   (IMP-133); raw OEM detail now stays behind a typed/localized error envelope
    (IMP-130).
 6. **P1 artifact truth:** make provenance line-ending independent (IMP-115),
    reject placeholder installer hashes (IMP-116), and emit usable SBOM license
@@ -174,14 +174,12 @@ payload content and add a direct-hook test.
 
 ### Error fidelity versus localization — Verified
 
-`CommandError` intentionally preserves exact backend/OEM text, but
-`src/lib/tauri.ts:568-579` returns it directly and many routes render it
-without a locale-aware summary. `RendererErrorBoundary.tsx:63-66` has a second
-failure path with hard-coded English. IMP-130 should map stable error codes to
-localized summaries, keep exact device/OEM text verbatim in an explicitly
-labelled details region, scope any redaction to renderer-added host paths or
-identifiers, and make the recovery fallback render-safe even if the i18n tree
-failed.
+`CommandError` intentionally preserves exact backend/OEM text, but the command
+boundary previously returned it directly and many routes rendered it without a
+locale-aware summary. The boundary now maps stable codes to localized
+summaries, keeps exact device/OEM text in a labelled details line, redacts
+renderer-originated host paths or identifiers, and keeps the recovery fallback
+render-safe even if the i18n tree fails (IMP-130).
 
 ### Artifact and supply-chain claims — Verified
 
@@ -248,7 +246,7 @@ IMP-114 is the still-open total-theme gate.
 - **Empty/error states:** Host Doctor with zero findings and Mirror with zero
   packages still need explicit copy (IMP-119), while install/uninstall and
   package actions should preserve exact OEM output through R-141/R-142 and the
-  localized envelope proposed in IMP-130.
+  localized envelope shipped in IMP-130.
 - **Accessibility and themes:** the rendered/axe harness is strong in dark mode,
   but does not set `data-theme="light"`; the native config pins `Dark`. Narrow
   locale/zoom coverage is concentrated in one locale even though key parity is

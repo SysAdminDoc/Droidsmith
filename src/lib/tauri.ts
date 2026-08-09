@@ -105,6 +105,7 @@ import {
   type WirelessHistorySnapshot,
   type WirelessPairRequest,
 } from "./bindings";
+import i18n from "./i18n";
 
 export * from "./bindings";
 
@@ -560,22 +561,143 @@ export async function callSetWirelessAutoReconnect(
 }
 
 /**
- * Extract a human-readable message from an unknown thrown value. Tauri command
- * rejections arrive as plain `{ code, message }` objects (the serialized
- * `CommandError`), not `Error` instances, so a naive `String(error)` renders
- * the useless "[object Object]". Prefer this everywhere errors reach the UI.
+ * Stable user-facing summaries for the command boundary. The native message
+ * remains available below as labelled technical detail, while the summary is
+ * localized through the active i18next language. Prefix matching keeps newer
+ * command codes safe by putting them in the closest established category.
+ */
+const COMMAND_ERROR_CATEGORIES: Record<string, string> = {
+  transport: "transport",
+  mirror: "mirror",
+  profile: "profile",
+  pack: "pack",
+  validation: "validation",
+  operation: "operation",
+  files: "files",
+  device: "device",
+  storage: "storage",
+};
+
+type ParsedCommandError = {
+  code: string | null;
+  message: string;
+  native: boolean;
+};
+
+/**
+ * Extract a localized, privacy-aware message from an unknown thrown value.
+ * Tauri command rejections arrive as plain `{ code, message }` objects (the
+ * serialized `CommandError`), not `Error` instances, so a naive `String(error)`
+ * renders the useless "[object Object]". Native/OEM text is kept verbatim in
+ * a labelled technical-details section; renderer-originated text is redacted
+ * for host paths and identifiers before it reaches the UI.
  */
 export function errorMessage(error: unknown): string {
-  if (error instanceof Error) return error.message;
-  if (
-    typeof error === "object" &&
-    error !== null &&
-    "message" in error &&
-    typeof (error as { message: unknown }).message === "string"
-  ) {
-    return (error as { message: string }).message;
+  const parsed = parseCommandError(error);
+  const category = commandErrorCategory(parsed.code);
+  const summary = i18n.t(`errors.command.${category}`, {
+    defaultValue: i18n.t("errors.command.generic"),
+  });
+  const detail = parsed.native
+    ? parsed.message
+    : redactRendererDetail(parsed.message);
+  const technical = detail.trim()
+    ? `${i18n.t("errors.technicalDetails")}: ${detail}`
+    : i18n.t("errors.technicalDetailsUnavailable");
+  return `${summary}\n${technical}`;
+}
+
+function parseCommandError(error: unknown): ParsedCommandError {
+  if (isRecord(error) && typeof error.code === "string") {
+    return {
+      code: error.code,
+      message:
+        typeof error.message === "string" ? error.message : String(error),
+      native: true,
+    };
   }
-  return String(error);
+  if (error instanceof Error) {
+    const payload = errorPayload(error.message);
+    if (isRecord(payload) && typeof payload.code === "string") {
+      return {
+        code: payload.code,
+        message:
+          typeof payload.message === "string" ? payload.message : error.message,
+        native: true,
+      };
+    }
+    return { code: null, message: error.message, native: false };
+  }
+  if (typeof error === "string") {
+    const payload = errorPayload(error);
+    if (isRecord(payload) && typeof payload.code === "string") {
+      return {
+        code: payload.code,
+        message: typeof payload.message === "string" ? payload.message : error,
+        native: true,
+      };
+    }
+    return { code: null, message: error, native: false };
+  }
+  return { code: null, message: String(error), native: false };
+}
+
+function commandErrorCategory(code: string | null): string {
+  if (!code) return "generic";
+  if (
+    code.startsWith("adb_") ||
+    code.startsWith("fastboot_") ||
+    code === "wireless_adb_failed" ||
+    code === "device_not_found"
+  ) {
+    return COMMAND_ERROR_CATEGORIES.transport;
+  }
+  if (code.startsWith("scrcpy_") || code.startsWith("gnirehtet_")) {
+    return COMMAND_ERROR_CATEGORIES.mirror;
+  }
+  if (code.startsWith("profile_")) return COMMAND_ERROR_CATEGORIES.profile;
+  if (code.startsWith("pack_") || code === "no_resource_dir") {
+    return COMMAND_ERROR_CATEGORIES.pack;
+  }
+  if (
+    code.startsWith("invalid_") ||
+    code.startsWith("dropped_path_") ||
+    code === "confirmation_required" ||
+    code === "untrusted_transport_override_required"
+  ) {
+    return COMMAND_ERROR_CATEGORIES.validation;
+  }
+  if (
+    code.startsWith("operation_") ||
+    code.startsWith("process_") ||
+    code.includes("batch_")
+  ) {
+    return COMMAND_ERROR_CATEGORIES.operation;
+  }
+  if (
+    code.includes("file") ||
+    code.includes("path") ||
+    code === "reveal_failed" ||
+    code === "open_with_failed"
+  ) {
+    return COMMAND_ERROR_CATEGORIES.files;
+  }
+  if (
+    code.includes("package") ||
+    code.includes("install") ||
+    code.includes("device") ||
+    code === "current_user_missing"
+  ) {
+    return COMMAND_ERROR_CATEGORIES.device;
+  }
+  if (
+    code === "io_error" ||
+    code === "no_app_data_dir" ||
+    code === "host_operation_serialize_failed"
+  ) {
+    return COMMAND_ERROR_CATEGORIES.storage;
+  }
+  return "generic";
 }
 
 export function normalizeWirelessFailure(
@@ -603,7 +725,46 @@ export function normalizeWirelessFailure(
     return new WirelessCommandFailure(message, code, hintCode, diagnostics);
   }
 
-  return new WirelessCommandFailure(errorMessage(error));
+  return new WirelessCommandFailure(rawErrorMessage(error));
+}
+
+function rawErrorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    "message" in error &&
+    typeof (error as { message: unknown }).message === "string"
+  ) {
+    return (error as { message: string }).message;
+  }
+  return String(error);
+}
+
+function redactRendererDetail(value: string): string {
+  const printable = [...value]
+    .map((character) => {
+      const code = character.charCodeAt(0);
+      return code < 32 || code === 127 ? " " : character;
+    })
+    .join("");
+  return printable
+    .replace(/\b[A-Za-z][A-Za-z0-9+.-]*:\/\/\S+/gu, "<url>")
+    .replace(/\b[A-Za-z]:[\\/][^\s"'<>]*/gu, "<path>")
+    .replace(
+      /(^|\s)\/(?:Users|home|private|tmp|var|etc|opt)\/[^\s"'<>]*/gu,
+      "$1<path>",
+    )
+    .replace(/\b[A-Fa-f0-9]{8}-[A-Fa-f0-9-]{27,36}\b/gu, "<id>")
+    .replace(/\b(?:\d{1,3}\.){3}\d{1,3}\b/gu, "<network>")
+    .replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/giu, "<email>")
+    .replace(
+      /\b(serial|token|password|secret|host|endpoint|device(?:[ _-]?id)?)(\s*[:=]\s*)[^\s,;]+/giu,
+      "$1$2<redacted>",
+    )
+    .replace(/\b[A-Za-z0-9_-]{24,}\b/gu, "<redacted>")
+    .trim()
+    .slice(0, 500);
 }
 
 function errorPayload(message: string): unknown | null {

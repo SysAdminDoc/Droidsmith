@@ -94,7 +94,25 @@
     "copied": "Redigierte Fehlerzusammenfassung kopiert.",
     "copyFailed": "Der Zugriff auf die Zwischenablage ist fehlgeschlagen. Markieren und kopieren Sie die Zusammenfassung manuell.",
     "logsOpened": "Der lokale Diagnoseordner wurde geöffnet.",
-    "openFailed": "Der lokale Diagnoseordner konnte nicht geöffnet werden."
+    "openFailed": "Der lokale Diagnoseordner konnte nicht geöffnet werden.",
+    "fallbackTitle": "Droidsmith konnte die Wiederherstellungssteuerung nicht anzeigen.",
+    "fallbackBody": "Schließen Sie Droidsmith und öffnen Sie es erneut."
+  },
+  "errors": {
+    "technicalDetails": "Technische Details",
+    "technicalDetailsUnavailable": "Technische Details sind nicht verfügbar.",
+    "command": {
+      "generic": "Der Vorgang konnte nicht abgeschlossen werden.",
+      "transport": "Droidsmith konnte nicht mit den Android-Werkzeugen oder dem Gerät kommunizieren.",
+      "mirror": "Droidsmith konnte die Spiegelung nicht starten oder steuern.",
+      "profile": "Droidsmith konnte das Profil nicht lesen oder anwenden.",
+      "pack": "Droidsmith konnte das Debloat-Paket nicht laden oder anwenden.",
+      "validation": "Die Anfrage wurde abgelehnt, weil eine oder mehrere Eingaben ungültig sind.",
+      "operation": "Der angeforderte Vorgang wurde nicht abgeschlossen.",
+      "files": "Droidsmith konnte den Dateivorgang nicht abschließen.",
+      "device": "Das Gerät hat die angeforderte Paket- oder Geräteaktion abgelehnt.",
+      "storage": "Droidsmith konnte nicht auf seine lokalen Vorgangsdaten zugreifen."
+    }
   },
   "runtime": {
     "desktop": "Desktop-Laufzeitumgebung",

@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { inTauri, normalizeWirelessFailure, summarizeState } from "./tauri";
+import { changeDroidsmithLanguage } from "./i18n";
+import {
+  errorMessage,
+  inTauri,
+  normalizeWirelessFailure,
+  summarizeState,
+} from "./tauri";
 
 describe("summarizeState", () => {
   it("formats known snake-case states for display", () => {
@@ -51,5 +57,36 @@ describe("normalizeWirelessFailure", () => {
     expect(failure.message).toBe("connection refused");
     expect(failure.hintCode).toBeNull();
     expect(failure.diagnostics).toBeNull();
+  });
+});
+
+describe("errorMessage", () => {
+  it("localizes known command codes while preserving native technical detail", async () => {
+    await changeDroidsmithLanguage("de");
+    try {
+      const message = errorMessage({
+        code: "adb_not_found",
+        message: "adb: executable missing on the OEM workstation",
+      });
+      expect(message).toContain("Droidsmith konnte nicht mit");
+      expect(message).toContain("Technische Details:");
+      expect(message).toContain(
+        "adb: executable missing on the OEM workstation",
+      );
+    } finally {
+      await changeDroidsmithLanguage("en");
+    }
+  });
+
+  it("redacts renderer paths and identifiers in technical detail", () => {
+    const message = errorMessage(
+      new Error(
+        "render failed at C:\\Users\\QA\\private.txt serial=QA-123456789012345678901234",
+      ),
+    );
+    expect(message).toContain("Technical details:");
+    expect(message).toContain("<path>");
+    expect(message).toContain("serial=<redacted>");
+    expect(message).not.toContain("C:\\Users\\QA\\private.txt");
   });
 });

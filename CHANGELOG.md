@@ -70,6 +70,12 @@ each milestone tag.
   Host Doctor also explains the OS-specific USB backend default and exact
   environment override only when a verified 37.0.1+ server supports it.
   (R-139, R-140)
+- **Command failures now have locale-safe summaries.** Stable native error
+  codes map to translated summaries in all five locales, while OEM/device
+  output remains visible under a labelled technical-details line and
+  renderer-originated paths and identifiers are redacted. The renderer's
+  final recovery fallback also uses the locale resource with a static copy if
+  that resource tree fails. (IMP-130)
 
 ## [0.9.17] - 2026-08-02
 
