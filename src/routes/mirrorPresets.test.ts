@@ -55,6 +55,43 @@ describe("mirror presets", () => {
     ).toBe(false);
   });
 
+  it("round-trips the probed scrcpy controls and rejects unsafe values", () => {
+    expect(
+      normalizePreset({
+        displayId: "106",
+        mouseMode: "uhid",
+        cameraTorch: true,
+        cameraZoom: "1.5",
+        captureOrientation: "@90",
+        noClipboardAutosync: true,
+        pushTarget: "/sdcard/Download/",
+      }),
+    ).toMatchObject({
+      displayId: "106",
+      mouseMode: "uhid",
+      cameraTorch: true,
+      cameraZoom: "1.5",
+      captureOrientation: "@90",
+      noClipboardAutosync: true,
+      pushTarget: "/sdcard/Download/",
+    });
+    expect(
+      normalizePreset({
+        displayId: "not-an-id",
+        mouseMode: "trackpad" as never,
+        cameraZoom: "1.5;rm",
+        captureOrientation: "45" as never,
+        pushTarget: "/sdcard/../data",
+      }),
+    ).toMatchObject({
+      displayId: "",
+      mouseMode: "default",
+      cameraZoom: "",
+      captureOrientation: "",
+      pushTarget: "",
+    });
+  });
+
   it("drops legacy renderer-authored recording paths", () => {
     const migrated = normalizePreset({
       recording: true,

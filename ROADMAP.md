@@ -23,13 +23,6 @@ and Android, privacy-safe diagnostics, and the widest remaining product gap
 
 ### P2
 
-- [ ] R-147 P2 — Expose the remaining scrcpy flags
-  Why: display selection in particular is the difference between mirroring a device and mirroring the *right surface* on a device that has more than one.
-  Evidence: `src-tauri/src/scrcpy.rs` builds `--flex-display`, `--keep-active`, `--new-display`, `--start-app`, vp8/vp9 and `--ignore-video-encoder-constraints`, but contains no `--display-id`, `--list-displays`, `--mouse=`, `--camera-torch`, `--camera-zoom`, `--capture-orientation`, `--no-clipboard-autosync` or `--push-target`; scrcpy `doc/video.md` and `doc/control.md`.
-  Touches: `src-tauri/src/scrcpy.rs`, `src/routes/Mirror.tsx`, `src/routes/mirrorPresets.ts`
-  Acceptance: displays are enumerated via `--list-displays` and selectable; mouse mode, camera torch/zoom, capture orientation, clipboard autosync and push target are exposed; each is gated on the probed binary advertising it, following the existing encoder-probe pattern, and stored in the per-device preset.
-  Complexity: M
-
 - [ ] IMP-125 P2 — Render a real-scale package inventory in the rendered-route gate
   Why: the gate exercises a handful of packages while real devices report 500-900, and `PackageTable` is not row-virtualized — so whether large inventories are usable is currently unmeasured in either direction.
   Evidence: `scripts/check-rendered-routes.mjs` mocks `list_packages` with a small fixture keyed on `com.example.app`; `src/routes/apps/PackageTable.tsx:405-409` uses `IntersectionObserver` for lazy metadata only, with no row windowing.

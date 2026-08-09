@@ -1,4 +1,5 @@
 export type KeyboardMode = "default" | "sdk" | "uhid" | "aoa" | "disabled";
+export type MouseMode = "default" | "sdk" | "uhid" | "aoa" | "disabled";
 export type VideoCodec = "h264" | "h265" | "av1" | "vp8" | "vp9";
 export type AudioCodec = "default" | "opus" | "aac" | "flac" | "raw";
 export type DisplayOrientation =
@@ -11,6 +12,18 @@ export type DisplayOrientation =
   | "flip90"
   | "flip180"
   | "flip270";
+export type CaptureOrientation =
+  | ""
+  | "@"
+  | DisplayOrientation
+  | "@0"
+  | "@90"
+  | "@180"
+  | "@270"
+  | "@flip0"
+  | "@flip90"
+  | "@flip180"
+  | "@flip270";
 
 export type MirrorPreset = {
   maxSize: string;
@@ -29,6 +42,8 @@ export type MirrorPreset = {
   fullscreen: boolean;
   alwaysOnTop: boolean;
   noControl: boolean;
+  displayId: string;
+  mouseMode: MouseMode;
   crop: string;
   displayOrientation: string;
   screenOffTimeout: string;
@@ -38,6 +53,11 @@ export type MirrorPreset = {
   videoSource: string;
   cameraFacing: string;
   cameraSize: string;
+  cameraTorch: boolean;
+  cameraZoom: string;
+  captureOrientation: CaptureOrientation;
+  noClipboardAutosync: boolean;
+  pushTarget: string;
   displayImePolicy: string;
   noVdDestroyContent: boolean;
   /** Package to launch on connect via scrcpy `--start-app` (empty = none). */
@@ -76,6 +96,8 @@ export const DEFAULT_MIRROR_PRESET: MirrorPreset = {
   fullscreen: false,
   alwaysOnTop: false,
   noControl: false,
+  displayId: "",
+  mouseMode: "default",
   crop: "",
   displayOrientation: "",
   screenOffTimeout: "",
@@ -85,6 +107,11 @@ export const DEFAULT_MIRROR_PRESET: MirrorPreset = {
   videoSource: "display",
   cameraFacing: "back",
   cameraSize: "",
+  cameraTorch: false,
+  cameraZoom: "",
+  captureOrientation: "",
+  noClipboardAutosync: false,
+  pushTarget: "",
   displayImePolicy: "",
   noVdDestroyContent: false,
   startApp: "",
@@ -175,6 +202,13 @@ export function normalizePreset(value: Partial<MirrorPreset>): MirrorPreset {
       typeof value.noControl === "boolean"
         ? value.noControl
         : DEFAULT_MIRROR_PRESET.noControl,
+    displayId:
+      typeof value.displayId === "string" && /^\d{0,10}$/u.test(value.displayId)
+        ? value.displayId
+        : DEFAULT_MIRROR_PRESET.displayId,
+    mouseMode: isMouseMode(value.mouseMode)
+      ? value.mouseMode
+      : DEFAULT_MIRROR_PRESET.mouseMode,
     crop:
       typeof value.crop === "string" &&
       /^(\d{1,6}:\d{1,6}:\d{1,6}:\d{1,6})?$/u.test(value.crop)
@@ -214,6 +248,23 @@ export function normalizePreset(value: Partial<MirrorPreset>): MirrorPreset {
       /^(\d{1,5}x\d{1,5})?$/u.test(value.cameraSize)
         ? value.cameraSize
         : DEFAULT_MIRROR_PRESET.cameraSize,
+    cameraTorch:
+      typeof value.cameraTorch === "boolean"
+        ? value.cameraTorch
+        : DEFAULT_MIRROR_PRESET.cameraTorch,
+    cameraZoom: isCameraZoom(value.cameraZoom)
+      ? value.cameraZoom
+      : DEFAULT_MIRROR_PRESET.cameraZoom,
+    captureOrientation: isCaptureOrientation(value.captureOrientation)
+      ? value.captureOrientation
+      : DEFAULT_MIRROR_PRESET.captureOrientation,
+    noClipboardAutosync:
+      typeof value.noClipboardAutosync === "boolean"
+        ? value.noClipboardAutosync
+        : DEFAULT_MIRROR_PRESET.noClipboardAutosync,
+    pushTarget: isPushTarget(value.pushTarget)
+      ? value.pushTarget
+      : DEFAULT_MIRROR_PRESET.pushTarget,
     displayImePolicy: isDisplayImePolicy(value.displayImePolicy)
       ? value.displayImePolicy
       : DEFAULT_MIRROR_PRESET.displayImePolicy,
@@ -282,6 +333,43 @@ function isDisplayOrientation(value: unknown): value is DisplayOrientation {
   );
 }
 
+function isCaptureOrientation(value: unknown): value is CaptureOrientation {
+  return (
+    isDisplayOrientation(value) ||
+    value === "@" ||
+    value === "@0" ||
+    value === "@90" ||
+    value === "@180" ||
+    value === "@270" ||
+    value === "@flip0" ||
+    value === "@flip90" ||
+    value === "@flip180" ||
+    value === "@flip270"
+  );
+}
+
+function isCameraZoom(value: unknown): value is string {
+  if (value === "") return true;
+  if (typeof value !== "string" || !/^\d{1,8}(\.\d{1,3})?$/u.test(value)) {
+    return false;
+  }
+  return Number(value) > 0;
+}
+
+function isPushTarget(value: unknown): value is string {
+  return (
+    typeof value === "string" &&
+    value.length <= 4096 &&
+    (value === "" ||
+      (value.startsWith("/") &&
+        !value.split("/").includes("..") &&
+        !Array.from(value).some(
+          (character) =>
+            character.charCodeAt(0) < 0x20 || "\\`$;|&<>".includes(character),
+        )))
+  );
+}
+
 function isVideoCodec(value: unknown): value is VideoCodec {
   return (
     value === "h264" ||
@@ -297,6 +385,16 @@ export function presetStorageKey(serial: string): string {
 }
 
 function isKeyboardMode(value: unknown): value is KeyboardMode {
+  return (
+    value === "default" ||
+    value === "sdk" ||
+    value === "uhid" ||
+    value === "aoa" ||
+    value === "disabled"
+  );
+}
+
+function isMouseMode(value: unknown): value is MouseMode {
   return (
     value === "default" ||
     value === "sdk" ||

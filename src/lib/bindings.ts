@@ -2328,6 +2328,16 @@ export type LaunchScrcpyRequest = {
   fullscreen?: boolean;
   always_on_top?: boolean;
   no_control?: boolean;
+  /**
+   * `--display-id=<id>` selects a physical or virtual display reported by
+   * scrcpy's display probe.
+   */
+  display_id?: number | null;
+  /**
+   * `--mouse=sdk|uhid|aoa|disabled`; unset/default leaves scrcpy's default
+   * mouse injection mode in place.
+   */
+  mouse_mode?: string | null;
   crop?: string | null;
   display_orientation?: string | null;
   screen_off_timeout?: number | null;
@@ -2341,6 +2351,27 @@ export type LaunchScrcpyRequest = {
   video_source?: string | null;
   camera_facing?: string | null;
   camera_size?: string | null;
+  /**
+   * `--camera-torch` enables the camera light while mirroring a camera.
+   */
+  camera_torch?: boolean;
+  /**
+   * `--camera-zoom=<ratio>` selects a camera zoom ratio.
+   */
+  camera_zoom?: string | null;
+  /**
+   * `--capture-orientation=<orientation>` rotates the captured video.
+   */
+  capture_orientation?: string | null;
+  /**
+   * `--no-clipboard-autosync` disables scrcpy's clipboard synchronization.
+   */
+  no_clipboard_autosync?: boolean;
+  /**
+   * `--push-target=<directory>` selects the remote directory used by
+   * scrcpy's file push shortcut.
+   */
+  push_target?: string | null;
   /**
    * `--display-ime-policy=local|hide|fallback` — where the soft keyboard
    * renders relative to a virtual display (scrcpy 3.2+).
@@ -3288,6 +3319,24 @@ export type ScrcpyCapabilities = {
    * `--ignore-video-encoder-constraints` landed in scrcpy 4.1.
    */
   supports_ignore_video_encoder_constraints: boolean;
+  /**
+   * These controls are derived from the installed binary's `--help`
+   * output, rather than assumed from a version number.
+   */
+  supports_display_id: boolean;
+  supports_list_displays: boolean;
+  displays: ScrcpyDisplay[];
+  supports_mouse: boolean;
+  supports_camera_torch: boolean;
+  supports_camera_zoom: boolean;
+  supports_capture_orientation: boolean;
+  supports_no_clipboard_autosync: boolean;
+  supports_push_target: boolean;
+};
+export type ScrcpyDisplay = {
+  id: number;
+  width: number | null;
+  height: number | null;
 };
 export type ScrcpyExitReason =
   | "user_stopped"

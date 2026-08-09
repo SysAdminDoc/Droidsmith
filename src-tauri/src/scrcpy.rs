@@ -36,6 +36,14 @@ pub struct LaunchScrcpyRequest {
     pub always_on_top: bool,
     #[serde(default)]
     pub no_control: bool,
+    /// `--display-id=<id>` selects a physical or virtual display reported by
+    /// scrcpy's display probe.
+    #[serde(default)]
+    pub display_id: Option<u32>,
+    /// `--mouse=sdk|uhid|aoa|disabled`; unset/default leaves scrcpy's default
+    /// mouse injection mode in place.
+    #[serde(default)]
+    pub mouse_mode: Option<String>,
     #[serde(default)]
     pub crop: Option<String>,
     #[serde(default)]
@@ -56,6 +64,22 @@ pub struct LaunchScrcpyRequest {
     pub camera_facing: Option<String>,
     #[serde(default)]
     pub camera_size: Option<String>,
+    /// `--camera-torch` enables the camera light while mirroring a camera.
+    #[serde(default)]
+    pub camera_torch: bool,
+    /// `--camera-zoom=<ratio>` selects a camera zoom ratio.
+    #[serde(default)]
+    pub camera_zoom: Option<String>,
+    /// `--capture-orientation=<orientation>` rotates the captured video.
+    #[serde(default)]
+    pub capture_orientation: Option<String>,
+    /// `--no-clipboard-autosync` disables scrcpy's clipboard synchronization.
+    #[serde(default)]
+    pub no_clipboard_autosync: bool,
+    /// `--push-target=<directory>` selects the remote directory used by
+    /// scrcpy's file push shortcut.
+    #[serde(default)]
+    pub push_target: Option<String>,
     /// `--display-ime-policy=local|hide|fallback` — where the soft keyboard
     /// renders relative to a virtual display (scrcpy 3.2+).
     #[serde(default)]
@@ -84,6 +108,13 @@ pub struct ScrcpyVideoEncoder {
     pub codec: String,
     pub name: String,
     pub software: bool,
+}
+
+#[derive(specta::Type, Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct ScrcpyDisplay {
+    pub id: u32,
+    pub width: Option<u32>,
+    pub height: Option<u32>,
 }
 
 #[derive(specta::Type, Debug, Clone, Serialize, PartialEq, Eq)]
@@ -119,6 +150,17 @@ pub struct ScrcpyCapabilities {
     pub supports_no_window: bool,
     /// `--ignore-video-encoder-constraints` landed in scrcpy 4.1.
     pub supports_ignore_video_encoder_constraints: bool,
+    /// These controls are derived from the installed binary's `--help`
+    /// output, rather than assumed from a version number.
+    pub supports_display_id: bool,
+    pub supports_list_displays: bool,
+    pub displays: Vec<ScrcpyDisplay>,
+    pub supports_mouse: bool,
+    pub supports_camera_torch: bool,
+    pub supports_camera_zoom: bool,
+    pub supports_capture_orientation: bool,
+    pub supports_no_clipboard_autosync: bool,
+    pub supports_push_target: bool,
 }
 
 #[derive(specta::Type, Debug, Clone, Serialize, PartialEq, Eq)]
@@ -252,19 +294,67 @@ pub fn capabilities(
         .ok_or_else(|| "scrcpy version output was not recognized".to_string())?;
 
     let mut warnings = Vec::new();
-    let tool_codecs = match run_probe(scrcpy_path, &["--help"], PROBE_TIMEOUT) {
-        Ok(output) if output.code == Some(0) => parse_tool_video_codecs(&output.combined()),
+    let (tool_codecs, help_text) = match run_probe(scrcpy_path, &["--help"], PROBE_TIMEOUT) {
+        Ok(output) if output.code == Some(0) => {
+            let combined = output.combined();
+            (parse_tool_video_codecs(&combined), Some(combined))
+        }
         Ok(output) => {
             warnings.push(format!(
                 "scrcpy help probe failed: {}",
                 probe_failure_text(&output)
             ));
-            vec!["h264".to_string()]
+            (vec!["h264".to_string()], None)
         }
         Err(error) => {
             warnings.push(error);
-            vec!["h264".to_string()]
+            (vec!["h264".to_string()], None)
         }
+    };
+
+    let supports_display_id = help_text
+        .as_deref()
+        .is_some_and(|text| help_supports_option(text, "--display-id"));
+    let supports_list_displays = help_text
+        .as_deref()
+        .is_some_and(|text| help_supports_option(text, "--list-displays"));
+    let supports_mouse = help_text
+        .as_deref()
+        .is_some_and(|text| help_supports_option(text, "--mouse"));
+    let supports_camera_torch = help_text
+        .as_deref()
+        .is_some_and(|text| help_supports_option(text, "--camera-torch"));
+    let supports_camera_zoom = help_text
+        .as_deref()
+        .is_some_and(|text| help_supports_option(text, "--camera-zoom"));
+    let supports_capture_orientation = help_text
+        .as_deref()
+        .is_some_and(|text| help_supports_option(text, "--capture-orientation"));
+    let supports_no_clipboard_autosync = help_text
+        .as_deref()
+        .is_some_and(|text| help_supports_option(text, "--no-clipboard-autosync"));
+    let supports_push_target = help_text
+        .as_deref()
+        .is_some_and(|text| help_supports_option(text, "--push-target"));
+
+    let displays = if supports_display_id && supports_list_displays {
+        let display_args = ["-s", target.serial.as_str(), "--list-displays"];
+        match run_probe(scrcpy_path, &display_args, ENCODER_PROBE_TIMEOUT) {
+            Ok(output) if output.code == Some(0) => parse_displays(&output.combined()),
+            Ok(output) => {
+                warnings.push(format!(
+                    "display probe failed: {}",
+                    probe_failure_text(&output)
+                ));
+                Vec::new()
+            }
+            Err(error) => {
+                warnings.push(error);
+                Vec::new()
+            }
+        }
+    } else {
+        Vec::new()
     };
 
     let encoder_args = ["-s", target.serial.as_str(), "--list-encoders"];
@@ -305,6 +395,15 @@ pub fn capabilities(
         supports_start_app: version_gte(&version, 3, 0),
         supports_no_window: version_gte(&version, 3, 2),
         supports_ignore_video_encoder_constraints: version_gte(&version, 4, 1),
+        supports_display_id,
+        supports_list_displays,
+        displays,
+        supports_mouse,
+        supports_camera_torch,
+        supports_camera_zoom,
+        supports_capture_orientation,
+        supports_no_clipboard_autosync,
+        supports_push_target,
         security: crate::scrcpy_policy::assess(&version),
         version,
         available_video_codecs,
@@ -693,6 +792,94 @@ fn valid_crop(value: &str) -> bool {
         })
 }
 
+const VALID_MOUSE_MODES: [&str; 4] = ["sdk", "uhid", "aoa", "disabled"];
+
+fn valid_camera_zoom(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= 12
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || byte == b'.')
+        && value.bytes().filter(|byte| *byte == b'.').count() <= 1
+        && value
+            .parse::<f32>()
+            .map(|zoom| zoom.is_finite() && zoom > 0.0)
+            .unwrap_or(false)
+}
+
+fn valid_capture_orientation(value: &str) -> bool {
+    let orientation = value.strip_prefix('@').unwrap_or(value);
+    orientation.is_empty() || VALID_DISPLAY_ORIENTATIONS.contains(&orientation)
+}
+
+/// scrcpy forwards this value to the device as a remote directory. Keep it an
+/// absolute, normalized-looking path and reject shell/control metacharacters
+/// before it can cross that boundary.
+fn valid_push_target(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= 4096
+        && value.starts_with('/')
+        && !value.split('/').any(|part| part == "..")
+        && !value.chars().any(|character| {
+            character.is_control()
+                || matches!(character, '\\' | '`' | '$' | ';' | '|' | '&' | '<' | '>')
+        })
+}
+
+pub(crate) fn help_supports_option(output: &str, option: &str) -> bool {
+    output.lines().any(|line| {
+        line.split_whitespace().any(|token| {
+            let token = token.trim_matches(|character: char| {
+                matches!(
+                    character,
+                    ',' | '.' | ':' | ';' | '(' | ')' | '[' | ']' | '{' | '}'
+                )
+            });
+            token == option
+                || token.starts_with(&format!("{option}="))
+                || token.starts_with(&format!("{option}<"))
+        })
+    })
+}
+
+pub(crate) fn parse_displays(output: &str) -> Vec<ScrcpyDisplay> {
+    let mut displays = Vec::new();
+    for line in output.lines() {
+        let Some(marker) = line.find("--display-id=") else {
+            continue;
+        };
+        let value = &line[marker + "--display-id=".len()..];
+        let digits = value
+            .as_bytes()
+            .iter()
+            .take_while(|byte| byte.is_ascii_digit())
+            .count();
+        if digits == 0 {
+            continue;
+        }
+        let Ok(id) = value[..digits].parse::<u32>() else {
+            continue;
+        };
+        if displays
+            .iter()
+            .any(|display: &ScrcpyDisplay| display.id == id)
+        {
+            continue;
+        }
+        let (width, height) = line
+            .split_once('(')
+            .and_then(|(_, dimensions)| dimensions.split_once(')'))
+            .and_then(|(dimensions, _)| dimensions.split_once('x'))
+            .and_then(|(width, height)| {
+                Some((width.trim().parse().ok()?, height.trim().parse().ok()?))
+            })
+            .map_or((None, None), |(width, height)| (Some(width), Some(height)));
+        displays.push(ScrcpyDisplay { id, width, height });
+    }
+    displays.sort_by_key(|display| display.id);
+    displays
+}
+
 pub fn build_args(
     request: &LaunchScrcpyRequest,
     record_path: Option<&Path>,
@@ -737,6 +924,54 @@ pub fn build_args(
                 }
             }
         }
+        if request.camera_torch {
+            if !capabilities.supports_camera_torch {
+                return Err(
+                    "camera torch requires a scrcpy binary advertising --camera-torch".to_string(),
+                );
+            }
+            args.push("--camera-torch".to_string());
+        }
+        if let Some(zoom) = request
+            .camera_zoom
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+        {
+            if !capabilities.supports_camera_zoom {
+                return Err(
+                    "camera zoom requires a scrcpy binary advertising --camera-zoom".to_string(),
+                );
+            }
+            if !valid_camera_zoom(zoom) {
+                return Err(format!(
+                    "scrcpy camera zoom must be a positive decimal: {zoom}"
+                ));
+            }
+            args.push(format!("--camera-zoom={zoom}"));
+        }
+    }
+
+    if let Some(display_id) = request.display_id {
+        if camera_mode {
+            return Err("display selection is unavailable in camera mode".to_string());
+        }
+        if !capabilities.supports_display_id {
+            return Err(
+                "display selection requires a scrcpy binary advertising --display-id".to_string(),
+            );
+        }
+        if !capabilities.displays.is_empty()
+            && !capabilities
+                .displays
+                .iter()
+                .any(|display| display.id == display_id)
+        {
+            return Err(format!(
+                "scrcpy display id {display_id} was not reported by the device"
+            ));
+        }
+        args.push(format!("--display-id={display_id}"));
     }
 
     if let Some(max_size) = request.max_size.filter(|value| *value > 0) {
@@ -812,6 +1047,20 @@ pub fn build_args(
             _ => return Err(format!("unsupported scrcpy keyboard mode: {mode}")),
         }
     }
+    if let Some(mode) = request
+        .mouse_mode
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty() && *value != "default")
+    {
+        if !capabilities.supports_mouse {
+            return Err("mouse mode requires a scrcpy binary advertising --mouse".to_string());
+        }
+        if !VALID_MOUSE_MODES.contains(&mode) {
+            return Err(format!("unsupported scrcpy mouse mode: {mode}"));
+        }
+        args.push(format!("--mouse={mode}"));
+    }
     if !camera_mode && request.turn_screen_off {
         args.push("--turn-screen-off".to_string());
     }
@@ -858,6 +1107,25 @@ pub fn build_args(
             ));
         }
         args.push(format!("--display-orientation={orientation}"));
+    }
+    if let Some(orientation) = request
+        .capture_orientation
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        if !capabilities.supports_capture_orientation {
+            return Err(
+                "capture orientation requires a scrcpy binary advertising --capture-orientation"
+                    .to_string(),
+            );
+        }
+        if !valid_capture_orientation(orientation) {
+            return Err(format!(
+                "unsupported scrcpy capture orientation: {orientation}"
+            ));
+        }
+        args.push(format!("--capture-orientation={orientation}"));
     }
     if let Some(timeout) = request.screen_off_timeout.filter(|value| *value > 0) {
         args.push(format!("--screen-off-timeout={timeout}"));
@@ -926,6 +1194,33 @@ pub fn build_args(
             return Err("control-only mode (--no-window) requires scrcpy 3.2 or later".to_string());
         }
         args.push("--no-window".to_string());
+    }
+    if request.no_clipboard_autosync {
+        if !capabilities.supports_no_clipboard_autosync {
+            return Err(
+                "disabling clipboard autosync requires a scrcpy binary advertising --no-clipboard-autosync"
+                    .to_string(),
+            );
+        }
+        args.push("--no-clipboard-autosync".to_string());
+    }
+    if let Some(push_target) = request
+        .push_target
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        if !capabilities.supports_push_target {
+            return Err(
+                "push target requires a scrcpy binary advertising --push-target".to_string(),
+            );
+        }
+        if !valid_push_target(push_target) {
+            return Err(format!(
+                "scrcpy push target must be an absolute remote directory: {push_target}"
+            ));
+        }
+        args.push(format!("--push-target={push_target}"));
     }
     if !camera_mode && request.flex_display {
         if !version_gte(&capabilities.version, 4, 0) {
@@ -1171,9 +1466,9 @@ fn probe_failure_text(output: &ProbeOutput) -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        build_args, classify_exit_reason, parse_tool_video_codecs, parse_version,
+        build_args, classify_exit_reason, parse_displays, parse_tool_video_codecs, parse_version,
         parse_video_encoders, retry_settings_match, LaunchScrcpyRequest, ScrcpyCapabilities,
-        ScrcpyExitReason, ScrcpyVideoEncoder,
+        ScrcpyDisplay, ScrcpyExitReason, ScrcpyVideoEncoder,
     };
     use crate::adb::DeviceTarget;
     use std::path::Path;
@@ -1209,6 +1504,8 @@ mod tests {
             no_control: false,
             crop: None,
             display_orientation: None,
+            display_id: None,
+            mouse_mode: None,
             screen_off_timeout: None,
             audio_codec: None,
             new_display: None,
@@ -1216,6 +1513,11 @@ mod tests {
             video_source: None,
             camera_facing: None,
             camera_size: None,
+            camera_torch: false,
+            camera_zoom: None,
+            capture_orientation: None,
+            no_clipboard_autosync: false,
+            push_target: None,
             display_ime_policy: None,
             no_vd_destroy_content: false,
             start_app: None,
@@ -1247,6 +1549,26 @@ mod tests {
             supports_start_app: true,
             supports_no_window: true,
             supports_ignore_video_encoder_constraints: false,
+            supports_display_id: true,
+            supports_list_displays: true,
+            displays: vec![
+                ScrcpyDisplay {
+                    id: 0,
+                    width: Some(1080),
+                    height: Some(2400),
+                },
+                ScrcpyDisplay {
+                    id: 106,
+                    width: Some(1920),
+                    height: Some(1080),
+                },
+            ],
+            supports_mouse: true,
+            supports_camera_torch: true,
+            supports_camera_zoom: true,
+            supports_capture_orientation: true,
+            supports_no_clipboard_autosync: true,
+            supports_push_target: true,
         }
     }
 
@@ -1314,6 +1636,48 @@ mod tests {
                     name: "c2.android.hevc.encoder".to_string(),
                     software: true,
                 }
+            ]
+        );
+    }
+
+    #[test]
+    fn parses_advertised_scrcpy_controls_and_display_inventory() {
+        let help = "  --display-id=<id>\n  --list-displays\n  --mouse=sdk|uhid|aoa\n  --camera-torch\n  --camera-zoom=<ratio>\n  --capture-orientation=<orientation>\n  --no-clipboard-autosync\n  --push-target=<directory>";
+        for option in [
+            "--display-id",
+            "--list-displays",
+            "--mouse",
+            "--camera-torch",
+            "--camera-zoom",
+            "--capture-orientation",
+            "--no-clipboard-autosync",
+            "--push-target",
+        ] {
+            assert!(
+                super::help_supports_option(help, option),
+                "missing {option}"
+            );
+        }
+        assert!(!super::help_supports_option(help, "--camera"));
+
+        assert_eq!(
+            parse_displays(
+                "[server] INFO: List of displays:\n\
+                 --display-id=106    (1920x1080)\n\
+                 --display-id=0 (1080x2400)\n\
+                 --display-id=106 (duplicate)"
+            ),
+            vec![
+                ScrcpyDisplay {
+                    id: 0,
+                    width: Some(1080),
+                    height: Some(2400),
+                },
+                ScrcpyDisplay {
+                    id: 106,
+                    width: Some(1920),
+                    height: Some(1080),
+                },
             ]
         );
     }
@@ -1403,6 +1767,102 @@ mod tests {
         assert!(args.contains(&"--fullscreen".to_string()));
         assert!(args.contains(&"--always-on-top".to_string()));
         assert!(args.contains(&"--no-control".to_string()));
+    }
+
+    #[test]
+    fn emits_and_gates_remaining_scrcpy_controls() {
+        let mut req = request();
+        req.display_id = Some(106);
+        req.mouse_mode = Some("uhid".to_string());
+        req.capture_orientation = Some("@90".to_string());
+        req.no_clipboard_autosync = true;
+        req.push_target = Some("/sdcard/Download/".to_string());
+        let args = build_args(&req, None, &capabilities()).unwrap();
+        for expected in [
+            "--display-id=106",
+            "--mouse=uhid",
+            "--capture-orientation=@90",
+            "--no-clipboard-autosync",
+            "--push-target=/sdcard/Download/",
+        ] {
+            assert!(args.iter().any(|arg| arg == expected), "missing {expected}");
+        }
+
+        let mut camera = request();
+        camera.video_source = Some("camera".to_string());
+        camera.camera_torch = true;
+        camera.camera_zoom = Some("1.5".to_string());
+        let args = build_args(&camera, None, &capabilities()).unwrap();
+        assert!(args.contains(&"--camera-torch".to_string()));
+        assert!(args.contains(&"--camera-zoom=1.5".to_string()));
+
+        for (field, expected) in [
+            ("display_id", "display selection"),
+            ("mouse_mode", "mouse mode"),
+            ("capture_orientation", "capture orientation"),
+            ("no_clipboard_autosync", "clipboard autosync"),
+            ("push_target", "push target"),
+        ] {
+            let mut old = capabilities();
+            let mut candidate = request();
+            match field {
+                "display_id" => {
+                    candidate.display_id = Some(0);
+                    old.supports_display_id = false;
+                }
+                "mouse_mode" => {
+                    candidate.mouse_mode = Some("sdk".to_string());
+                    old.supports_mouse = false;
+                }
+                "capture_orientation" => {
+                    candidate.capture_orientation = Some("90".to_string());
+                    old.supports_capture_orientation = false;
+                }
+                "no_clipboard_autosync" => {
+                    candidate.no_clipboard_autosync = true;
+                    old.supports_no_clipboard_autosync = false;
+                }
+                "push_target" => {
+                    candidate.push_target = Some("/sdcard/".to_string());
+                    old.supports_push_target = false;
+                }
+                _ => unreachable!(),
+            }
+            assert!(
+                build_args(&candidate, None, &old)
+                    .unwrap_err()
+                    .contains(expected),
+                "{field} should be capability-gated"
+            );
+        }
+    }
+
+    #[test]
+    fn rejects_invalid_remaining_scrcpy_control_values() {
+        let mut mouse = request();
+        mouse.mouse_mode = Some("trackpad".to_string());
+        assert!(build_args(&mouse, None, &capabilities())
+            .unwrap_err()
+            .contains("mouse mode"));
+
+        let mut camera = request();
+        camera.video_source = Some("camera".to_string());
+        camera.camera_zoom = Some("1.5;rm".to_string());
+        assert!(build_args(&camera, None, &capabilities())
+            .unwrap_err()
+            .contains("camera zoom"));
+
+        let mut orientation = request();
+        orientation.capture_orientation = Some("45".to_string());
+        assert!(build_args(&orientation, None, &capabilities())
+            .unwrap_err()
+            .contains("capture orientation"));
+
+        let mut target = request();
+        target.push_target = Some("/sdcard/../data".to_string());
+        assert!(build_args(&target, None, &capabilities())
+            .unwrap_err()
+            .contains("push target"));
     }
 
     #[test]

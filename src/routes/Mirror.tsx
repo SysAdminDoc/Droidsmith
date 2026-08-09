@@ -81,6 +81,26 @@ const KEYBOARD_MODES: { value: KeyboardMode; labelKey: string }[] = [
   { value: "disabled", labelKey: "mirror.keyboardDisabled" },
 ];
 
+const CAPTURE_ORIENTATIONS = [
+  "0",
+  "90",
+  "180",
+  "270",
+  "flip0",
+  "flip90",
+  "flip180",
+  "flip270",
+  "@",
+  "@0",
+  "@90",
+  "@180",
+  "@270",
+  "@flip0",
+  "@flip90",
+  "@flip180",
+  "@flip270",
+] as const;
+
 export default function MirrorRoute() {
   const { t } = useTranslation();
   const { devicesState, authorizedDevices } = useAuthorizedDevices();
@@ -377,6 +397,9 @@ export default function MirrorRoute() {
             no_control: preset.noControl,
             crop: preset.crop.trim() || null,
             display_orientation: preset.displayOrientation || null,
+            display_id: parseDisplayId(preset.displayId),
+            mouse_mode:
+              preset.mouseMode === "default" ? null : preset.mouseMode,
             screen_off_timeout: parsePositiveInt(preset.screenOffTimeout),
             audio_codec:
               preset.audioCodec === "default" ? null : preset.audioCodec,
@@ -390,6 +413,14 @@ export default function MirrorRoute() {
               preset.videoSource === "camera" && preset.cameraSize.trim()
                 ? preset.cameraSize.trim()
                 : null,
+            camera_torch: preset.videoSource === "camera" && preset.cameraTorch,
+            camera_zoom:
+              preset.videoSource === "camera" && preset.cameraZoom.trim()
+                ? preset.cameraZoom.trim()
+                : null,
+            capture_orientation: preset.captureOrientation || null,
+            no_clipboard_autosync: preset.noClipboardAutosync,
+            push_target: preset.pushTarget.trim() || null,
             display_ime_policy: preset.displayImePolicy || null,
             no_vd_destroy_content: preset.noVdDestroyContent,
             start_app: preset.startApp.trim() || null,
@@ -765,6 +796,60 @@ export default function MirrorRoute() {
                       </option>
                     </FieldSelect>
                   </label>
+                  {capabilityState.kind === "ready" &&
+                    capabilityState.value.supports_display_id &&
+                    capabilityState.value.displays.length > 0 && (
+                      <label className="grid gap-1.5">
+                        <span className="text-xs font-medium text-anvil-400">
+                          {t("mirror.displayId")}
+                        </span>
+                        <FieldSelect
+                          value={preset.displayId}
+                          onChange={(event) =>
+                            setPreset((previous) => ({
+                              ...previous,
+                              displayId: event.target.value,
+                            }))
+                          }
+                        >
+                          <option value="">
+                            {t("mirror.displayIdDefault")}
+                          </option>
+                          {capabilityState.value.displays.map((display) => (
+                            <option key={display.id} value={display.id}>
+                              {displayLabel(display)}
+                            </option>
+                          ))}
+                        </FieldSelect>
+                      </label>
+                    )}
+                  {capabilityState.kind === "ready" &&
+                    capabilityState.value.supports_capture_orientation && (
+                      <label className="grid gap-1.5">
+                        <span className="text-xs font-medium text-anvil-400">
+                          {t("mirror.captureOrientation")}
+                        </span>
+                        <FieldSelect
+                          value={preset.captureOrientation}
+                          onChange={(event) =>
+                            setPreset((previous) => ({
+                              ...previous,
+                              captureOrientation: event.target
+                                .value as MirrorPreset["captureOrientation"],
+                            }))
+                          }
+                        >
+                          <option value="">
+                            {t("mirror.orientationDefault")}
+                          </option>
+                          {CAPTURE_ORIENTATIONS.map((orientation) => (
+                            <option key={orientation} value={orientation}>
+                              {orientation}
+                            </option>
+                          ))}
+                        </FieldSelect>
+                      </label>
+                    )}
                   <label className="grid gap-1.5">
                     <span className="text-xs font-medium text-anvil-400">
                       {t("mirror.audioCodec")}
@@ -848,6 +933,29 @@ export default function MirrorRoute() {
                             }))
                           }
                           placeholder="1920x1080/240"
+                          inputMode="text"
+                          className="font-mono"
+                        />
+                      </label>
+                    )}
+                  {capabilityState.kind === "ready" &&
+                    capabilityState.value.supports_push_target && (
+                      <label className="grid gap-1.5 sm:col-span-2">
+                        <span className="text-xs font-medium text-anvil-400">
+                          {t("mirror.pushTarget")}
+                        </span>
+                        <FieldInput
+                          type="text"
+                          value={preset.pushTarget}
+                          onChange={(e) =>
+                            setPreset((prev) => ({
+                              ...prev,
+                              pushTarget: sanitizePushTargetInput(
+                                e.target.value,
+                              ).slice(0, 4096),
+                            }))
+                          }
+                          placeholder="/sdcard/Download/"
                           inputMode="text"
                           className="font-mono"
                         />
@@ -1001,6 +1109,40 @@ export default function MirrorRoute() {
                             className="font-mono"
                           />
                         </label>
+                        {capabilityState.value.supports_camera_zoom && (
+                          <label className="grid gap-1.5">
+                            <span className="text-xs font-medium text-anvil-400">
+                              {t("mirror.cameraZoom")}
+                            </span>
+                            <FieldInput
+                              type="text"
+                              value={preset.cameraZoom}
+                              onChange={(e) =>
+                                setPreset((prev) => ({
+                                  ...prev,
+                                  cameraZoom: e.target.value
+                                    .replace(/[^\d.]/g, "")
+                                    .slice(0, 12),
+                                }))
+                              }
+                              placeholder="1.0"
+                              inputMode="decimal"
+                              className="font-mono"
+                            />
+                          </label>
+                        )}
+                        {capabilityState.value.supports_camera_torch && (
+                          <Toggle
+                            checked={preset.cameraTorch}
+                            onChange={(checked) =>
+                              setPreset((prev) => ({
+                                ...prev,
+                                cameraTorch: checked,
+                              }))
+                            }
+                            label={t("mirror.cameraTorch")}
+                          />
+                        )}
                       </>
                     )}
                   <label className="grid gap-1.5">
@@ -1097,6 +1239,34 @@ export default function MirrorRoute() {
                       ))}
                     </FieldSelect>
                   </label>
+                  {capabilityState.kind === "ready" &&
+                    capabilityState.value.supports_mouse && (
+                      <label className="grid gap-1.5">
+                        <span className="text-xs font-medium text-anvil-400">
+                          {t("mirror.mouseMode")}
+                        </span>
+                        <FieldSelect
+                          value={preset.mouseMode}
+                          onChange={(event) =>
+                            setPreset((previous) => ({
+                              ...previous,
+                              mouseMode: event.target
+                                .value as MirrorPreset["mouseMode"],
+                            }))
+                          }
+                        >
+                          <option value="default">
+                            {t("mirror.mouseModeDefault")}
+                          </option>
+                          <option value="sdk">SDK</option>
+                          <option value="uhid">UHID</option>
+                          <option value="aoa">AOA</option>
+                          <option value="disabled">
+                            {t("mirror.keyboardDisabled")}
+                          </option>
+                        </FieldSelect>
+                      </label>
+                    )}
                 </div>
 
                 <div className="mt-4 grid gap-3 sm:grid-cols-2">
@@ -1159,6 +1329,19 @@ export default function MirrorRoute() {
                     }
                     label={t("mirror.noControl")}
                   />
+                  {capabilityState.kind === "ready" &&
+                    capabilityState.value.supports_no_clipboard_autosync && (
+                      <Toggle
+                        checked={preset.noClipboardAutosync}
+                        onChange={(checked) =>
+                          setPreset((prev) => ({
+                            ...prev,
+                            noClipboardAutosync: checked,
+                          }))
+                        }
+                        label={t("mirror.noClipboardAutosync")}
+                      />
+                    )}
                   {capabilityState.kind === "ready" &&
                     capabilityState.value.supports_flex_display && (
                       <Toggle
@@ -1458,4 +1641,29 @@ function SessionPanel({
 function parsePositiveInt(value: string): number | null {
   const parsed = Number.parseInt(value.trim(), 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
+function parseDisplayId(value: string): number | null {
+  if (!/^\d{1,10}$/u.test(value.trim())) return null;
+  const parsed = Number(value.trim());
+  return Number.isSafeInteger(parsed) && parsed >= 0 && parsed <= 0xffffffff
+    ? parsed
+    : null;
+}
+
+function displayLabel(display: ScrcpyCapabilities["displays"][number]): string {
+  const dimensions =
+    display.width !== null && display.height !== null
+      ? ` (${display.width}x${display.height})`
+      : "";
+  return `${display.id}${dimensions}`;
+}
+
+function sanitizePushTargetInput(value: string): string {
+  return Array.from(value)
+    .filter(
+      (character) =>
+        character.charCodeAt(0) >= 0x20 && !"\\`$;|&<>".includes(character),
+    )
+    .join("");
 }

@@ -54,6 +54,10 @@ each milestone tag.
   `uad_lists.json` is converted into a schema-valid, removable pack without
   bundling upstream data; the imported pack records the source SHA-256 and
   GPL-3.0 provenance, and malformed records identify their package id. (R-146)
+- **Mirror sessions expose the remaining probed scrcpy controls.** Displays
+  are enumerated and selectable, while mouse mode, camera torch/zoom, capture
+  orientation, clipboard autosync, and push target are validated against the
+  installed binary and saved per device. (R-147)
 - **Remote file mutations quote shell-sensitive device paths.** Absolute paths
   containing whitespace, punctuation, or quotes are protected at the `adb
   shell` boundary, while the structured plan remains available for exact
