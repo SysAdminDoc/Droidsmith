@@ -221,6 +221,14 @@ export function PackPreview({
                             {t(`debloat.entryStatus.${support.status}`)}
                           </Badge>
                         )}
+                        {support && (
+                          <Badge
+                            tone={verificationTone(support.verification)}
+                            className="ms-2"
+                          >
+                            {t(`debloat.verification.${support.verification}`)}
+                          </Badge>
+                        )}
                         <div className="mt-2 flex flex-wrap items-center gap-2">
                           <span className="text-xs text-anvil-500">
                             {t("debloat.actionLabel")}
@@ -370,6 +378,12 @@ function entryStatusTone(
     case "unsupported":
       return "danger";
   }
+}
+
+function verificationTone(
+  status: PackEntryAssessment["verification"],
+): "success" | "warning" {
+  return status === "verified" ? "success" : "warning";
 }
 
 function groupByTier(

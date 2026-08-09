@@ -501,6 +501,11 @@
       "ready": "Listo",
       "unsupported": "No compatible"
     },
+    "verification": {
+      "verified": "Eliminación verificada en esta compilación",
+      "not_verified": "No verificado en esta compilación",
+      "unknown": "Verificación de eliminación desconocida"
+    },
     "entryUnavailableForPlan": "Este paquete no está disponible para el dispositivo y usuario de Android seleccionados.",
     "errorCount_few": "{{count}} errores",
     "errorCount_many": "{{count}} errores",

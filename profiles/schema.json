@@ -146,6 +146,21 @@
           "const": "unsuspend"
         },
         {
+          "description": "`pm unstop --user 0 <pkg>` — clears Android's stopped bit. The\njournal inverse uses `am force-stop` only after verifying the package\nreturned to the unstopped state.",
+          "type": "string",
+          "const": "unstop"
+        },
+        {
+          "description": "`pm hide --user 0 <pkg>` — hides a package for one Android user while\nretaining its APK and data.",
+          "type": "string",
+          "const": "hide"
+        },
+        {
+          "description": "`pm unhide --user 0 <pkg>` — reverses Hide.",
+          "type": "string",
+          "const": "unhide"
+        },
+        {
           "description": "`pm disable-user --user 0 <pkg>` — reversible with `pm enable`.",
           "type": "string",
           "const": "disable"
@@ -154,6 +169,21 @@
           "description": "`pm enable <pkg>` — reverses Disable.",
           "type": "string",
           "const": "enable"
+        },
+        {
+          "description": "`pm disable-until-used --user 0 <pkg>` — moves a package into the\nplatform's lazy-disabled state. The verified inverse is DefaultState.",
+          "type": "string",
+          "const": "disable_until_used"
+        },
+        {
+          "description": "`pm default-state --user 0 <pkg>` — restores a package from the\nverified disabled-until-used state to its manifest default.",
+          "type": "string",
+          "const": "default_state"
+        },
+        {
+          "description": "`pm suspend-quarantine --user 0 <pkg>` — the quarantine-flavoured\nsuspension command. AOSP currently does not publish this command in\n`pm help`, so it is only available when the device advertises it.",
+          "type": "string",
+          "const": "suspend_quarantine"
         },
         {
           "description": "Android 15+ `pm archive` keeps user data while removing APK/cache.",

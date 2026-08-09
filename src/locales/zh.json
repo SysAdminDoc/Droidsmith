@@ -1182,6 +1182,11 @@
       "missing": "未安装",
       "unsupported": "不支持"
     },
+    "verification": {
+      "verified": "已验证此版本可移除",
+      "not_verified": "此版本未验证",
+      "unknown": "移除验证未知"
+    },
     "compatibilityOverride": "我已审查不匹配或未知的设备检查项，并接受按原样应用此确切的方案包修订。此覆盖将记录在操作日志中。",
     "planFailed": "无法创建方案包计划",
     "entryUnavailableForPlan": "此包不适用于所选设备和 Android 用户。",

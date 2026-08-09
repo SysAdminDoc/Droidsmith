@@ -1182,6 +1182,11 @@
       "missing": "Not installed",
       "unsupported": "Unsupported"
     },
+    "verification": {
+      "verified": "Verified removable on this build",
+      "not_verified": "Not verified on this build",
+      "unknown": "Removal verification unknown"
+    },
     "compatibilityOverride": "I reviewed the mismatched or unknown device checks and accept applying this exact pack revision anyway. This override will be recorded in the action journal.",
     "planFailed": "Pack plan could not be created",
     "entryUnavailableForPlan": "This package is not available for the selected device and Android user.",

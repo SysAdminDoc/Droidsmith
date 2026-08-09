@@ -1182,6 +1182,11 @@
       "missing": "Nicht installiert",
       "unsupported": "Nicht unterstützt"
     },
+    "verification": {
+      "verified": "Für diesen Build als entfernbar verifiziert",
+      "not_verified": "Für diesen Build nicht verifiziert",
+      "unknown": "Entfernungsnachweis unbekannt"
+    },
     "compatibilityOverride": "Ich habe die abweichenden oder unbekannten Gerätechecks geprüft und akzeptiere, diese genaue Paketrevision trotzdem anzuwenden. Diese Überschreibung wird im Aktionsjournal protokolliert.",
     "planFailed": "Paketplan konnte nicht erstellt werden",
     "entryUnavailableForPlan": "Dieses Paket ist für das ausgewählte Gerät und den Android-Benutzer nicht verfügbar.",

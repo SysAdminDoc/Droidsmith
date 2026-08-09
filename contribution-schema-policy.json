@@ -3,14 +3,14 @@
   "schemas": {
     "pack": {
       "document_version": "1",
-      "schema_sha256": "58444ce2698d67a33ab271b4a5c7c1e5ec415c20ad6123e4b4da87c1a4cdb3a2",
+      "schema_sha256": "46c08304514ff0d5a50a832672a94e99ebd7dafcb69152b24eb72a4d9792dfc2",
       "migration": "convert the file to the v1 pack schema in src-tauri/src/packs/mod.rs, set version: \"1\", then run droidsmith-pack-lint",
       "compatibility_fixture": "packs/_example.yaml",
       "fixture_version": "1"
     },
     "profile": {
       "document_version": "3",
-      "schema_sha256": "bc6d06c289cc659b9d9366750010d1cde100ed70252012f743732527315871cd",
+      "schema_sha256": "1e989326508ebb2c711b33d1ba40d430218c1d83a9195ac7a88f67f495cf8961",
       "migration": "profile v1 is inspected and migrated explicitly to the current schema; review the profile-level Android user target before saving or applying it. v2 loads and runs as-is, and separately offers a reviewed upgrade to v3",
       "compatibility_fixture": "src-tauri/fixtures/profiles/v1-valid.yaml",
       "fixture_version": "1"

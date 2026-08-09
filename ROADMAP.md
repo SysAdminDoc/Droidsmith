@@ -23,13 +23,6 @@ and Android, privacy-safe diagnostics, and the widest remaining product gap
 
 ### P2
 
-- [ ] R-145 P2 — Record per-entry "verified removable on" provenance in packs
-  Why: the most-discussed unmet ask in the debloat space is knowing which ROM a removal was actually proven safe on, and the pack schema records provenance only at pack level.
-  Evidence: UAD-NG issue #1164 (13 comments); `packs/schema.json` `PackEntry` has `id`, `removal`, `description`, `depends_on`, `needed_by`, `labels` — no verification record; pack-level `targets` and `provenance` exist but describe the whole document.
-  Touches: `packs/schema.json`, `src-tauri/src/packs/mod.rs`, `src-tauri/src/bin/pack_lint.rs`, `src/routes/debloat/PackPreview.tsx`, `packs/*.yaml`
-  Acceptance: an entry may carry verification records (build fingerprint prefix, Android level, outcome, date, source); the Debloat preview shows whether the connected device matches any record and says "not verified on this build" when it does not; `pack_lint` rejects a record missing a source; absence of records is rendered as unknown, never as safe.
-  Complexity: M
-
 - [ ] R-146 P2 — Import a user-supplied UAD-NG list
   Why: content depth is the weakest axis — 138 bundled pack entries and 11 quirk rules against a continuously-maintained upstream list — and the local-file import pattern already used for R-095 closes it without redistributing GPL-3.0 data.
   Evidence: `packs/*.yaml` total 138 entries (including the example pack); `quirks/*.yaml` total 11 rules; UAD-NG is GPL-3.0 and its data file is `resources/assets/uad_lists.json` (already cited by pinned commit in `quirks/samsung-oneui.yaml`); `packs/schema.json` `RemovalLevel` already mirrors UAD-NG's tiers and `depends_on`/`needed_by` mirror its dependency graph; `import_pack` in `src-tauri/src/commands/packs.rs:275` is the audited host-path grant model to reuse. Depends on the licensing-posture open question in RESEARCH.md.

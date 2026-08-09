@@ -170,6 +170,58 @@ pub struct PackEntry {
     /// "vendor-locked").
     #[serde(default)]
     pub labels: Vec<String>,
+    /// Per-build evidence for the removal outcome. An empty list is explicit
+    /// unknown evidence, never a claim that removal is safe.
+    #[serde(default, alias = "verification_records", alias = "verified_on")]
+    pub verification: Vec<PackVerification>,
+}
+
+#[derive(
+    schemars::JsonSchema, specta::Type, Debug, Clone, PartialEq, Eq, Serialize, Deserialize,
+)]
+#[serde(deny_unknown_fields)]
+pub struct PackVerification {
+    /// Case-insensitive prefix of `ro.build.fingerprint` on the tested build.
+    #[serde(alias = "fingerprint_prefix", alias = "build_fingerprint")]
+    pub build_fingerprint_prefix: String,
+    /// Android SDK/API level observed during the verification.
+    #[serde(alias = "api_level")]
+    pub android_level: u32,
+    /// Outcome observed when the package was tested on this build.
+    pub outcome: PackVerificationOutcome,
+    /// UTC verification date in `YYYY-MM-DD` form.
+    pub date: String,
+    /// Human-auditable source for the verification evidence.
+    pub source: String,
+}
+
+#[derive(
+    schemars::JsonSchema, specta::Type, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum PackVerificationOutcome {
+    /// The package was removed or otherwise completed the tested operation.
+    #[serde(
+        alias = "success",
+        alias = "passed",
+        alias = "pass",
+        alias = "verified"
+    )]
+    Removed,
+    /// The tested operation did not establish a removable package state.
+    #[serde(
+        alias = "failure",
+        alias = "failed",
+        alias = "not_removed",
+        alias = "not_verified"
+    )]
+    Failed,
+}
+
+impl PackVerificationOutcome {
+    fn is_positive(self) -> bool {
+        matches!(self, Self::Removed)
+    }
 }
 
 #[derive(
@@ -292,6 +344,17 @@ pub struct PackEntryAssessment {
     /// True when the entry was raised to Unsafe because it shares
     /// `android.uid.system` on the selected device/user.
     pub shared_system_uid: bool,
+    /// Whether a positive per-entry verification record matches this device.
+    /// Unknown is deliberately distinct from verified.
+    pub verification: PackVerificationStatus,
+}
+
+#[derive(specta::Type, Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PackVerificationStatus {
+    Verified,
+    NotVerified,
+    Unknown,
 }
 
 #[derive(specta::Type, Debug, Clone, Serialize)]
@@ -496,6 +559,32 @@ pub fn lint(p: &Pack) -> Vec<String> {
                 entry.id
             ));
         }
+        for verification in &entry.verification {
+            if verification.build_fingerprint_prefix.trim().is_empty() {
+                issues.push(format!(
+                    "entry {:?}: verification.build_fingerprint_prefix is empty",
+                    entry.id
+                ));
+            }
+            if verification.android_level == 0 {
+                issues.push(format!(
+                    "entry {:?}: verification.android_level must be greater than 0",
+                    entry.id
+                ));
+            }
+            if !valid_verification_date(&verification.date) {
+                issues.push(format!(
+                    "entry {:?}: verification.date must be YYYY-MM-DD",
+                    entry.id
+                ));
+            }
+            if verification.source.trim().is_empty() {
+                issues.push(format!(
+                    "entry {:?}: verification.source is empty",
+                    entry.id
+                ));
+            }
+        }
         for dep in &entry.depends_on {
             if !valid_package_name(dep) {
                 issues.push(format!(
@@ -555,6 +644,7 @@ pub struct RemovedPackage {
 pub struct DeviceExportContext {
     pub manufacturer: Option<String>,
     pub model: Option<String>,
+    pub build_fingerprint: Option<String>,
     pub api_level: Option<u32>,
     pub user_id: u32,
     /// Absolute capture date (`YYYY-MM-DD`); the caller stamps it.
@@ -594,6 +684,22 @@ pub fn from_device_state(
                 "Uninstalled for the selected user on the source device.".to_string(),
             ),
         };
+        let verification = match (context.build_fingerprint.as_deref(), context.api_level) {
+            (Some(build_fingerprint), Some(android_level))
+                if !build_fingerprint.trim().is_empty()
+                    && android_level > 0
+                    && valid_verification_date(&context.date) =>
+            {
+                vec![PackVerification {
+                    build_fingerprint_prefix: build_fingerprint.to_string(),
+                    android_level,
+                    outcome: PackVerificationOutcome::Removed,
+                    date: context.date.clone(),
+                    source: "Droidsmith device export".to_string(),
+                }]
+            }
+            _ => Vec::new(),
+        };
         packages.push(PackEntry {
             id: entry.id.clone(),
             removal,
@@ -602,6 +708,7 @@ pub fn from_device_state(
             depends_on: Vec::new(),
             needed_by: Vec::new(),
             labels: vec!["device-export".to_string()],
+            verification,
         });
     }
     if packages.is_empty() {
@@ -859,6 +966,7 @@ pub fn assess(pack: &Pack, context: &DevicePackContext) -> PackAssessment {
                     effective_removal,
                     resolved_action: entry.action.unwrap_or_default(),
                     shared_system_uid,
+                    verification: assess_verification(entry, context),
                 };
             }
             let unavailable: Vec<&str> = entry
@@ -878,6 +986,7 @@ pub fn assess(pack: &Pack, context: &DevicePackContext) -> PackAssessment {
                     effective_removal,
                     resolved_action: entry.action.unwrap_or_default(),
                     shared_system_uid,
+                    verification: assess_verification(entry, context),
                 }
             } else {
                 PackEntryAssessment {
@@ -890,6 +999,7 @@ pub fn assess(pack: &Pack, context: &DevicePackContext) -> PackAssessment {
                     effective_removal,
                     resolved_action: entry.action.unwrap_or_default(),
                     shared_system_uid,
+                    verification: assess_verification(entry, context),
                 }
             }
         })
@@ -901,6 +1011,44 @@ pub fn assess(pack: &Pack, context: &DevicePackContext) -> PackAssessment {
         checks,
         entries,
     }
+}
+
+fn assess_verification(entry: &PackEntry, context: &DevicePackContext) -> PackVerificationStatus {
+    if entry.verification.is_empty() {
+        return PackVerificationStatus::Unknown;
+    }
+    let (Some(build_fingerprint), Some(android_level)) =
+        (context.build_fingerprint.as_deref(), context.api_level)
+    else {
+        return PackVerificationStatus::Unknown;
+    };
+    let build_fingerprint = build_fingerprint.to_ascii_lowercase();
+    if entry.verification.iter().any(|record| {
+        record.outcome.is_positive()
+            && record.android_level == android_level
+            && build_fingerprint.starts_with(&record.build_fingerprint_prefix.to_ascii_lowercase())
+    }) {
+        PackVerificationStatus::Verified
+    } else {
+        PackVerificationStatus::NotVerified
+    }
+}
+
+fn valid_verification_date(value: &str) -> bool {
+    let bytes = value.as_bytes();
+    if bytes.len() != 10 || bytes[4] != b'-' || bytes[7] != b'-' {
+        return false;
+    }
+    if !bytes
+        .iter()
+        .enumerate()
+        .all(|(index, byte)| matches!(index, 4 | 7) || byte.is_ascii_digit())
+    {
+        return false;
+    }
+    let month = value[5..7].parse::<u8>().ok();
+    let day = value[8..10].parse::<u8>().ok();
+    matches!((month, day), (Some(1..=12), Some(1..=31)))
 }
 
 fn pattern_check(field: &str, expected: &[String], actual: Option<&str>) -> CompatibilityCheck {
@@ -1094,6 +1242,62 @@ packages:
     }
 
     #[test]
+    fn verification_requires_a_source_and_valid_metadata() {
+        let mut pack: Pack = serde_yaml_ng::from_str(GOOD).unwrap();
+        pack.packages[0].verification = vec![PackVerification {
+            build_fingerprint_prefix: "google/panther".into(),
+            android_level: 35,
+            outcome: PackVerificationOutcome::Removed,
+            date: "2026-08-09".into(),
+            source: String::new(),
+        }];
+        let issues = lint(&pack);
+        assert!(issues
+            .iter()
+            .any(|issue| issue.contains("verification.source is empty")));
+    }
+
+    #[test]
+    fn per_entry_verification_is_exactly_scoped_to_build_and_android_level() {
+        let mut pack: Pack = serde_yaml_ng::from_str(GOOD).unwrap();
+        pack.packages[0].verification = vec![PackVerification {
+            build_fingerprint_prefix: "google/panther".into(),
+            android_level: 35,
+            outcome: PackVerificationOutcome::Removed,
+            date: "2026-08-09".into(),
+            source: "test fixture".into(),
+        }];
+        let context = DevicePackContext {
+            manufacturer: Some("Google".into()),
+            model: Some("Pixel 7".into()),
+            build_fingerprint: Some("google/panther/panther:15/test".into()),
+            api_level: Some(35),
+            user_id: 0,
+            user_current: true,
+            installed_packages: HashSet::from([pack.packages[0].id.clone()]),
+            system_uid_packages: HashSet::new(),
+        };
+        let assessment = assess(&pack, &context);
+        assert_eq!(
+            assessment.entries[0].verification,
+            PackVerificationStatus::Verified
+        );
+
+        let mut different_build = context.clone();
+        different_build.build_fingerprint = Some("google/cheetah/cheetah:15/test".into());
+        assert_eq!(
+            assess(&pack, &different_build).entries[0].verification,
+            PackVerificationStatus::NotVerified
+        );
+
+        pack.packages[0].verification.clear();
+        assert_eq!(
+            assess(&pack, &context).entries[0].verification,
+            PackVerificationStatus::Unknown
+        );
+    }
+
+    #[test]
     fn flags_inverted_android_min_max() {
         let bad = r#"
 name: "x"
@@ -1190,6 +1394,7 @@ packages:
         let context = DeviceExportContext {
             manufacturer: Some("Google".into()),
             model: Some("Pixel 8".into()),
+            build_fingerprint: Some("google/panther/panther:14/AP2A.240705.004".into()),
             api_level: Some(34),
             user_id: 0,
             date: "2026-07-21".into(),
@@ -1198,6 +1403,11 @@ packages:
         assert_eq!(pack.id, "google-pixel-8-export");
         assert_eq!(pack.packages.len(), 3);
         assert_eq!(pack.targets.user_scope, UserScope::Owner);
+        assert_eq!(pack.packages[0].verification.len(), 1);
+        assert_eq!(
+            pack.packages[0].verification[0].build_fingerprint_prefix,
+            "google/panther/panther:14/AP2A.240705.004"
+        );
         assert!(lint(&pack).is_empty(), "{:?}", lint(&pack));
 
         // The serialized YAML must parse and lint cleanly via the import path.

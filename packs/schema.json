@@ -195,6 +195,14 @@
             "type": "string"
           },
           "default": []
+        },
+        "verification": {
+          "description": "Per-build evidence for the removal outcome. An empty list is explicit\nunknown evidence, never a claim that removal is safe.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/PackVerification"
+          },
+          "default": []
         }
       },
       "additionalProperties": false,
@@ -220,6 +228,55 @@
         "disable",
         "archive",
         "uninstall_for_user"
+      ]
+    },
+    "PackVerification": {
+      "type": "object",
+      "properties": {
+        "build_fingerprint_prefix": {
+          "description": "Case-insensitive prefix of `ro.build.fingerprint` on the tested build.",
+          "type": "string"
+        },
+        "android_level": {
+          "description": "Android SDK/API level observed during the verification.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "outcome": {
+          "description": "Outcome observed when the package was tested on this build.",
+          "$ref": "#/$defs/PackVerificationOutcome"
+        },
+        "date": {
+          "description": "UTC verification date in `YYYY-MM-DD` form.",
+          "type": "string"
+        },
+        "source": {
+          "description": "Human-auditable source for the verification evidence.",
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "build_fingerprint_prefix",
+        "android_level",
+        "outcome",
+        "date",
+        "source"
+      ]
+    },
+    "PackVerificationOutcome": {
+      "oneOf": [
+        {
+          "description": "The package was removed or otherwise completed the tested operation.",
+          "type": "string",
+          "const": "removed"
+        },
+        {
+          "description": "The tested operation did not establish a removable package state.",
+          "type": "string",
+          "const": "failed"
+        }
       ]
     },
     "PackProvenance": {

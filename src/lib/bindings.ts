@@ -2659,6 +2659,11 @@ export type PackEntry = {
    * "vendor-locked").
    */
   labels?: string[];
+  /**
+   * Per-build evidence for the removal outcome. An empty list is explicit
+   * unknown evidence, never a claim that removal is safe.
+   */
+  verification?: PackVerification[];
 };
 export type PackEntryAssessment = {
   id: string;
@@ -2679,6 +2684,11 @@ export type PackEntryAssessment = {
    * `android.uid.system` on the selected device/user.
    */
   shared_system_uid: boolean;
+  /**
+   * Whether a positive per-entry verification record matches this device.
+   * Unknown is deliberately distinct from verified.
+   */
+  verification: PackVerificationStatus;
 };
 export type PackEntryStatus = "ready" | "missing" | "unsupported";
 /**
@@ -2736,6 +2746,38 @@ export type PackTargets = {
    */
   user_scope?: UserScope;
 };
+export type PackVerification = {
+  /**
+   * Case-insensitive prefix of `ro.build.fingerprint` on the tested build.
+   */
+  build_fingerprint_prefix: string;
+  /**
+   * Android SDK/API level observed during the verification.
+   */
+  android_level: number;
+  /**
+   * Outcome observed when the package was tested on this build.
+   */
+  outcome: PackVerificationOutcome;
+  /**
+   * UTC verification date in `YYYY-MM-DD` form.
+   */
+  date: string;
+  /**
+   * Human-auditable source for the verification evidence.
+   */
+  source: string;
+};
+export type PackVerificationOutcome =
+  /**
+   * The package was removed or otherwise completed the tested operation.
+   */
+  | "removed"
+  /**
+   * The tested operation did not establish a removable package state.
+   */
+  | "failed";
+export type PackVerificationStatus = "verified" | "not_verified" | "unknown";
 export type PackageActionCapabilities = {
   disable: PackageSubcommandCapability;
   suspend: PackageSubcommandCapability;
@@ -3124,6 +3166,12 @@ export type RemoteFileMutationRequest = {
 export type RemoteListing = {
   path: string;
   entries: RemoteFileEntry[];
+  /**
+   * Permission bits for the browsed directory. `None` means the OEM output
+   * was unavailable or unparseable; the renderer must leave mutations
+   * enabled rather than guessing in that case.
+   */
+  directory_permissions: string | null;
   free_space_kb: number | null;
 };
 export type RemovalLevel = "recommended" | "advanced" | "expert" | "unsafe";

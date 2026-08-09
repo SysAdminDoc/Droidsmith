@@ -46,6 +46,10 @@ each milestone tag.
   device-advertised `unstop`, hide/unhide, lazy-disable/default-state, and
   quarantine-suspend actions with exact live-state transitions and verified
   journal inverses; unsupported commands stay hidden. (R-144)
+- **Debloat entries now carry per-build removal evidence.** Pack records can
+  name a build-fingerprint prefix, Android level, outcome, date, and source;
+  the preview distinguishes verified, not verified on this build, and unknown,
+  while pack lint rejects incomplete evidence. (R-145)
 - **Remote file mutations quote shell-sensitive device paths.** Absolute paths
   containing whitespace, punctuation, or quotes are protected at the `adb
   shell` boundary, while the structured plan remains available for exact

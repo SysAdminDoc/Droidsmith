@@ -422,6 +422,7 @@ pub fn export_device_pack(
     let context = crate::packs::DeviceExportContext {
         manufacturer: info.manufacturer,
         model: info.model,
+        build_fingerprint: info.build_fingerprint,
         api_level: info.sdk_level.and_then(|value| value.parse().ok()),
         user_id: userId,
         date: crate::time::iso_utc_now().chars().take(10).collect(),
@@ -754,6 +755,7 @@ fn missing_pack_assessment(entry: &crate::packs::PackEntry) -> crate::packs::Pac
         effective_removal: entry.removal,
         resolved_action: entry.action.unwrap_or_default(),
         shared_system_uid: false,
+        verification: crate::packs::PackVerificationStatus::Unknown,
     }
 }
 
@@ -771,6 +773,7 @@ mod invariant_tests {
             labels: Vec::new(),
             depends_on: Vec::new(),
             needed_by: Vec::new(),
+            verification: Vec::new(),
         };
         let skipped = missing_pack_assessment(&entry);
         assert_eq!(skipped.id, entry.id);
