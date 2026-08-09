@@ -198,10 +198,18 @@ pub fn list_remote_files(
 ) -> Result<RemoteListing, CommandError> {
     let remote = validate_remote_path(&remote_path)?;
     let transport = validated_transport(&target)?;
-    let stdout = transport.shell_target(&target, &["ls", "-la", &remote])?;
+    list_remote_files_with_transport(&transport, &target, remote)
+}
+
+fn list_remote_files_with_transport(
+    transport: &dyn AdbTransport,
+    target: &adb::DeviceTarget,
+    remote: String,
+) -> Result<RemoteListing, CommandError> {
+    let stdout = transport.shell_target(target, &["ls", "-la", &remote])?;
     let entries = parse_ls_output(&stdout);
     let free_space = transport
-        .shell_target(&target, &["df", "-k", &remote])
+        .shell_target(target, &["df", "-k", &remote])
         .ok()
         .and_then(|s| parse_df_free(&s));
     Ok(RemoteListing {
@@ -232,20 +240,46 @@ pub fn apply_remote_file_mutation(
     request: remote_files::RemoteFileMutationRequest,
     confirmed: bool,
 ) -> Result<ApplyActionResult, CommandError> {
-    let reviewed = remote_files::plan(&request)?;
+    let reviewed = review_remote_file_mutation(&request, confirmed)?;
+    let (transport, transport_override) = privileged_transport(&target)?;
+    let user_id = current_android_user(&transport, &target)?;
+    let dir = journal_dir(&app)?;
+    apply_remote_file_mutation_with_transport(
+        &transport,
+        target,
+        reviewed,
+        user_id,
+        transport_override,
+        &dir,
+    )
+}
+
+fn review_remote_file_mutation(
+    request: &remote_files::RemoteFileMutationRequest,
+    confirmed: bool,
+) -> Result<remote_files::RemoteFileMutationPlan, CommandError> {
+    let reviewed = remote_files::plan(request)?;
     if !confirmed {
         return Err(CommandError {
             code: "confirmation_required",
             message: "remote file mutation requires an explicit confirmation review".to_string(),
         });
     }
-    let (transport, transport_override) = privileged_transport(&target)?;
-    let user_id = current_android_user(&transport, &target)?;
+    Ok(reviewed)
+}
+
+fn apply_remote_file_mutation_with_transport(
+    transport: &dyn AdbTransport,
+    target: adb::DeviceTarget,
+    reviewed: remote_files::RemoteFileMutationPlan,
+    user_id: u32,
+    transport_override: Option<adb::DeviceTransportKind>,
+    journal_directory: &Path,
+) -> Result<ApplyActionResult, CommandError> {
     let identity = DeviceIdentity::from_target(&target);
     let plan = remote_files::action_plan(target, user_id, transport_override, &reviewed);
-    let dir = journal_dir(&app)?;
-    journal::with_journal(&dir, &identity, |journal| {
-        execute_remote_file_journaled(journal, &transport, plan)
+    journal::with_journal(journal_directory, &identity, |journal| {
+        execute_remote_file_journaled(journal, transport, plan)
     })
 }
 
@@ -408,4 +442,171 @@ pub(crate) fn parse_df_free(stdout: &str) -> Option<u64> {
         }
     }
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::adb::device::DeviceState;
+    use crate::adb::transport::{MockTransport, TransportError};
+    use crate::adb::{Device, DeviceTransportKind};
+
+    fn target() -> adb::DeviceTarget {
+        adb::DeviceTarget {
+            serial: "files-test".to_string(),
+            transport_id: Some(7),
+            connection_generation: 8,
+            model: Some("Pixel".to_string()),
+            product: Some("pixel".to_string()),
+            device: Some("husky".to_string()),
+            build_fingerprint: Some("google/husky/test".to_string()),
+            transport_kind: DeviceTransportKind::Usb,
+            untrusted_transport_override: false,
+        }
+    }
+
+    fn device() -> Device {
+        Device {
+            serial: "files-test".to_string(),
+            state: DeviceState::Device,
+            model: Some("Pixel".to_string()),
+            product: Some("pixel".to_string()),
+            device: Some("husky".to_string()),
+            marketing_name: None,
+            bus_address: None,
+            connection_type: None,
+            negotiated_speed: None,
+            max_speed: None,
+            build_fingerprint: Some("google/husky/test".to_string()),
+            transport_id: Some(7),
+            connection_generation: 8,
+            transport_kind: DeviceTransportKind::Usb,
+            wireless: false,
+        }
+    }
+
+    #[test]
+    fn list_remote_files_uses_validated_path_for_listing_and_free_space() {
+        let mock = MockTransport::new();
+        mock.expect_shell(
+            "files-test",
+            &["ls", "-la", "/sdcard/QA dir"],
+            Ok("total 4\ndrwxr-xr-x 2 root root 4096 2026-08-08 10:00 QA dir\n-rw-r--r-- 1 root root 12 2026-08-08 10:00 note.txt\n".to_string()),
+        );
+        mock.expect_shell(
+            "files-test",
+            &["df", "-k", "/sdcard/QA dir"],
+            Ok("Filesystem 1K-blocks Used Available Use% Mounted on\n/dev/block 1000 250 750 25% /sdcard\n".to_string()),
+        );
+
+        let listing =
+            list_remote_files_with_transport(&mock, &target(), "/sdcard/QA dir".to_string())
+                .expect("remote listing");
+        assert_eq!(listing.path, "/sdcard/QA dir");
+        assert_eq!(listing.free_space_kb, Some(750));
+        assert_eq!(listing.entries.len(), 2);
+        assert!(listing
+            .entries
+            .iter()
+            .any(|entry| entry.name == "QA dir" && entry.is_dir));
+        assert!(listing
+            .entries
+            .iter()
+            .any(|entry| entry.name == "note.txt" && entry.size == Some(12)));
+    }
+
+    #[test]
+    fn apply_remote_file_mutation_requires_confirmation_without_touching_transport() {
+        let error = review_remote_file_mutation(
+            &remote_files::RemoteFileMutationRequest {
+                kind: remote_files::RemoteFileMutationKind::Mkdir,
+                source_path: "/sdcard/QA dir".to_string(),
+                destination_path: None,
+            },
+            false,
+        )
+        .unwrap_err();
+        assert_eq!(error.code, "confirmation_required");
+    }
+
+    #[test]
+    fn apply_remote_file_mutation_journals_exact_reviewed_command_and_verifies_transition() {
+        let mock = MockTransport::new().with_devices(vec![device()]);
+        mock.expect_shell(
+            "files-test",
+            &["pm", "list", "users"],
+            Ok("Users:\n    UserInfo{0:Owner:c13} running (current)\n".to_string()),
+        );
+        mock.expect_shell(
+            "files-test",
+            &["am", "get-current-user"],
+            Ok("0\n".to_string()),
+        );
+        mock.expect_shell(
+            "files-test",
+            &["ls", "-ld", "/sdcard/QA dir"],
+            Err(TransportError::Exit {
+                code: 1,
+                stderr: "missing".to_string(),
+            }),
+        );
+        mock.expect_shell(
+            "files-test",
+            &["mkdir", "/sdcard/QA dir"],
+            Ok("created\n".to_string()),
+        );
+        mock.expect_shell(
+            "files-test",
+            &["ls", "-ld", "/sdcard/QA dir"],
+            Ok("drwxr-xr-x 2 root root 4096 2026-08-08 10:00 QA dir\n".to_string()),
+        );
+        mock.expect_shell(
+            "files-test",
+            &["test", "-e", "/sdcard/QA dir"],
+            Ok(String::new()),
+        );
+
+        let directory = std::env::temp_dir().join(format!(
+            "droidsmith-files-test-{}-{}",
+            std::process::id(),
+            crate::time::iso_utc_now().replace([':', '.'], "-")
+        ));
+        let reviewed = review_remote_file_mutation(
+            &remote_files::RemoteFileMutationRequest {
+                kind: remote_files::RemoteFileMutationKind::Mkdir,
+                source_path: "/sdcard/QA dir".to_string(),
+                destination_path: None,
+            },
+            true,
+        )
+        .expect("reviewed remote mutation");
+        let result = apply_remote_file_mutation_with_transport(
+            &mock,
+            target(),
+            reviewed,
+            0,
+            None,
+            &directory,
+        )
+        .expect("journaled remote mutation");
+
+        assert_eq!(result.stdout, "created\n");
+        assert_eq!(
+            result.entry.outcome,
+            crate::journal::JournalOutcome::Succeeded
+        );
+        assert_eq!(result.entry.applied.plan.args, ["mkdir", "/sdcard/QA dir"]);
+        assert!(result
+            .entry
+            .applied
+            .plan
+            .description
+            .contains("'/sdcard/QA dir'"));
+        assert!(result.entry.applied.after_state.contains("present"));
+        assert_eq!(
+            result.entry.applied.stdout,
+            "[shell output redacted; 8 byte(s)]"
+        );
+        let _ = std::fs::remove_dir_all(directory);
+    }
 }

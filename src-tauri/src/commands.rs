@@ -355,7 +355,7 @@ fn execute_journaled(
 
 fn execute_remote_file_journaled(
     journal: &mut Journal,
-    transport: &adb::ShellTransport,
+    transport: &dyn AdbTransport,
     mut plan: actions::PlannedAction,
 ) -> Result<ApplyActionResult, CommandError> {
     actions::validate_plan(&plan)?;

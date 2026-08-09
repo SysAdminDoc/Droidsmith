@@ -221,6 +221,15 @@ pub fn plan_shell_action(request: PlanShellActionRequest) -> Result<ShellActionP
             message: "shell argv is empty, oversized, or contains control characters".to_string(),
         });
     }
+    let (transport, transport_override) = privileged_transport(&request.target)?;
+    plan_shell_action_with_transport(&transport, transport_override, request)
+}
+
+fn plan_shell_action_with_transport(
+    transport: &dyn AdbTransport,
+    transport_override: Option<adb::DeviceTransportKind>,
+    request: PlanShellActionRequest,
+) -> Result<ShellActionPlan, CommandError> {
     let classification = classify_shell(&request.argv);
     if classification == ShellClassification::ReadOnly {
         return Ok(ShellActionPlan {
@@ -229,8 +238,7 @@ pub fn plan_shell_action(request: PlanShellActionRequest) -> Result<ShellActionP
             plan: None,
         });
     }
-    let (transport, transport_override) = privileged_transport(&request.target)?;
-    let users = adb::list_users(&transport, &request.target)?;
+    let users = adb::list_users(transport, &request.target)?;
     let user_id = users
         .iter()
         .find(|user| user.current)
@@ -335,4 +343,108 @@ pub fn apply_device_control(
     journal::with_journal(&dir, &identity, |journal| {
         execute_journaled(journal, &transport, plan, None)
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::adb::device::DeviceState;
+    use crate::adb::transport::MockTransport;
+
+    fn target() -> adb::DeviceTarget {
+        adb::DeviceTarget {
+            serial: "console-test".to_string(),
+            transport_id: Some(7),
+            connection_generation: 1,
+            model: Some("Pixel".to_string()),
+            product: Some("pixel".to_string()),
+            device: Some("husky".to_string()),
+            build_fingerprint: Some("google/husky/test".to_string()),
+            transport_kind: adb::DeviceTransportKind::Usb,
+            untrusted_transport_override: false,
+        }
+    }
+
+    #[test]
+    fn plan_shell_action_rejects_invalid_argv_before_transport_access() {
+        let error = plan_shell_action(PlanShellActionRequest {
+            target: target(),
+            argv: Vec::new(),
+        })
+        .unwrap_err();
+        assert_eq!(error.code, "invalid_shell_argv");
+    }
+
+    #[test]
+    fn plan_shell_action_keeps_read_only_commands_out_of_the_mutation_plan() {
+        let result = plan_shell_action_with_transport(
+            &MockTransport::new(),
+            None,
+            PlanShellActionRequest {
+                target: target(),
+                argv: vec!["getprop".to_string(), "ro.product.model".to_string()],
+            },
+        )
+        .unwrap();
+        assert!(!result.mutating);
+        assert!(!result.dangerous);
+        assert!(result.plan.is_none());
+    }
+
+    #[test]
+    fn plan_shell_action_binds_mutations_to_the_current_user() {
+        let mock = MockTransport::new();
+        mock.expect_shell(
+            "console-test",
+            &["pm", "list", "users"],
+            Ok("Users:\n    UserInfo{0:Owner:c13} running (current)\n".to_string()),
+        );
+        mock.expect_shell(
+            "console-test",
+            &["am", "get-current-user"],
+            Ok("0\n".to_string()),
+        );
+        let result = plan_shell_action_with_transport(
+            &mock,
+            None,
+            PlanShellActionRequest {
+                target: target(),
+                argv: vec![
+                    "settings".to_string(),
+                    "put".to_string(),
+                    "secure".to_string(),
+                    "ui_night_mode".to_string(),
+                    "2".to_string(),
+                ],
+            },
+        )
+        .unwrap();
+        let plan = result.plan.expect("mutation plan");
+        assert!(result.mutating);
+        assert_eq!(plan.request.user_id, 0);
+        assert_eq!(plan.args[0], "settings");
+        assert_eq!(plan.args[4], "2");
+    }
+
+    #[test]
+    fn target_fixture_retains_device_state_for_command_surface_tests() {
+        let device = adb::Device {
+            serial: "console-test".to_string(),
+            state: DeviceState::Device,
+            model: Some("Pixel".to_string()),
+            product: Some("pixel".to_string()),
+            device: Some("husky".to_string()),
+            marketing_name: None,
+            bus_address: None,
+            connection_type: None,
+            negotiated_speed: None,
+            max_speed: None,
+            build_fingerprint: Some("google/husky/test".to_string()),
+            transport_id: Some(7),
+            connection_generation: 1,
+            transport_kind: adb::DeviceTransportKind::Usb,
+            wireless: false,
+        };
+        assert_eq!(device.target(), target());
+    }
 }
