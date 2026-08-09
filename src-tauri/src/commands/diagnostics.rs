@@ -261,6 +261,29 @@ pub struct ExplainPackageHazardsRequest {
     pub package_ids: Vec<String>,
 }
 
+pub(crate) fn validate_package_hazard_request(
+    req: &ExplainPackageHazardsRequest,
+) -> Result<(), CommandError> {
+    const MAX_PACKAGES: usize = 256;
+    if req.package_ids.len() > MAX_PACKAGES {
+        return Err(CommandError {
+            code: "too_many_packages",
+            message: format!("package hazard review accepts at most {MAX_PACKAGES} packages"),
+        });
+    }
+    if let Some(package_id) = req
+        .package_ids
+        .iter()
+        .find(|package_id| !crate::adb::packages::valid_package_name(package_id))
+    {
+        return Err(CommandError {
+            code: "invalid_package",
+            message: format!("invalid package id {package_id:?}"),
+        });
+    }
+    Ok(())
+}
+
 /// Load quirks from the bundled resource directory and match against the
 /// failure context.
 /// Returns `Some(quirk)` if a rule applies, `None` if the raw error
@@ -298,23 +321,7 @@ pub fn explain_package_hazards(
     app: tauri::AppHandle,
     req: ExplainPackageHazardsRequest,
 ) -> Result<Vec<Quirk>, CommandError> {
-    const MAX_PACKAGES: usize = 256;
-    if req.package_ids.len() > MAX_PACKAGES {
-        return Err(CommandError {
-            code: "too_many_packages",
-            message: format!("package hazard review accepts at most {MAX_PACKAGES} packages"),
-        });
-    }
-    if let Some(package_id) = req
-        .package_ids
-        .iter()
-        .find(|package_id| !crate::adb::packages::valid_package_name(package_id))
-    {
-        return Err(CommandError {
-            code: "invalid_package",
-            message: format!("invalid package id {package_id:?}"),
-        });
-    }
+    validate_package_hazard_request(&req)?;
 
     let resource_dir = app.path().resource_dir().map_err(|error| CommandError {
         code: "no_resource_dir",
@@ -334,4 +341,43 @@ pub fn explain_package_hazards(
     .into_iter()
     .cloned()
     .collect())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn package_hazard_validation_rejects_invalid_ids_before_resource_access() {
+        let request = ExplainPackageHazardsRequest {
+            manufacturer: None,
+            rom: None,
+            package_ids: vec!["com.example.good".to_string(), "-bad".to_string()],
+        };
+        let error = validate_package_hazard_request(&request).unwrap_err();
+        assert_eq!(error.code, "invalid_package");
+    }
+
+    #[test]
+    fn package_hazard_validation_bounds_batch_size() {
+        let request = ExplainPackageHazardsRequest {
+            manufacturer: None,
+            rom: None,
+            package_ids: (0..257).map(|i| format!("com.example.p{i}")).collect(),
+        };
+        let error = validate_package_hazard_request(&request).unwrap_err();
+        assert_eq!(error.code, "too_many_packages");
+    }
+
+    #[test]
+    fn recovery_failure_text_keeps_cancellation_and_output_limit_distinct() {
+        assert_eq!(
+            recovery_operation_failure(&operations::OperationError::Cancelled),
+            "operation was cancelled"
+        );
+        assert_eq!(
+            recovery_operation_failure(&operations::OperationError::OutputTooLarge(128)),
+            "adb recovery output exceeded 128 bytes"
+        );
+    }
 }

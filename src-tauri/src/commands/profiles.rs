@@ -251,3 +251,77 @@ pub(crate) fn profile_preview_rows(
         })
         .collect()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn target() -> adb::DeviceTarget {
+        adb::DeviceTarget {
+            serial: "profiles-test".to_string(),
+            transport_id: Some(4),
+            connection_generation: 1,
+            model: Some("Test".to_string()),
+            product: Some("test".to_string()),
+            device: Some("test".to_string()),
+            build_fingerprint: Some("build/test".to_string()),
+            transport_kind: adb::DeviceTransportKind::Usb,
+            untrusted_transport_override: false,
+        }
+    }
+
+    #[test]
+    fn profile_preview_rows_report_ready_and_already_matching_states() {
+        let profile = profile::Profile {
+            name: "test".to_string(),
+            version: profile::PROFILE_SCHEMA_VERSION.to_string(),
+            description: String::new(),
+            device: Default::default(),
+            user: Default::default(),
+            actions: vec![
+                profile::ProfileAction {
+                    kind: actions::ActionKind::Disable,
+                    package: "com.example.ready".to_string(),
+                    filter: String::new(),
+                    note: String::new(),
+                },
+                profile::ProfileAction {
+                    kind: actions::ActionKind::Disable,
+                    package: "com.example.disabled".to_string(),
+                    filter: String::new(),
+                    note: String::new(),
+                },
+            ],
+        };
+        let packages = vec![
+            adb::AppPackage {
+                package: "com.example.ready".to_string(),
+                enabled: true,
+                system: false,
+                apk_path: None,
+                uid: None,
+                installer: None,
+                archived: false,
+                retained: false,
+            },
+            adb::AppPackage {
+                package: "com.example.disabled".to_string(),
+                enabled: false,
+                system: true,
+                apk_path: Some("/system/app/Test.apk".to_string()),
+                uid: Some(1_000),
+                installer: None,
+                archived: false,
+                retained: false,
+            },
+        ];
+        let rows = profile_preview_rows(&profile, &target(), 0, &packages);
+        assert_eq!(rows.len(), 2);
+        assert!(matches!(rows[0].status, ProfilePreviewStatus::Ready));
+        assert!(matches!(
+            rows[1].status,
+            ProfilePreviewStatus::AlreadyMatches
+        ));
+        assert_eq!(rows[0].expected_state, "disabled");
+    }
+}

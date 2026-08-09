@@ -64,7 +64,7 @@ pub async fn extract_apk(
 ) -> Result<HostArtifact, CommandError> {
     let (transport, _) = privileged_transport(&target)?;
     let output_target = grants.consume(&path_grant, HostPathPurpose::ExtractApkSave)?;
-    let remote = validate_remote_path(&remote_path)?;
+    let remote = validate_extract_apk_remote(&remote_path)?;
     let selector = target.adb_selector();
     let adb_path = transport.adb_path.clone();
     let sink = operations::channel_sink(on_event);
@@ -90,4 +90,27 @@ pub async fn extract_apk(
     .await?;
     grants.record_produced(&artifact.local_path)?;
     Ok(artifact)
+}
+
+pub(crate) fn validate_extract_apk_remote(remote_path: &str) -> Result<String, CommandError> {
+    validate_remote_path(remote_path)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn extract_apk_remote_validation_rejects_flags_and_relative_paths() {
+        for path in ["--help", "relative.apk", "/sdcard/../data/app.apk"] {
+            let error = validate_extract_apk_remote(path).unwrap_err();
+            assert_eq!(error.code, "invalid_remote_path", "path={path:?}");
+        }
+    }
+
+    #[test]
+    fn extract_apk_remote_validation_preserves_a_valid_device_path() {
+        let path = validate_extract_apk_remote("/sdcard/My files/app.apk").unwrap();
+        assert_eq!(path, "/sdcard/My files/app.apk");
+    }
 }

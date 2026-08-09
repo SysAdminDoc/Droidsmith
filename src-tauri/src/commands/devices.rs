@@ -492,3 +492,28 @@ pub(crate) fn diagnostic_text(value: &str) -> String {
         .collect::<String>();
     normalized.trim().chars().take(1_024).collect()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn diagnostic_text_removes_controls_and_bounds_host_output() {
+        let input = format!("  adb\u{0}\n{}  ", "x".repeat(2_000));
+        let result = diagnostic_text(&input);
+        assert!(!result.contains('\u{0}'));
+        assert!(result.starts_with("adb\n"));
+        assert_eq!(result.chars().count(), 1_024);
+    }
+
+    #[test]
+    fn device_lifecycle_error_serializes_as_an_error_event() {
+        let event = DeviceLifecycleEvent::Error {
+            message: "adb unavailable".to_string(),
+            observed_at: "2026-01-01T00:00:00Z".to_string(),
+        };
+        let json = serde_json::to_value(event).unwrap();
+        assert_eq!(json["kind"], "error");
+        assert_eq!(json["message"], "adb unavailable");
+    }
+}

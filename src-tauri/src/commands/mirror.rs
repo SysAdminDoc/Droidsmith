@@ -53,13 +53,7 @@ pub async fn launch_scrcpy(
     path_grant: Option<String>,
     retry_session_id: Option<u64>,
 ) -> Result<crate::scrcpy::ScrcpySession, CommandError> {
-    validate_serial_arg(&request.serial)?;
-    if request.target.serial != request.serial {
-        return Err(CommandError {
-            code: "target_mismatch",
-            message: "scrcpy target does not match the requested serial".to_string(),
-        });
-    }
+    validate_scrcpy_target(&request.serial, &request.target)?;
     // The adb list_devices round-trip and the capability probe (up to ~23 s on
     // a cache miss) must not run on the IPC dispatch thread; mirror the
     // sibling scrcpy_capabilities command.
@@ -235,4 +229,49 @@ pub fn stop_gnirehtet(session_id: u64) -> Result<crate::gnirehtet::GnirehtetSess
         code: "gnirehtet_stop_failed",
         message: e,
     })
+}
+
+pub(crate) fn validate_scrcpy_target(
+    serial: &str,
+    target: &adb::DeviceTarget,
+) -> Result<(), CommandError> {
+    validate_serial_arg(serial)?;
+    if target.serial != serial {
+        return Err(CommandError {
+            code: "target_mismatch",
+            message: "scrcpy target does not match the requested serial".to_string(),
+        });
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn target(serial: &str) -> adb::DeviceTarget {
+        adb::DeviceTarget {
+            serial: serial.to_string(),
+            transport_id: Some(1),
+            connection_generation: 1,
+            model: None,
+            product: None,
+            device: None,
+            build_fingerprint: Some("build/test".to_string()),
+            transport_kind: adb::DeviceTransportKind::Usb,
+            untrusted_transport_override: false,
+        }
+    }
+
+    #[test]
+    fn scrcpy_target_validation_rejects_invalid_serials_before_process_work() {
+        let error = validate_scrcpy_target("-serial", &target("-serial")).unwrap_err();
+        assert_eq!(error.code, "invalid_serial");
+    }
+
+    #[test]
+    fn scrcpy_target_validation_rejects_stale_serial_binding() {
+        let error = validate_scrcpy_target("other", &target("device")).unwrap_err();
+        assert_eq!(error.code, "target_mismatch");
+    }
 }

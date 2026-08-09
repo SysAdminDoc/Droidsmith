@@ -102,3 +102,34 @@ pub fn connect_wireless(
     }
     Ok(result)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn pair_request_validation_fails_before_spawning_adb() {
+        let transport = adb::ShellTransport::new("missing-adb-for-command-test");
+        let request = adb::WirelessPairRequest {
+            host: "127.0.0.1".to_string(),
+            port: 37_001,
+            pairing_code: "12".to_string(),
+        };
+        let error = crate::adb::wireless::pair(&transport, &request, None).unwrap_err();
+        assert_eq!(error.code, "wireless_adb_failed");
+        assert!(error.message.contains("six digits"));
+    }
+
+    #[test]
+    fn connect_request_validation_rejects_invalid_hosts_before_spawning_adb() {
+        let transport = adb::ShellTransport::new("missing-adb-for-command-test");
+        let request = adb::WirelessConnectRequest {
+            host: "bad host".to_string(),
+            port: 5555,
+            legacy_tcp: false,
+        };
+        let error = crate::adb::wireless::connect(&transport, &request, None).unwrap_err();
+        assert_eq!(error.code, "wireless_adb_failed");
+        assert!(error.message.contains("invalid wireless adb host"));
+    }
+}

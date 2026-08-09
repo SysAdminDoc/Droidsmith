@@ -47,12 +47,7 @@ pub async fn get_package_metadata(
     package: String,
     #[allow(non_snake_case)] userId: u32,
 ) -> Result<apk_metadata::AppPackageMetadata, CommandError> {
-    if !valid_package_name(&package) {
-        return Err(CommandError {
-            code: "invalid_package",
-            message: "invalid package id".to_string(),
-        });
-    }
+    validate_metadata_package(&package)?;
     let resolution = adb::locate_adb();
     let path = resolution
         .path
@@ -82,4 +77,31 @@ pub fn list_users(target: adb::DeviceTarget) -> Result<Vec<adb::AndroidUser>, ad
     let transport = adb::ShellTransport::new(path);
     adb::validate_device_target(&transport, &target)?;
     adb::list_users(&transport, &target)
+}
+
+pub(crate) fn validate_metadata_package(package: &str) -> Result<(), CommandError> {
+    if valid_package_name(package) {
+        Ok(())
+    } else {
+        Err(CommandError {
+            code: "invalid_package",
+            message: "invalid package id".to_string(),
+        })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn metadata_validation_accepts_hyphenated_package_names() {
+        assert!(validate_metadata_package("com.example.my-app").is_ok());
+    }
+
+    #[test]
+    fn metadata_validation_rejects_flag_like_package_names() {
+        let error = validate_metadata_package("--user").unwrap_err();
+        assert_eq!(error.code, "invalid_package");
+    }
 }

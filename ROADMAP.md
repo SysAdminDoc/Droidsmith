@@ -21,13 +21,6 @@ and Android, privacy-safe diagnostics, and the widest remaining product gap
 
 ### P1
 
-- [ ] R-135 P1 — Account for Project Mainline when judging CVE-2026-0073
-  Why: the fix ships through the Mainline ADB subcomponent as a Google Play system update, so `ro.build.version.security_patch` under-reports patched devices and the one place Droidsmith emits a security verdict currently over-claims.
-  Evidence: `src-tauri/src/adb/security_patch.rs:42-66` classifies from build patch level + SDK only; the AOSP 2026-05-01 bulletin lists ADB under Mainline-delivered components (ref A-469080888).
-  Touches: `src-tauri/src/adb/security_patch.rs`, `src-tauri/src/adb/wireless.rs`, `src-tauri/fixtures/adb-transcripts/v1/`, `src/routes/Wireless.tsx`
-  Acceptance: the classifier additionally consults the device's Google Play system update level (module metadata) and returns `Patched` when it is at or after the floor; when the module level cannot be read the verdict stays `AuthBypassUnpatched` **and** the UI states that the Mainline path was not checked, rather than implying a complete judgement; transcript fixtures cover patched-via-Mainline, unpatched, and module-unreadable. The exact readable property needs live validation against a device before the fixture is treated as authoritative.
-  Complexity: M
-
 - [ ] IMP-118 P1 — Test the Tauri command surface
   Why: ~4,649 lines across thirteen `commands/*.rs` files carry no inline tests, and that set includes the two functions holding the P0 injection defect.
   Evidence: no `#[cfg(test)]` in `commands/{actions_commands,console,devices,diagnostics,files,installs,mirror,packages,plans,profiles,settings_commands,system,wireless}.rs`; `commands/packs.rs` is the only exception.

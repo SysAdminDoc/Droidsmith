@@ -269,3 +269,27 @@ pub fn has_settings_import_backup(app: tauri::AppHandle) -> Result<bool, Command
     let app_data_dir = settings_app_data_dir(&app)?;
     Ok(settings::import_backup_available(&app_data_dir))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn settings_command_state_round_trip_keeps_the_selected_language() {
+        let dir = std::env::temp_dir().join(format!(
+            "droidsmith-settings-command-{}-{}",
+            std::process::id(),
+            crate::time::iso_utc_now().replace([':', '.'], "-")
+        ));
+        let initial = settings::initialize(&dir, Default::default()).unwrap();
+        assert_eq!(initial.settings.language, None);
+        let updated = settings::set_language(&dir, settings::SettingsLanguage::Ru).unwrap();
+        assert_eq!(updated.language, Some(settings::SettingsLanguage::Ru));
+        let loaded = settings::initialize(&dir, Default::default()).unwrap();
+        assert_eq!(
+            loaded.settings.language,
+            Some(settings::SettingsLanguage::Ru)
+        );
+        let _ = std::fs::remove_dir_all(dir);
+    }
+}

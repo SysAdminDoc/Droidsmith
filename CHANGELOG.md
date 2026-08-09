@@ -16,6 +16,10 @@ each milestone tag.
 
 ### Security and accessibility
 
+- **Tauri command modules now carry boundary coverage.** Validation and failure
+  paths are tested in every command domain, with fake-transport coverage for
+  journal batch execution and focused tests for filesystem, package, wireless,
+  profile, settings, diagnostics, and host-tool boundaries. (IMP-118)
 - **Remote file mutations quote shell-sensitive device paths.** Absolute paths
   containing whitespace, punctuation, or quotes are protected at the `adb
   shell` boundary, while the structured plan remains available for exact

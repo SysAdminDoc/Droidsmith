@@ -616,3 +616,94 @@ pub(crate) fn unique_screenshot_remote() -> String {
         n
     )
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn output(stdout: &str, stderr: &str, code: Option<i32>, timed_out: bool) -> ProcessOutput {
+        ProcessOutput {
+            stdout: stdout.to_string(),
+            stderr: stderr.to_string(),
+            code,
+            timed_out,
+        }
+    }
+
+    #[test]
+    fn fastboot_getvar_reads_stderr_before_stdout() {
+        let result = parse_fastboot_getvar(
+            "product",
+            &output("product: wrong\n", "product: husky\n", Some(0), false),
+        )
+        .unwrap();
+        assert_eq!(result, "husky");
+    }
+
+    #[test]
+    fn fastboot_getvar_distinguishes_timeout_exit_and_missing_value() {
+        assert_eq!(
+            parse_fastboot_getvar("product", &output("", "", Some(0), true))
+                .unwrap_err()
+                .code,
+            "fastboot_timeout"
+        );
+        assert_eq!(
+            parse_fastboot_getvar("product", &output("", "permission denied", Some(1), false))
+                .unwrap_err()
+                .code,
+            "fastboot_exit"
+        );
+        assert_eq!(
+            parse_fastboot_getvar(
+                "product",
+                &output("finished. total time: 1 ms", "", Some(0), false)
+            )
+            .unwrap_err()
+            .code,
+            "fastboot_no_value"
+        );
+    }
+
+    #[test]
+    fn backup_destination_requires_an_absolute_file_path_with_an_existing_parent() {
+        assert_eq!(
+            validate_backup_target("").unwrap_err().code,
+            "invalid_backup_path"
+        );
+        assert_eq!(
+            validate_backup_target("relative/backup.zip")
+                .unwrap_err()
+                .code,
+            "invalid_backup_path"
+        );
+        let destination = std::env::temp_dir().join(format!(
+            "droidsmith-command-backup-{}-test.zip",
+            std::process::id()
+        ));
+        assert_eq!(
+            validate_backup_target(&destination.display().to_string()).unwrap(),
+            destination
+        );
+    }
+
+    #[test]
+    fn permission_parser_keeps_granted_state_and_ignores_other_sections() {
+        let permissions = parse_permissions(
+            "runtime permissions:\n  android.permission.CAMERA: granted=true\n  android.permission.POST_NOTIFICATIONS: granted=false\nother section\n",
+        );
+        assert_eq!(permissions.len(), 2);
+        assert!(permissions[0].granted);
+        assert!(!permissions[1].granted);
+    }
+
+    #[test]
+    fn hierarchy_extraction_drops_the_device_status_suffix() {
+        assert_eq!(
+            extract_hierarchy(
+                "noise<hierarchy><node /></hierarchy>\nUI hierarchy dumped to: /dev/tty"
+            ),
+            "<hierarchy><node /></hierarchy>"
+        );
+    }
+}

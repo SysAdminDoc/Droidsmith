@@ -160,3 +160,54 @@ pub(crate) fn batch_action_description(
     };
     format!("{action} {count} packages for Android user {user_id}")
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn target() -> adb::DeviceTarget {
+        adb::DeviceTarget {
+            serial: "plans-test".to_string(),
+            transport_id: Some(3),
+            connection_generation: 2,
+            model: Some("Test".to_string()),
+            product: Some("test".to_string()),
+            device: Some("test".to_string()),
+            build_fingerprint: Some("build/test".to_string()),
+            transport_kind: adb::DeviceTransportKind::Usb,
+            untrusted_transport_override: false,
+        }
+    }
+
+    fn request(kind: actions::ActionKind, package: &str) -> actions::ActionRequest {
+        actions::ActionRequest {
+            serial: "plans-test".to_string(),
+            target: target(),
+            package: package.to_string(),
+            kind,
+            user_id: 10,
+            pack_context: None,
+            context: Default::default(),
+        }
+    }
+
+    #[test]
+    fn plan_action_rejects_unreviewed_shell_operations() {
+        let error = plan_action(request(actions::ActionKind::Shell, "ignored")).unwrap_err();
+        assert_eq!(error.code, "invalid_action_kind");
+    }
+
+    #[test]
+    fn batch_description_is_canonical_and_user_scoped() {
+        assert_eq!(
+            batch_action_description(actions::ActionKind::Disable, 3, 10),
+            "Disable 3 packages for Android user 10"
+        );
+        let batch = plan_action_batch(vec![
+            request(actions::ActionKind::Disable, "com.example.one"),
+            request(actions::ActionKind::Disable, "com.example.two"),
+        ])
+        .unwrap();
+        assert_eq!(batch.description, "Disable 2 packages for Android user 10");
+    }
+}

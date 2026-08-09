@@ -443,3 +443,46 @@ pub fn put_device_setting(
         command: adb::command_preview(spec, &normalized),
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::adb::transport::MockTransport;
+
+    #[test]
+    fn batch_validation_rejects_empty_plans_before_transport_access() {
+        let error = validate_action_batch_plan(&BatchActionPlan {
+            plans: Vec::new(),
+            description: String::new(),
+        })
+        .unwrap_err();
+        assert_eq!(error.code, "invalid_action_batch");
+    }
+
+    #[test]
+    fn batch_execution_rejects_mismatched_undo_ids_with_fake_transport() {
+        let path = std::env::temp_dir().join(format!(
+            "droidsmith-command-batch-{}-{}",
+            std::process::id(),
+            next_batch_id()
+        ));
+        let identity = DeviceIdentity::new("command-test", Some("build/test"));
+        let mut journal = Journal::open(&path, &identity).unwrap();
+        let error = execute_batch_plans(
+            &mut journal,
+            &MockTransport::new(),
+            Vec::new(),
+            Some(vec![1]),
+        )
+        .unwrap_err();
+        assert_eq!(error.code, "invalid_action_batch");
+    }
+
+    #[test]
+    fn batch_ids_are_nonempty_and_unique() {
+        let first = next_batch_id();
+        let second = next_batch_id();
+        assert_ne!(first, second);
+        assert!(first.starts_with("batch-"));
+    }
+}
