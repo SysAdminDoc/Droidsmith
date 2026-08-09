@@ -531,7 +531,7 @@
     "noPacksBodySuffix": ". Consulta",
     "import": {
       "title": "Importar un paquete",
-      "body": "Importa un paquete de limpieza desde un archivo YAML local. Se valida contra el esquema y se guarda en este equipo, sin acceso a la red.",
+      "body": "Importa un paquete YAML local o el uad_lists.json de UAD-NG proporcionado por el usuario. Se convierte localmente, conserva el SHA-256 y la licencia GPL-3.0, y se guarda en este equipo sin acceso a la red.",
       "sha256Label": "SHA-256 esperado (opcional)",
       "sha256Placeholder": "Resumen hexadecimal de 64 caracteres",
       "button": "Elegir archivo e importar",

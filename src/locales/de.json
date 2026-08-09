@@ -1139,7 +1139,7 @@
     "packErrorsBody": "Diese gebündelten Paketdateien wurden übersprungen. Reparieren oder entfernen Sie sie; fehlerfreie Pakete unten funktionieren weiterhin.",
     "import": {
       "title": "Paket importieren",
-      "body": "Importieren Sie ein Debloat-Paket aus einer lokalen YAML-Datei. Es wird schemavalidiert und auf diesem Rechner gespeichert – ohne Netzwerkzugriff.",
+      "body": "Importieren Sie ein lokales YAML-Paket oder eine vom Benutzer bereitgestellte UAD-NG-uad_lists.json. Die Liste wird lokal konvertiert, mit SHA-256 und GPL-3.0-Lizenz vermerkt und ohne Netzwerkzugriff auf diesem Rechner gespeichert.",
       "sha256Label": "Erwarteter SHA-256 (optional)",
       "sha256Placeholder": "64-stelliger Hex-Digest",
       "button": "Datei wählen & importieren",

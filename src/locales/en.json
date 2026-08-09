@@ -1139,7 +1139,7 @@
     "packErrorsBody": "These bundled pack files were skipped. Fix or remove them; healthy packs below still work.",
     "import": {
       "title": "Import a pack",
-      "body": "Import a debloat pack from a local YAML file. It is schema-validated and stored on this machine — no network access.",
+      "body": "Import a local YAML pack or user-supplied UAD-NG uad_lists.json. The list is converted locally, attributed with its SHA-256 and GPL-3.0 licence, and stored on this machine — no network access.",
       "sha256Label": "Expected SHA-256 (optional)",
       "sha256Placeholder": "64-character hex digest",
       "button": "Choose file & import",

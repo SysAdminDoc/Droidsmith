@@ -3,7 +3,7 @@
   "schemas": {
     "pack": {
       "document_version": "1",
-      "schema_sha256": "46c08304514ff0d5a50a832672a94e99ebd7dafcb69152b24eb72a4d9792dfc2",
+      "schema_sha256": "8d715a56c80c8c73537d3e3899c69e03066aace3a1f0afaccf4d6b60c5130097",
       "migration": "convert the file to the v1 pack schema in src-tauri/src/packs/mod.rs, set version: \"1\", then run droidsmith-pack-lint",
       "compatibility_fixture": "packs/_example.yaml",
       "fixture_version": "1"

@@ -50,6 +50,10 @@ each milestone tag.
   name a build-fingerprint prefix, Android level, outcome, date, and source;
   the preview distinguishes verified, not verified on this build, and unknown,
   while pack lint rejects incomplete evidence. (R-145)
+- **User-supplied UAD-NG lists can be imported locally.** A selected
+  `uad_lists.json` is converted into a schema-valid, removable pack without
+  bundling upstream data; the imported pack records the source SHA-256 and
+  GPL-3.0 provenance, and malformed records identify their package id. (R-146)
 - **Remote file mutations quote shell-sensitive device paths.** Absolute paths
   containing whitespace, punctuation, or quotes are protected at the `adb
   shell` boundary, while the structured plan remains available for exact

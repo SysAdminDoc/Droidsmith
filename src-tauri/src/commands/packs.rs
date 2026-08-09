@@ -256,8 +256,9 @@ pub struct ImportedPack {
 /// native read grant. This is the network-free alternative to remote-pack
 /// fetching (R-095): it reuses the audited host-path grant model, optionally
 /// verifies a caller-supplied SHA-256 pin, schema-validates and lints the
-/// bytes, rejects ids that shadow a bundled pack, and persists the file to the
-/// app-data `packs/` directory so it appears in the picker on the next load.
+/// bytes, converts a `.json` UAD-NG list locally, rejects ids that shadow a
+/// bundled pack, and persists the result to the app-data `packs/` directory
+/// so it appears in the picker on the next load.
 #[tauri::command]
 #[specta::specta]
 pub fn import_pack(
@@ -268,6 +269,18 @@ pub fn import_pack(
 ) -> Result<ImportedPack, CommandError> {
     let source = grants.consume(&path_grant, HostPathPurpose::PackImportOpen)?;
 
+    let uad_json = source
+        .extension()
+        .map(|extension| extension.to_string_lossy().eq_ignore_ascii_case("json"))
+        .unwrap_or(false)
+        .then(|| {
+            crate::fs_util::read_to_string_limited(&source, crate::packs::MAX_UAD_LIST_BYTES)
+                .map_err(|error| CommandError {
+                    code: "pack_read",
+                    message: format!("could not read the selected UAD-NG list: {error}"),
+                })
+        })
+        .transpose()?;
     let actual_sha256 = crate::fs_util::sha256_file(&source).map_err(|error| CommandError {
         code: "pack_read",
         message: format!("could not read the selected pack file: {error}"),
@@ -292,13 +305,26 @@ pub fn import_pack(
         }
     }
 
-    let pack = crate::packs::load(&source).map_err(|error| {
-        let load_error = pack_error_to_load_error(String::new(), &error);
-        CommandError {
-            code: load_error.code,
-            message: load_error.message,
-        }
-    })?;
+    let pack = if let Some(json) = uad_json.as_deref() {
+        let source_name = source
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or("uad_lists.json");
+        crate::packs::from_uad_list_json(json, source_name, &actual_sha256).map_err(|message| {
+            CommandError {
+                code: "pack_convert",
+                message: format!("could not convert the selected UAD-NG list: {message}"),
+            }
+        })?
+    } else {
+        crate::packs::load(&source).map_err(|error| {
+            let load_error = pack_error_to_load_error(String::new(), &error);
+            CommandError {
+                code: load_error.code,
+                message: load_error.message,
+            }
+        })?
+    };
 
     // `packs::load` lints the id to lowercase kebab-case, so `<id>.yaml` is a
     // safe filename; guard again for defense in depth before touching the FS.
@@ -333,10 +359,21 @@ pub fn import_pack(
         message: format!("could not create the imported-packs directory: {error}"),
     })?;
     let destination = user_dir.join(format!("{}.yaml", pack.id));
-    std::fs::copy(&source, &destination).map_err(|error| CommandError {
-        code: "io_error",
-        message: format!("could not store the imported pack: {error}"),
-    })?;
+    if uad_json.is_some() {
+        let yaml = crate::packs::to_yaml(&pack).map_err(|error| CommandError {
+            code: "pack_convert",
+            message: format!("could not serialize the converted UAD-NG pack: {error}"),
+        })?;
+        std::fs::write(&destination, yaml).map_err(|error| CommandError {
+            code: "io_error",
+            message: format!("could not store the converted UAD-NG pack: {error}"),
+        })?;
+    } else {
+        std::fs::copy(&source, &destination).map_err(|error| CommandError {
+            code: "io_error",
+            message: format!("could not store the imported pack: {error}"),
+        })?;
+    }
 
     Ok(ImportedPack {
         id: pack.id.clone(),

@@ -53,6 +53,10 @@ use crate::adb::packages::valid_package_name;
 pub const PACK_SCHEMA_VERSION: &str = "1";
 
 const MAX_PACK_BYTES: u64 = 512 * 1024;
+/// UAD-NG's current list is larger than a normal hand-authored pack. Keep the
+/// local conversion bounded without requiring the upstream data to be bundled.
+pub(crate) const MAX_UAD_LIST_BYTES: u64 = 8 * 1024 * 1024;
+const MAX_UAD_ENTRIES: usize = 20_000;
 pub(crate) const PACK_SCHEMA_MIGRATION: &str =
     "convert the file to the v1 pack schema in src-tauri/src/packs/mod.rs, set version: \"1\", then run droidsmith-pack-lint";
 
@@ -93,6 +97,11 @@ pub struct Pack {
 pub struct PackProvenance {
     pub source: String,
     pub license: String,
+    /// Optional digest of the exact source artifact used to produce the pack.
+    /// Imported UAD-NG lists populate this so the local conversion remains
+    /// auditable without copying upstream data into the repository.
+    #[serde(default)]
+    pub sha256: Option<String>,
 }
 
 #[derive(schemars::JsonSchema, specta::Type, Debug, Clone, Default, Serialize, Deserialize)]
@@ -527,6 +536,15 @@ pub fn lint(p: &Pack) -> Vec<String> {
     if p.provenance.license.trim().is_empty() {
         issues.push("provenance.license is empty".to_string());
     }
+    if let Some(sha256) = &p.provenance.sha256 {
+        if sha256.len() != 64
+            || !sha256
+                .chars()
+                .all(|character| character.is_ascii_hexdigit())
+        {
+            issues.push("provenance.sha256 must be 64 hexadecimal characters".to_string());
+        }
+    }
     if p.targets.user_scope == UserScope::Unspecified {
         issues.push("targets.user_scope must be owner, current, or any".to_string());
     }
@@ -657,6 +675,241 @@ pub fn to_yaml(pack: &Pack) -> Result<String, serde_yaml_ng::Error> {
     serde_yaml_ng::to_string(pack)
 }
 
+/// Convert the user-selected UAD-NG JSON object into a schema-v1 pack.
+///
+/// UAD-NG stores records under their package id at the top level. Every record
+/// is converted or the whole operation fails; malformed entries are never
+/// silently skipped. The source digest is supplied by the command boundary,
+/// which hashes the exact selected file before it is persisted.
+pub fn from_uad_list_json(
+    json: &str,
+    source_name: &str,
+    source_sha256: &str,
+) -> Result<Pack, String> {
+    if source_sha256.len() != 64
+        || !source_sha256
+            .chars()
+            .all(|character| character.is_ascii_hexdigit())
+    {
+        return Err("source SHA-256 must be 64 hexadecimal characters".to_string());
+    }
+
+    let document: serde_json::Value = serde_json::from_str(json)
+        .map_err(|error| format!("UAD-NG list is not valid JSON: {error}"))?;
+    let records = document.as_object().ok_or_else(|| {
+        "UAD-NG list must be a JSON object mapping package ids to records".to_string()
+    })?;
+    if records.is_empty() {
+        return Err("UAD-NG list contains no package records".to_string());
+    }
+    if records.len() > MAX_UAD_ENTRIES {
+        return Err(format!(
+            "UAD-NG list contains {} records; the limit is {MAX_UAD_ENTRIES}",
+            records.len()
+        ));
+    }
+
+    let mut packages = Vec::with_capacity(records.len());
+    for (package_id, record) in records {
+        let record_label = format!("record {package_id:?}");
+        if !valid_package_name(package_id) {
+            return Err(format!("{record_label}: not a valid Android package id"));
+        }
+        let record = record
+            .as_object()
+            .ok_or_else(|| format!("{record_label}: expected a JSON object"))?;
+        if let Some(inner_id) = record.get("id") {
+            let inner_id = inner_id
+                .as_str()
+                .ok_or_else(|| format!("{record_label} field \"id\": expected a string"))?;
+            if inner_id != package_id {
+                return Err(format!(
+                    "{record_label} field \"id\": expected {package_id:?}, got {inner_id:?}"
+                ));
+            }
+        }
+
+        let removal = uad_removal(record, &record_label)?;
+        let description = uad_required_text(record, &record_label, "description")?;
+        let depends_on = uad_string_array(
+            record,
+            &record_label,
+            "dependencies",
+            &["dependencies", "depends_on"],
+        )?;
+        let needed_by = uad_string_array(
+            record,
+            &record_label,
+            "neededBy",
+            &["neededBy", "needed_by"],
+        )?;
+        let mut labels = uad_string_array(record, &record_label, "labels", &["labels"])?;
+        if let Some(list) = uad_optional_text(record, &record_label, "list", &["list"])? {
+            labels.push(format!("uad-list:{}", list.to_ascii_lowercase()));
+        }
+
+        packages.push(PackEntry {
+            id: package_id.clone(),
+            removal,
+            action: None,
+            description,
+            depends_on,
+            needed_by,
+            labels,
+            verification: Vec::new(),
+        });
+    }
+    packages.sort_by(|left, right| left.id.cmp(&right.id));
+
+    let source_name = if source_name.trim().is_empty() {
+        "uad_lists.json"
+    } else {
+        source_name.trim()
+    };
+    let source_sha256 = source_sha256.to_ascii_lowercase();
+    let source = format!("User-supplied UAD-NG list {source_name} (SHA-256: {source_sha256})");
+    let attribution = format!(
+        "Converted locally from user-supplied UAD-NG list {source_name}; source SHA-256: {source_sha256}; licence: GPL-3.0."
+    );
+    let pack = Pack {
+        id: format!("uad-ng-{}-import", &source_sha256[..12]),
+        revision: 1,
+        name: "Imported UAD-NG list".to_string(),
+        version: PACK_SCHEMA_VERSION.to_string(),
+        description: format!(
+            "Locally converted {source_name} with {} package records. Review every removal tier and device compatibility before applying.",
+            packages.len()
+        ),
+        targets: PackTargets {
+            user_scope: UserScope::Any,
+            ..PackTargets::default()
+        },
+        packages,
+        attribution: Some(attribution),
+        provenance: PackProvenance {
+            source,
+            license: "GPL-3.0".to_string(),
+            sha256: Some(source_sha256),
+        },
+    };
+    let issues = lint(&pack);
+    if issues.is_empty() {
+        Ok(pack)
+    } else {
+        Err(format!(
+            "converted UAD-NG list failed pack validation: {}",
+            issues.join("; ")
+        ))
+    }
+}
+
+fn uad_removal(
+    record: &serde_json::Map<String, serde_json::Value>,
+    record_label: &str,
+) -> Result<RemovalLevel, String> {
+    let value = uad_required_text(record, record_label, "removal")?;
+    match value.to_ascii_lowercase().as_str() {
+        "recommended" => Ok(RemovalLevel::Recommended),
+        "advanced" => Ok(RemovalLevel::Advanced),
+        "expert" => Ok(RemovalLevel::Expert),
+        "unsafe" => Ok(RemovalLevel::Unsafe),
+        _ => Err(format!(
+            "{record_label} field \"removal\": unknown tier {value:?}"
+        )),
+    }
+}
+
+fn uad_required_text(
+    record: &serde_json::Map<String, serde_json::Value>,
+    record_label: &str,
+    field: &str,
+) -> Result<String, String> {
+    let value = record
+        .get(field)
+        .ok_or_else(|| format!("{record_label}: missing field \"{field}\""))?;
+    let value = value
+        .as_str()
+        .ok_or_else(|| format!("{record_label} field \"{field}\": expected a string"))?;
+    if value.trim().is_empty() {
+        return Err(format!(
+            "{record_label} field \"{field}\": must not be empty"
+        ));
+    }
+    Ok(value.trim().to_string())
+}
+
+fn uad_optional_text(
+    record: &serde_json::Map<String, serde_json::Value>,
+    record_label: &str,
+    field: &str,
+    aliases: &[&str],
+) -> Result<Option<String>, String> {
+    let value = uad_alias_value(record, record_label, field, aliases)?;
+    let Some(value) = value else { return Ok(None) };
+    let value = value
+        .as_str()
+        .ok_or_else(|| format!("{record_label} field \"{field}\": expected a string"))?;
+    if value.trim().is_empty() {
+        return Err(format!(
+            "{record_label} field \"{field}\": must not be empty"
+        ));
+    }
+    Ok(Some(value.trim().to_string()))
+}
+
+fn uad_string_array(
+    record: &serde_json::Map<String, serde_json::Value>,
+    record_label: &str,
+    field: &str,
+    aliases: &[&str],
+) -> Result<Vec<String>, String> {
+    let value = uad_alias_value(record, record_label, field, aliases)?;
+    let Some(value) = value else {
+        return Ok(Vec::new());
+    };
+    let values = value
+        .as_array()
+        .ok_or_else(|| format!("{record_label} field \"{field}\": expected an array"))?;
+    values
+        .iter()
+        .enumerate()
+        .map(|(index, value)| {
+            let value = value.as_str().ok_or_else(|| {
+                format!("{record_label} field \"{field}\" record {index}: expected a string")
+            })?;
+            if value.trim().is_empty() {
+                return Err(format!(
+                    "{record_label} field \"{field}\" record {index}: must not be empty"
+                ));
+            }
+            Ok(value.trim().to_string())
+        })
+        .collect()
+}
+
+fn uad_alias_value<'a>(
+    record: &'a serde_json::Map<String, serde_json::Value>,
+    record_label: &str,
+    field: &str,
+    aliases: &[&str],
+) -> Result<Option<&'a serde_json::Value>, String> {
+    let matches = aliases
+        .iter()
+        .filter_map(|alias| record.get(*alias).map(|value| (*alias, value)))
+        .collect::<Vec<_>>();
+    if matches.len() > 1 {
+        return Err(format!(
+            "{record_label}: fields {} are aliases for \"{field}\"; provide only one",
+            matches
+                .iter()
+                .map(|(alias, _)| format!("\"{alias}\""))
+                .collect::<Vec<_>>()
+                .join(", ")
+        ));
+    }
+    Ok(matches.into_iter().next().map(|(_, value)| value))
+}
+
 /// Build a schema-valid [`Pack`] capturing a device's currently disabled,
 /// archived, and uninstalled packages (R-098). Errors when there is nothing to
 /// export. The produced pack lints clean so it re-imports via `import_pack`.
@@ -757,6 +1010,7 @@ pub fn from_device_state(
         provenance: PackProvenance {
             source: "Droidsmith device export".to_string(),
             license: "unspecified".to_string(),
+            sha256: None,
         },
     };
     debug_assert!(lint(&pack).is_empty(), "exported pack must lint clean");
@@ -1142,6 +1396,85 @@ packages:
         assert_eq!(p.packages[0].removal, RemovalLevel::Recommended);
         assert_eq!(p.packages[1].labels, vec!["productivity"]);
         assert!(lint(&p).is_empty());
+    }
+
+    #[test]
+    fn converts_uad_list_records_with_tiers_and_provenance() {
+        let source_sha256 = "A".repeat(64);
+        let json = r#"{
+          "com.example.dependent": {
+            "list": "Aosp",
+            "description": "A dependent package.",
+            "dependencies": ["com.example.base"],
+            "neededBy": [],
+            "labels": ["telemetry"],
+            "removal": "Advanced"
+          },
+          "com.example.base": {
+            "list": "Misc",
+            "description": "A base package.",
+            "dependencies": [],
+            "neededBy": ["com.example.dependent"],
+            "labels": [],
+            "removal": "Recommended"
+          }
+        }"#;
+
+        let pack = from_uad_list_json(json, "uad_lists.json", &source_sha256).unwrap();
+
+        assert_eq!(pack.id, "uad-ng-aaaaaaaaaaaa-import");
+        assert_eq!(pack.packages.len(), 2);
+        assert_eq!(pack.packages[0].id, "com.example.base");
+        assert_eq!(pack.packages[0].removal, RemovalLevel::Recommended);
+        assert_eq!(pack.packages[0].needed_by, ["com.example.dependent"]);
+        assert!(pack.packages[0]
+            .labels
+            .contains(&"uad-list:misc".to_string()));
+        assert_eq!(pack.packages[1].removal, RemovalLevel::Advanced);
+        assert_eq!(pack.provenance.license, "GPL-3.0");
+        assert_eq!(
+            pack.provenance.sha256.as_deref(),
+            Some("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+        );
+        assert!(pack
+            .attribution
+            .as_deref()
+            .is_some_and(|value| value.contains(
+                "SHA-256: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            ) && value.contains("GPL-3.0")));
+        assert!(lint(&pack).is_empty());
+    }
+
+    #[test]
+    fn uad_conversion_names_the_offending_record_and_does_not_drop_it() {
+        let json = r#"{
+          "com.example.good": {
+            "description": "Valid entry.",
+            "removal": "Recommended"
+          },
+          "com.example.bad": {
+            "description": "Invalid entry.",
+            "removal": "Maybe"
+          }
+        }"#;
+
+        let error = from_uad_list_json(json, "uad_lists.json", &"b".repeat(64)).unwrap_err();
+        assert!(
+            error.contains("record \"com.example.bad\""),
+            "error: {error}"
+        );
+        assert!(error.contains("unknown tier"), "error: {error}");
+    }
+
+    #[test]
+    fn uad_conversion_rejects_invalid_source_hash() {
+        let error = from_uad_list_json(
+            r#"{"com.example.app":{"description":"Entry","removal":"Recommended"}}"#,
+            "uad_lists.json",
+            "not-a-hash",
+        )
+        .unwrap_err();
+        assert!(error.contains("source SHA-256"));
     }
 
     #[test]

@@ -493,8 +493,9 @@ export const commands = {
    * native read grant. This is the network-free alternative to remote-pack
    * fetching (R-095): it reuses the audited host-path grant model, optionally
    * verifies a caller-supplied SHA-256 pin, schema-validates and lints the
-   * bytes, rejects ids that shadow a bundled pack, and persists the file to the
-   * app-data `packs/` directory so it appears in the picker on the next load.
+   * bytes, converts a `.json` UAD-NG list locally, rejects ids that shadow a
+   * bundled pack, and persists the result to the app-data `packs/` directory
+   * so it appears in the picker on the next load.
    */
   async importPack(
     pathGrant: string,
@@ -2714,7 +2715,16 @@ export type PackLoadError = {
   code: string;
   message: string;
 };
-export type PackProvenance = { source: string; license: string };
+export type PackProvenance = {
+  source: string;
+  license: string;
+  /**
+   * Optional digest of the exact source artifact used to produce the pack.
+   * Imported UAD-NG lists populate this so the local conversion remains
+   * auditable without copying upstream data into the repository.
+   */
+  sha256?: string | null;
+};
 export type PackTargets = {
   /**
    * Manufacturer strings as reported by `ro.product.manufacturer`.

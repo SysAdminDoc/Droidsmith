@@ -95,7 +95,7 @@ impl HostPathPurpose {
             Self::RecoveryBaselineOpen => "Inspect recovery baseline",
             Self::ProfileOpen => "Import Droidsmith profile",
             Self::FleetReportOpen => "Open Droidsmith fleet report",
-            Self::PackImportOpen => "Import Droidsmith debloat pack",
+            Self::PackImportOpen => "Import Droidsmith pack or UAD-NG list",
             Self::PackExportSave => "Export device debloat pack",
             Self::ApkAnalyzeOpen => "Analyze Android package",
         }
@@ -125,9 +125,11 @@ impl HostPathPurpose {
             }
             Self::PerfettoTraceSave => Some(("Perfetto system trace", &["perfetto-trace"])),
             Self::InstallOpen => Some(("Android package", &["apk", "apks", "xapk", "apkm"])),
-            Self::PackImportOpen | Self::PackExportSave => {
-                Some(("Droidsmith debloat pack", &["yaml", "yml"]))
-            }
+            Self::PackImportOpen => Some((
+                "Droidsmith debloat pack or UAD-NG list",
+                &["yaml", "yml", "json"],
+            )),
+            Self::PackExportSave => Some(("Droidsmith debloat pack", &["yaml", "yml"])),
             Self::ApkAnalyzeOpen => Some(("Android package", &["apk", "apks", "xapk", "apkm"])),
             Self::PullSave | Self::PushOpen => None,
         }
@@ -752,6 +754,17 @@ mod tests {
             Some((
                 "UI layout or accessibility audit",
                 &["xml", "json", "txt"][..]
+            ))
+        );
+    }
+
+    #[test]
+    fn pack_import_dialog_accepts_yaml_and_uad_json() {
+        assert_eq!(
+            HostPathPurpose::PackImportOpen.filter(),
+            Some((
+                "Droidsmith debloat pack or UAD-NG list",
+                &["yaml", "yml", "json"][..]
             ))
         );
     }

@@ -23,14 +23,6 @@ and Android, privacy-safe diagnostics, and the widest remaining product gap
 
 ### P2
 
-- [ ] R-146 P2 — Import a user-supplied UAD-NG list
-  Why: content depth is the weakest axis — 138 bundled pack entries and 11 quirk rules against a continuously-maintained upstream list — and the local-file import pattern already used for R-095 closes it without redistributing GPL-3.0 data.
-  Evidence: `packs/*.yaml` total 138 entries (including the example pack); `quirks/*.yaml` total 11 rules; UAD-NG is GPL-3.0 and its data file is `resources/assets/uad_lists.json` (already cited by pinned commit in `quirks/samsung-oneui.yaml`); `packs/schema.json` `RemovalLevel` already mirrors UAD-NG's tiers and `depends_on`/`needed_by` mirror its dependency graph; `import_pack` in `src-tauri/src/commands/packs.rs:275` is the audited host-path grant model to reuse. Depends on the licensing-posture open question in RESEARCH.md.
-  Note: this does **not** supersede blocked **R-036** (bundling the UAD-NG list with attribution), which stays blocked on redistribution permission. This item ships zero upstream data and is the same dependency-free substitution that resolved R-095's local-file half.
-  Touches: `src-tauri/src/commands/packs.rs`, `src-tauri/src/packs/mod.rs`, `src/routes/debloat/PackPicker.tsx`
-  Acceptance: a user-selected `uad_lists.json` converts locally to a schema-valid pack with tier mapping and attribution recording the source file's SHA-256 and licence; nothing from UAD-NG is committed to this repository; the resulting pack is badged as imported and removable; conversion failures name the offending record rather than dropping it.
-  Complexity: M
-
 - [ ] R-147 P2 — Expose the remaining scrcpy flags
   Why: display selection in particular is the difference between mirroring a device and mirroring the *right surface* on a device that has more than one.
   Evidence: `src-tauri/src/scrcpy.rs` builds `--flex-display`, `--keep-active`, `--new-display`, `--start-app`, vp8/vp9 and `--ignore-video-encoder-constraints`, but contains no `--display-id`, `--list-displays`, `--mouse=`, `--camera-torch`, `--camera-zoom`, `--capture-orientation`, `--no-clipboard-autosync` or `--push-target`; scrcpy `doc/video.md` and `doc/control.md`.

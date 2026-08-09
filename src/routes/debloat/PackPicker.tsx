@@ -52,10 +52,11 @@ function PackErrors({ errors }: { errors: PackLoadError[] }) {
   );
 }
 
-/// Import a debloat pack from a local YAML file through the audited host-path
-/// grant model. Network-free alternative to remote-pack fetching (R-095): the
-/// backend schema-validates the bytes, optionally checks a SHA-256 pin, and
-/// stores the pack under the app-data `packs/` directory.
+/// Import a debloat pack or user-supplied UAD-NG JSON list through the audited
+/// host-path grant model. Network-free alternative to remote-pack fetching
+/// (R-095): the backend validates YAML or converts UAD-NG JSON locally,
+/// optionally checks a SHA-256 pin, and stores the resulting pack under the
+/// app-data `packs/` directory.
 function PackImportControl({ onImported }: { onImported: () => void }) {
   const { t } = useTranslation();
   const [sha256, setSha256] = useState("");

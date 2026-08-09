@@ -61,7 +61,8 @@
       "$ref": "#/$defs/PackProvenance",
       "default": {
         "source": "",
-        "license": ""
+        "license": "",
+        "sha256": null
       }
     }
   },
@@ -287,6 +288,14 @@
         },
         "license": {
           "type": "string"
+        },
+        "sha256": {
+          "description": "Optional digest of the exact source artifact used to produce the pack.\nImported UAD-NG lists populate this so the local conversion remains\nauditable without copying upstream data into the repository.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
         }
       },
       "additionalProperties": false,
