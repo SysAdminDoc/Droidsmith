@@ -23,13 +23,6 @@ and Android, privacy-safe diagnostics, and the widest remaining product gap
 
 ### P2
 
-- [ ] IMP-125 P2 — Render a real-scale package inventory in the rendered-route gate
-  Why: the gate exercises a handful of packages while real devices report 500-900, and `PackageTable` is not row-virtualized — so whether large inventories are usable is currently unmeasured in either direction.
-  Evidence: `scripts/check-rendered-routes.mjs` mocks `list_packages` with a small fixture keyed on `com.example.app`; `src/routes/apps/PackageTable.tsx:405-409` uses `IntersectionObserver` for lazy metadata only, with no row windowing.
-  Touches: `scripts/check-rendered-routes.mjs`, `src/routes/apps/PackageTable.tsx`, `release-policy.json`
-  Acceptance: the gate renders a 1,000-package inventory, exercises filter/search/sort, and asserts a declared interaction budget; virtualization is introduced only if the measurement fails the budget, and the budget lives in `release-policy.json` alongside the bundle budget.
-  Complexity: M
-
 - [ ] R-148 P2 — Publish the unreleased versions
   Why: twelve releases exist only in source; the newest downloadable artifact is v0.5.3 from 2026-07-17, so no user can obtain any work from the last three weeks.
   Evidence: `gh release list` returns only `v0.5.3` (2026-07-17) and `v0.1.0`; manifests are at 0.9.17; `README.md:106` already discloses the gap. Depends on the bundle-capable-host open question in RESEARCH.md.

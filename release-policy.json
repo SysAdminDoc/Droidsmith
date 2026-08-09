@@ -33,6 +33,13 @@
       "src/routes/ApkAnalyzer.tsx"
     ]
   },
+  "rendererPerformance": {
+    "packageInventory": {
+      "packageCount": 1000,
+      "initialRenderBudgetMs": 2000,
+      "interactionBudgetMs": 750
+    }
+  },
   "trackedDocumentation": {
     "files": [
       "README.md",

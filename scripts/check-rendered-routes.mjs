@@ -1,4 +1,4 @@
-/* global window, document, navigator, getComputedStyle, HTMLElement, requestAnimationFrame, NodeFilter, Node, CSS */
+/* global window, document, navigator, performance, Event, getComputedStyle, HTMLElement, requestAnimationFrame, NodeFilter, Node, CSS */
 import fs from "node:fs";
 import http from "node:http";
 import net from "node:net";
@@ -24,9 +24,12 @@ const docsScreenshotDir = path.join(repoRoot, "docs", "screenshots");
 const languageContract = JSON.parse(
   fs.readFileSync(path.join(repoRoot, "language-contract.json"), "utf8"),
 );
-const accessibilityAuditPolicy = JSON.parse(
+const releasePolicy = JSON.parse(
   fs.readFileSync(path.join(repoRoot, "release-policy.json"), "utf8"),
-).accessibilityAudit;
+);
+const accessibilityAuditPolicy = releasePolicy.accessibilityAudit;
+const packageInventoryPerformancePolicy =
+  releasePolicy.rendererPerformance.packageInventory;
 const localeContracts = languageContract.languages.map(({ code, locale }) => ({
   code,
   locale,
@@ -50,17 +53,22 @@ try {
 
   const browser = await chromium.launch();
   try {
-    await runDesktopFlow(browser);
-    await runAccessibilityAuditFlow(browser);
-    await runMobileFlow(browser);
-    await runLocaleZoomFlow(browser);
-    await runApkAccessibilityFlow(browser);
-    await runLazyRouteRecoveryFlow(browser);
-    await runResilienceFlow(browser);
-    await runWatcherFallbackFlow(browser);
-    await runRendererErrorFlow(browser);
-    await runStaticRecoveryFallbackFlow(browser);
-    await runDocCaptureFlow(browser);
+    if (argv.includes("--package-scale")) {
+      await runPackageInventoryScaleFlow(browser);
+    } else {
+      await runDesktopFlow(browser);
+      await runAccessibilityAuditFlow(browser);
+      await runMobileFlow(browser);
+      await runLocaleZoomFlow(browser);
+      await runApkAccessibilityFlow(browser);
+      await runLazyRouteRecoveryFlow(browser);
+      await runResilienceFlow(browser);
+      await runWatcherFallbackFlow(browser);
+      await runRendererErrorFlow(browser);
+      await runStaticRecoveryFallbackFlow(browser);
+      await runDocCaptureFlow(browser);
+      await runPackageInventoryScaleFlow(browser);
+    }
   } finally {
     await browser.close();
   }
@@ -68,6 +76,139 @@ try {
   stdout.write("Rendered route smoke OK\n");
 } finally {
   stopServer(server);
+}
+
+// IMP-125: measure the real package-grid path at a declared inventory scale.
+// This stays headless and deliberately does not capture a screenshot: it is a
+// performance guard, not a visual snapshot. The thresholds live beside the
+// renderer bundle budget in release-policy.json.
+async function runPackageInventoryScaleFlow(browser) {
+  const context = await browser.newContext({
+    viewport: { width: 1366, height: 900 },
+  });
+  const page = await context.newPage();
+  const errors = collectConsoleErrors(page);
+  await installTauriMock(page);
+  await page.goto(baseUrl, { waitUntil: "networkidle" });
+  await page.evaluate(() => window.__DROIDSMITH_MOCK_LARGE_PACKAGES__(true));
+  await page.getByRole("button", { name: "Select Pixel QA" }).click();
+
+  const expectedPackageCount = packageInventoryPerformancePolicy.packageCount;
+  await page.evaluate(() => {
+    window.__DROIDSMITH_PACKAGE_SCALE_START__ = performance.now();
+  });
+  await page.getByRole("button", { name: /Apps/ }).click();
+  const packageGrid = page.getByRole("grid", { name: "Installed packages" });
+  await packageGrid.waitFor();
+  await page.locator("[data-package-row]").first().waitFor();
+  await page.waitForFunction(
+    (expected) =>
+      document.querySelector("[role='grid']")?.getAttribute("aria-rowcount") ===
+      String(expected + 1),
+    expectedPackageCount,
+  );
+  const initialRenderMs = await page.evaluate(
+    () => performance.now() - window.__DROIDSMITH_PACKAGE_SCALE_START__,
+  );
+  assertPackageScaleBudget(
+    "initial render",
+    initialRenderMs,
+    packageInventoryPerformancePolicy.initialRenderBudgetMs,
+  );
+  const renderedPackageCount = await packageGrid
+    .locator("[data-package-row]")
+    .count();
+  if (
+    renderedPackageCount >= expectedPackageCount ||
+    (await packageGrid.getAttribute("aria-rowcount")) !==
+      String(expectedPackageCount + 1)
+  ) {
+    throw new Error(
+      `Package scale fixture rendered the wrong inventory; expected ${expectedPackageCount} rows, got ${renderedPackageCount} DOM rows and aria-rowcount ${await packageGrid.getAttribute("aria-rowcount")}`,
+    );
+  }
+  const packageScroller = packageGrid.locator("xpath=..");
+  await packageScroller.evaluate((element) => {
+    element.scrollTop = element.scrollHeight;
+    element.dispatchEvent(new Event("scroll", { bubbles: true }));
+  });
+  await page.getByText("com.example.scale.0995", { exact: true }).waitFor();
+
+  const filter = page.getByRole("radio", { name: "User", exact: true });
+  await page.evaluate(() => {
+    window.__DROIDSMITH_PACKAGE_SCALE_START__ = performance.now();
+  });
+  await filter.click();
+  await page.waitForFunction((expected) => {
+    const rows = document.querySelectorAll("[data-package-row]").length;
+    return rows > 0 && rows < expected;
+  }, expectedPackageCount);
+  const filterMs = await page.evaluate(
+    () => performance.now() - window.__DROIDSMITH_PACKAGE_SCALE_START__,
+  );
+  assertPackageScaleBudget(
+    "filter interaction",
+    filterMs,
+    packageInventoryPerformancePolicy.interactionBudgetMs,
+  );
+
+  await page.getByRole("radio", { name: "All", exact: true }).click();
+  await page.locator("[data-package-row]").first().waitFor();
+  const search = page.getByLabel("Filter packages by name");
+  await page.evaluate(() => {
+    window.__DROIDSMITH_PACKAGE_SCALE_START__ = performance.now();
+  });
+  await search.fill("scale.0001");
+  await page.waitForFunction(
+    () => document.querySelectorAll("[data-package-row]").length === 1,
+  );
+  const searchMs = await page.evaluate(
+    () => performance.now() - window.__DROIDSMITH_PACKAGE_SCALE_START__,
+  );
+  assertPackageScaleBudget(
+    "search interaction",
+    searchMs,
+    packageInventoryPerformancePolicy.interactionBudgetMs,
+  );
+  await page.getByText("com.example.scale.0001", { exact: true }).waitFor();
+
+  await search.fill("");
+  await page.locator("[data-package-row]").first().waitFor();
+  const typeHeader = page.getByRole("columnheader").nth(2);
+  await page.evaluate(() => {
+    window.__DROIDSMITH_PACKAGE_SCALE_START__ = performance.now();
+  });
+  await page.getByRole("button", { name: "Type", exact: true }).click();
+  await page.waitForFunction(
+    () =>
+      document.querySelectorAll("th")[2]?.getAttribute("aria-sort") ===
+      "ascending",
+  );
+  const sortMs = await page.evaluate(
+    () => performance.now() - window.__DROIDSMITH_PACKAGE_SCALE_START__,
+  );
+  assertPackageScaleBudget(
+    "sort interaction",
+    sortMs,
+    packageInventoryPerformancePolicy.interactionBudgetMs,
+  );
+  if ((await typeHeader.getAttribute("aria-sort")) !== "ascending") {
+    throw new Error("Package type sort did not expose aria-sort=ascending");
+  }
+
+  assertNoConsoleErrors(errors, "package inventory scale flow");
+  stdout.write(
+    `Package inventory scale OK (${expectedPackageCount} rows; render ${Math.round(initialRenderMs)}ms, filter ${Math.round(filterMs)}ms, search ${Math.round(searchMs)}ms, sort ${Math.round(sortMs)}ms)\n`,
+  );
+  await context.close();
+}
+
+function assertPackageScaleBudget(label, elapsedMs, budgetMs) {
+  if (!Number.isFinite(elapsedMs) || elapsedMs > budgetMs) {
+    throw new Error(
+      `Package inventory ${label} exceeded the declared ${budgetMs}ms budget (${Math.round(elapsedMs)}ms)`,
+    );
+  }
 }
 
 // IMP-104: keep semantic accessibility regression coverage on the same mocked
@@ -2406,6 +2547,19 @@ async function installTauriMock(
         installer: null,
       },
     ];
+    const scalePackages = [
+      ...packages,
+      ...Array.from({ length: 996 }, (_, index) => ({
+        package: `com.example.scale.${String(index).padStart(4, "0")}`,
+        enabled: index % 5 !== 0,
+        suspended: false,
+        archived: false,
+        system: index % 4 === 0,
+        apk_path: `/data/app/com.example.scale.${String(index).padStart(4, "0")}/base.apk`,
+        uid: 20000 + index,
+        installer: index % 3 === 0 ? "com.android.vending" : null,
+      })),
+    ];
     let remoteFiles = [
       {
         name: "Résumé final.txt",
@@ -2450,6 +2604,7 @@ async function installTauriMock(
     const gateResolvers = new Map();
     const gatePromises = new Map();
     let emptyPackages = false;
+    let largePackageInventory = false;
     let emptyFindings = false;
     window.__DROIDSMITH_MOCK_FAIL_NEXT__ = (cmd) => failNext.add(cmd);
     window.__DROIDSMITH_MOCK_GATE__ = (cmd) => {
@@ -2467,6 +2622,9 @@ async function installTauriMock(
     };
     window.__DROIDSMITH_MOCK_EMPTY_PACKAGES__ = (value) => {
       emptyPackages = value;
+    };
+    window.__DROIDSMITH_MOCK_LARGE_PACKAGES__ = (value) => {
+      largePackageInventory = value;
     };
     window.__DROIDSMITH_MOCK_EMPTY_FINDINGS__ = (value) => {
       emptyFindings = value;
@@ -3159,10 +3317,11 @@ async function installTauriMock(
           };
         }
         if (cmd === "list_packages") {
+          const inventory = largePackageInventory ? scalePackages : packages;
           return {
             packages: emptyPackages
               ? []
-              : filterPackages(packages, args.filter ?? "all"),
+              : filterPackages(inventory, args.filter ?? "all"),
             archive: {
               supported: archiveApi >= 35,
               api_level: archiveApi,
@@ -3191,6 +3350,30 @@ async function installTauriMock(
                 ? "pm unsuspend is advertised by this device"
                 : "pm unsuspend is not advertised by this device",
             },
+            hide: {
+              supported: false,
+              reason: "pm hide is not advertised by this device",
+            },
+            unhide: {
+              supported: false,
+              reason: "pm unhide is not advertised by this device",
+            },
+            unstop: {
+              supported: false,
+              reason: "am force-stop is not advertised by this device",
+            },
+            disable_until_used: {
+              supported: false,
+              reason: "pm disable-until-used is not advertised by this device",
+            },
+            default_state: {
+              supported: false,
+              reason: "pm default-state is not advertised by this device",
+            },
+            suspend_quarantine: {
+              supported: false,
+              reason: "pm suspend-quarantine is not advertised by this device",
+            },
             archive: {
               supported: archiveApi >= 35,
               reason:
@@ -3201,6 +3384,11 @@ async function installTauriMock(
             uninstall_for_user: {
               supported: true,
               reason: "pm uninstall is advertised by this device",
+            },
+            archived_package_metadata: {
+              supported: false,
+              reason:
+                "archived package metadata is not advertised by this device",
             },
             storage_stats: {
               supported: true,

@@ -58,6 +58,10 @@ each milestone tag.
   are enumerated and selectable, while mouse mode, camera torch/zoom, capture
   orientation, clipboard autosync, and push target are validated against the
   installed binary and saved per device. (R-147)
+- **Rendered-route smoke now measures real package scale.** The Apps grid is
+  virtualized for 1,000-package inventories, the headless gate exercises
+  filtering, search, and sorting, and interaction budgets are declared beside
+  the renderer bundle budget. (IMP-125)
 - **Remote file mutations quote shell-sensitive device paths.** Absolute paths
   containing whitespace, punctuation, or quotes are protected at the `adb
   shell` boundary, while the structured plan remains available for exact

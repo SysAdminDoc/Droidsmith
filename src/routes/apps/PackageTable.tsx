@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type KeyboardEvent as ReactKeyboardEvent,
@@ -31,6 +32,32 @@ import {
 // hands focus to the first interactive control inside the focused cell (Escape
 // returns focus to the cell).
 const GRID_PAGE_STEP = 10;
+const VIRTUALIZATION_THRESHOLD = 200;
+const VIRTUAL_ROW_HEIGHT = 88;
+const VIRTUAL_VIEWPORT_HEIGHT = 560;
+const VIRTUAL_OVERSCAN = 8;
+type PackageSortKey = "package" | "type" | "state";
+
+function comparePackages(
+  left: AppPackage,
+  right: AppPackage,
+  sortBy: PackageSortKey,
+): number {
+  if (sortBy === "type") {
+    const typeOrder = Number(left.system) - Number(right.system);
+    if (typeOrder !== 0) return typeOrder;
+  } else if (sortBy === "state") {
+    const stateOrder = packageStateRank(left) - packageStateRank(right);
+    if (stateOrder !== 0) return stateOrder;
+  }
+  return left.package.localeCompare(right.package);
+}
+
+function packageStateRank(pkg: AppPackage): number {
+  if (pkg.retained) return 3;
+  if (pkg.archived) return 2;
+  return pkg.enabled ? 0 : 1;
+}
 
 function useRovingGrid(rowCount: number, colCount: number) {
   const gridRef = useRef<HTMLTableElement>(null);
@@ -195,9 +222,35 @@ export function PackageTable({
   showLegacyExport: boolean;
 }) {
   const { t } = useTranslation();
+  const [sortBy, setSortBy] = useState<PackageSortKey>("package");
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [scrollTop, setScrollTop] = useState(0);
   const allVisibleSelected =
     packages.length > 0 &&
     packages.every((pkg) => selectedPackages.has(pkg.package));
+  const sortedPackages = useMemo(
+    () =>
+      [...packages].sort((left, right) => comparePackages(left, right, sortBy)),
+    [packages, sortBy],
+  );
+  const virtualized = sortedPackages.length > VIRTUALIZATION_THRESHOLD;
+  const firstVisibleIndex = virtualized
+    ? Math.max(0, Math.floor(scrollTop / VIRTUAL_ROW_HEIGHT) - VIRTUAL_OVERSCAN)
+    : 0;
+  const visibleRowCount = virtualized
+    ? Math.ceil(VIRTUAL_VIEWPORT_HEIGHT / VIRTUAL_ROW_HEIGHT) +
+      VIRTUAL_OVERSCAN * 2
+    : sortedPackages.length;
+  const visiblePackages = virtualized
+    ? sortedPackages
+        .slice(firstVisibleIndex, firstVisibleIndex + visibleRowCount)
+        .map((pkg, offset) => ({ pkg, rowIndex: firstVisibleIndex + offset }))
+    : sortedPackages.map((pkg, rowIndex) => ({ pkg, rowIndex }));
+
+  useEffect(() => {
+    setScrollTop(0);
+    if (scrollRef.current) scrollRef.current.scrollTop = 0;
+  }, [packages.length]);
   const gridColumnCount = 5;
   const { gridRef, onKeyDown, cellProps } = useRovingGrid(
     packages.length + 1,
@@ -232,7 +285,18 @@ export function PackageTable({
           <p>{t("apps.noMatchingPackagesBody")}</p>
         </EmptyState>
       ) : (
-        <div className="overflow-x-auto">
+        <div
+          ref={scrollRef}
+          onScroll={(event) => {
+            if (virtualized) setScrollTop(event.currentTarget.scrollTop);
+          }}
+          className={
+            virtualized ? "max-h-[35rem] overflow-auto" : "overflow-x-auto"
+          }
+          style={
+            virtualized ? { maxHeight: VIRTUAL_VIEWPORT_HEIGHT } : undefined
+          }
+        >
           <table
             ref={gridRef}
             role="grid"
@@ -255,14 +319,59 @@ export function PackageTable({
                     className="h-4 w-4 accent-circuit-400"
                   />
                 </TableHeaderCell>
-                <TableHeaderCell {...cellProps(0, 1)}>
-                  {t("apps.package")}
+                <TableHeaderCell
+                  {...cellProps(0, 1)}
+                  aria-sort={sortBy === "package" ? "ascending" : "none"}
+                >
+                  <button
+                    type="button"
+                    onClick={() => setSortBy("package")}
+                    aria-label={t("apps.package")}
+                    className="font-semibold hover:text-anvil-100"
+                  >
+                    {t("apps.package")}
+                    {sortBy === "package" && (
+                      <span className="ml-1" aria-hidden="true">
+                        ↑
+                      </span>
+                    )}
+                  </button>
                 </TableHeaderCell>
-                <TableHeaderCell {...cellProps(0, 2)}>
-                  {t("apps.type")}
+                <TableHeaderCell
+                  {...cellProps(0, 2)}
+                  aria-sort={sortBy === "type" ? "ascending" : "none"}
+                >
+                  <button
+                    type="button"
+                    onClick={() => setSortBy("type")}
+                    aria-label={t("apps.type")}
+                    className="font-semibold hover:text-anvil-100"
+                  >
+                    {t("apps.type")}
+                    {sortBy === "type" && (
+                      <span className="ml-1" aria-hidden="true">
+                        ↑
+                      </span>
+                    )}
+                  </button>
                 </TableHeaderCell>
-                <TableHeaderCell {...cellProps(0, 3)}>
-                  {t("devices.state")}
+                <TableHeaderCell
+                  {...cellProps(0, 3)}
+                  aria-sort={sortBy === "state" ? "ascending" : "none"}
+                >
+                  <button
+                    type="button"
+                    onClick={() => setSortBy("state")}
+                    aria-label={t("devices.state")}
+                    className="font-semibold hover:text-anvil-100"
+                  >
+                    {t("devices.state")}
+                    {sortBy === "state" && (
+                      <span className="ml-1" aria-hidden="true">
+                        ↑
+                      </span>
+                    )}
+                  </button>
                 </TableHeaderCell>
                 <TableHeaderCell {...cellProps(0, 4)}>
                   {t("apps.actions")}
@@ -270,13 +379,24 @@ export function PackageTable({
               </tr>
             </thead>
             <tbody className="divide-y divide-white/10">
-              {packages.map((pkg, rowIndex) => (
+              {firstVisibleIndex > 0 && (
+                <tr aria-hidden="true" role="presentation">
+                  <td colSpan={gridColumnCount}>
+                    <div
+                      aria-hidden="true"
+                      style={{ height: firstVisibleIndex * VIRTUAL_ROW_HEIGHT }}
+                    />
+                  </td>
+                </tr>
+              )}
+              {visiblePackages.map(({ pkg, rowIndex }) => (
                 <tr
                   key={pkg.package}
+                  data-package-row="true"
                   role="row"
                   aria-rowindex={rowIndex + 2}
                   aria-selected={selectedPackages.has(pkg.package)}
-                  className="bg-anvil-950/20 transition hover:bg-white/[0.035]"
+                  className="h-[5.5rem] bg-anvil-950/20 transition hover:bg-white/[0.035]"
                 >
                   <TableCell {...cellProps(rowIndex + 1, 0)}>
                     <input
@@ -398,6 +518,23 @@ export function PackageTable({
                   </TableCell>
                 </tr>
               ))}
+              {firstVisibleIndex + visiblePackages.length <
+                sortedPackages.length && (
+                <tr aria-hidden="true" role="presentation">
+                  <td colSpan={gridColumnCount}>
+                    <div
+                      aria-hidden="true"
+                      style={{
+                        height:
+                          (sortedPackages.length -
+                            firstVisibleIndex -
+                            visiblePackages.length) *
+                          VIRTUAL_ROW_HEIGHT,
+                      }}
+                    />
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
