@@ -45,7 +45,7 @@ serde_yaml_ng = "0.10"
 # syn 3 and serde_derive_internals 0.30 alongside the versions already in the
 # tree, adding two entries to the reviewed duplicate graph in
 # `release-policy.json` for no functional gain.
-schemars = { version = "=1.2.1", features = ["preserve_order"] }
+schemars = { version = "=1.2.2", features = ["preserve_order"] }
 sha2 = "0.10"
 # The specta stack stays `=`-pinned, but no longer because of the Rust floor:
 # tauri-specta, specta, and specta-typescript are lock-step prereleases whose
