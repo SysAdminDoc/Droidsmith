@@ -12,12 +12,10 @@ import {
   errorMessage,
   callApplyAction,
   callApplyActionBatch,
-  callCancelOperation,
   callExportRecoveryBaseline,
   callInspectRecoveryBaseline,
   callGetPackageMetadata,
   callGetPackageActionCapabilities,
-  callInstallApk,
   callJournalList,
   callJournalUndo,
   callJournalUndoBatch,
@@ -28,10 +26,7 @@ import {
   callPlanAction,
   callPlanActionBatch,
   callSelectHostPath,
-  callGrantDroppedPath,
-  inTauri,
   deviceTarget,
-  newOperationId,
   type ActionKind,
   type BaselineRoundTrip,
   type FingerprintObservation,
@@ -40,9 +35,7 @@ import {
   type BatchActionItemResult,
   type BatchActionResult,
   type JournalEntry,
-  type InstallOptions,
   type PackageFilter,
-  type OperationEvent,
 } from "../lib/tauri";
 import {
   useAuthorizedDevices,
@@ -72,9 +65,9 @@ import {
 } from "./apps/InstallPanels";
 import { PackagesSkeleton } from "./apps/PackagesSkeleton";
 import { usePackageBackups } from "./apps/usePackageBackups";
+import { usePackageInstall } from "./apps/usePackageInstall";
 import type {
   ActionState,
-  InstallState,
   JournalState,
   PackagesState,
   RecoveryState,
@@ -128,22 +121,12 @@ export default function AppsRoute() {
   const [search, setSearch] = useState("");
   const [inspectedPkg, setInspectedPkg] = useState<string | null>(null);
   const [showAdvancedBackups, setShowAdvancedBackups] = useState(false);
-  const [installState, setInstallState] = useState<InstallState>({
-    kind: "idle",
-  });
   const [incrementalInstall, setIncrementalInstall] = useState(false);
   const [recoveryState, setRecoveryState] = useState<RecoveryState>({
     kind: "idle",
   });
   const [otaNotice, setOtaNotice] = useState(false);
-  const activeInstallRef = useRef<string | null>(null);
-  const installGenerationRef = useRef(0);
   const metadataRequestedRef = useRef(new Set<string>());
-  // Mirrors installState for the drag-drop listener, which is intentionally
-  // not re-subscribed on every state change (drops during the unlisten window
-  // would be lost).
-  const installStateRef = useRef(installState);
-  installStateRef.current = installState;
 
   const selectedDevice =
     authorizedDevices.find((device) =>
@@ -187,7 +170,6 @@ export default function AppsRoute() {
     authorizedTarget,
     `apps-action:${selectedUser}`,
   );
-  const installOperation = useTargetOperation(authorizedTarget, "apps-install");
   const recoveryOperation = useTargetOperation(
     authorizedTarget,
     `apps-recovery:${selectedUser}`,
@@ -332,6 +314,19 @@ export default function AppsRoute() {
     usersReady,
   ]);
 
+  const {
+    installState,
+    setInstallState,
+    startInstall,
+    cancelInstall,
+    confirmInstallOverride,
+  } = usePackageInstall({
+    target: authorizedTarget,
+    device: selectedDevice,
+    incremental: incrementalInstall,
+    loadPackages,
+  });
+
   const requestPackageMetadata = useCallback(
     (packageName: string) => {
       if (!selectedTarget || !usersReady) return;
@@ -398,10 +393,6 @@ export default function AppsRoute() {
         : authorizedDevices.length === 1
           ? authorizedDevices[0]!
           : null;
-    installGenerationRef.current += 1;
-    const installOperationId = activeInstallRef.current;
-    activeInstallRef.current = null;
-    if (installOperationId) void callCancelOperation(installOperationId);
     setSelectedSerial(next?.serial ?? null);
     setSelectedTransportId(next?.transport_id ?? null);
     setActionState({ kind: "idle" });
@@ -410,18 +401,8 @@ export default function AppsRoute() {
     // pruning effect keeps package names both devices share).
     setSelectedPackages([]);
     setInspectedPkg(null);
-    setInstallState({ kind: "idle" });
     setRecoveryState({ kind: "idle" });
   }, [authorizedDevices, selectedSerial, selectedTransportId]);
-
-  useEffect(() => {
-    return () => {
-      installGenerationRef.current += 1;
-      const installOperationId = activeInstallRef.current;
-      activeInstallRef.current = null;
-      if (installOperationId) void callCancelOperation(installOperationId);
-    };
-  }, []);
 
   useEffect(() => {
     void loadUsers();
@@ -534,193 +515,6 @@ export default function AppsRoute() {
       usersReady,
     ],
   );
-
-  const runInstall = useCallback(
-    async (
-      pathGrant: string,
-      localPath: string,
-      installOptions: InstallOptions,
-    ) => {
-      if (!selectedDevice || !authorizedTarget) return;
-      const lease = installOperation.begin();
-      const operationId = newOperationId("install");
-      const generation = installGenerationRef.current + 1;
-      installGenerationRef.current = generation;
-      activeInstallRef.current = operationId;
-      lease.registerCancellation(operationId);
-      setInstallState({
-        kind: "running",
-        operationId,
-        progress: t("apps.installStarting"),
-        output: "",
-      });
-      try {
-        const result = await callInstallApk(
-          authorizedTarget,
-          pathGrant,
-          installOptions,
-          {
-            operationId,
-            onEvent: (event: OperationEvent) => {
-              if (
-                activeInstallRef.current !== operationId ||
-                installGenerationRef.current !== generation ||
-                !lease.isCurrent()
-              )
-                return;
-              setInstallState((previous) => {
-                if (
-                  previous.kind !== "running" ||
-                  previous.operationId !== operationId
-                )
-                  return previous;
-                if (event.kind === "output" && event.chunk) {
-                  return {
-                    ...previous,
-                    output: `${previous.output}${event.chunk}`.slice(
-                      -64 * 1024,
-                    ),
-                  };
-                }
-                if (event.kind === "progress" && event.message) {
-                  return { ...previous, progress: event.message };
-                }
-                return previous;
-              });
-            },
-          },
-        );
-        if (installGenerationRef.current !== generation || !lease.isCurrent())
-          return;
-        activeInstallRef.current = null;
-        setInstallState({ kind: "result", localPath, result });
-        if (result.succeeded) await loadPackages();
-      } catch (error) {
-        if (
-          activeInstallRef.current !== operationId ||
-          installGenerationRef.current !== generation ||
-          !lease.isCurrent()
-        )
-          return;
-        activeInstallRef.current = null;
-        setInstallState({
-          kind: "error",
-          message: errorMessage(error),
-        });
-      }
-    },
-    [authorizedTarget, installOperation, loadPackages, selectedDevice, t],
-  );
-
-  const startInstall = useCallback(async () => {
-    if (!selectedDevice) return;
-    const lease = installOperation.begin();
-    setInstallState({ kind: "choosing" });
-    try {
-      const selected = await callSelectHostPath("install_open");
-      if (!lease.isCurrent()) return;
-      if (!selected) {
-        setInstallState({ kind: "idle" });
-        return;
-      }
-      await runInstall(selected.id, selected.local_path, {
-        incremental: incrementalInstall,
-      });
-    } catch (error) {
-      lease.commit(() =>
-        setInstallState({
-          kind: "error",
-          message: errorMessage(error),
-        }),
-      );
-    }
-  }, [incrementalInstall, installOperation, runInstall, selectedDevice]);
-
-  useEffect(() => {
-    if (!inTauri() || !selectedDevice) return;
-    let cancelled = false;
-    let unlisten: (() => void) | undefined;
-    void import("@tauri-apps/api/webview").then(({ getCurrentWebview }) => {
-      if (cancelled) return;
-      void getCurrentWebview()
-        .onDragDropEvent(async (event) => {
-          if (event.payload.type !== "drop" || cancelled) return;
-          // The install button is disabled while an install runs; a drop must
-          // not start a second concurrent install that silently orphans the
-          // first (read via ref — the listener is not re-subscribed on state
-          // changes).
-          if (
-            installStateRef.current.kind === "running" ||
-            installStateRef.current.kind === "choosing"
-          )
-            return;
-          const apkPaths = event.payload.paths.filter((p) => {
-            const ext = p.split(".").pop()?.toLowerCase() ?? "";
-            return ["apk", "apks", "xapk", "apkm"].includes(ext);
-          });
-          if (apkPaths.length === 0) return;
-          const path = apkPaths[0];
-          const lease = installOperation.begin();
-          try {
-            const grant = await callGrantDroppedPath(path);
-            if (cancelled || !lease.isCurrent()) return;
-            await runInstall(grant.id, grant.local_path, {
-              incremental: incrementalInstall,
-            });
-          } catch (error) {
-            if (cancelled || !lease.isCurrent()) return;
-            setInstallState({
-              kind: "error",
-              message: errorMessage(error),
-            });
-          }
-        })
-        .then((fn) => {
-          if (cancelled) fn();
-          else unlisten = fn;
-        });
-    });
-    return () => {
-      cancelled = true;
-      unlisten?.();
-    };
-  }, [incrementalInstall, installOperation, runInstall, selectedDevice]);
-
-  const cancelInstall = useCallback(async () => {
-    const operationId = activeInstallRef.current;
-    if (!operationId) return;
-    setInstallState((previous) =>
-      previous.kind === "running"
-        ? { ...previous, progress: t("apps.installCancelling") }
-        : previous,
-    );
-    await callCancelOperation(operationId);
-  }, [t]);
-
-  const confirmInstallOverride = useCallback(async () => {
-    if (
-      installState.kind !== "confirming_override" ||
-      !installState.result.failure?.suggested_override
-    )
-      return;
-    const installOptions: InstallOptions = {
-      override_confirmed: true,
-      allow_downgrade:
-        installState.result.failure.suggested_override === "allow_downgrade",
-      bypass_low_target_sdk_block:
-        installState.result.failure.suggested_override ===
-        "bypass_low_target_sdk_block",
-    };
-    const retryGrant = installState.result.retry_path_grant;
-    if (!retryGrant) {
-      setInstallState({
-        kind: "error",
-        message: t("apps.installGrantExpired"),
-      });
-      return;
-    }
-    await runInstall(retryGrant, installState.localPath, installOptions);
-  }, [installState, runInstall, t]);
 
   const confirmAction = useCallback(async () => {
     // Same mid-flight device-switch guard as the journal undo paths: a switch
@@ -1211,11 +1005,6 @@ export default function AppsRoute() {
             selected={selectedTransportId}
             selectedSerial={selectedSerial}
             onSelect={(device) => {
-              installGenerationRef.current += 1;
-              const installOperationId = activeInstallRef.current;
-              activeInstallRef.current = null;
-              if (installOperationId)
-                void callCancelOperation(installOperationId);
               setSelectedSerial(device.serial);
               setSelectedTransportId(device.transport_id);
               setActionState({ kind: "idle" });
