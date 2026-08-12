@@ -12,8 +12,6 @@ import {
   errorMessage,
   callApplyAction,
   callApplyActionBatch,
-  callExportRecoveryBaseline,
-  callInspectRecoveryBaseline,
   callGetPackageMetadata,
   callGetPackageActionCapabilities,
   callJournalList,
@@ -25,10 +23,8 @@ import {
   callAssessUninstallRecovery,
   callPlanAction,
   callPlanActionBatch,
-  callSelectHostPath,
   deviceTarget,
   type ActionKind,
-  type BaselineRoundTrip,
   type FingerprintObservation,
   type AndroidUser,
   type AppPackageMetadata,
@@ -50,7 +46,10 @@ import {
 import { PackageTable } from "./apps/PackageTable";
 import { JournalPanel } from "./apps/JournalPanel";
 import { PermissionsPanel } from "./apps/PermissionsPanel";
-import { RecoveryBaselinePanel } from "./apps/RecoveryBaselinePanel";
+import {
+  RecoveryBaselineActions,
+  RecoveryBaselinePanel,
+} from "./apps/RecoveryBaselinePanel";
 import { BatchActionBar, FilterChips } from "./apps/FilterControls";
 import {
   archiveIsRisky,
@@ -58,20 +57,13 @@ import {
   type UnarchiveOutlook,
 } from "./apps/unarchive";
 import { ActionOverlay } from "./apps/ActionOverlay";
-import {
-  BackupStatePanel,
-  InstallOverrideDialog,
-  InstallStatePanel,
-} from "./apps/InstallPanels";
+import { BackupStatePanel } from "./apps/BackupPanel";
+import { InstallOverrideDialog, InstallStatePanel } from "./apps/InstallPanels";
 import { PackagesSkeleton } from "./apps/PackagesSkeleton";
 import { usePackageBackups } from "./apps/usePackageBackups";
 import { usePackageInstall } from "./apps/usePackageInstall";
-import type {
-  ActionState,
-  JournalState,
-  PackagesState,
-  RecoveryState,
-} from "./apps/types";
+import { useRecoveryBaseline } from "./apps/useRecoveryBaseline";
+import type { ActionState, JournalState, PackagesState } from "./apps/types";
 import {
   Badge,
   Button,
@@ -122,9 +114,6 @@ export default function AppsRoute() {
   const [inspectedPkg, setInspectedPkg] = useState<string | null>(null);
   const [showAdvancedBackups, setShowAdvancedBackups] = useState(false);
   const [incrementalInstall, setIncrementalInstall] = useState(false);
-  const [recoveryState, setRecoveryState] = useState<RecoveryState>({
-    kind: "idle",
-  });
   const [otaNotice, setOtaNotice] = useState(false);
   const metadataRequestedRef = useRef(new Set<string>());
 
@@ -169,10 +158,6 @@ export default function AppsRoute() {
   const actionOperation = useTargetOperation(
     authorizedTarget,
     `apps-action:${selectedUser}`,
-  );
-  const recoveryOperation = useTargetOperation(
-    authorizedTarget,
-    `apps-recovery:${selectedUser}`,
   );
   const undoOperation = useTargetOperation(
     authorizedTarget,
@@ -376,6 +361,20 @@ export default function AppsRoute() {
     }
   }, [journalOperation, selectedTarget]);
 
+  const {
+    recoveryState,
+    exportActionBaseline,
+    inspectRecoveryBaseline,
+    applyRecoveryBaseline,
+    resetRecovery,
+  } = useRecoveryBaseline({
+    target: authorizedTarget,
+    userId: selectedUser,
+    actionState,
+    loadPackages,
+    loadJournal,
+  });
+
   useEffect(() => {
     const current = authorizedDevices.find((device) =>
       selectedTransportId != null
@@ -401,8 +400,8 @@ export default function AppsRoute() {
     // pruning effect keeps package names both devices share).
     setSelectedPackages([]);
     setInspectedPkg(null);
-    setRecoveryState({ kind: "idle" });
-  }, [authorizedDevices, selectedSerial, selectedTransportId]);
+    resetRecovery();
+  }, [authorizedDevices, resetRecovery, selectedSerial, selectedTransportId]);
 
   useEffect(() => {
     void loadUsers();
@@ -566,137 +565,6 @@ export default function AppsRoute() {
       );
     }
   }, [actionOperation, actionState, loadJournal, loadPackages, t]);
-
-  const exportActionBaseline = useCallback(async () => {
-    if (
-      (actionState.kind !== "confirming" &&
-        actionState.kind !== "confirming_batch") ||
-      !authorizedTarget
-    )
-      return;
-    const plans =
-      actionState.kind === "confirming"
-        ? [actionState.plan]
-        : actionState.plan.plans;
-    const first = plans[0];
-    if (!first) return;
-    const lease = recoveryOperation.begin();
-    setRecoveryState({
-      kind: "busy",
-      message: t("apps.recoveryExporting"),
-    });
-    try {
-      const selected = await callSelectHostPath(
-        "recovery_baseline_save",
-        plans.length === 1
-          ? recoveryFileName(first.request.package)
-          : recoveryBatchFileName(plans.length),
-      );
-      if (!lease.isCurrent()) return;
-      if (!selected) {
-        setRecoveryState({ kind: "idle" });
-        return;
-      }
-      const artifact = await callExportRecoveryBaseline(
-        authorizedTarget,
-        first.request.user_id,
-        plans.map((plan) => ({
-          package: plan.request.package,
-          kind: plan.request.kind,
-        })),
-        first.request.pack_context
-          ? {
-              id: first.request.pack_context.pack_id,
-              revision: first.request.pack_context.revision,
-            }
-          : null,
-        selected.id,
-      );
-      lease.commit(() =>
-        setRecoveryState({
-          kind: "saved",
-          path: artifact.local_path,
-          sha256: artifact.sha256,
-        }),
-      );
-    } catch (error) {
-      lease.commit(() =>
-        setRecoveryState({
-          kind: "error",
-          message: errorMessage(error),
-        }),
-      );
-    }
-  }, [actionState, authorizedTarget, recoveryOperation, t]);
-
-  /** Open a saved baseline and plan one half of the OTA round trip.
-   *
-   *  The direction is chosen up front rather than switched inside the review,
-   *  because the two halves happen at different times — restore, update,
-   *  re-apply — and because the native read grant is one-shot, so a switch
-   *  would mean re-picking the file anyway. */
-  const inspectRecoveryBaseline = useCallback(
-    async (roundTrip: BaselineRoundTrip) => {
-      if (!authorizedTarget) return;
-      const lease = recoveryOperation.begin();
-      setRecoveryState({
-        kind: "busy",
-        message: t("apps.recoveryInspecting"),
-      });
-      try {
-        const selected = await callSelectHostPath("recovery_baseline_open");
-        if (!lease.isCurrent()) return;
-        if (!selected) {
-          setRecoveryState({ kind: "idle" });
-          return;
-        }
-        const diff = await callInspectRecoveryBaseline(
-          authorizedTarget,
-          selected.id,
-          roundTrip,
-        );
-        lease.commit(() => setRecoveryState({ kind: "review", diff }));
-      } catch (error) {
-        lease.commit(() =>
-          setRecoveryState({
-            kind: "error",
-            message: errorMessage(error),
-          }),
-        );
-      }
-    },
-    [authorizedTarget, recoveryOperation, t],
-  );
-
-  const applyRecoveryBaseline = useCallback(async () => {
-    if (recoveryState.kind !== "review") return;
-    const { diff } = recoveryState;
-    const lease = recoveryOperation.begin();
-    setRecoveryState({
-      kind: "busy",
-      message: t("apps.recoveryApplying", { count: diff.plans.length }),
-    });
-    let applied = 0;
-    const failures: string[] = [];
-    for (const plan of diff.plans) {
-      if (!lease.isCurrent()) return;
-      try {
-        await callApplyAction(plan);
-        if (!lease.isCurrent()) return;
-        applied += 1;
-      } catch (error) {
-        if (!lease.isCurrent()) return;
-        failures.push(`${plan.request.package}: ${errorMessage(error)}`);
-      }
-    }
-    if (
-      !lease.commit(() =>
-        setRecoveryState({ kind: "result", diff, applied, failures }),
-      )
-    )
-      return;
-    await Promise.all([loadPackages(), loadJournal()]);
-  }, [loadJournal, loadPackages, recoveryOperation, recoveryState, t]);
 
   const undoJournalEntry = useCallback(
     async (entry: JournalEntry) => {
@@ -882,30 +750,15 @@ export default function AppsRoute() {
         actions={
           selectedDevice ? (
             <div className="flex flex-wrap gap-2">
-              <Button
-                type="button"
-                onClick={() => void inspectRecoveryBaseline("restore")}
+              <RecoveryBaselineActions
                 disabled={
                   !authorizedTarget ||
                   recoveryState.kind === "busy" ||
                   !usersReady
                 }
-                variant="ghost"
-              >
-                {t("apps.recoveryRestoreOpen")}
-              </Button>
-              <Button
-                type="button"
-                onClick={() => void inspectRecoveryBaseline("reapply")}
-                disabled={
-                  !authorizedTarget ||
-                  recoveryState.kind === "busy" ||
-                  !usersReady
-                }
-                variant="ghost"
-              >
-                {t("apps.recoveryReapplyOpen")}
-              </Button>
+                onRestore={() => void inspectRecoveryBaseline("restore")}
+                onReapply={() => void inspectRecoveryBaseline("reapply")}
+              />
               <Button
                 type="button"
                 onClick={() => void startInstall()}
@@ -1011,7 +864,7 @@ export default function AppsRoute() {
               setSelectedPackages([]);
               setInspectedPkg(null);
               setInstallState({ kind: "idle" });
-              setRecoveryState({ kind: "idle" });
+              resetRecovery();
             }}
           />
         )}
@@ -1025,7 +878,7 @@ export default function AppsRoute() {
         <RecoveryBaselinePanel
           state={recoveryState}
           onApply={() => void applyRecoveryBaseline()}
-          onDismiss={() => setRecoveryState({ kind: "idle" })}
+          onDismiss={resetRecovery}
         />
 
         {selectedSerial && (
@@ -1052,7 +905,7 @@ export default function AppsRoute() {
                     onChange={(e) => {
                       setSelectedUser(Number(e.target.value));
                       setSelectedPackages([]);
-                      setRecoveryState({ kind: "idle" });
+                      resetRecovery();
                     }}
                     aria-label={t("apps.userLabel")}
                     className="h-auto px-2 py-1 font-mono"
@@ -1260,17 +1113,6 @@ export default function AppsRoute() {
       </section>
     </>
   );
-}
-
-function recoveryFileName(packageName: string): string {
-  const date = new Date().toISOString().slice(0, 10);
-  const safePackage = packageName.replace(/[^A-Za-z0-9_.-]/g, "_");
-  return `droidsmith-recovery-${date}-${safePackage}.json`;
-}
-
-function recoveryBatchFileName(count: number): string {
-  const date = new Date().toISOString().slice(0, 10);
-  return `droidsmith-recovery-${date}-batch-${count}-packages.json`;
 }
 
 // A batch item with a non-null `error` failed at the device; successful items

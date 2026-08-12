@@ -4,7 +4,7 @@
 
 <h1 align="center">Droidsmith</h1>
 
-![Version](https://img.shields.io/badge/version-0.9.17-cyan)
+![Version](https://img.shields.io/badge/version-0.9.18-cyan)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Platforms](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-blue)
 
@@ -111,7 +111,7 @@ validation. Detected data entries are not a promise of completeness or future
 restore compatibility; Droidsmith does not present `adb restore` as a reliable
 recovery path.
 
-The source tree and manifests are version `0.9.17`. The latest downloadable
+The source tree and manifests are version `0.9.18`. The latest downloadable
 artifact is the unsigned Windows
 [v0.9.17 release](https://github.com/SysAdminDoc/Droidsmith/releases/tag/v0.9.17),
 published on 2026-08-09 with MSI, NSIS, portable, and `SHA256SUMS` assets.
@@ -199,7 +199,7 @@ guidance. The plugin API and marketplace remain deferred.
 
 | Contract | Supported value |
 |---|---|
-| Droidsmith source/manifests | `0.9.17` |
+| Droidsmith source/manifests | `0.9.18` |
 | Node.js | `^22.12.0 \|\| >=24.0.0` |
 | Rust | `>=1.90` |
 | Tauri | `2.x` |

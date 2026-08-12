@@ -11,6 +11,39 @@ import {
 } from "../common";
 import type { RecoveryState } from "./types";
 
+/** Header controls for opening a saved baseline in either OTA direction. */
+export function RecoveryBaselineActions({
+  disabled,
+  onRestore,
+  onReapply,
+}: {
+  disabled: boolean;
+  onRestore: () => void;
+  onReapply: () => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <>
+      <Button
+        type="button"
+        onClick={onRestore}
+        disabled={disabled}
+        variant="ghost"
+      >
+        {t("apps.recoveryRestoreOpen")}
+      </Button>
+      <Button
+        type="button"
+        onClick={onReapply}
+        disabled={disabled}
+        variant="ghost"
+      >
+        {t("apps.recoveryReapplyOpen")}
+      </Button>
+    </>
+  );
+}
+
 /** Recovery-baseline drift review + apply surface (IMP-67: extracted verbatim
  *  from the former Apps.tsx god-file). */
 export function RecoveryBaselinePanel({

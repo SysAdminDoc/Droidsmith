@@ -167,6 +167,17 @@ each milestone tag.
   final recovery fallback also uses the locale resource with a static copy if
   that resource tree fails. (IMP-130)
 
+## [0.9.18] - 2026-08-12
+
+### Changed
+
+- **Apps package workflows are split into focused route modules.** Package
+  backup UI, recovery-baseline export and OTA restore/re-apply orchestration,
+  and the recovery toolbar controls now live under `src/routes/apps/`; the
+  route remains responsible for state composition. Vitest, rendered-route
+  smoke, and the production bundle gate all pass without initial-bundle growth.
+  (IMP-128)
+
 ## [0.9.17] - 2026-08-02
 
 ### Changed
