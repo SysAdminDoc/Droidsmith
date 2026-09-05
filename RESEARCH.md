@@ -1,6 +1,6 @@
-# Research — Droidsmith
+# Research: Droidsmith
 
-Date: 2026-08-08 — replaces all prior research.
+Date: 2026-08-08. replaces all prior research.
 
 Confidence labels: **Verified** means read or executed against the repository or
 the linked primary source on 2026-08-08; **Likely** means a secondary report;
@@ -24,8 +24,8 @@ community, and security review:
 1. **P0 trust boundary:** quote every device-side path before it reaches
    `adb shell` (R-133). The current file-manager path is both a correctness bug
    for spaces and a shell-injection path; the Console path has a separate guard.
-2. **P0 dependency gate:** clear both high npm advisories — `brace-expansion`
-   GHSA-rgw5-rvv9-x895/CVE-2026-69152 and `nanoid` GHSA-2v37-7h3g-55p8 — and
+2. **P0 dependency gate:** clear both high npm advisories, `brace-expansion`
+   GHSA-rgw5-rvv9-x895/CVE-2026-69152 and `nanoid` GHSA-2v37-7h3g-55p8, and
    declare an npm floor (IMP-113).
 3. **P0 accessibility:** replace enumerated light-theme utility overrides with
    semantic tokens and run the rendered/axe gate in both themes (IMP-114).
@@ -99,7 +99,7 @@ scrcpy 4.1 provides the upstream mirror/control contract, codec recovery, and
 display/camera/input flags; Droidsmith already supervises the binary and probes
 capabilities. escrcpy adds multi-device control, batch install/screenshot,
 input broadcast, and a local MCP assistant. The useful parity item is fleet
-workflow (R-138/R-149), not an embedded scrcpy client or an online AI copilot.
+workflow (R-138/R-149), not an embedded scrcpy client or an Online cloud assistant.
 
 ### ADB Explorer and AppManager
 
@@ -140,7 +140,7 @@ upstream project documentation wins when behavior conflicts.
 
 ## Security, Privacy, and Reliability
 
-### Device-side command construction — Verified statically; Needs live validation
+### Device-side command construction: Verified statically; Needs live validation
 
 `src-tauri/src/remote_files.rs:54-75` rejects control characters, traversal,
 duplicate separators, and trailing separators but permits shell metacharacters
@@ -153,7 +153,7 @@ command beyond `ProtectedPath`. The existing test checks the planned argv, not
 the joined command. This is the root-cause P0 (R-133); Android's ADB guidance
 also requires a second level of quoting for remote shell words.
 
-### npm dependency gate — Verified by execution on 2026-08-08
+### npm dependency gate: Verified by execution on 2026-08-08
 
 `npm audit --audit-level=moderate --json` exits 1 with two high advisories:
 `brace-expansion` 5.0.8 is below fixed 5.0.9 for GHSA-rgw5-rvv9-x895, and
@@ -163,7 +163,7 @@ has a local `cargo audit --deny warnings` wrapper and `release:check` now invoke
 existing IMP-113 should cover both npm advisories; IMP-120 should be narrowed to
 making the standalone security script use the same cargo-deny policy.
 
-### Native crash-log privacy — Verified
+### Native crash-log privacy: Verified
 
 `src-tauri/src/diagnostics.rs:15-16` claims “No PII”, but
 `write_panic_record` at `:189-212` writes the panic location and arbitrary
@@ -174,7 +174,7 @@ is safe before export or before the user opens the diagnostics directory.
 IMP-133 should preserve useful panic class/location while bounding or redacting
 payload content and add a direct-hook test.
 
-### Error fidelity versus localization — Verified
+### Error fidelity versus localization: Verified
 
 `CommandError` intentionally preserves exact backend/OEM text, but the command
 boundary previously returned it directly and many routes rendered it without a
@@ -183,7 +183,7 @@ summaries, keeps exact device/OEM text in a labelled details line, redacts
 renderer-originated host paths or identifiers, and keeps the recovery fallback
 render-safe even if the i18n tree fails (IMP-130).
 
-### Artifact and supply-chain claims — Verified
+### Artifact and supply-chain claims: Verified
 
 The provenance generator hashes UTF-8 file bytes without a repository
 `.gitattributes`; `core.autocrlf=true` can therefore make the same commit produce
@@ -195,7 +195,7 @@ CycloneDX and SPDX both provide the fields needed to make the artifact useful;
 the implementation must retain deterministic inputs rather than inserting a
 wall-clock value.
 
-### Android and host drift — Verified or Needs live validation
+### Android and host drift: Verified or Needs live validation
 
 - Platform-tools 37.0.1 changes USB backend defaults per OS, removes the
   openscreen mDNS implementation, and adds a `kill-server` requester chain.
@@ -242,7 +242,7 @@ IMP-114 is the still-open total-theme gate.
   `Mirror.tsx`, `Profiles.tsx`, `Logcat.tsx`, and `Wireless.tsx`. The initial
   renderer bundle is near 84% of its 450,000-byte budget. `Apps.tsx` should stay
   orchestration-only as existing extracted panels grow (IMP-128).
-- **Collection scale:** the smoke harness mocks only a few packages and
+- **Collection scale:** the smoke suite mocks only a few packages and
   `PackageTable` uses lazy metadata rather than row virtualization. Render and
   measure a 1,000-package inventory before choosing a virtualization strategy
   (IMP-125).
@@ -250,7 +250,7 @@ IMP-114 is the still-open total-theme gate.
   packages still need explicit copy (IMP-119), while install/uninstall and
   package actions should preserve exact OEM output through R-141/R-142 and the
   localized envelope shipped in IMP-130.
-- **Accessibility and themes:** the rendered/axe harness is strong in dark mode,
+- **Accessibility and themes:** the rendered Axe gate is strong in dark mode,
   but does not set `data-theme="light"`; the native config pins `Dark`. Narrow
   locale/zoom coverage is concentrated in one locale even though key parity is
   exact. IMP-114 must gate both themes; new error copy must join the locale
@@ -276,28 +276,28 @@ IMP-114 is the still-open total-theme gate.
 
 ## Rejected Ideas
 
-- **Remote pack/list auto-fetch or an in-app updater** — conflicts with the
+- **Remote pack/list auto-fetch or an in-app updater**. Conflicts with the
   no-HTTP/local-first rule and duplicates blocked R-075/R-095/R-036; UAD-NG's
   launch-time fetch and bootloop reports are a cautionary signal.
-- **Embedded scrcpy pane, OTG/gamepad control, or a full ADB protocol rewrite**
-  — large surface with device-only verification and no user value proportional
+- **Embedded scrcpy pane, OTG/gamepad control, or a full ADB protocol rewrite**:
+  Large surface with device-only verification and no user value proportional
   to the risk; keep the supervised sidecar and expose bounded flags (R-147).
-- **Online AI copilot** — violates the no-network default. A local stdio MCP
+- **Online cloud assistant**. Violates the no-network default. A local stdio MCP
   adapter with explicit mutation confirmations is materially different (R-149).
 - **Shizuku/on-device companion, mobile client, cloud MDM, account sync, or
-  multi-user cloud workspaces** — off mission or already blocked, with no safe
+  multi-user cloud workspaces**. Off mission or already blocked, with no safe
   local migration path demonstrated.
-- **Telemetry/crash reporting SaaS** — conflicts with “no telemetry”; local
+- **Telemetry/crash reporting SaaS**. Conflicts with “no telemetry”; local
   redacted logs, support bundles, and user-initiated exports are sufficient.
 - **Bundling UAD-NG data, automatic APK-verification bypass, and guessed Android
-  17 uninstall workarounds** — licensing, safety, and evidence failures. Keep
+  17 uninstall workarounds**. Licensing, safety, and evidence failures. Keep
   user-supplied local conversion (R-146) and verbatim OEM failure reporting
   (R-141/R-142).
 - **Global coverage percentages, a broad plugin marketplace, and a major React,
-  Vite, Tailwind, or Tauri migration** — do not pay down the observed boundary,
+  Vite, Tailwind, or Tauri migration**. Do not pay down the observed boundary,
   accessibility, or release risks; use focused gates and existing extension
   points first.
-- **New mobile/offline/multi-user/migration features in this pass** — the app is
+- **New mobile/offline/multi-user/migration features in this pass**. The app is
   already local/offline-first and its profile/settings migration contracts are
   versioned; no public evidence justified reopening the blocked architecture.
 

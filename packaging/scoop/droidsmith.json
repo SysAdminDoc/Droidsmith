@@ -1,12 +1,12 @@
 {
-  "version": "0.9.17",
-  "description": "Cross-platform open-source GUI for managing Android devices over ADB",
+  "version": "0.9.19",
+  "description": "Local Android device workshop for apps, debloat recovery, wireless ADB, Logcat, scrcpy, and APK inspection",
   "homepage": "https://github.com/SysAdminDoc/Droidsmith",
   "license": "MIT",
   "architecture": {
     "64bit": {
-      "url": "https://github.com/SysAdminDoc/Droidsmith/releases/download/v0.9.17/Droidsmith_0.9.17_x64-setup.exe",
-      "hash": "0da2afac7563f86eabb8a59a25e5556c6b13bf64d5f2565f2ba3397c60f08e8d"
+      "url": "https://github.com/SysAdminDoc/Droidsmith/releases/download/v0.9.19/Droidsmith_0.9.19_x64-setup.exe",
+      "hash": "bd5b3b714b93d240c11da2ea1e2362b6dabe80d735aa7d36915e29f21c22437b"
     }
   },
   "innosetup": false,

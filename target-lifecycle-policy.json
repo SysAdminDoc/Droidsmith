@@ -20,13 +20,8 @@
       "callApplyAction",
       "callApplyActionBatch",
       "callAssessUninstallRecovery",
-      "callBackupPackage",
-      "callExportPackageApks",
-      "callExportRecoveryBaseline",
       "callGetPackageActionCapabilities",
       "callGetPackageMetadata",
-      "callInspectRecoveryBaseline",
-      "callInstallApk",
       "callJournalList",
       "callJournalUndo",
       "callJournalUndoBatch",
@@ -34,8 +29,7 @@
       "callListUsers",
       "callObserveDeviceFingerprint",
       "callPlanAction",
-      "callPlanActionBatch",
-      "callPreflightPackageBackup"
+      "callPlanActionBatch"
     ],
     "src/routes/BugreportCapture.tsx": ["callCaptureBugreport"],
     "src/routes/Console.tsx": [
@@ -74,6 +68,17 @@
     "src/routes/apps/PermissionsPanel.tsx": [
       "callListPermissions",
       "callSetPermission"
+    ],
+    "src/routes/apps/usePackageBackups.ts": [
+      "callBackupPackage",
+      "callExportPackageApks",
+      "callPreflightPackageBackup"
+    ],
+    "src/routes/apps/usePackageInstall.ts": ["callInstallApk"],
+    "src/routes/apps/useRecoveryBaseline.ts": [
+      "callApplyAction",
+      "callExportRecoveryBaseline",
+      "callInspectRecoveryBaseline"
     ],
     "src/routes/debloat/ApplyReview.tsx": ["callListRunningServices"],
     "src/routes/debloat/PackPicker.tsx": ["callExportDevicePack"],

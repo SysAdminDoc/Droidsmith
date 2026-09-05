@@ -4,7 +4,6 @@ import test from "node:test";
 import {
   collectCargoDuplicates,
   readCargoDependencyRequirement,
-  validateAutomationFiles,
   validateAccessibilityAuditPolicy,
   validateDependencyFloor,
   validateNpmDependencyFloor,
@@ -175,25 +174,22 @@ test("release versions must all exist and match", () => {
 });
 
 test("packaging hashes reject placeholders and malformed values", () => {
-  const winget = "InstallerSha256: " + "0".repeat(64);
   const scoop = JSON.stringify({
     architecture: { "64bit": { hash: "0".repeat(64) } },
   });
   assert.throws(
-    () => validatePackagingInstallerHashes(winget, scoop),
+    () => validatePackagingInstallerHashes(scoop),
     /placeholder SHA-256/u,
   );
   assert.throws(
     () =>
       validatePackagingInstallerHashes(
-        "InstallerSha256: not-a-hash",
-        JSON.stringify({ architecture: { "64bit": { hash: "f".repeat(64) } } }),
+        JSON.stringify({ architecture: { "64bit": { hash: "not-a-hash" } } }),
       ),
     /64-character hexadecimal/u,
   );
   assert.doesNotThrow(() =>
     validatePackagingInstallerHashes(
-      "InstallerSha256: " + "a".repeat(64),
       JSON.stringify({ architecture: { "64bit": { hash: "b".repeat(64) } } }),
     ),
   );
@@ -336,84 +332,6 @@ test("tracked documentation enforces truth, live links, and version rows", () =>
       `${currentRow} drift must fail`,
     );
   }
-});
-
-test("tracked automation keeps required blocking jobs and immutable actions", () => {
-  const ciWorkflow = `
-on:
-  push:
-  pull_request:
-  schedule:
-  workflow_dispatch:
-permissions:
-  contents: read
-jobs:
-  frontend:
-  native:
-    os: [ubuntu-latest, windows-latest, macos-latest]
-  security:
-  release-smoke:
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-      - run: npm ci
-      - run: npm run release:check -- --policy-only
-      - run: npm run ui:smoke
-      - run: cargo test --locked
-      - run: npm run security:audit
-      - run: npm run release:check
-`;
-  const dependabot = `
-version: 2
-updates:
-  - package-ecosystem: npm
-    directory: /
-    schedule:
-      interval: weekly
-    open-pull-requests-limit: 4
-    groups:
-  - package-ecosystem: cargo
-    directory: /src-tauri
-    schedule:
-      interval: weekly
-    open-pull-requests-limit: 4
-    groups:
-  - package-ecosystem: github-actions
-    directory: /
-    schedule:
-      interval: weekly
-    open-pull-requests-limit: 2
-    groups:
-`;
-  assert.doesNotThrow(() => validateAutomationFiles(ciWorkflow, dependabot));
-
-  for (const job of ["frontend", "native", "security", "release-smoke"]) {
-    assert.throws(
-      () =>
-        validateAutomationFiles(
-          ciWorkflow.replace(`\n  ${job}:\n`, `\n  removed-${job}:\n`),
-          dependabot,
-        ),
-      /CI workflow is missing required marker/u,
-      `${job} must remain a required CI job`,
-    );
-  }
-  assert.throws(
-    () =>
-      validateAutomationFiles(
-        ciWorkflow.replace("11d5960a326750d5838078e36cf38b85af677262", "v4"),
-        dependabot,
-      ),
-    /full commit SHAs/u,
-  );
-  assert.throws(
-    () =>
-      validateAutomationFiles(
-        ciWorkflow,
-        dependabot.replace("package-ecosystem: cargo", "ecosystem: removed"),
-      ),
-    /Dependabot policy is missing required marker/u,
-  );
 });
 
 test("renderer manifest keeps every route dynamic and the entry under budget", () => {

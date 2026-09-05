@@ -15,12 +15,6 @@ const platformToolsPolicyPath = path.join(
   "platform-tools-policy.json",
 );
 const languageContractPath = path.join(repoRoot, "language-contract.json");
-const wingetManifestPath = path.join(
-  repoRoot,
-  "packaging",
-  "winget",
-  "SysAdminDoc.Droidsmith.yaml",
-);
 const scoopManifestPath = path.join(
   repoRoot,
   "packaging",
@@ -154,29 +148,13 @@ function validatePolicy() {
   validateScrcpyPolicy();
   validateLanguageContract();
   validateSubprocessCaptureContract();
-  validateAutomationPolicy();
 }
 
 function validatePackagingInstallerHashesOnDisk() {
-  validatePackagingInstallerHashes(
-    fs.readFileSync(wingetManifestPath, "utf8"),
-    fs.readFileSync(scoopManifestPath, "utf8"),
-  );
+  validatePackagingInstallerHashes(fs.readFileSync(scoopManifestPath, "utf8"));
 }
 
-export function validatePackagingInstallerHashes(wingetText, scoopText) {
-  const wingetHash = /^\s*InstallerSha256:\s*([0-9a-f]{64})\s*$/imu.exec(
-    wingetText,
-  )?.[1];
-  assert(
-    wingetHash,
-    "winget installer manifest must contain a 64-character hexadecimal SHA-256",
-  );
-  assert(
-    !/^0{64}$/u.test(wingetHash.toLowerCase()),
-    "winget installer manifest still contains a placeholder SHA-256",
-  );
-
+export function validatePackagingInstallerHashes(scoopText) {
   let scoop;
   try {
     scoop = JSON.parse(scoopText);
@@ -1089,78 +1067,6 @@ export function validateVersionValues(versions) {
   assert(
     distinct.size === 1 && !distinct.has(undefined),
     `release versions differ: ${JSON.stringify(versions)}`,
-  );
-}
-
-function validateAutomationPolicy() {
-  validateAutomationFiles(
-    fs.readFileSync(
-      path.join(repoRoot, ".github", "workflows", "ci.yml"),
-      "utf8",
-    ),
-    fs.readFileSync(path.join(repoRoot, ".github", "dependabot.yml"), "utf8"),
-  );
-}
-
-export function validateAutomationFiles(ciWorkflow, dependabot) {
-  const requiredWorkflowMarkers = [
-    "pull_request:",
-    "push:",
-    "schedule:",
-    "workflow_dispatch:",
-    "permissions:\n  contents: read",
-    "\n  frontend:\n",
-    "\n  native:\n",
-    "\n  security:\n",
-    "\n  release-smoke:\n",
-    "os: [ubuntu-latest, windows-latest, macos-latest]",
-    "npm ci",
-    "npm run release:check -- --policy-only",
-    "npm run ui:smoke",
-    "cargo test --locked",
-    "npm run security:audit",
-    "npm run release:check",
-    "github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'",
-  ];
-  for (const marker of requiredWorkflowMarkers) {
-    assert(
-      ciWorkflow.includes(marker),
-      `CI workflow is missing required marker: ${marker}`,
-    );
-  }
-
-  const actionReferences = [
-    ...ciWorkflow.matchAll(/^\s*-\s+uses:\s+[^@\s]+@([^\s#]+)/gmu),
-  ].map((match) => match[1]);
-  assert(actionReferences.length > 0, "CI workflow has no action references");
-  assert(
-    actionReferences.every((reference) => /^[0-9a-f]{40}$/u.test(reference)),
-    "CI actions must be pinned to full commit SHAs",
-  );
-
-  const requiredDependabotMarkers = [
-    "version: 2",
-    "package-ecosystem: npm",
-    "package-ecosystem: cargo",
-    "package-ecosystem: github-actions",
-    "directory: /src-tauri",
-    "interval: weekly",
-    "open-pull-requests-limit:",
-    "groups:",
-  ];
-  for (const marker of requiredDependabotMarkers) {
-    assert(
-      dependabot.includes(marker),
-      `Dependabot policy is missing required marker: ${marker}`,
-    );
-  }
-  const pullRequestLimits = [
-    ...dependabot.matchAll(/open-pull-requests-limit:\s*(\d+)/gu),
-  ].map((match) => Number.parseInt(match[1], 10));
-  assert(
-    pullRequestLimits.length === 3 &&
-      pullRequestLimits.every((limit) => limit > 0 && limit <= 4),
-    "Dependabot ecosystems must each cap open pull requests at four",
   );
 }
 

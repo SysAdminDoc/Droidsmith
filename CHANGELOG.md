@@ -14,12 +14,40 @@ completion.
 Working batches live here. Sections collapse into a versioned release on
 each milestone tag.
 
+Nothing queued.
+
+## [0.9.19]: 2026-09-05
+
+### Marketing and release maintenance
+
+- **The project page now starts with the product.** A shorter README puts the
+  download, core workflows, safety boundaries, and setup requirements up front.
+  Seven current interface captures and a 1280 by 640 repository card replace
+  the stale screenshots that still showed version 0.1.0.
+- **Marketing assets are reproducible.** The headless renderer now captures all
+  documented workspaces in one focused mode, rebuilds the social card from
+  current product imagery, and verifies dimensions, weight, links, and version
+  parity before release.
+- **Repository distribution stays local and reviewable.** The obsolete Winget
+  manifest generator and hosted build workflow were removed. Scoop metadata,
+  native installers, security checks, and release validation remain local.
+- **Frontend dependencies were refreshed within their declared ranges.** The
+  npm lockfile now resolves patched Browserslist and selector-parser releases,
+  and `npm audit` reports no known vulnerabilities.
+- **New profiles now match the current schema.** The author workspace writes v3
+  documents, every locale reports v3, and migrated filenames no longer claim
+  v2 while the Rust backend has already upgraded the document.
+- **The release gate follows the Apps module split.** Target-sensitive backup,
+  install, and recovery calls are inventoried in their current guarded hooks,
+  so lifecycle drift checks no longer compare the refactored route with its old
+  monolithic layout.
+
 ### Distribution
 
-- **Unsigned Windows release artifacts are now published.** The v0.9.17 MSI,
-  NSIS installer, portable executable, and `SHA256SUMS` are attached to the
-  generated GitHub release; Winget and Scoop manifests carry the released
-  NSIS SHA-256. (R-148)
+- **Unsigned Windows release artifacts are now published.** The v0.9.19 MSI,
+  NSIS installer, portable executable, CycloneDX SBOM, and `SHA256SUMS` are
+  attached to the GitHub release; the Scoop manifest carries the released NSIS
+  SHA-256. (R-148)
 - **The headless workflows are available over local MCP stdio.**
   `droidsmith-mcp` exposes read-only device, package, profile, baseline, pack,
   and redacted fleet-report tools, while profile, baseline, and pack mutations
@@ -105,8 +133,8 @@ each milestone tag.
 - **Provenance hashes are checkout-stable.** `.gitattributes` fixes text
   normalization across hosts and the provenance suite covers CRLF input
   invariance. (IMP-115)
-- **Release policy rejects placeholder installer hashes.** Winget and Scoop
-  manifests must carry a real lowercase SHA-256 before packaging can pass.
+- **Release policy rejects placeholder installer hashes.** The Scoop manifest
+  must carry a real lowercase SHA-256 before packaging can pass.
   (IMP-116)
 - **Native panic records redact caller payloads.** Crash logs retain useful
   location and type metadata without persisting arbitrary serials, paths,
@@ -145,21 +173,21 @@ each milestone tag.
   explicitly preserves CHANGELOG, RESEARCH, and ROADMAP alongside README, and
   the local contributor guidance distinguishes those public documents from
   private markdown notes. (IMP-129)
-- **Pull requests now run the cheap release-policy gate.** Frontend CI checks
-  policy, version, schema, accessibility, provenance, and dependency floors on
-  push/PR while the full unsigned bundle smoke remains scheduled. (IMP-134)
+- **The local release-policy gate covers the full contributor contract.** It
+  checks policy, version, schema, accessibility, provenance, and dependency
+  floors before the unsigned bundle smoke can pass. (IMP-134)
 - **The YAML parser choice is now explicit.** The project retains
   `serde_yaml_ng` for this release after a dated compatibility review; a
   `serde-saphyr` migration remains a separate fixture- and graph-reviewed
   change rather than an untested dependency swap. (IMP-126)
-- **Frontend coverage is now a focused merge gate.** The pinned V8 provider
+- **Frontend coverage is now a focused local gate.** The pinned V8 provider
   reports text/JSON/HTML artifacts and enforces measured statement, branch,
-  function, and line thresholds over `src/lib` helper/state code in CI.
+  function, and line thresholds over `src/lib` helper/state code.
   (IMP-131)
-- **Parser fuzzing now has a bounded CI lane.** Stable tests replay the
-  checked-in ADB, YAML, journal, and scrcpy seeds; scheduled/manual Linux CI
-  installs pinned nightly tooling, runs each target for 30 seconds, and uploads
-  crash artifacts without coupling release builds to nightly LLVM. (IMP-132)
+- **Parser fuzzing now has a bounded local lane.** Stable tests replay the
+  checked-in ADB, YAML, journal, and scrcpy seeds. Maintainers can run the
+  nightly targets for 30 seconds without coupling releases to nightly LLVM.
+  (IMP-132)
 - **Command failures now have locale-safe summaries.** Stable native error
   codes map to translated summaries in all five locales, while OEM/device
   output remains visible under a labelled technical-details line and
@@ -167,7 +195,7 @@ each milestone tag.
   final recovery fallback also uses the locale resource with a static copy if
   that resource tree fails. (IMP-130)
 
-## [0.9.18] - 2026-08-12
+## [0.9.18]: 2026-08-12
 
 ### Changed
 
@@ -178,7 +206,7 @@ each milestone tag.
   smoke, and the production bundle gate all pass without initial-bundle growth.
   (IMP-128)
 
-## [0.9.17] - 2026-08-02
+## [0.9.17]: 2026-08-02
 
 ### Changed
 
@@ -188,7 +216,7 @@ each milestone tag.
   clearer typographic hierarchy across every menu route. A generated design
   reference is preserved at `docs/mockups/premium-visual-system-2026-08-02.png`.
 
-## [0.9.16] - 2026-08-01
+## [0.9.16]: 2026-08-01
 
 ### Added
 
@@ -210,7 +238,7 @@ each milestone tag.
   unsupported devices report an explicit unsupported/unknown state and no
   mutating forms are exposed. (R-132)
 
-## [0.9.15] - 2026-08-01
+## [0.9.15]: 2026-08-01
 
 ### Added
 
@@ -221,13 +249,13 @@ each milestone tag.
   from the device's own `pm help` rather than inferred from API level, and a
   device that does not advertise it reports the size as unavailable instead of
   estimating from the APK. Sizes are deliberately excluded from the
-  APK-identity cache — the label and icon are properties of the APK, but data
+  APK-identity cache, the label and icon are properties of the APK, but data
   and cache change constantly, so a cached size would be stale the moment the
   app was opened. A response with none of the expected fields is unavailable,
   not zero. (R-130)
 
 - **Profiles gain filter predicates as schema v3.** A step can carry a `filter`
-  instead of a `package`, resolved against the live inventory at plan time —
+  instead of a `package`, resolved against the live inventory at plan time,
   which is what stops a profile from being effectively device-specific, since
   the same handset from two carriers does not ship the same bloat. Predicates
   cover the attributes the inventory already carries (`system`,
@@ -236,33 +264,33 @@ each milestone tag.
   grammar is deliberately small and non-backtracking: an LL(1)
   recursive-descent parser with capped length, nesting depth, and term count,
   and no regex, because a profile is a file someone can hand you. Evaluation is
-  total and three-valued — a predicate needing an attribute the device did not
+  total and three-valued, a predicate needing an attribute the device did not
   report is *undecidable*, so the package is excluded and named explicitly
   rather than silently matched. Both the import diff and the CLI list every
   package each predicate selected and every one it could not decide before
   anything is applied. v2 profiles keep loading and running unchanged and
   separately offer a reviewed upgrade via the new `migrate-v2`; only v1, which
-  is genuinely ambiguous, still requires migration before use. (R-128)
+  is ambiguous, still requires migration before use. (R-128)
 
 - **The pre-OTA / post-OTA round trip is now a guided pair rather than a manual
   ritual.** A recovery baseline diff takes an explicit direction: restoring
   walks every recoverable package back to the state the baseline recorded,
   re-applying walks forward to the state the recorded actions produced. The
-  direction cannot be inferred — right after an update, a reverted package and
-  a never-changed one look identical — so Apps offers both halves as separate
+  direction cannot be inferred, right after an update, a reverted package and
+  a never-changed one look identical, so Apps offers both halves as separate
   entry points and the CLI gains `baseline-apply --direction restore|reapply`
   with the usual `--dry-run` / `--apply` pair and exit codes. Neither direction
   plans anything against a package already in the wanted state, so nothing is
   applied twice, and apply always recomputes the diff live rather than trusting
-  a plan. Packages the portable baseline cannot recover — it records enable
-  state only, which is what lets it survive the fingerprint change — are now
+  a plan. Packages the portable baseline cannot recover, it records enable
+  state only, which is what lets it survive the fingerprint change, are now
   named explicitly and identically at both ends instead of being folded into
   the skipped rows. A baseline from another device identity is refused rather
   than applied as an empty plan. (R-126)
 
 - **Saved fleet reports now render in the app.** A third Profiles tab opens a
   `run --all-devices --json` report read-only and shows per-device outcome,
-  failure reason or skip cause, and every planned action with its result —
+  failure reason or skip cause, and every planned action with its result,
   including actions a resume deliberately did not replay. It is available with
   no device connected, because the backing command builds no transport and
   makes no network request. Devices are named by digest rather than serial,
@@ -274,7 +302,7 @@ each milestone tag.
 - **An interrupted fleet run can now be resumed from its own report.**
   `droidsmith-cli run <profile> --retry-from <report.json>` selects only the
   devices the source report left failed or skipped, and never replays an action
-  the report proves applied — those are reported with `status: skipped` in both
+  the report proves applied, those are reported with `status: skipped` in both
   dry-run and apply. Before selecting anything, the resume re-proves the report
   schema, the profile document hash, the ordered action set, the per-device
   hashed identity, the resolved Android user, and the current transport; any
@@ -342,7 +370,7 @@ each milestone tag.
   rule set and sole reviewed exclusion live in release policy with validation
   tests; any semantic violation fails `npm run ui:smoke` and therefore CI. The
   layered-surface contrast rule remains explicitly assigned to the dedicated
-  computed-contrast harness in IMP-105 instead of being silently suppressed.
+  computed-contrast test in IMP-105 instead of being silently suppressed.
   (IMP-104)
 
 - **Rendered contrast is measured after real surface compositing.** A shared
@@ -385,7 +413,7 @@ each milestone tag.
   hierarchy. A persistent desktop runtime rail keeps ADB, device, USB, mDNS,
   and version context visible without repeating status pills inside each
   route. Console, Logcat, Fastboot, APK Analyzer, and Mirror now use layouts
-  shaped around their actual workflows. The full rendered-route harness is
+  shaped around their actual workflows. The full rendered-route suite is
   green across all 11 workspaces, settings, diagnostics, onboarding, keyboard
   flows, non-English locales, narrow widths, and 200% zoom. (IMP-95)
 
@@ -415,7 +443,7 @@ each milestone tag.
   Backend fixtures, selection tests, generated IPC bindings, and the rendered
   debloat flow cover the classification and acknowledgement gate. (IMP-103)
 
-## [0.9.14] - 2026-08-01
+## [0.9.14]: 2026-08-01
 
 ### Changed
 
@@ -423,7 +451,7 @@ each milestone tag.
   The old floor was a wall set by an upstream project rather than by this one:
   Tauri has merged an MSRV bump to 1.90 with a stated "latest minus three"
   policy, so the next Tauri minor would have hard-blocked. The floor was also
-  costing correctness — four call sites were written as `map_or(true, ..)`
+  costing correctness, four call sites were written as `map_or(true, ..)`
   purely because `Option::is_none_or` landed in 1.82, and they now read as
   intended. A committed `rust-toolchain.toml` pins the exact toolchain every
   build uses, so a compiler change is a reviewed commit. `proptest` is
@@ -431,7 +459,7 @@ each milestone tag.
   than on the floor: the specta stack is a lock-step prerelease triple whose
   exporter output the checked-in bindings are verified against, and `schemars`
   1.2.2 would add a third `syn` major to the reviewed duplicate graph. The
-  `paste` advisory suppression stays too — contrary to the note that claimed
+  `paste` advisory suppression stays too, contrary to the note that claimed
   otherwise, it is a Specta dependency present on the current release line and
   no floor change retires it. That note has been corrected. (IMP-101)
 
@@ -439,7 +467,7 @@ each milestone tag.
 
 - **Uninstall-for-user now states whether it can be undone, before you commit.**
   Droidsmith recorded package provenance around the mutation, but nothing
-  proved `pm install-existing` would succeed *beforehand* — which is the moment
+  proved `pm install-existing` would succeed *beforehand*, which is the moment
   the answer matters. The review dialog now carries an explicit reversible /
   cannot-be-undone / unproven verdict derived from PackageManager's system flag
   for that Android user, and the verdict is written into the journal intent so
@@ -453,20 +481,20 @@ each milestone tag.
 
 - **Devices reporting the same serial no longer share persisted state.** The
   action journal and per-device settings scopes were keyed on the ADB serial
-  alone, but serials are not unique — clone and OEM firmware ships duplicated
+  alone, but serials are not unique, clone and OEM firmware ships duplicated
   values and some devices report an empty one. Two such devices shared one
   journal file, so an undo row recorded against device A was offered against
   device B. Persistence is now keyed on a canonical identity that mixes the
   verified build fingerprint into the serial. Existing journals and settings
   scopes are adopted in place on first use, so no history is lost, and a device
   that has not proven a fingerprint is refused rather than silently shown an
-  empty history. Recovery baselines deliberately keep serial-only identity —
-  their purpose is to survive the OTA that changes the fingerprint — and report
+  empty history. Recovery baselines deliberately keep serial-only identity,
+  their purpose is to survive the OTA that changes the fingerprint, and report
   the build change as a separate compatibility axis instead. Duplicate serials
   on *identical* builds remain indistinguishable; that limit is documented
   rather than papered over. (IMP-99)
 
-## [0.9.13] - 2026-07-31
+## [0.9.13]: 2026-07-31
 
 ### Changed
 
@@ -484,23 +512,23 @@ each milestone tag.
 - **Known-vulnerable version policy for the host scrcpy binary.** Droidsmith
   launches and supervises whatever `scrcpy` is on the host, and CVE-2025-34449
   (fixed in 3.3.4) is a global buffer overflow in `sc_device_msg_deserialize`
-  that a malicious or compromised *device* can use to attack the desktop *host*
-  — the one direction that matters when the tool is pointed at an untrusted
+  that a malicious or compromised *device* can use to attack the desktop *host*,
+  the one direction that matters when the tool is pointed at an untrusted
   device. scrcpy's release notes describe the fix only as "Fix UHID_OUTPUT
   message parsing", the project publishes no GitHub security advisory, and NVD
   does not index it under the keyword scrcpy, so no dependency scanner will ever
   surface it. A new reviewed `scrcpy-policy.json` records the 3.3.4 floor, the
   advisory, and its source; Mirror raises a localized host-risk panel naming the
   CVE when the detected binary is below it. The policy never blocks a launch and
-  never blocks a newer version, and an unparseable version — or an unparseable
-  policy — reports `unknown` rather than a clean result. The release gate
+  never blocks a newer version, and an unparseable version, or an unparseable
+  policy, reports `unknown` rather than a clean result. The release gate
   rejects drift between the policy document and the Rust module. (R-121)
 
 ### Fixed
 
 - **Picked up the Tauri isolation-pattern fix.** Droidsmith runs the isolation
   pattern, and Tauri 2.7.0 fixed a bug where it created iframes within iframes
-  on Windows — the primary platform. Tauri moves 2.11.2 to 2.11.5 and
+  on Windows, the primary platform. Tauri moves 2.11.2 to 2.11.5 and
   `tauri-build` 2.6.2 to 2.6.3, which also brings the 2.5.0 channel-throughput
   fix for small payloads (Logcat streaming) and the 2.6.0 async-command dispatch
   change. `@tauri-apps/api` and `@tauri-apps/cli` move to 2.11.1/2.11.4 so the
@@ -509,7 +537,7 @@ each milestone tag.
 - **Host Doctor no longer asserts an mDNS backend it cannot know.**
   Platform Tools 37.0.0 made `libadbmdns` the default and 37.0.1 deleted the
   openscreen implementation, but AOSP's `AdbServerStatus` proto still carries
-  only `BONJOUR` and `OPENSCREEN` — there is no value for the backend actually
+  only `BONJOUR` and `OPENSCREEN`, there is no value for the backend actually
   in use. Droidsmith was printing that field as fact and, worse, telling users
   on 37.x to move off "the legacy Openscreen backend" that is neither active nor
   selectable. The value is now gated behind `mdns_backend_reliable`: below
@@ -521,8 +549,8 @@ each milestone tag.
 ### Security
 
 - **Wireless debugging now warns before pairing an unpatched device.**
-  CVE-2026-0073 is an `adbd` mutual-auth bypass — `adbd_tls_verify_cert` treated
-  the `-1` "different key types" return of `EVP_PKEY_cmp` as truthy — that gives
+  CVE-2026-0073 is an `adbd` mutual-auth bypass, `adbd_tls_verify_cert` treated
+  the `-1` "different key types" return of `EVP_PKEY_cmp` as truthy, that gives
   an adjacent attacker code execution as the shell user with no prompt on the
   device. Droidsmith's own pairing plants a host key in the device trust store,
   so the Wireless workspace now classifies every connected device from
@@ -532,13 +560,13 @@ each milestone tag.
   acknowledged. The acknowledgement is scoped to the exact flagged set, so a
   different unpatched device re-arms it. A missing, malformed, or
   outside-the-advisory-range value reports `unknown` and is never presented as
-  either verdict, and the probe is advisory-only — a failure to read it never
+  either verdict, and the probe is advisory-only, a failure to read it never
   blocks the pairing surface. (R-120)
 - **Declared a Tauri security floor instead of relying on the lockfile.**
   `tauri` now requires `2.11.1` and `tauri-build` requires `2.6`, so the fix for
-  CVE-2026-42184 / GHSA-7gmj-67g7-phm9 — where `is_local_url` used
+  CVE-2026-42184 / GHSA-7gmj-67g7-phm9, where `is_local_url` used
   `split_once('.')` and let a remote page such as `http://app.evil.com` match the
-  `app://` custom protocol on Windows and reach local-only IPC commands — can no
+  `app://` custom protocol on Windows and reach local-only IPC commands, can no
   longer be lost by a fresh `cargo update`. A new
   `dependencySecurityFloors` block in `release-policy.json` records the advisory,
   rationale, and source, and the release gate fails if any declared requirement
@@ -622,7 +650,7 @@ each milestone tag.
   target set now excludes archived and retained packages, so only actually
   installed packages are planned; the rest are skipped as not-present. (Packages
   the OEM protects, e.g. Samsung's Themes store, still fail with the existing
-  "OEM security layer denied this package action" message — that is expected.)
+  "OEM security layer denied this package action" message, that is expected.)
   Regression-tested via `debloat_target_ids`.
 - **Debloat and package actions were blocked by the IPC isolation policy on
   real devices.** The isolation layer validated `context.shell_argv`
@@ -639,14 +667,14 @@ each milestone tag.
   with "could not determine which binary to run." Pinned `default-run` to the
   `droidsmith` GUI binary.
 
-## [0.9.12] - 2026-07-24
+## [0.9.12]: 2026-07-24
 
 scrcpy app launcher + control-only mode, offline APK version diff, and localized
 platform-tools diagnostics.
 
 ### Fixed
 
-- **Audit — localized platform-tools version-policy summaries.** The Host Doctor
+- **Audit: localized platform-tools version-policy summaries.** The Host Doctor
   "compatibility needs attention" / "known-bad release" findings previously
   showed the version-policy rationale in English regardless of locale. The
   assessment now carries a machine-readable reason, and the renderer composes a
@@ -657,11 +685,11 @@ platform-tools diagnostics.
 
 ### Added
 
-- **R-117 — scrcpy control-only mode.** Mirror now offers a version-gated
+- **R-117: scrcpy control-only mode.** Mirror now offers a version-gated
   (scrcpy 3.2+) "No window" toggle that launches scrcpy with `--no-window` to
   control and/or record a device without opening a mirror window. The flag is
   hidden on older scrcpy and the setting persists in the per-device preset.
-- **R-114 — Offline APK version diff.** The APK Analyzer can now compare the
+- **R-114: Offline APK version diff.** The APK Analyzer can now compare the
   analyzed APK against a second local APK (chosen via a one-shot grant) and
   reports the deltas that matter for an update review: added/removed
   permissions, component-count changes, min/target/compile SDK changes, signing
@@ -669,7 +697,7 @@ platform-tools diagnostics.
   package-id mismatch warning. The comparison is computed entirely locally and
   nothing is uploaded. (Diff logic lives in the frontend as a pure, fixture
   -tested function since both parsed reports are already client-side.)
-- **R-111 — scrcpy app launcher.** When the detected scrcpy supports it
+- **R-111: scrcpy app launcher.** When the detected scrcpy supports it
   (3.0+), Mirror offers an optional "Launch app on connect" control that starts
   a chosen app via `--start-app`, optionally into a `--new-display` virtual
   display. The picker autocompletes from the device's package inventory
@@ -677,26 +705,26 @@ platform-tools diagnostics.
   preset. The flag is validated as a package name and the control is hidden on
   older scrcpy.
 
-## [0.9.11] - 2026-07-24
+## [0.9.11]: 2026-07-24
 
 Fleet CLI, archive/debloat trust signals, packaging manifests, and async
 hardening.
 
 ### Added
 
-- **R-115 — winget + Scoop manifest generator.** `npm run packaging:generate`
+- **R-115: winget + Scoop manifest generator.** `npm run packaging:generate`
   renders a winget singleton manifest (`packaging/winget/`) and a Scoop manifest
   (`packaging/scoop/`) from the repo version and Tauri bundle metadata, with
   placeholder installer URLs/hashes until a tagged release provides real ones.
   `npm run packaging:check` schema-validates the rendered manifests and asserts
   they track `package.json`. Public winget/Scoop submission stays tracked in
   Roadmap_Blocked.md pending a tagged GitHub release.
-- **R-112 — Running services in the Debloat review.** The debloat safety review
+- **R-112: Running services in the Debloat review.** The debloat safety review
   now probes each selected package (bounded to the first 16) for live services
   via `dumpsys` and surfaces which apps are running right now, so the reviewer
   knows a disable won't stop already-running services until reboot or
   force-stop. Handles loading, populated, none, truncated, and error states.
-- **R-109 — Archive reversibility warning.** The package-action review now
+- **R-109: Archive reversibility warning.** The package-action review now
   checks each package's installer-of-record before archiving. Android 15 can
   only restore an archived app through an installer that handles the unarchive
   intent, so packages that were sideloaded (no/`shell`/package-installer
@@ -704,7 +732,7 @@ hardening.
   unverified third-party installer are flagged with a distinct warning instead
   of being presented as cleanly reversible. Only a Play Store installer is
   treated as reversible.
-- **R-108 — CLI fleet mode.** `droidsmith-cli run`, `baseline-export`, and
+- **R-108: CLI fleet mode.** `droidsmith-cli run`, `baseline-export`, and
   `baseline-inspect` now accept `--all-devices` to fan the operation over every
   connected, authorized device instead of a single `--device SERIAL`. Each
   device is planned/applied independently; `--json` emits a `devices[]` array
@@ -717,19 +745,19 @@ hardening.
 
 ### Fixed
 
-- **Audit — Debloat apply queue keeps running after leaving the route.**
+- **Audit: Debloat apply queue keeps running after leaving the route.**
   Navigating away mid-apply now stops the queue: unmounting bumps the queue
   generation and flags cancellation, so `runQueue` returns after the current
   already-journaled action instead of silently applying the remaining packages
   in the background with no visible progress or cancel control.
-- **IMP-85 / audit — user-discovery races and dead code.** `loadUsers` in Apps
+- **IMP-85 / audit: user-discovery races and dead code.** `loadUsers` in Apps
   and Debloat now carries a last-write request guard so interleaved
   `callListUsers` responses from rapid target switches can no longer clobber the
   current device's user selection, and the unreachable "Android user discovery
   returned no users" throw (a hardcoded English literal the backend contract
   already prevents) was removed.
 
-## [0.9.10] - 2026-07-22
+## [0.9.10]: 2026-07-22
 
 Deep engineering / UX audit pass: ~40 verified fixes across backend process
 supervision, renderer async flows, localization, accessibility, and theming.
@@ -797,7 +825,7 @@ supervision, renderer async flows, localization, accessibility, and theming.
   divider-role borders are normalized to `border-white/10`, and the dead
   `darkMode: "class"` Tailwind config is removed.
 
-## [0.9.9] - 2026-07-22
+## [0.9.9]: 2026-07-22
 
 ### Changed
 
@@ -820,7 +848,7 @@ supervision, renderer async flows, localization, accessibility, and theming.
   Tuning command previews wrap safely on narrow screens, and compact shell
   actions no longer overflow the reduced navigation rail.
 
-## [0.9.8] - 2026-07-22
+## [0.9.8]: 2026-07-22
 
 Production audit: command and host-file trust boundaries, durable recovery,
 bounded process/APK handling, async UI correctness, accessibility, and startup
@@ -834,8 +862,8 @@ performance.
   mutations.
 - Reveal and Open With authorization is now registered only after Droidsmith
   successfully produces a regular artifact, then revalidates its canonical
-  identity before launching the OS. Merely choosing a save destination—and
-  later symlink retargeting—can no longer authorize an unrelated host file.
+  identity before launching the OS. Merely choosing a save destination,and
+  later symlink retargeting,can no longer authorize an unrelated host file.
 
 ### Fixed
 
@@ -877,7 +905,7 @@ performance.
   initial renderer JavaScript from about 693 KB to 358 KB, and the release gate
   now enforces a 450,000-byte ceiling.
 
-## [0.9.7] - 2026-07-21
+## [0.9.7]: 2026-07-21
 
 Roadmap drain: trusted APK signature verification, bounded local Perfetto
 captures, deterministic layout accessibility audits, renderer reliability,
@@ -885,7 +913,7 @@ portable settings, and route-level loading performance.
 
 ### Added
 
-- **R-107 — Official APK signature verification.** The offline Analyzer now
+- **R-107: Official APK signature verification.** The offline Analyzer now
   discovers a compatible Android SDK `apksigner` 0.9+ without making Java a
   requirement for its existing static report. Bounded official verification
   distinguishes verified, rejected, and Not verified outcomes; successful
@@ -895,33 +923,33 @@ portable settings, and route-level loading performance.
   only when its calculated certificate digest matches the value printed by
   `apksigner`; valid, tampered, multi-signer, and rotated fixtures plus a live
   Build Tools 37.0.0 probe cover the workflow.
-- **R-106 — Bounded Perfetto system traces.** Supported Android 10+ devices now
+- **R-106: Bounded Perfetto system traces.** Supported Android 10+ devices now
   expose fixed UI-rendering, app-startup, and system-health presets with their
   sources, duration, ring buffer, and 64 MB file ceiling shown before capture.
   Privacy-gated traces use cancellable config-stdin capture, atomic local
   commit, one-shot destinations, remote cleanup on every exit path, and local
   Reveal/Open With actions without upload or an embedded viewer.
-- **R-105 — Deterministic Layout Inspector accessibility audit.** UIAutomator
+- **R-105: Deterministic Layout Inspector accessibility audit.** UIAutomator
   captures now flag clickable nodes without labels, duplicate non-empty
   resource IDs, and density-aware touch targets smaller than 48dp. Findings
   link to exact tree nodes and raw attributes; local JSON/text exports carry a
   privacy warning and explicitly exclude color-contrast evaluation.
-- **IMP-83 — Route-level renderer chunks.** All eleven workspaces now load as
+- **IMP-83: Route-level renderer chunks.** All eleven workspaces now load as
   dynamic modules with localized loading and keyboard-recoverable failure
   states. Focus/hover and delayed adjacent-route preloads stay speculative, and
   the release gate now verifies Vite's manifest plus a 700,000-byte initial
   JavaScript ceiling (down from the prior roughly 934 KB entry).
-- **IMP-79 — Reversible display controls.** Density and night-mode changes now
+- **IMP-79: Reversible display controls.** Density and night-mode changes now
   capture the current user-bound raw/effective state before mutation, verify
   the resulting state, and persist the exact inverse in the action journal.
   Device Controls exposes an immediate Restore action, while Activity can
   safely undo the change after restart without guessing a default value.
-- **IMP-78 — Renderer crash recovery.** Added a localized top-level error
+- **IMP-78: Renderer crash recovery.** Added a localized top-level error
   boundary with reload, backend-owned diagnostics-folder reveal, and a bounded
   redacted summary that remains manually selectable if clipboard access fails.
   A failure inside the recovery UI itself degrades to dependency-free static
   guidance instead of another blank window.
-- **R-104 — Portable settings round-trip.** Expanded versioned settings exports
+- **R-104: Portable settings round-trip.** Expanded versioned settings exports
   to include language, mirror presets, Logcat query libraries, wireless history,
   and auto-reconnect. Imports validate before mutation, show a redacted
   merge/replace preview, write atomically, preserve machine-local device
@@ -929,34 +957,34 @@ portable settings, and route-level loading performance.
 
 ### Security
 
-- **IMP-77 — Bounded subprocess capture.** Consolidated short-lived ADB,
+- **IMP-77: Bounded subprocess capture.** Consolidated short-lived ADB,
   fastboot, host-diagnostic, and scrcpy probes behind a shared 4 MiB-per-stream
   collector. Output overflow now terminates and reaps the complete child tree
   with a typed error; streaming supervisors share the same bounded-tail logic.
 
 ### Fixed
 
-- **IMP-82 — Accessible status and locale contracts.** Static state panels no
+- **IMP-82: Accessible status and locale contracts.** Static state panels no
   longer announce themselves as live updates, while operation results opt into
   polite or assertive announcements. Process force-stop review is now a
   focus-trapped, Escape-dismissible modal, and APK/Wireless numbers and dates
   follow the selected locale across mobile and 200% reflow coverage.
-- **IMP-81 — Public README contract.** Removed links to local-only documentation,
+- **IMP-81: Public README contract.** Removed links to local-only documentation,
   embedded the supported source-build and unsigned-distribution guidance, and
   now distinguish the `0.9.6` source tree from the older published `v0.5.3`
   artifacts.
-- **IMP-80 — Target-bound async lifecycle.** Centralized immutable device
+- **IMP-80: Target-bound async lifecycle.** Centralized immutable device
   fingerprints, operation generations, stale-result guards, and cancellation
   registration in one renderer primitive. Apps permissions, File Manager,
   gnirehtet, Logcat, bugreport capture, and the device watcher now cancel or
   ignore work from superseded targets; the backend also closes the
   cancel-before-registration race without spawning an orphan process.
-- **IMP-76 — Locale persistence contract.** Unified the renderer, Rust settings,
+- **IMP-76: Locale persistence contract.** Unified the renderer, Rust settings,
   and isolation allowlists behind a release-checked five-locale contract. Every
   shipped locale now survives restart, while a failed save remains visible
   without undoing the user's in-session language change.
 
-## [0.9.6] - 2026-07-21
+## [0.9.6]: 2026-07-21
 
 Roadmap drain: the Debloat workspace is now split into focused workflow panels
 with the route retained as the orchestration and composition root.
@@ -974,13 +1002,13 @@ with the route retained as the orchestration and composition root.
 
 ### Refactored
 
-- **IMP-75 — Debloat workflow split.** Extracted apply review, pack preview,
+- **IMP-75: Debloat workflow split.** Extracted apply review, pack preview,
   compatibility checks, queue progress/results, queue rows, quirk guidance, and
   queue helpers into focused `src/routes/debloat/` modules. The interaction and
   safety behavior is unchanged, including unsafe-tier acknowledgement, recovery
   baseline export, cancel-after-current, retry, and quirk explanation flows.
 
-## [0.9.5] - 2026-07-21
+## [0.9.5]: 2026-07-21
 
 Inspection + lifecycle expansion: offline APK Analyzer, device-state pack
 export, richer Mirror and Process Manager, a dependency re-audit, and the
@@ -988,7 +1016,7 @@ start of the Debloat.tsx split.
 
 ### Security
 
-- **R-099 — Dependency re-audit.** Re-ran `cargo audit --deny warnings` clean
+- **R-099: Dependency re-audit.** Re-ran `cargo audit --deny warnings` clean
   over 527 crates; every ignored advisory remains an unfixable transitive
   (Tauri GTK3 / unic / build-time macro), and none affects a direct dependency
   (RUSTSEC-2026-0009 `time` does not apply to the pinned version). Refreshed the
@@ -996,17 +1024,17 @@ start of the Debloat.tsx split.
 
 ### Added
 
-- **R-103 — Per-process CPU in Process Manager.** The process table now shows a
+- **R-103: Per-process CPU in Process Manager.** The process table now shows a
   sortable `%CPU` column parsed from the existing `ps -o %CPU` snapshot
   (`ProcessInfo.cpu_percent`), alongside the RSS memory column. OEM `ps` builds
-  that omit the column show `—` rather than a fabricated value. Live graphs
+  that omit the column show `Not available` rather than a fabricated value. Live graphs
   remain out of scope (they need a device-side sampler).
-- **R-100 — scrcpy virtual-display flags.** Mirror gains version-gated
+- **R-100: scrcpy virtual-display flags.** Mirror gains version-gated
   `--display-ime-policy` (soft-keyboard placement on a virtual display, scrcpy
   3.2+) and `--no-vd-destroy-content` (keep virtual-display apps alive after the
   window closes, scrcpy 3.1+) controls, persisted in the per-device mirror
   preset and shown only when the detected scrcpy build supports them.
-- **R-098 — Export device debloat state as a shareable pack.** A new "Export
+- **R-098: Export device debloat state as a shareable pack.** A new "Export
   device state" control in the Debloat picker captures the selected device's
   currently disabled, archived, and uninstalled packages and writes them to a
   schema-valid pack YAML through a native save grant. The exported file
@@ -1014,8 +1042,8 @@ start of the Debloat.tsx split.
   phone" can be re-applied to another device after an OTA or factory reset.
   New `export_device_pack` IPC command, `pack_export_save` host-path purpose,
   and `packs::from_device_state` serializer.
-- **R-097 — Offline APK Analyzer.** A new sidebar route statically inspects a
-  local `.apk`/`.apks` chosen through the audited host-path grant — no device
+- **R-097: Offline APK Analyzer.** A new sidebar route statically inspects a
+  local `.apk`/`.apks` chosen through the audited host-path grant, no device
   required. Reports package id, version code/name, min/target/compile SDK,
   requested permissions, activity/service/receiver/provider counts, DEX file /
   defined-class / method-reference totals with a multidex (64K) flag, the
@@ -1025,9 +1053,9 @@ start of the Debloat.tsx split.
   `apk_metadata.rs`), `analyze_apk` IPC command, and `apk_analyze_open`
   host-path purpose.
 
-## [0.9.4] - 2026-07-21
+## [0.9.4]: 2026-07-21
 
-Local debloat-pack import — the network-free half of R-095.
+Local debloat-pack import, the network-free half of R-095.
 
 ### Added
 
@@ -1041,11 +1069,11 @@ Local debloat-pack import — the network-free half of R-095.
   remove control. New IPC: `import_pack`, `remove_imported_pack`; new host-path
   purpose `pack_import_open`; `PackCandidate` now reports an `imported` flag.
   This ships the dependency-free alternative called out in R-095 with no
-  outbound network capability — remote-URL fetching stays in
+  outbound network capability, remote-URL fetching stays in
   [Roadmap_Blocked.md](Roadmap_Blocked.md) pending a maintainer network-posture
   decision.
 
-## [0.9.3] - 2026-07-21
+## [0.9.3]: 2026-07-21
 
 Roadmap drain to empty: the Devices.tsx god-file split, persistent gnirehtet
 reverse-tethering, and the version-gated scrcpy capability surface (virtual
@@ -1078,12 +1106,12 @@ display, audio-source picker, camera mirroring).
 
 - **IMP-72 Devices.tsx god-file split.** Extracted the inline device panels and
   helpers from `Devices.tsx` (1,633 → 370 LOC) into focused `src/routes/devices/`
-  modules — `icons`, `DeviceHeaderActions`, `AdbHealthPanel`, `RecoveryDialog`,
+  modules, `icons`, `DeviceHeaderActions`, `AdbHealthPanel`, `RecoveryDialog`,
   `DeviceTable` (toolbar/table/skeleton/state helpers), `DeviceDetail`
-  (+ health cards), and `AuthorizePrompt` — matching the IMP-67 sub-panel split.
+  (+ health cards), and `AuthorizePrompt`, matching the IMP-67 sub-panel split.
   No behavior change (typecheck/lint/tests/ui:smoke green).
 
-## [0.9.2] - 2026-07-20
+## [0.9.2]: 2026-07-20
 
 Roadmap drain: wireless reconnect history, post-OTA drift detection, quirk
 failure hints, ProcessManager force-stop, an expanded Mirror scrcpy flag
@@ -1100,7 +1128,7 @@ coverage.
 - **R-087 Post-OTA debloat-drift detection.** Droidsmith now records each
   device's build fingerprint and, when it changes between sessions (an OTA
   update), surfaces a dismissible notice on the Apps route prompting the user to
-  review their debloat recovery baseline — packages disabled/removed before the
+  review their debloat recovery baseline, packages disabled/removed before the
   update may have returned. New IPC `observe_device_fingerprint`; the existing
   recovery-baseline review already renders the drift diff and confirmed re-apply.
 - **R-088 / R-089 Expanded Mirror scrcpy flags.** Mirror now exposes
@@ -1110,8 +1138,8 @@ coverage.
   persist in per-device mirror presets, validated (crop/orientation/timeout/
   codec reject malformed input, including shell metacharacters in crop), and
   asserted in the scrcpy arg-construction unit tests. (The remaining
-  version-gated capability surface — virtual/new display, camera mirroring,
-  audio-source picker — stays under R-089.)
+  version-gated capability surface, virtual/new display, camera mirroring,
+  audio-source picker, stays under R-089.)
 - **R-090 ProcessManager force-stop.** Process rows that resolve to an app
   package now offer a confirmed **Force-stop** action (`am force-stop --user 0`)
   routed through the audited action planner/journal. Native binaries, kernel
@@ -1129,17 +1157,17 @@ coverage.
   attempts each saved endpoint once when the route first loads. New IPC:
   `list_wireless_history`, `forget_wireless_endpoint`, `set_wireless_auto_reconnect`.
 
-## [0.9.1] - 2026-07-20
+## [0.9.1]: 2026-07-20
 
-Deep audit pass — correctness, security, UX, performance, and maintainability
+Deep audit pass, correctness, security, UX, performance, and maintainability
 fixes across primary and secondary surfaces.
 
 ### Security
 
 - The console shell gate classified commands by their head token only, but adb
   joins argv and runs it through the device `sh -c`, so a read-only head
-  (`getprop`, `cat`, …) followed by a token carrying `; | & $ \` ( ) < >` — for
-  example the console splitting `getprop; pm uninstall x` on whitespace —
+  (`getprop`, `cat`, …) followed by a token carrying `; | & $ \` ( ) < >`, for
+  example the console splitting `getprop; pm uninstall x` on whitespace,
   executed a hidden mutation while bypassing the reviewed/journaled executor.
   `classify_shell` now treats any shell control metacharacter as non-read-only,
   so `shell_run` rejects it and `plan_shell_action` routes it through review.
@@ -1147,7 +1175,7 @@ fixes across primary and secondary surfaces.
 ### Fixed
 
 - Reverse-tethering (`Share Internet`) sessions were orphaned when the selected
-  device changed or the route unmounted — the toggle remounts per device, so a
+  device changed or the route unmounted, the toggle remounts per device, so a
   running gnirehtet session lost its only control surface and a later remount
   would spawn a duplicate that fails on the busy relay port. The session is now
   stopped in the effect cleanup (and a "not tracked" stop of an already-reaped
@@ -1155,7 +1183,7 @@ fixes across primary and secondary surfaces.
 - The permissions panel is not remounted when the inspected package changes, so
   a slow list/set request for the previous package could overwrite the current
   one; added a generation guard that drops stale resolutions.
-- The Tuning editor rendered raw developer tokens (`invalid`, `nan`, `0.5–2`) as
+- The Tuning editor rendered raw developer tokens (`invalid`, `nan`, `0.5-2`) as
   its inline validation message; these are now translated (all five locales).
 - The Profiles ordered-action list and dry-run diff showed the raw action enum
   (`uninstall_for_user`) while the selector showed the translated label; both
@@ -1167,7 +1195,7 @@ fixes across primary and secondary surfaces.
 ### Performance
 
 - The installed-package table filtered and re-rendered every interactive row
-  (each mounting an IntersectionObserver) on every search keystroke — real jank
+  (each mounting an IntersectionObserver) on every search keystroke, real jank
   on devices with hundreds of packages. Filtering now uses a deferred search
   value and memoized collections so the heavy render is lower-priority.
 
@@ -1181,7 +1209,7 @@ fixes across primary and secondary surfaces.
 - Normalized the Rust backend with rustfmt (accumulated drift across several
   modules) so `cargo fmt --check` passes.
 
-## [0.9.0] - 2026-07-20
+## [0.9.0]: 2026-07-20
 
 Reverse-tethering + maintainability batch: a gnirehtet "Share Internet" toggle,
 the completed Devices/Apps god-file split, and an RTL logical-property
@@ -1201,9 +1229,9 @@ foundation across every route.
 ### Refactored
 
 - Laid the RTL layout foundation (R-085). Every route and shared component now
-  uses CSS logical properties instead of physical ones — `ml/mr → ms/me`,
+  uses CSS logical properties instead of physical ones, `ml/mr → ms/me`,
   `pl/pr → ps/pe`, `left/right → start/end`, `text-left/right → text-start/end`,
-  and `border-l/r → border-s/e` (including logical border colors) — so a future
+  and `border-l/r → border-s/e` (including logical border colors), so a future
   RTL locale mirrors the layout automatically. Direction already propagates to
   `<html dir>` from each locale's `dir` metadata (`src/lib/i18n.ts`); Tailwind
   3.4's built-in logical utilities need no config change. No physical
@@ -1220,7 +1248,7 @@ foundation across every route.
   route-state types collected in `src/routes/apps/types.ts`. Behavior, rendered
   output, and the `ui:smoke` flows are unchanged.
 
-## [0.8.0] - 2026-07-20
+## [0.8.0]: 2026-07-20
 
 Device health + tuning batch: a battery/storage/thermal dashboard, a new
 Tuning route for safe system-settings edits, curated debloat presets, an
@@ -1281,7 +1309,7 @@ accessibility pass (forced-colors + ARIA grid), a repaired end-to-end
   each with its match count, and the selection remains fully reviewable/editable
   before applying (IMP-63).
 
-## [0.7.0] - 2026-07-18
+## [0.7.0]: 2026-07-18
 
 Design-system unification, locale expansion, and OEM pack coverage batch.
 
@@ -1320,7 +1348,7 @@ Design-system unification, locale expansion, and OEM pack coverage batch.
 - Console hint text now explains that arrow-key history recall skips
   failed commands.
 
-## [0.6.0] - 2026-07-18
+## [0.6.0]: 2026-07-18
 
 Research-driven feature batch from the 2026-07-18 competitive analysis
 (25+ competitors, 38+ community signals, Android 16 / scrcpy 4.1 /
@@ -1358,7 +1386,7 @@ platform-tools 37.0.1 updates reviewed).
 - Auto-update (R-075) moved to Roadmap_Blocked.md: requires an Ed25519
   keypair and release-manifest hosting that depend on R-006.
 
-## [0.5.3] - 2026-07-17
+## [0.5.3]: 2026-07-17
 
 ### Fixed
 
@@ -1370,7 +1398,7 @@ platform-tools 37.0.1 updates reviewed).
   enriched set is rejected (losing only uid/installer on older devices), and
   the archived/retained enrichment passes degrade instead of failing the list.
 
-## [0.5.2] - 2026-07-17
+## [0.5.2]: 2026-07-17
 
 Engineering, security, and product-quality audit pass. No feature changes;
 correctness, accessibility, and design-consistency hardening throughout.
@@ -1421,7 +1449,7 @@ correctness, accessibility, and design-consistency hardening throughout.
 - Normalized off-theme `rose-*`/`slate-*` colors to the `red-*`/`anvil-*`
   tokens, fixed a broken `forge-400` focus ring, and removed dead scaffolding.
 
-## [0.5.1] - 2026-07-17
+## [0.5.1]: 2026-07-17
 
 ### Fixed
 
@@ -1431,7 +1459,7 @@ correctness, accessibility, and design-consistency hardening throughout.
 - Added a headless production-path regression that forces the watcher to fail
   persistently and verifies the fallback still renders the connected device.
 
-## [0.5.0] - 2026-07-17
+## [0.5.0]: 2026-07-17
 
 Brings the Devices workspace into close parity with the premium desktop
 reference while retaining the native window frame and existing operational
@@ -1450,7 +1478,7 @@ workflows.
 - Regenerated the README screenshots after desktop, mobile, command-palette,
   and Russian 200% reflow verification.
 
-## [0.4.0] - 2026-07-17
+## [0.4.0]: 2026-07-17
 
 Rebuilds the desktop visual system around readable typography, compact
 navigation, quiet status language, and denser task-first layouts.
@@ -1469,7 +1497,7 @@ navigation, quiet status language, and denser task-first layouts.
 - Added the image-generated premium UI reference used to guide the implemented
   shell and Devices layout.
 
-## [0.3.0] - 2026-07-16
+## [0.3.0]: 2026-07-16
 
 Adds an opt-in incremental single-APK install mode with a clean fallback, and
 corrects a stale roadmap blocker (app-bundle install was already shipped).
@@ -1482,13 +1510,13 @@ corrects a stale roadmap blocker (app-bundle install was already shipped).
   cleanly to a normal install rather than failing, and the chosen mode
   (incremental, normal, or incremental-fell-back-to-normal) is both surfaced in
   the result and recorded in the install operation audit (schema v3). A genuine
-  package failure — a signature or downgrade rejection — is reported as-is
+  package failure, a signature or downgrade rejection, is reported as-is
   instead of being retried over a normal push. (App-bundle install for
   `.apks`/`.xapk`/`.apkm` archives was already shipped via atomic PackageInstaller
   sessions; the prior blocked note referencing a single-shot install path was
   stale.)
 
-## [0.2.0] - 2026-07-16
+## [0.2.0]: 2026-07-16
 
 Adds the versioned typed settings store, saveable structured Logcat query
 presets (with package/process-name filtering), and a read-only layout
@@ -1503,9 +1531,9 @@ plurals and the documentation screenshots.
   mocked-native smoke state via `npm run docs:screenshots`, and the smoke run now
   asserts the documented routes never render the desktop-required placeholder and
   survive a narrow (390px) viewport.
-- Russian plural output is now grammatically correct for counts 2–4 (IMP-36).
+- Russian plural output is now grammatically correct for counts 2-4 (IMP-36).
   Every pluralized string now defines the full CLDR set (`_one`/`_few`/`_many`/
-  `_other`) in both locales — e.g. "2 устройства" (few) instead of the previous
+  `_other`) in both locales, e.g. "2 устройства" (few) instead of the previous
   "2 устройств" (many). English `_few`/`_many` mirror `_other`, so key parity
   between the two locales is preserved.
 - Inline device-control results (screenshot, density, force-dark, file pull) now
@@ -1557,7 +1585,7 @@ plurals and the documentation screenshots.
   panel, and error panel (with recovery), plus a stale-completion / mid-request
   target-switch race: a package listing held in flight is superseded by a device
   hotplug, and the detached workspace hides its destructive controls and never
-  lets the stale response mutate it or raise a console error. The smoke harness
+  lets the stale response mutate it or raise a console error. The smoke suite
   gained gate/release, forced-failure, and empty-listing mock controls to drive
   these states deterministically.
 - Logcat gained saveable, versioned query presets (IMP-59). Presets filter on
@@ -1567,7 +1595,7 @@ plurals and the documentation screenshots.
   identically in the renderer and the Rust store). Presets can be saved, renamed,
   duplicated, reordered, deleted, and imported/exported as JSON; they live in the
   global scope or a per-device scope keyed by hashed identity, and only the query
-  definition is persisted — never captured log lines. A bounded "recently
+  definition is persisted, never captured log lines. A bounded "recently
   applied" history and read-only built-in `Crashes & ANRs` / `Stack traces`
   presets (approximating Android Studio's `is:crash` / `is:stacktrace`) ship with
   fixture coverage. The logcat stream moved from `-v brief` to `-v threadtime` so
@@ -1580,7 +1608,7 @@ plurals and the documentation screenshots.
   before migrating, quarantines corrupt data without blocking launch, and only
   clears the legacy renderer keys once the durable import succeeds. A new
   Diagnostics "Settings data" card offers scoped export (through a backend-issued
-  save grant — the internal settings path never crosses IPC) and scoped reset for
+  save grant, the internal settings path never crosses IPC) and scoped reset for
   language, mirror presets, or all. The store, migration, quarantine, and
   export/reset paths are covered by Rust and renderer tests plus IPC isolation
   policy.
@@ -1591,7 +1619,7 @@ plurals and the documentation screenshots.
 - Debloat pack preview now filters entries by a live search over package id,
   description, and labels (not just codename), and the final safety review
   requires an explicit acknowledgement checkbox before any unsafe-tier package
-  can be applied — the confirm button stays disabled until the risk is accepted.
+  can be applied, the confirm button stays disabled until the risk is accepted.
   Risk tiers and per-entry descriptions were already rendered; this closes the
   search and high-risk-acknowledgement gaps. The rendered-route smoke now asserts
   the unsafe confirm button is gated (2026-07-15).
@@ -1812,7 +1840,7 @@ plurals and the documentation screenshots.
 ### Accessibility
 
 - Localized the entire Devices control surface (virtual remote, screenshot,
-  display tuning, process manager, file manager, network inspector) — roughly 80
+  display tuning, process manager, file manager, network inspector), roughly 80
   previously hard-coded English strings now flow through i18n with English and
   Russian parity (IMP-33). Process-table sort headers are now real keyboard-
   focusable buttons with `aria-sort` instead of click-only `<th>` cells.
@@ -1891,14 +1919,14 @@ plurals and the documentation screenshots.
 - Localized the last hard-coded Devices tooltip and gave network-inspector rows
   a stable composite key instead of a bare array index.
 - Fixed the network inspector showing a bogus `state = "0"` for stateless
-  (UDP / netstat-style) sockets — the parser fell back to the numeric recv-q
+  (UDP / netstat-style) sockets, the parser fell back to the numeric recv-q
   column when no TCP state was present; it now reports `UNCONN`.
 - Made the crash-log panic hook idempotent (installs once) so a panic is never
   recorded multiple times if diagnostics setup runs more than once.
 - Fixed cross-device state bleed in the Devices route. The process list, file
   listing, and network sockets are now reset when you switch devices (the
-  controls panel is keyed by serial), so device A's data can no longer be shown
-  — or acted on — while device B is selected.
+  controls panel is keyed by serial), so device A's data can no longer be shown,
+  or acted on, while device B is selected.
 - Mirror now resets its tracked session when you switch devices, so a running
   session for one device no longer blocks launching on another.
 - Process manager, file manager, network inspector, and the permissions panel
@@ -1906,7 +1934,7 @@ plurals and the documentation screenshots.
   falling back to an empty state (common on devices that restrict `ss`/`ps` or
   reject a `pm grant`). Fastboot variable queries likewise show a clear message
   when the query runs but returns nothing.
-- Fixed fastboot variable values not displaying after the getvar backend fix —
+- Fixed fastboot variable values not displaying after the getvar backend fix,
   the frontend still expected a `key: value` line and dropped the now-cleaned
   value; it now uses the returned value directly.
 - Logcat now tracks and clears its poll timer on stop/unmount and resets the
@@ -1928,7 +1956,7 @@ plurals and the documentation screenshots.
   renderer passed relative host paths that the backend (correctly) rejects. Both
   now obtain their destination from the native save dialog, so the renderer never
   dictates an arbitrary host path. The screenshot device-side temp file is now
-  unique per capture and always removed — even when the pull fails — so a partial
+  unique per capture and always removed, even when the pull fails, so a partial
   capture never leaks onto `/sdcard`.
 - Fixed `fastboot getvar` returning an empty value. fastboot writes successful
   variable values to stderr while exiting 0, but the shared runner returned
@@ -1938,23 +1966,23 @@ plurals and the documentation screenshots.
   stderr (stdout fallback) without a blind retry, preserves both streams on
   failure, and reports timeouts explicitly. Fake-fastboot tests cover success,
   error, and timeout.
-- Fixed Vite `envPrefix` literal asterisk — `TAURI_ENV_*` was treated as a
+- Fixed Vite `envPrefix` literal asterisk, `TAURI_ENV_*` was treated as a
   literal string, not a glob. Changed to `TAURI_ENV_` for correct prefix matching.
 - Fixed `index.html` body using `bg-zinc-950` instead of the app's actual
   `bg-[#08090d]` theme color, preventing a flash of wrong background on load.
   Changed `color-scheme` meta from `dark light` to `dark` (dark-only app).
-- Fixed Logcat polling stale closure — `fetchLogcat`'s recursive `setTimeout`
+- Fixed Logcat polling stale closure, `fetchLogcat`'s recursive `setTimeout`
   now reads `selectedSerial` and `tagFilter` from refs instead of capturing
   them in the closure, so changes take effect without restarting the tail.
   Logcat fetch errors are now surfaced as a visible badge instead of swallowed.
-- Fixed Console history key collision — entries now use a monotonic counter
+- Fixed Console history key collision, entries now use a monotonic counter
   instead of `Date.now()` timestamps that could collide on rapid submissions.
 - Fixed `loadDevices` in all six device-dependent routes (Apps, Debloat, Mirror,
-  Console, Logcat, Fastboot) — `selectedSerial` in the `useCallback` dependency
+  Console, Logcat, Fastboot), `selectedSerial` in the `useCallback` dependency
   array caused unnecessary device re-scans on every serial change.
-- Fixed `Card` component `className` override — `className || "p-4"` lost the
+- Fixed `Card` component `className` override, `className || "p-4"` lost the
   default padding when any truthy className was passed. Changed to `??`.
-- Fixed `is_iso_date` parser false-positive — now requires `YYYY-MM-DD` pattern
+- Fixed `is_iso_date` parser false-positive, now requires `YYYY-MM-DD` pattern
   instead of matching any 8+ char string containing a hyphen.
 - `valid_package_name` now accepts hyphens, matching real OEM package names.
 - Finished scrcpy sessions are now removed from the global session map during
@@ -2026,13 +2054,13 @@ plurals and the documentation screenshots.
   summarized in `RESEARCH_REPORT.md` with the previous research files archived
   under `docs/archive/research/`.
 
-## [0.1.0] — 2026-05-25
+## [0.1.0]: 2026-05-25
 
 First tagged release. Pre-built Windows installer + portable `.exe`
 attached to the GitHub release. Includes everything in the Phase 1+
 end-to-end slice below plus the Phase 0 scaffold (R-001..R-002, IMP-01..IMP-07).
 
-### 2026-05-25 — Phase 1+ end-to-end slice
+### 2026-05-25: Phase 1+ end-to-end slice
 
 The thin slice from device detection through action queue + journal,
 plus the pack / quirks framework and the headless CLI. 67 Rust tests
@@ -2078,7 +2106,7 @@ and 5 frontend tests, all gates green.
 - `packs::lint` validates name/description/version, package id
   validity, duplicate detection, depends_on/needed_by id validity,
   android_min ≤ android_max.
-- `droidsmith-pack-lint` binary — exit 0 clean, 1 issues, 2 usage.
+- `droidsmith-pack-lint` binary, exit 0 clean, 1 issues, 2 usage.
 - `packs/_example.yaml` seeds the contributor copy.
 - New dep: `serde_yml 0.0.12`.
 
@@ -2086,7 +2114,7 @@ and 5 frontend tests, all gates green.
 
 - `quirks::{Quirk, QuirkMatch, Mitigation, DeviceContext}` with
   AND-across-fields / OR-within-field substring matching.
-- Case-insensitive ROM substring matching so "MIUI 14 — HyperOS Preview"
+- Case-insensitive ROM substring matching so "MIUI 14, HyperOS Preview"
   matches `rom: ["hyperos"]`.
 - `explain_failure` Tauri command.
 - `quirks/hyperos.yaml` seed rule: the documented Xiaomi
@@ -2106,11 +2134,11 @@ and 5 frontend tests, all gates green.
 
 - `crate::time::{format_utc_rfc3339, iso_utc_now}` extracted so the
   CLI bin, journal layer, and diagnostics module all stamp identically.
-  Hand-rolled Howard Hinnant date algorithm — no `chrono`/`time` dep.
+  Hand-rolled Howard Hinnant date algorithm, no `chrono`/`time` dep.
 
 **Sidecar fetch (R-010 scaffolding):**
 
-- `scripts/fetch-platform-tools.ps1` (Windows) and `.sh` (POSIX) —
+- `scripts/fetch-platform-tools.ps1` (Windows) and `.sh` (POSIX),
   download, SHA-256 verify (placeholders pinned), extract, stage as
   per-target-triple sidecars under `src-tauri/binaries/`.
 - AdbWinApi DLL handling on Windows.
@@ -2121,7 +2149,7 @@ and 5 frontend tests, all gates green.
 
 - `src/lib/tauri.ts` exposes typed wrappers around `invoke()` plus
   `inTauri()` for graceful "running in plain Vite" fallback.
-- `src/routes/Devices.tsx` is fully live — calls `list_devices`,
+- `src/routes/Devices.tsx` is fully live, calls `list_devices`,
   renders empty/error/no-adb states, refresh button.
 - `src/routes/placeholders.tsx` has dedicated components for Apps,
   Debloat, Mirror, Console, Logcat, Fastboot. Each lists planned
@@ -2132,23 +2160,23 @@ and 5 frontend tests, all gates green.
 
 **POSIX dev-mirror (IMP-07):**
 
-- `scripts/dev-mirror.sh` — rsync-based, sentinel-guarded,
+- `scripts/dev-mirror.sh`, rsync-based, sentinel-guarded,
   `--watch`/`--reverse`/`--force`/`--dest` flags. Defaults to
   `~/.droidsmith-mirror`. Watch mode polls at 1s using `find -printf`
-  for a coarse mtime fingerprint — dependency-free.
+  for a coarse mtime fingerprint, dependency-free.
 
 ### Added
 
-- **R-003** GitHub Actions CI matrix (`.github/workflows/ci.yml`) — Rust on Ubuntu/Windows/macOS running `cargo fmt --check`, `cargo check`, `cargo clippy --all-targets -D warnings`, `cargo test --all-targets`, plus a separate frontend job (typecheck, lint, prettier, vitest).
+- **R-003** GitHub Actions CI matrix (`.github/workflows/ci.yml`), Rust on Ubuntu/Windows/macOS running `cargo fmt --check`, `cargo check`, `cargo clippy --all-targets -D warnings`, `cargo test --all-targets`, plus a separate frontend job (typecheck, lint, prettier, vitest).
 - **R-004** Lint enforcement: `[lints.clippy] all = warn`, `[lints.rust] unsafe_code = deny` with a single allowed FFI site in `diagnostics::show_native`, `src-tauri/rustfmt.toml` pinned.
 - **R-005** Contributor surface: [`CONTRIBUTING.md`](CONTRIBUTING.md), [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md) (Contributor Covenant 2.1), [`SECURITY.md`](SECURITY.md), [`.github/ISSUE_TEMPLATE/bug.md`](.github/ISSUE_TEMPLATE/bug.md), [`.github/ISSUE_TEMPLATE/feature.md`](.github/ISSUE_TEMPLATE/feature.md), [`.github/PULL_REQUEST_TEMPLATE.md`](.github/PULL_REQUEST_TEMPLATE.md).
 - **R-007 floor / F-NEW-10** File-only rotating crash log (1MB × 5 backups) at the OS config directory via [`diagnostics::install_panic_hook`](src-tauri/src/diagnostics.rs). Opt-in upload still deferred to R-073.
 - **LICENSE-THIRD-PARTY.md** seeded with placeholders for `adb` / `fastboot` / `scrcpy` / UAD-NG list.
-- Vitest harness ([`vitest.config.ts`](vitest.config.ts), [`src/App.test.tsx`](src/App.test.tsx)) with a milestone-mapping smoke test that fails if `App.tsx` nav drifts from the roadmap.
+- Vitest setup ([`vitest.config.ts`](vitest.config.ts), [`src/App.test.tsx`](src/App.test.tsx)) with a milestone-mapping smoke test that fails if `App.tsx` nav drifts from the roadmap.
 
 ### Changed
 
-- **IMP-01** [`src-tauri/src/lib.rs`](src-tauri/src/lib.rs) no longer `.expect()`s the Tauri builder. Errors route through [`diagnostics::fatal_dialog`](src-tauri/src/diagnostics.rs) — native message box on each OS, `eprintln!` fallback in headless contexts.
+- **IMP-01** [`src-tauri/src/lib.rs`](src-tauri/src/lib.rs) no longer `.expect()`s the Tauri builder. Errors route through [`diagnostics::fatal_dialog`](src-tauri/src/diagnostics.rs), native message box on each OS, `eprintln!` fallback in headless contexts.
 - **IMP-02** [`src-tauri/capabilities/default.json`](src-tauri/capabilities/default.json) scoped from `shell:default` to `shell:allow-execute` with three named sidecars (`adb`, `fastboot`, `scrcpy`) and regex arg validators. Renderer cannot spawn arbitrary commands.
 - **IMP-03** [`src-tauri/Cargo.toml`](src-tauri/Cargo.toml): `thiserror 1 → 2`, `which 6 → 8`, added `os_info 3`. MSRV bumped 1.77 → 1.81 so `PanicHookInfo` lints cleanly.
 - **IMP-04** [`commands::heartbeat`](src-tauri/src/commands.rs) now returns `{version, os{family,version,arch}, tauri_version, rust_version, app_data_dir, adb{path,source,version}}`. Frontend renders as a 7-row key/value grid.
@@ -2157,39 +2185,39 @@ and 5 frontend tests, all gates green.
 
 ### Fixed
 
-- **A1 — race / pipe-buffer deadlock in `adb version` probe.** [`adb::probe_version`](src-tauri/src/adb.rs) previously polled `try_wait` for up to 2 s and only read stdout afterward. A verbose `adb version` could fill the OS pipe buffer (~64 KB on Windows) and block the child waiting for a reader, producing a phantom timeout. Now reads on a worker thread concurrently with the wait loop.
-- **A2 — false promise of crash log on Tauri builder error.** [`crate::run`](src-tauri/src/lib.rs) showed a dialog saying "a crash log was written" but the panic hook only fires on actual `panic!()`. Builder `Err` returns slipped past silently. Now writes through the new [`diagnostics::log_fatal`](src-tauri/src/diagnostics.rs) helper and the dialog quotes the real log path.
-- **A3 — `iso_now()` was lying.** The function name implied ISO-8601 but returned raw epoch seconds. Now emits proper `YYYY-MM-DDTHH:MM:SSZ` UTC via Howard Hinnant's date algorithm; tests cover epoch, leap-year, and post-century-leap anchors.
-- **A4 — panic hook silently disabled on minimal environments.** [`fallback_log_dir`](src-tauri/src/diagnostics.rs) previously returned `Option<PathBuf>` and skipped installing the hook on any container without `APPDATA` / `XDG_CONFIG_HOME` / `HOME`. Now always returns a path (falling back to `std::env::temp_dir().join("Droidsmith")`), guaranteeing the hook installs everywhere.
-- **A5 — silent log rotate failures.** Rotation in [`diagnostics::rotate_if_needed`](src-tauri/src/diagnostics.rs) used to swallow `rename` errors, which would lose subsequent crash records if a file lock wedged the rename. Now logs the failure to stderr while preserving the existing crash log.
-- **A8 — `adb` missed on macOS Homebrew installs.** GUI-launched apps don't inherit shell `PATH`, so `brew install android-platform-tools` was invisible. The resolver now also tries `/opt/homebrew/bin/adb` (Apple Silicon) and `/usr/local/bin/adb` (Intel) under a new `ResolveSource::Homebrew`.
-- **A8b — `adb` missed on Debian/Ubuntu `apt install adb`.** The Linux candidate list now also tries `/usr/bin/adb`.
-- **A9 — empty env vars produced bogus candidate paths.** On Windows `set ANDROID_HOME=` leaves the var defined-but-empty; the resolver was emitting `/platform-tools/adb` candidates. Now centralized in `read_env_path` which treats empty as unset.
-- **A10 — test mutated process-global env.** The previous `candidate_paths_includes_android_home_when_set` test set/cleared `ANDROID_HOME`, which is unsafe under `cargo test` parallelism. Refactored `candidate_paths` to take a `ResolverEnv` struct so tests pass synthetic env without touching process state.
-- **B1 — AppleScript escape was incomplete.** Newlines and tabs in titles/messages would produce malformed `osascript` invocations. Now escapes `\\`, `"`, `\n`, `\r`, `\t`.
-- **B6 — `dev-mirror.ps1` could wipe an unrelated folder.** `robocopy /MIR` was happy to delete arbitrary destination contents. Added a `.droidsmith-mirror` sentinel: if the destination exists, is non-empty, and lacks the sentinel, the script refuses and points to `-Force`.
-- **C1 — heartbeat error had no retry.** A failed `invoke("heartbeat")` left the user staring at a red string with no next action. Now offers a Retry button, a typed `LoadState` machine (`loading | ok | error`), `aria-live` for the panel, and `role="alert"` on the error message.
-- **C6 — invisible keyboard focus.** Tailwind strips the browser focus ring; the nav buttons had no replacement. Added `focus-visible:ring-2 focus-visible:ring-anvil-300`.
-- **C7 — Windows paths broke mid-word in the heartbeat panel.** Replaced `break-all` with `break-words` plus a `​` injector at `/` and `\` so paths wrap at segment boundaries.
-- **D1 — `os_info::get()` re-read `/etc/os-release` (or the Windows registry) on every heartbeat.** Now cached behind `OnceLock`.
-- **D2 — `adb version` probe ran on every heartbeat.** The whole `AdbResolution` is now cached behind `OnceLock` for the process lifetime.
-- **E6 — smoke test duplicated the milestone list.** Tests now `import { NAV_ITEMS } from "./App"` and assert structural invariants (count, milestone format, descriptions, label uniqueness, ascending order).
-- **TS-config — `tsc -b` was rejecting the project**. `tsconfig.json` referenced `tsconfig.node.json` but the latter wasn't composite-compliant. Consolidated into a single `tsconfig.json` covering `src` + all root configs, with `@types/node` added so `vite.config.ts` typechecks.
-- **Vitest plugin type clash** — using `@vitejs/plugin-react` in `vitest.config.ts` caused a duplicate `Plugin<any>` clash between project vite 6 and vitest's bundled vite 5. Switched to esbuild's built-in `jsx: "automatic"` (we don't render in tests, only resolve `.tsx` modules).
-- **Lint flat-config script** — `eslint src --ext .ts,.tsx` is the v8-era syntax; flat-config wants just `eslint .`. Updated, added matching `format:check` / `format:write` scripts.
+- **A1: race / pipe-buffer deadlock in `adb version` probe.** [`adb::probe_version`](src-tauri/src/adb.rs) previously polled `try_wait` for up to 2 s and only read stdout afterward. A verbose `adb version` could fill the OS pipe buffer (~64 KB on Windows) and block the child waiting for a reader, producing a phantom timeout. Now reads on a worker thread concurrently with the wait loop.
+- **A2: false promise of crash log on Tauri builder error.** [`crate::run`](src-tauri/src/lib.rs) showed a dialog saying "a crash log was written" but the panic hook only fires on actual `panic!()`. Builder `Err` returns slipped past silently. Now writes through the new [`diagnostics::log_fatal`](src-tauri/src/diagnostics.rs) helper and the dialog quotes the real log path.
+- **A3: `iso_now()` was lying.** The function name implied ISO-8601 but returned raw epoch seconds. Now emits proper `YYYY-MM-DDTHH:MM:SSZ` UTC via Howard Hinnant's date algorithm; tests cover epoch, leap-year, and post-century-leap anchors.
+- **A4: panic hook silently disabled on minimal environments.** [`fallback_log_dir`](src-tauri/src/diagnostics.rs) previously returned `Option<PathBuf>` and skipped installing the hook on any container without `APPDATA` / `XDG_CONFIG_HOME` / `HOME`. Now always returns a path (falling back to `std::env::temp_dir().join("Droidsmith")`), guaranteeing the hook installs everywhere.
+- **A5: silent log rotate failures.** Rotation in [`diagnostics::rotate_if_needed`](src-tauri/src/diagnostics.rs) used to swallow `rename` errors, which would lose subsequent crash records if a file lock wedged the rename. Now logs the failure to stderr while preserving the existing crash log.
+- **A8: `adb` missed on macOS Homebrew installs.** GUI-launched apps don't inherit shell `PATH`, so `brew install android-platform-tools` was invisible. The resolver now also tries `/opt/homebrew/bin/adb` (Apple Silicon) and `/usr/local/bin/adb` (Intel) under a new `ResolveSource::Homebrew`.
+- **A8b: `adb` missed on Debian/Ubuntu `apt install adb`.** The Linux candidate list now also tries `/usr/bin/adb`.
+- **A9: empty env vars produced bogus candidate paths.** On Windows `set ANDROID_HOME=` leaves the var defined-but-empty; the resolver was emitting `/platform-tools/adb` candidates. Now centralized in `read_env_path` which treats empty as unset.
+- **A10: test mutated process-global env.** The previous `candidate_paths_includes_android_home_when_set` test set/cleared `ANDROID_HOME`, which is unsafe under `cargo test` parallelism. Refactored `candidate_paths` to take a `ResolverEnv` struct so tests pass synthetic env without touching process state.
+- **B1: AppleScript escape was incomplete.** Newlines and tabs in titles/messages would produce malformed `osascript` invocations. Now escapes `\\`, `"`, `\n`, `\r`, `\t`.
+- **B6: `dev-mirror.ps1` could wipe an unrelated folder.** `robocopy /MIR` was happy to delete arbitrary destination contents. Added a `.droidsmith-mirror` sentinel: if the destination exists, is non-empty, and lacks the sentinel, the script refuses and points to `-Force`.
+- **C1: heartbeat error had no retry.** A failed `invoke("heartbeat")` left the user staring at a red string with no next action. Now offers a Retry button, a typed `LoadState` machine (`loading | ok | error`), `aria-live` for the panel, and `role="alert"` on the error message.
+- **C6: invisible keyboard focus.** Tailwind strips the browser focus ring; the nav buttons had no replacement. Added `focus-visible:ring-2 focus-visible:ring-anvil-300`.
+- **C7: Windows paths broke mid-word in the heartbeat panel.** Replaced `break-all` with `break-words` plus a `​` injector at `/` and `\` so paths wrap at segment boundaries.
+- **D1: `os_info::get()` re-read `/etc/os-release` (or the Windows registry) on every heartbeat.** Now cached behind `OnceLock`.
+- **D2: `adb version` probe ran on every heartbeat.** The whole `AdbResolution` is now cached behind `OnceLock` for the process lifetime.
+- **E6: smoke test duplicated the milestone list.** Tests now `import { NAV_ITEMS } from "./App"` and assert structural invariants (count, milestone format, descriptions, label uniqueness, ascending order).
+- **TS-config: `tsc -b` was rejecting the project**. `tsconfig.json` referenced `tsconfig.node.json` but the latter wasn't composite-compliant. Consolidated into a single `tsconfig.json` covering `src` + all root configs, with `@types/node` added so `vite.config.ts` typechecks.
+- **Vitest plugin type clash**. Using `@vitejs/plugin-react` in `vitest.config.ts` caused a duplicate `Plugin<any>` clash between project vite 6 and vitest's bundled vite 5. Switched to esbuild's built-in `jsx: "automatic"` (we don't render in tests, only resolve `.tsx` modules).
+- **Lint flat-config script**, `eslint src --ext .ts,.tsx` is the v8-era syntax; flat-config wants just `eslint .`. Updated, added matching `format:check` / `format:write` scripts.
 
 ### Removed
 
 - `tsconfig.node.json` (consolidated into root `tsconfig.json`).
-- Dead `invalidate_cache_for_tests()` stub — tests bypass the cache via the new pure `resolve()` entry point.
-- `jsdom` devDep — test harness runs in Node now.
+- Dead `invalidate_cache_for_tests()` stub, tests bypass the cache via the new pure `resolve()` entry point.
+- `jsdom` devDep, tests run in Node now.
 
 ### Tooling
 
 - `.github/dependabot.yml`: weekly cargo + npm sweeps, monthly GitHub Actions, with grouping rules so the Tauri ecosystem ships one combined PR per cycle instead of a flood.
 - CI runners switched from `ubuntu-22.04` → `ubuntu-latest`, `macos-14` → `macos-latest`. Added `--locked` to cargo invocations so dependency drift on CI is caught early. Added `permissions: contents: read` and per-job timeouts.
 
-## [0.0.1] — 2026-05-25 — Scaffold complete
+## [0.0.1], 2026-05-25: Scaffold complete
 
 Foundational milestone: repo created, planning surface in place, Tauri shell
 builds cleanly on Windows. Nothing user-facing works yet; this is the start
@@ -2197,8 +2225,8 @@ line for feature work.
 
 ### Added
 
-- **R-001** Repository scaffolding: [README.md](README.md), [ROADMAP.md](ROADMAP.md), planning research, [LICENSE](LICENSE), [.gitignore](.gitignore) — commit `0a82c63`.
-- **R-002** Tauri 2 + React + TS + Vite + Tailwind scaffold — commit `4f7b584`.
+- **R-001** Repository scaffolding: [README.md](README.md), [ROADMAP.md](ROADMAP.md), planning research, [LICENSE](LICENSE), [.gitignore](.gitignore), commit `0a82c63`.
+- **R-002** Tauri 2 + React + TS + Vite + Tailwind scaffold, commit `4f7b584`.
   - Rust backend with `shell` + `dialog` plugins, `heartbeat` IPC, `adb::locate_adb` helper across Win/macOS/Linux paths.
   - React 18 + TypeScript frontend with sidebar shell and live heartbeat panel.
   - Tailwind 3 with custom `anvil` palette, ESLint flat config, Prettier, EditorConfig.
@@ -2206,7 +2234,7 @@ line for feature work.
   - HGFS dev-mirror script ([`scripts/dev-mirror.ps1`](scripts/dev-mirror.ps1)) with `-Watch` / `-Reverse` modes for VMware Shared Folders development.
   - `dist/index.html` placeholder so `tauri::generate_context!` validates before the first `npm run build`.
   - [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) covering native and HGFS dev loops.
-- **Research deep-dive** — commit `dd59888` — evidence-grounded feature and improvement plan, now summarized in [RESEARCH_REPORT.md](RESEARCH_REPORT.md) and archived under `docs/archive/research/`, with prioritized roadmap, IMP-01..IMP-07, F-NEW-01..F-NEW-10. Drives this Changelog and the integrated ROADMAP.
+- **Research deep-dive**. Commit `dd59888`, evidence-grounded feature and improvement plan, now summarized in [RESEARCH_REPORT.md](RESEARCH_REPORT.md) and archived under `docs/archive/research/`, with prioritized roadmap, IMP-01..IMP-07, F-NEW-01..F-NEW-10. Drives this Changelog and the integrated ROADMAP.
 
 ### Verified
 
@@ -2219,7 +2247,7 @@ line for feature work.
 - No CI matrix yet (R-003).
 - Direct deps `thiserror 1`, `which 6` are stale (IMP-03).
 
-## Roadmap archive — 2026-08-10 — ROADMAP.md
+## Roadmap archive, 2026-08-10: ROADMAP.md
 
 <details>
 <summary>Original roadmap snapshot</summary>
@@ -2230,12 +2258,12 @@ line for feature work.
 Single source of truth for what's planned and what's in flight. Completed items
 are deleted from here and logged in [CHANGELOG.md](CHANGELOG.md). Blocked items
 live in [Roadmap_Blocked.md](Roadmap_Blocked.md). Research context lives in
-[RESEARCH.md](RESEARCH.md); do not duplicate that here - link instead.
+[RESEARCH.md](RESEARCH.md); link to it instead of duplicating it here.
 
 ## Conventions
 
-- `[ ]` - not started
-- `[~]` - in flight
+- `[ ]`: not started
+- `[~]`: in flight
 - Priority tags: **P0** (must ship in v0.1) . **P1** (v0.1 desirable / v0.2 must) . **P2** (later milestones) . **P3** (cosmetic / nice-to-have)
 - **R-NNN** are roadmap items; **IMP-NN** are hardening / improvement items
 
@@ -2252,7 +2280,7 @@ and Android, privacy-safe diagnostics, and the widest remaining product gap
 
 ### P3
 
-- [ ] IMP-128 P3 — Split `Apps.tsx`
+- [ ] IMP-128 P3, Split `Apps.tsx`
   Why: it is the largest file in the frontend at 2,023 lines despite six components already extracted, and the initial bundle sits at 84% of its declared budget.
   Evidence: `src/routes/Apps.tsx` 2,023 lines against `src/routes/apps/` already holding `PackageTable`, `FilterControls`, `InstallPanels`, `JournalPanel`, `PermissionsPanel`, `RecoveryBaselinePanel`; `dist/assets/index-*.js` 380 KB against `release-policy.json` `initialJavaScriptBudgetBytes` 450000; the `commands.rs` split behind `command_registry.rs` is the precedent.
   Touches: `src/routes/Apps.tsx`, `src/routes/apps/`

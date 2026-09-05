@@ -1,9 +1,9 @@
 {
   "name": "droidsmith",
   "private": true,
-  "version": "0.9.18",
+  "version": "0.9.19",
   "type": "module",
-  "description": "Cross-platform open-source GUI for managing Android devices over ADB",
+  "description": "Local Android device workshop for apps, debloat recovery, wireless ADB, Logcat, scrcpy, and APK inspection",
   "license": "MIT",
   "scripts": {
     "dev": "vite",
@@ -15,7 +15,10 @@
     "bundle:check": "node scripts/check-tauri-resources.mjs",
     "ui:smoke": "node scripts/check-rendered-routes.mjs",
     "docs:screenshots": "node scripts/check-rendered-routes.mjs --capture-docs",
-    "release:check": "node scripts/check-release-policy.mjs",
+    "marketing:social": "node scripts/generate-social-preview.mjs",
+    "marketing:generate": "npm run docs:screenshots && npm run marketing:social",
+    "marketing:check": "node --test scripts/marketing-assets.test.mjs",
+    "release:check": "npm run marketing:check && node scripts/check-release-policy.mjs",
     "release:smoke": "node scripts/check-production-bundle.mjs",
     "security:audit": "npm audit --audit-level=moderate && node scripts/audit-rust.mjs && npm run security:deny && npm run security:isolation",
     "security:audit:rust": "node scripts/audit-rust.mjs",

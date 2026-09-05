@@ -1,7 +1,7 @@
 [package]
 name = "droidsmith"
-version = "0.9.18"
-description = "Cross-platform open-source GUI for managing Android devices over ADB"
+version = "0.9.19"
+description = "Local Android device workshop for apps, diagnostics, and maintenance"
 authors = ["Droidsmith contributors"]
 license = "MIT"
 repository = "https://github.com/SysAdminDoc/Droidsmith"

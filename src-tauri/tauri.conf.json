@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Droidsmith",
-  "version": "0.9.18",
+  "version": "0.9.19",
   "identifier": "com.droidsmith.app",
   "build": {
     "frontendDist": "../dist",
@@ -42,8 +42,8 @@
     "copyright": "Copyright (c) Droidsmith contributors",
     "homepage": "https://github.com/SysAdminDoc/Droidsmith",
     "category": "DeveloperTool",
-    "shortDescription": "Open-source ADB GUI",
-    "longDescription": "Cross-platform open-source GUI for managing Android devices over ADB. A modern, MIT-licensed alternative to ADB AppControl with no paywalled features and no telemetry.",
+    "shortDescription": "Local Android device workshop",
+    "longDescription": "Manage Android apps, review debloat plans, pair wireless ADB, stream Logcat, launch scrcpy, and inspect APKs from one local desktop app.",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

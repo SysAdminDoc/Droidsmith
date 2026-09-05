@@ -263,7 +263,7 @@ export default function ProfilesRoute() {
   const currentProfile = useMemo<Profile>(
     () => ({
       name: profileName.trim(),
-      version: "2",
+      version: "3",
       description: description.trim(),
       device: {
         require_serial_prefix: serialPrefix.trim(),
@@ -655,7 +655,7 @@ export default function ProfilesRoute() {
                 saveMigration={(profile) =>
                   void saveProfile(
                     profile,
-                    `${fileSafeName(profile.name)}-v2.yaml`,
+                    `${fileSafeName(profile.name)}-v3.yaml`,
                   )
                 }
               />

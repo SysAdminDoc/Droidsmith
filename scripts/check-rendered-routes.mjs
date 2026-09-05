@@ -27,6 +27,9 @@ const languageContract = JSON.parse(
 const releasePolicy = JSON.parse(
   fs.readFileSync(path.join(repoRoot, "release-policy.json"), "utf8"),
 );
+const appVersion = JSON.parse(
+  fs.readFileSync(path.join(repoRoot, "package.json"), "utf8"),
+).version;
 const accessibilityAuditPolicy = releasePolicy.accessibilityAudit;
 const packageInventoryPerformancePolicy =
   releasePolicy.rendererPerformance.packageInventory;
@@ -53,7 +56,9 @@ try {
 
   const browser = await chromium.launch();
   try {
-    if (argv.includes("--package-scale")) {
+    if (captureDocs) {
+      await runDocCaptureFlow(browser);
+    } else if (argv.includes("--package-scale")) {
       await runPackageInventoryScaleFlow(browser);
     } else {
       await runDesktopFlow(browser);
@@ -1128,8 +1133,8 @@ async function runDesktopFlow(browser) {
   await page
     .getByText("this device did not report `installer`", { exact: false })
     .waitFor();
-  await page.getByRole("button", { name: "Save reviewed v2 profile" }).click();
-  await page.getByText(/Validated schema v2 profile saved to/).waitFor();
+  await page.getByRole("button", { name: "Save reviewed v3 profile" }).click();
+  await page.getByText(/Validated schema v3 profile saved to/).waitFor();
   await assertNoHorizontalOverflow(page, "desktop Profiles diff");
 
   // R-129: a saved fleet report renders read-only, names devices by digest,
@@ -2015,7 +2020,7 @@ async function runStaticRecoveryFallbackFlow(browser) {
 }
 
 // Render every primary workspace from mocked-native state so visual-system
-// changes cannot be verified only on the default route. The three README views
+// changes cannot be verified only on the default route. The seven README views
 // are also refreshed when invoked with --capture-docs. Every route is exercised
 // at a narrow width to catch reflow regressions in secondary workflows.
 async function runDocCaptureFlow(browser) {
@@ -2039,11 +2044,13 @@ async function runDocCaptureFlow(browser) {
     },
     {
       id: "debloat",
+      docName: "droidsmith-debloat",
       nav: /Debloat/,
       title: "Debloat",
     },
     {
       id: "profiles",
+      docName: "droidsmith-profiles",
       nav: /Profiles/,
       title: "Profiles",
     },
@@ -2060,6 +2067,7 @@ async function runDocCaptureFlow(browser) {
     },
     {
       id: "logcat",
+      docName: "droidsmith-logcat",
       nav: /Logcat/,
       title: "Logcat",
     },
@@ -2075,6 +2083,7 @@ async function runDocCaptureFlow(browser) {
     },
     {
       id: "apk-analyzer",
+      docName: "droidsmith-apk-analyzer",
       nav: /APK Analyzer/,
       title: "APK Analyzer",
     },
@@ -2086,7 +2095,7 @@ async function runDocCaptureFlow(browser) {
     viewport: { width: 1366, height: 900 },
   });
   const errors = collectConsoleErrors(page);
-  await installTauriMock(page);
+  await installTauriMock(page, { marketingMode: captureDocs });
   await page.goto(baseUrl, { waitUntil: "networkidle" });
 
   for (const shot of shots) {
@@ -2102,6 +2111,9 @@ async function runDocCaptureFlow(browser) {
       throw new Error(
         `${shot.id} still renders the desktop-required placeholder`,
       );
+    }
+    if (captureDocs) {
+      await prepareMarketingCapture(page, shot.id);
     }
     await page.screenshot({
       path: path.join(screenshotDir, `design-${shot.id}.png`),
@@ -2127,6 +2139,60 @@ async function runDocCaptureFlow(browser) {
 
   assertNoConsoleErrors(errors, "doc capture smoke");
   await page.close();
+}
+
+async function prepareMarketingCapture(page, routeId) {
+  if (routeId === "devices") {
+    await page
+      .getByRole("heading", { name: "Device details", exact: true })
+      .waitFor();
+    return;
+  }
+  if (routeId === "apps") {
+    const otaNotice = page
+      .getByText("Device updated since last use", { exact: true })
+      .locator("../..");
+    if ((await otaNotice.count()) > 0) {
+      await otaNotice.getByRole("button", { name: "Dismiss" }).click();
+    }
+    await page.getByText("Maps", { exact: true }).waitFor();
+    return;
+  }
+  if (routeId === "debloat") {
+    await page.getByRole("button", { name: /Pixel Essentials/ }).click();
+    await page.getByRole("heading", { name: "Compatibility checks" }).waitFor();
+    return;
+  }
+  if (routeId === "profiles") {
+    await page
+      .getByLabel("Name", { exact: true })
+      .fill("Daily driver essentials");
+    await page
+      .getByLabel("Description", { exact: true })
+      .fill("Keep the core work apps ready after device setup.");
+    await page
+      .getByRole("checkbox", { name: /com\.google\.android\.apps\.maps/ })
+      .check();
+    await page.getByRole("button", { name: "Add selected (1)" }).click();
+    await page.getByText("1 action", { exact: true }).waitFor();
+    return;
+  }
+  if (routeId === "logcat") {
+    await page.getByRole("button", { name: "Start tail" }).click();
+    await page
+      .getByText(/Displayed com\.acme\.notes\/\.MainActivity/)
+      .waitFor();
+    await page.getByText(/Skipped 32 frames/).waitFor();
+    return;
+  }
+  if (routeId === "apk-analyzer") {
+    await page.getByRole("button", { name: "Choose an APK" }).click();
+    await page.getByText("com.acme.notes", { exact: true }).waitFor();
+    await page
+      .getByText("Verified by apksigner", { exact: true })
+      .first()
+      .waitFor();
+  }
 }
 
 function collectConsoleErrors(page) {
@@ -2476,6 +2542,8 @@ async function installTauriMock(
     rendererFailure = false,
     recoveryFailure = false,
     mockClipboard = false,
+    marketingMode = false,
+    mockAppVersion = appVersion,
   } = {},
 ) {
   await page.addInitScript(
@@ -2489,6 +2557,8 @@ async function installTauriMock(
       rendererFailure,
       recoveryFailure,
       mockClipboard,
+      marketingMode,
+      mockAppVersion,
     },
   );
   await page.addInitScript(() => {
@@ -2499,6 +2569,8 @@ async function installTauriMock(
       rendererFailure,
       recoveryFailure,
       mockClipboard,
+      marketingMode,
+      mockAppVersion,
     } = window.__DROIDSMITH_MOCK_OPTIONS__;
     window.__DROIDSMITH_SMOKE_RENDER_FAILURE__ = rendererFailure;
     window.__DROIDSMITH_SMOKE_RECOVERY_FAILURE__ = recoveryFailure;
@@ -2518,16 +2590,18 @@ async function installTauriMock(
     let nextCallbackId = 1;
     let nextEventId = 1;
     const device = {
-      serial: "QA123",
+      serial: marketingMode ? "R3CN70A1B2C" : "QA123",
       state: "device",
-      model: "Pixel QA",
+      model: marketingMode ? "Pixel 9 Pro" : "Pixel QA",
       product: "oriole",
       device: "oriole",
       bus_address: "1-4",
       connection_type: "usb",
       negotiated_speed: 5_000_000_000,
       max_speed: 10_000_000_000,
-      build_fingerprint: "google/oriole/oriole:15/QA",
+      build_fingerprint: marketingMode
+        ? "google/caiman/caiman:16/BP2A.260805.012/12345678:user/release-keys"
+        : "google/oriole/oriole:15/QA",
       transport_id: 7,
       connection_generation: 8,
       transport_kind: "usb",
@@ -2561,11 +2635,11 @@ async function installTauriMock(
       burst_mode: true,
       recommended_for_wifi_v2: true,
       wifi_v2_state: "supported",
-      wifi_v2_devices: ["Pixel QA"],
+      wifi_v2_devices: [marketingMode ? "Pixel 9 Pro" : "Pixel QA"],
       warning: null,
       platform_tools: platformToolsPolicy,
     };
-    const packages = [
+    const testPackages = [
       {
         package: "com.example.app",
         enabled: true,
@@ -2604,8 +2678,51 @@ async function installTauriMock(
         installer: null,
       },
     ];
+    const marketingPackages = [
+      {
+        package: "com.google.android.apps.maps",
+        enabled: true,
+        suspended: false,
+        archived: false,
+        system: false,
+        apk_path: "/data/app/com.google.android.apps.maps/base.apk",
+        uid: 10101,
+        installer: "com.android.vending",
+      },
+      {
+        package: "com.android.settings",
+        enabled: true,
+        suspended: false,
+        archived: false,
+        system: true,
+        apk_path: "/system/priv-app/Settings/Settings.apk",
+        uid: 1000,
+        installer: null,
+      },
+      {
+        package: "org.mozilla.firefox",
+        enabled: false,
+        suspended: false,
+        archived: false,
+        system: false,
+        apk_path: "/data/app/org.mozilla.firefox/base.apk",
+        uid: 10102,
+        installer: "com.android.vending",
+      },
+      {
+        package: "com.spotify.music",
+        enabled: true,
+        suspended: true,
+        archived: false,
+        system: false,
+        apk_path: "/data/app/com.spotify.music/base.apk",
+        uid: 10103,
+        installer: "com.android.vending",
+      },
+    ];
+    const packages = marketingMode ? marketingPackages : testPackages;
     const scalePackages = [
-      ...packages,
+      ...testPackages,
       ...Array.from({ length: 996 }, (_, index) => ({
         package: `com.example.scale.${String(index).padStart(4, "0")}`,
         enabled: index % 5 !== 0,
@@ -2756,7 +2873,9 @@ async function installTauriMock(
           field: "build_fingerprint",
           status: "compatible",
           expected: ["google/"],
-          actual: "google/oriole/oriole:15/QA",
+          actual: marketingMode
+            ? "google/caiman/caiman:16/BP2A.260805.012"
+            : "google/oriole/oriole:15/QA",
         },
         {
           field: "android_user",
@@ -2765,32 +2884,65 @@ async function installTauriMock(
           actual: "0 (current)",
         },
       ],
-      entries: [
-        {
-          id: "com.example.app",
-          status: "ready",
-          detail: null,
-          effective_removal: "recommended",
-          resolved_action: "suspend",
-          shared_system_uid: false,
-        },
-        {
-          id: "com.example.fail",
-          status: "ready",
-          detail: null,
-          effective_removal: "unsafe",
-          resolved_action: "disable",
-          shared_system_uid: true,
-        },
-        {
-          id: "com.android.settings",
-          status: "ready",
-          detail: null,
-          effective_removal: "unsafe",
-          resolved_action: "disable",
-          shared_system_uid: false,
-        },
-      ],
+      entries: marketingMode
+        ? [
+            {
+              id: "com.google.android.apps.wellbeing",
+              status: "ready",
+              detail: null,
+              effective_removal: "recommended",
+              resolved_action: "suspend",
+              shared_system_uid: false,
+              verification: "verified",
+            },
+            {
+              id: "com.google.android.apps.tips",
+              status: "ready",
+              detail: null,
+              effective_removal: "recommended",
+              resolved_action: "disable",
+              shared_system_uid: false,
+              verification: "verified",
+            },
+            {
+              id: "com.google.android.as",
+              status: "ready",
+              detail: null,
+              effective_removal: "unsafe",
+              resolved_action: "disable",
+              shared_system_uid: true,
+              verification: "not_verified",
+            },
+          ]
+        : [
+            {
+              id: "com.example.app",
+              status: "ready",
+              detail: null,
+              effective_removal: "recommended",
+              resolved_action: "suspend",
+              shared_system_uid: false,
+              verification: "unknown",
+            },
+            {
+              id: "com.example.fail",
+              status: "ready",
+              detail: null,
+              effective_removal: "unsafe",
+              resolved_action: "disable",
+              shared_system_uid: true,
+              verification: "unknown",
+            },
+            {
+              id: "com.android.settings",
+              status: "ready",
+              detail: null,
+              effective_removal: "unsafe",
+              resolved_action: "disable",
+              shared_system_uid: false,
+              verification: "unknown",
+            },
+          ],
     };
 
     window.__TAURI_INTERNALS__ = {
@@ -2856,7 +3008,7 @@ async function installTauriMock(
             },
             profile_save: {
               id: "123e4567-e89b-42d3-a456-42661417400a",
-              local_path: "C:/Users/QA/Desktop/qa-profile-v2.yaml",
+              local_path: "C:/Users/QA/Desktop/qa-profile-v3.yaml",
             },
             profile_open: {
               id: "123e4567-e89b-42d3-a456-42661417400b",
@@ -2916,7 +3068,7 @@ async function installTauriMock(
         }
         if (cmd === "heartbeat") {
           return {
-            version: "0.1.0",
+            version: mockAppVersion,
             os: { family: "Windows", version: "11", arch: "x86_64" },
             tauri_version: "2.0.0",
             rust_version: "1.88.0",
@@ -3195,7 +3347,7 @@ async function installTauriMock(
                 ],
               },
               environment: {
-                app_version: "0.1.0",
+                app_version: mockAppVersion,
                 adb_version: "37.0.0",
                 adb_compatibility: platformToolsPolicy,
               },
@@ -3470,7 +3622,7 @@ async function installTauriMock(
         if (cmd === "get_device_info") {
           return {
             serial: args.target.serial,
-            model: "Pixel QA",
+            model: marketingMode ? "Pixel 9 Pro" : "Pixel QA",
             manufacturer: "Google",
             android_version: "17",
             sdk_level: "36",
@@ -3585,16 +3737,29 @@ async function installTauriMock(
           });
         }
         if (cmd === "get_package_metadata") {
+          const marketingLabels = {
+            "com.android.settings": "Settings",
+            "com.google.android.apps.maps": "Maps",
+            "com.spotify.music": "Spotify",
+            "org.mozilla.firefox": "Firefox",
+          };
           return {
             package: args.package,
-            label: args.package === "com.example.app" ? "Example App" : null,
+            label: marketingMode
+              ? (marketingLabels[args.package] ?? null)
+              : args.package === "com.example.app"
+                ? "Example App"
+                : null,
             icon_data_uri: null,
             cache_hit: false,
             // R-130: one package reports real storage, the rest are on a
             // device surface that does not, so both the measured and the
             // honestly-unavailable renderings are exercised.
             storage:
-              args.package === "com.example.app"
+              args.package ===
+              (marketingMode
+                ? "com.google.android.apps.maps"
+                : "com.example.app")
                 ? { code_bytes: 3584, data_bytes: 6068736, cache_bytes: 439808 }
                 : null,
           };
@@ -3737,13 +3902,13 @@ async function installTauriMock(
         if (cmd === "save_profile") {
           if (
             args.path_grant !== "123e4567-e89b-42d3-a456-42661417400a" ||
-            args.profile.version !== "2" ||
+            args.profile.version !== "3" ||
             args.profile.actions.length === 0
           ) {
-            throw new Error("Profile export did not validate schema v2");
+            throw new Error("Profile export did not validate schema v3");
           }
           return {
-            local_path: "C:/Users/QA/Desktop/qa-profile-v2.yaml",
+            local_path: "C:/Users/QA/Desktop/qa-profile-v3.yaml",
             size_bytes: 768,
             sha256: "c".repeat(64),
           };
@@ -3751,7 +3916,7 @@ async function installTauriMock(
         if (cmd === "run_profile_fleet") {
           if (
             args.path_grant !== "123e4567-e89b-42d3-a456-42661417401b" ||
-            args.profile.version !== "2" ||
+            args.profile.version !== "3" ||
             args.profile.actions.length === 0 ||
             typeof args.apply !== "boolean"
           ) {
@@ -3940,7 +4105,7 @@ async function installTauriMock(
           }
           const migrated = {
             name: "Legacy QA setup",
-            version: "2",
+            version: "3",
             description: "Migrated rendered-smoke profile",
             device: {
               require_serial_prefix: "QA",
@@ -4414,14 +4579,18 @@ async function installTauriMock(
             operation_id: args.operation_id,
             kind: "output",
             stream: "stdout",
-            chunk: "I/QA(  123): first part",
+            chunk: marketingMode
+              ? "I/ActivityTaskManager( 1842): Displayed com.acme.notes/.MainActivity: +438ms\n"
+              : "I/QA(  123): first part",
           });
-          emitChannel(args.on_event, {
-            operation_id: args.operation_id,
-            kind: "output",
-            stream: "stdout",
-            chunk: " complete\n",
-          });
+          if (!marketingMode) {
+            emitChannel(args.on_event, {
+              operation_id: args.operation_id,
+              kind: "output",
+              stream: "stdout",
+              chunk: " complete\n",
+            });
+          }
           emitChannel(args.on_event, {
             operation_id: args.operation_id,
             kind: "reconnecting",
@@ -4432,7 +4601,9 @@ async function installTauriMock(
             operation_id: args.operation_id,
             kind: "output",
             stream: "stdout",
-            chunk: "W/QA(  123): after reconnect\n",
+            chunk: marketingMode
+              ? "W/Choreographer( 1842): Skipped 32 frames! The application may be doing too much work.\n"
+              : "W/QA(  123): after reconnect\n",
           });
           return new Promise((resolve) => {
             pendingOperations.set(args.operation_id, {
@@ -4658,12 +4829,13 @@ async function installTauriMock(
             packs: [
               {
                 pack: {
-                  id: "qa-debloat",
+                  id: marketingMode ? "pixel-essentials" : "qa-debloat",
                   revision: 3,
-                  name: "QA Debloat Pack",
+                  name: marketingMode ? "Pixel Essentials" : "QA Debloat Pack",
                   version: "1",
-                  description:
-                    "Synthetic pack used by rendered route smoke tests.",
+                  description: marketingMode
+                    ? "A conservative starting point for optional Pixel packages."
+                    : "Synthetic pack used by rendered route smoke tests.",
                   targets: {
                     manufacturer: ["Google"],
                     rom: ["Pixel"],
@@ -4673,35 +4845,66 @@ async function installTauriMock(
                     android_max: null,
                     user_scope: "owner",
                   },
-                  packages: [
-                    {
-                      id: "com.example.app",
-                      removal: "recommended",
-                      action: "suspend",
-                      description: "Safe QA package.",
-                      depends_on: [],
-                      needed_by: [],
-                      labels: ["qa", "telemetry"],
-                    },
-                    {
-                      id: "com.example.fail",
-                      removal: "recommended",
-                      description:
-                        "Package that simulates an OEM policy failure.",
-                      depends_on: [],
-                      needed_by: [],
-                      labels: ["qa", "failure"],
-                    },
-                    {
-                      id: "com.android.settings",
-                      removal: "unsafe",
-                      description:
-                        "System settings is intentionally not preselected.",
-                      depends_on: [],
-                      needed_by: ["device settings"],
-                      labels: ["system"],
-                    },
-                  ],
+                  packages: marketingMode
+                    ? [
+                        {
+                          id: "com.google.android.apps.wellbeing",
+                          removal: "recommended",
+                          action: "suspend",
+                          description:
+                            "Digital Wellbeing dashboards and focus tools.",
+                          depends_on: [],
+                          needed_by: [],
+                          labels: ["wellbeing", "optional"],
+                        },
+                        {
+                          id: "com.google.android.apps.tips",
+                          removal: "recommended",
+                          description:
+                            "Pixel Tips tutorials and feature suggestions.",
+                          depends_on: [],
+                          needed_by: [],
+                          labels: ["tutorials"],
+                        },
+                        {
+                          id: "com.google.android.as",
+                          removal: "unsafe",
+                          description:
+                            "On-device intelligence used by several Pixel features.",
+                          depends_on: [],
+                          needed_by: ["system features"],
+                          labels: ["system"],
+                        },
+                      ]
+                    : [
+                        {
+                          id: "com.example.app",
+                          removal: "recommended",
+                          action: "suspend",
+                          description: "Safe QA package.",
+                          depends_on: [],
+                          needed_by: [],
+                          labels: ["qa", "telemetry"],
+                        },
+                        {
+                          id: "com.example.fail",
+                          removal: "recommended",
+                          description:
+                            "Package that simulates an OEM policy failure.",
+                          depends_on: [],
+                          needed_by: [],
+                          labels: ["qa", "failure"],
+                        },
+                        {
+                          id: "com.android.settings",
+                          removal: "unsafe",
+                          description:
+                            "System settings is intentionally not preselected.",
+                          depends_on: [],
+                          needed_by: ["device settings"],
+                          labels: ["system"],
+                        },
+                      ],
                   attribution: null,
                   provenance: { source: "ui-smoke", license: "MIT" },
                 },
@@ -4712,10 +4915,13 @@ async function installTauriMock(
                 pack: {
                   id: "qa-imported",
                   revision: 1,
-                  name: "QA Imported Pack",
+                  name: marketingMode
+                    ? "Personal Pixel Cleanup"
+                    : "QA Imported Pack",
                   version: "1",
-                  description:
-                    "Synthetic locally-imported pack used by rendered route smoke tests.",
+                  description: marketingMode
+                    ? "A locally imported cleanup plan with recorded provenance."
+                    : "Synthetic locally-imported pack used by rendered route smoke tests.",
                   targets: {
                     manufacturer: ["Google"],
                     rom: ["Pixel"],
@@ -4764,19 +4970,23 @@ async function installTauriMock(
             label: "V3.0 Signer",
             sha256:
               "e116fd40d2ae76931d17f3b0d5caa3e0952ff0138a687de0c44fc3aad2118793",
-            subject: "CN=Example QA Signer, O=Droidsmith QA",
-            issuer: "CN=Droidsmith QA Root, O=Droidsmith QA",
+            subject: marketingMode
+              ? "CN=Sample Notes Release, O=Local Demo"
+              : "CN=Example QA Signer, O=Droidsmith QA",
+            issuer: marketingMode
+              ? "CN=Sample Notes Release, O=Local Demo"
+              : "CN=Droidsmith QA Root, O=Droidsmith QA",
             valid_from_unix: 1_735_689_600,
             valid_until_unix: 2_051_222_400,
           };
           const notVerified =
             window.__DROIDSMITH_MOCK_APK_VERIFICATION__ === "not_verified";
           return {
-            file_name: "sample.apk",
+            file_name: marketingMode ? "sample-notes.apk" : "sample.apk",
             file_size: 4_215_872,
             sha256:
               "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
-            package: "com.example.qa",
+            package: marketingMode ? "com.acme.notes" : "com.example.qa",
             version_code: 4207,
             version_name: "4.2.0",
             min_sdk: 24,

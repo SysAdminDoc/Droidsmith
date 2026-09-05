@@ -1,5 +1,5 @@
-// R-115: verify the winget/Scoop manifest generator renders schema-valid
-// manifests whose version tracks package.json.
+// Verify the Scoop manifest generator renders schema-valid output whose
+// version tracks package.json.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -8,10 +8,8 @@ import { fileURLToPath } from "node:url";
 
 import {
   buildScoopManifest,
-  buildWingetManifest,
   readReleaseMeta,
-  validateManifests,
-  PACKAGE_IDENTIFIER,
+  validateManifest,
 } from "./generate-packaging-manifests.mjs";
 
 const repoRoot = path.resolve(
@@ -26,32 +24,24 @@ test("readReleaseMeta reports the package.json version", () => {
   assert.equal(readReleaseMeta().version, pkgVersion);
 });
 
-test("generated manifests pass schema validation for the current version", () => {
+test("generated manifest passes schema validation for the current version", () => {
   const meta = readReleaseMeta();
-  const winget = buildWingetManifest(meta);
   const scoop = buildScoopManifest(meta);
-  assert.deepEqual(validateManifests(winget, scoop, pkgVersion), []);
-  assert.equal(winget.PackageIdentifier, PACKAGE_IDENTIFIER);
+  assert.deepEqual(validateManifest(scoop, pkgVersion), []);
   assert.equal(scoop.version, pkgVersion);
 });
 
 test("validation rejects a version mismatch", () => {
   const meta = readReleaseMeta();
-  const problems = validateManifests(
-    buildWingetManifest(meta),
-    buildScoopManifest(meta),
-    "9.9.9",
-  );
+  const problems = validateManifest(buildScoopManifest(meta), "9.9.9");
   assert.ok(
-    problems.length >= 2,
+    problems.length >= 1,
     `expected version-mismatch problems, got ${problems}`,
   );
 });
 
 test("installer URLs reference the release version", () => {
   const meta = { ...readReleaseMeta(), version: "1.2.3" };
-  const winget = buildWingetManifest(meta);
   const scoop = buildScoopManifest(meta);
-  assert.ok(winget.Installers[0].InstallerUrl.includes("v1.2.3/"));
   assert.ok(scoop.architecture["64bit"].url.includes("1.2.3"));
 });
